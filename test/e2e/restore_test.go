@@ -263,10 +263,10 @@ func TestRestoreTUIWizardUsesTheGenericPlanAndDataRestoreApproval(t *testing.T) 
 	project, _, env := restoreProject(t)
 	restoreArtifact(t, project)
 
-	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
-		{wait: "> 스택 상태 (status)", send: "up"},
-		{wait: "> 비밀값 연결 (secrets)", send: "up"},
-		{wait: "> 이전 버전 복원 (rollback)", send: "up"},
+	steps := []lifecyclePTYStep{
+		// The menu order is the registration order; compute the distance from
+		// status so another ticket's feature does not break this journey.
+		{wait: "> 스택 상태 (status)", send: strings.Repeat("\x1b[B", menuDownPresses(t, "restore"))},
 		{wait: "> 데이터 복원 (restore)", send: "\r"},
 		{wait: "복원할 백업 선택", send: "\r"},
 		{wait: "복원 대상 볼륨 선택", send: "\r"},
@@ -275,7 +275,8 @@ func TestRestoreTUIWizardUsesTheGenericPlanAndDataRestoreApproval(t *testing.T) 
 		{wait: "승인 확인", send: ""},
 		{wait: "데이터 복원 (data_restore)", send: "\r"},
 		{wait: "복원 완료", send: ""},
-	})
+	}
+	output, code := runLifecyclePTYSteps(t, project, env, steps)
 	if code != 0 {
 		t.Fatalf("restore TUI exit = %d\n%s", code, output)
 	}
