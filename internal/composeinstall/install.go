@@ -331,7 +331,11 @@ func (f *Feature) probeCompose(ctx context.Context) (string, bool, error) {
 	if !res.Succeeded() {
 		return res.Combined(), false, nil
 	}
-	return strings.TrimSpace(res.Combined()), true, nil
+	output := strings.TrimSpace(string(res.Stdout))
+	if output == "" {
+		output = strings.TrimSpace(res.Combined())
+	}
+	return output, true, nil
 }
 
 func installPlan(rel Release, dest string) string {
