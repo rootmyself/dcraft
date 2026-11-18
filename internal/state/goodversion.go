@@ -1,6 +1,7 @@
 package state
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -99,7 +100,10 @@ func (s *Store) LoadGoodVersion(target core.Target) (GoodVersion, bool, error) {
 	if err != nil {
 		return GoodVersion{}, false, err
 	}
-	data, err := os.ReadFile(path)
+	if err := verifyRootIfExists(s.root); err != nil {
+		return GoodVersion{}, false, err
+	}
+	data, err := readStateFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return GoodVersion{}, false, nil
@@ -125,7 +129,14 @@ func (s *Store) LoadGoodVersion(target core.Target) (GoodVersion, bool, error) {
 // SaveGoodVersion replaces the previous-good record atomically. The caller must
 // hold the per-stack change lock (state.AcquireStackLock), so concurrent
 // updates, rollbacks or backups cannot replace it out of order.
-func (s *Store) SaveGoodVersion(target core.Target, rec GoodVersion) error {
+//
+// Commit is cancellation-aware: the context is checked immediately before the
+// rename that publishes the record. A canceled operation removes its temp file
+// and leaves the previous record byte-identical, so cancellation can never
+// destroy the last escape route. Once the rename has happened the record is
+// complete; the caller may report the operation as canceled, but the record is
+// not rolled back (rolling back a completed commit would be another change).
+func (s *Store) SaveGoodVersion(ctx context.Context, target core.Target, rec GoodVersion) error {
 	path, err := s.GoodVersionPath(target)
 	if err != nil {
 		return err
@@ -161,6 +172,9 @@ func (s *Store) SaveGoodVersion(target core.Target, rec GoodVersion) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := ensureRoot(s.root); err != nil {
+		return err
+	}
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("create stack state dir: %w", err)
@@ -185,6 +199,11 @@ func (s *Store) SaveGoodVersion(target core.Target, rec GoodVersion) error {
 	}
 	if err := tmp.Close(); err != nil {
 		return fmt.Errorf("close good version: %w", err)
+	}
+	// Last possible cancellation point. The temp file already holds a complete
+	// record, but publishing it would replace the previous good version.
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	if err := os.Rename(tmpName, path); err != nil {
 		return fmt.Errorf("replace good version: %w", err)

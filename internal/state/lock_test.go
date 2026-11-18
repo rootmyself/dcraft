@@ -22,7 +22,7 @@ func holder(action string) state.LockHolder {
 }
 
 func TestStackLockSerializesTheSameTargetAndReleases(t *testing.T) {
-	s := state.New(t.TempDir())
+	s := state.New(privateStateDir(t))
 	tgt := target("/work/app")
 
 	lock, err := s.AcquireStackLock(context.Background(), tgt, holder("up"))
@@ -48,7 +48,7 @@ func TestStackLockSerializesTheSameTargetAndReleases(t *testing.T) {
 }
 
 func TestStackLockDoesNotBlockDifferentTargets(t *testing.T) {
-	s := state.New(t.TempDir())
+	s := state.New(privateStateDir(t))
 	first, err := s.AcquireStackLock(context.Background(), target("/work/a"), holder("up"))
 	if err != nil {
 		t.Fatalf("first: %v", err)
@@ -62,7 +62,7 @@ func TestStackLockDoesNotBlockDifferentTargets(t *testing.T) {
 }
 
 func TestStackLockSeparatesEnvironments(t *testing.T) {
-	s := state.New(t.TempDir())
+	s := state.New(privateStateDir(t))
 	dev := target("/work/app")
 	staging := target("/work/app")
 	staging.Environment = "staging"
@@ -79,7 +79,7 @@ func TestStackLockSeparatesEnvironments(t *testing.T) {
 }
 
 func TestStackLockHolderIsVisibleAndPrivate(t *testing.T) {
-	root := t.TempDir()
+	root := privateStateDir(t)
 	s := state.New(root)
 	tgt := target("/work/app")
 	lock, err := s.AcquireStackLock(context.Background(), tgt, holder("up"))
@@ -110,7 +110,7 @@ func TestStackLockHolderIsVisibleAndPrivate(t *testing.T) {
 }
 
 func TestStackLockIsExclusiveAcrossGoroutines(t *testing.T) {
-	s := state.New(t.TempDir())
+	s := state.New(privateStateDir(t))
 	tgt := target("/work/app")
 	const n = 8
 	var wg sync.WaitGroup
@@ -149,7 +149,7 @@ func TestStackLockIsExclusiveAcrossGoroutines(t *testing.T) {
 }
 
 func TestStackLockCancellationDoesNotAcquire(t *testing.T) {
-	s := state.New(t.TempDir())
+	s := state.New(privateStateDir(t))
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	lock, err := s.AcquireStackLock(ctx, target("/work/app"), holder("up"))

@@ -14,6 +14,7 @@ import (
 
 	"github.com/rootmyself/dcraft/internal/core"
 	"github.com/rootmyself/dcraft/internal/stack"
+	"github.com/rootmyself/dcraft/internal/state"
 )
 
 const lifecycleCompose = `services:
@@ -109,6 +110,139 @@ func cleanupLifecycleCompose(t *testing.T, env []string, dir, project, file stri
 	if err != nil {
 		t.Logf("cleanup down %s failed: %v\n%s", project, err, out)
 	}
+}
+
+func TestIntegrationBlockedRenameDoesNotRedirectTheNextOperation(t *testing.T) {
+	env := requireIntegration(t)
+	base := "dcraft-rename-" + randomHex(t, 4)
+	project := filepath.Join(t.TempDir(), base)
+	if err := os.MkdirAll(project, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	composePath := filepath.Join(project, "compose.yaml")
+	if err := os.WriteFile(composePath, []byte(lifecycleCompose), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stateDir := t.TempDir()
+	dcraftEnv := buildEnv(map[string]string{"DCRAFT_STATE_DIR": stateDir})
+	store := state.New(stateDir)
+
+	release := func(res processResult, want int) lifecycleResult {
+		t.Helper()
+		if res.code != want {
+			t.Fatalf("exit = %d, want %d; stdout=%s stderr=%s", res.code, want, res.stdout, res.stderr)
+		}
+		return parseLifecycle(t, res.stdout)
+	}
+
+	up := release(runProcess(t, project, dcraftEnv, strings.NewReader(""), "up", "--json"), 0)
+	name := up.Data.Lifecycle.ProjectName
+	if name != base {
+		t.Fatalf("initial name = %q, want %q", name, base)
+	}
+	t.Cleanup(func() { cleanupLifecycleCompose(t, env, project, name, composePath, false) })
+
+	namesPath := filepath.Join(stateDir, "names.json")
+	before, err := os.ReadFile(namesPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Hold the real per-stack lock so a rename attempt is refused before its
+	// name claim could be written.
+	lock, err := store.AcquireStackLock(context.Background(),
+		core.Target{ProjectDir: project}, state.LockHolder{Action: "down", PID: 4242, StartedAt: time.Now()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocked := runProcess(t, project, dcraftEnv, strings.NewReader(""),
+		"up", "--json", "-p", base+"-renamed")
+	_ = lock.Release()
+	blockedParsed := release(blocked, 1)
+	if !hasLifecycleCategory(blockedParsed.Diagnostics, core.CategoryStackBusy) {
+		t.Fatalf("blocked rename diagnostics = %+v", blockedParsed.Diagnostics)
+	}
+
+	after, err := os.ReadFile(namesPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Fatalf("blocked rename changed names.json:\nbefore=%s\nafter=%s", before, after)
+	}
+
+	next := release(runProcess(t, project, dcraftEnv, strings.NewReader(""), "up", "--json"), 0)
+	if next.Data.Lifecycle.ProjectName != name {
+		t.Fatalf("next operation used %q, want the original %q", next.Data.Lifecycle.ProjectName, name)
+	}
+	if _, ok := listComposeProjects(t, env)[base+"-renamed"]; ok {
+		t.Fatalf("blocked rename created a second project %q", base+"-renamed")
+	}
+}
+
+func TestIntegrationSuffixedProjectIsReusedAfterStateLoss(t *testing.T) {
+	env := requireIntegration(t)
+	base := "dcraft-reuse-" + randomHex(t, 4)
+	root := t.TempDir()
+	ownerDir := filepath.Join(root, "owner", base)
+	oursDir := filepath.Join(root, "ours", base)
+	for _, dir := range []string{ownerDir, oursDir} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "compose.yaml"), []byte(lifecycleCompose), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sharedState := t.TempDir()
+	sharedEnv := buildEnv(map[string]string{"DCRAFT_STATE_DIR": sharedState})
+	ownerCompose := filepath.Join(ownerDir, "compose.yaml")
+	oursCompose := filepath.Join(oursDir, "compose.yaml")
+
+	ownerUp := runProcess(t, ownerDir, sharedEnv, strings.NewReader(""), "up", "--json")
+	if ownerUp.code != 0 {
+		t.Fatalf("owner up exit=%d stderr=%q", ownerUp.code, ownerUp.stderr)
+	}
+	if got := parseLifecycle(t, ownerUp.stdout).Data.Lifecycle.ProjectName; got != base {
+		t.Fatalf("owner name = %q, want %q", got, base)
+	}
+	t.Cleanup(func() { cleanupLifecycleCompose(t, env, ownerDir, base, ownerCompose, false) })
+
+	// This folder first used a declared high suffix.
+	declared := base + "-3"
+	oursDeclared := runProcess(t, oursDir, sharedEnv, strings.NewReader(""), "up", "-p", declared, "--json")
+	if oursDeclared.code != 0 {
+		t.Fatalf("declared up exit=%d stderr=%q", oursDeclared.code, oursDeclared.stderr)
+	}
+	t.Cleanup(func() { cleanupLifecycleCompose(t, env, oursDir, declared, oursCompose, false) })
+
+	// Every state file is gone, but the Compose projects remain. The next
+	// unqualified up must adopt the existing suffixed project, never allocate
+	// the smallest free name and create a duplicate.
+	lostEnv := buildEnv(map[string]string{"DCRAFT_STATE_DIR": t.TempDir()})
+	next := runProcess(t, oursDir, lostEnv, strings.NewReader(""), "up", "--json")
+	if next.code != 0 {
+		t.Fatalf("up after state loss exit=%d stderr=%q", next.code, next.stderr)
+	}
+	if got := parseLifecycle(t, next.stdout).Data.Lifecycle.ProjectName; got != declared {
+		t.Fatalf("name after state loss = %q, want the existing %q", got, declared)
+	}
+	projects := listComposeProjects(t, env)
+	if _, ok := projects[declared]; !ok {
+		t.Fatalf("suffixed project disappeared: %+v", projects)
+	}
+	if _, ok := projects[base+"-1"]; ok {
+		t.Fatalf("state loss created a duplicate project %q", base+"-1")
+	}
+}
+
+func hasLifecycleCategory(diags []core.Diagnostic, category core.Category) bool {
+	for _, d := range diags {
+		if d.Category == category {
+			return true
+		}
+	}
+	return false
 }
 
 func TestIntegrationLifecycleStack(t *testing.T) {

@@ -6,8 +6,11 @@ package data
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 
 	"github.com/rootmyself/dcraft/internal/core"
+	"github.com/rootmyself/dcraft/internal/fsidentity"
 )
 
 // Kind identifies what a data source is.
@@ -72,6 +75,15 @@ type OpResult struct {
 // The backup format contract (#16) and later restore tickets use it.
 const ArchiveDataFile = "data.tar.gz"
 
+// HelperToken is the stable per-stack token carried by data-helper containers.
+// One stack (folder identity + environment) cannot have two concurrent data
+// operations, so the token scopes helper inspection and cleanup to one
+// operation even when unrelated tests or users share the same Docker host.
+func HelperToken(target core.Target) string {
+	sum := sha256.Sum256([]byte(fsidentity.Key(target.ProjectDir) + "\x00" + target.Environment))
+	return hex.EncodeToString(sum[:])[:12]
+}
+
 // VolumeHelperImage is the default image whose tar archives a named volume.
 // It is announced in the backup plan and can be overridden with
 // DCRAFT_BACKUP_IMAGE.
@@ -105,8 +117,9 @@ type Backend interface {
 	StartServices(ctx context.Context, target core.Target, services []string) (OpResult, error)
 	// ArchiveVolume writes data.tar.gz into hostDir from a read-only mount of
 	// the named volume. The helper runs as root so the archive preserves
-	// uid/gid and modes.
-	ArchiveVolume(ctx context.Context, volumeName, hostDir string) (OpResult, error)
+	// uid/gid and modes. target scopes the helper labels and name to one stack
+	// so inspection never sees another operation's helper.
+	ArchiveVolume(ctx context.Context, target core.Target, volumeName, hostDir string) (OpResult, error)
 	// HelperImage is the image used by ArchiveVolume; it is shown in plans.
 	HelperImage() string
 	// Redact removes values referenced by the project's saved secret

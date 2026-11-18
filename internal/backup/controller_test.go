@@ -100,7 +100,7 @@ func (f *fakeBackend) StartServices(ctx context.Context, target core.Target, ser
 	return data.OpResult{}, nil
 }
 
-func (f *fakeBackend) ArchiveVolume(ctx context.Context, volumeName, hostDir string) (data.OpResult, error) {
+func (f *fakeBackend) ArchiveVolume(ctx context.Context, target core.Target, volumeName, hostDir string) (data.OpResult, error) {
 	f.record("archive:" + volumeName)
 	if f.archive == nil {
 		return data.OpResult{}, errors.New("fake archive hook is not configured")
@@ -141,6 +141,9 @@ func (f *fakeBackend) defaultArchive(t *testing.T) {
 
 func newController(t *testing.T, backend *fakeBackend, names fakeNames, stateDir string) (*Controller, *state.Store) {
 	t.Helper()
+	if err := os.Chmod(stateDir, 0o700); err != nil {
+		t.Fatalf("chmod state dir: %v", err)
+	}
 	store := state.New(stateDir)
 	return New(Config{
 		Backend: backend,

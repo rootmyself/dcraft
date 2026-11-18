@@ -70,6 +70,9 @@ func (s *Store) AcquireStackLock(ctx context.Context, target core.Target, holder
 	if err != nil {
 		return nil, err
 	}
+	if err := ensureRoot(s.root); err != nil {
+		return nil, err
+	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("create stack state dir: %w", err)
 	}
@@ -78,7 +81,7 @@ func (s *Store) AcquireStackLock(ctx context.Context, target core.Target, holder
 	if !acquireProcessLock(path) {
 		return nil, busyError(target, path)
 	}
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
+	f, err := openStateFile(path, os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		releaseProcessLock(path)
 		return nil, fmt.Errorf("open stack lock: %w", err)
@@ -140,7 +143,7 @@ func writeHolder(f *os.File, holder LockHolder) {
 }
 
 func readHolder(path string) (LockHolder, bool) {
-	data, err := os.ReadFile(path)
+	data, err := readStateFile(path)
 	if err != nil || len(data) == 0 {
 		return LockHolder{}, false
 	}
@@ -212,7 +215,7 @@ func tryFileLock(path string) (release func(), ok bool, err error) {
 	if !acquireProcessLock(path) {
 		return nil, false, nil
 	}
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
+	f, err := openStateFile(path, os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		releaseProcessLock(path)
 		return nil, false, fmt.Errorf("open state lock: %w", err)

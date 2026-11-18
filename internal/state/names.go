@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/rootmyself/dcraft/internal/core"
+	"github.com/rootmyself/dcraft/internal/fsidentity"
 )
 
 // NameSource explains where an effective Compose project name came from.
@@ -118,8 +120,8 @@ func (s *Store) AllocateName(ctx context.Context, req NameRequest) (NameAllocati
 		}
 	}
 
-	if err := os.MkdirAll(s.root, 0o700); err != nil {
-		return NameAllocation{}, fmt.Errorf("create state root: %w", err)
+	if err := ensureRoot(s.root); err != nil {
+		return NameAllocation{}, err
 	}
 	release, err := acquireFileLock(ctx, filepath.Join(s.root, "names.lock"))
 	if err != nil {
@@ -195,6 +197,26 @@ func (s *Store) AllocateName(ctx context.Context, req NameRequest) (NameAllocati
 		return NameAllocation{Name: current.ProjectName, Source: current.Source}, nil
 	}
 
+	// State loss (or a project created by plain Compose) must not create a
+	// second stack for the same folder. Reuse an existing project owned by this
+	// target even when its readable name is suffixed because another folder
+	// owns the base name. The same conflict rules apply as for a recorded name.
+	if ext, conflict, found := existingProjectForTarget(req.External, ourDir, registry.Claims, key); found {
+		if conflict != nil {
+			conflict.Target = req.Target
+			return NameAllocation{}, conflict
+		}
+		registry.Claims[key] = nameClaim{
+			ProjectName: ext.Name, Source: NameSourceExisting,
+			ProjectDir: req.Target.ProjectDir, Environment: req.Target.Environment,
+			UpdatedAt: now,
+		}
+		if err := saveNames(path, registry); err != nil {
+			return NameAllocation{}, err
+		}
+		return NameAllocation{Name: ext.Name, Source: NameSourceExisting}, nil
+	}
+
 	base := req.BaseName
 	if env := sanitizeNamePart(req.Target.Environment); env != "" {
 		base += "-" + env
@@ -239,6 +261,9 @@ func (s *Store) LookupName(target core.Target) (NameAllocation, bool, error) {
 	if strings.TrimSpace(target.ProjectDir) == "" {
 		return NameAllocation{}, false, errors.New("state: name lookup has no project folder")
 	}
+	if err := verifyRootIfExists(s.root); err != nil {
+		return NameAllocation{}, false, err
+	}
 	registry, err := loadNames(filepath.Join(s.root, "names.json"))
 	if err != nil {
 		return NameAllocation{}, false, err
@@ -252,7 +277,7 @@ func (s *Store) LookupName(target core.Target) (NameAllocation, bool, error) {
 
 func loadNames(path string) (nameRegistry, error) {
 	registry := nameRegistry{Version: nameRegistryVersion, Claims: map[string]nameClaim{}}
-	data, err := os.ReadFile(path)
+	data, err := readStateFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return registry, nil
@@ -336,6 +361,40 @@ func externalOwner(external []ExternalProject, name, ourDir string) (ExternalPro
 	return ExternalProject{}, false
 }
 
+// existingProjectForTarget finds one existing Compose project whose config
+// directory is this target. A free candidate is reused; if every candidate is
+// already claimed by another target, the first conflict is returned so the
+// caller stops with project_name_conflict instead of allocating a duplicate.
+func existingProjectForTarget(external []ExternalProject, ourDir string, claims map[string]nameClaim, ourKey string) (ExternalProject, *NameConflictError, bool) {
+	var candidates []ExternalProject
+	for _, ext := range external {
+		if ext.Name == "" || !sameDir(ext.ProjectDir, ourDir) {
+			continue
+		}
+		if err := validateName(ext.Name); err != nil {
+			continue
+		}
+		candidates = append(candidates, ext)
+	}
+	if len(candidates) == 0 {
+		return ExternalProject{}, nil, false
+	}
+	sort.Slice(candidates, func(i, j int) bool { return candidates[i].Name < candidates[j].Name })
+	var firstConflict *NameConflictError
+	for _, ext := range candidates {
+		owner, taken := claimOwner(claims, ourKey, ext.Name)
+		if !taken {
+			return ext, nil, true
+		}
+		if firstConflict == nil {
+			firstConflict = &NameConflictError{
+				Name: ext.Name, OwnerDir: owner.ProjectDir, OwnerEnvironment: owner.Environment,
+			}
+		}
+	}
+	return ExternalProject{}, firstConflict, true
+}
+
 func externalMine(external []ExternalProject, name, ourDir string) (ExternalProject, bool) {
 	for _, ext := range external {
 		if ext.Name == name && sameDir(ext.ProjectDir, ourDir) {
@@ -355,15 +414,7 @@ func composeProjectDir(t core.Target) string {
 }
 
 func sameDir(a, b string) bool {
-	if a == "" || b == "" {
-		return false
-	}
-	ra, errA := filepath.EvalSymlinks(a)
-	rb, errB := filepath.EvalSymlinks(b)
-	if errA == nil && errB == nil {
-		return filepath.Clean(ra) == filepath.Clean(rb)
-	}
-	return filepath.Clean(a) == filepath.Clean(b)
+	return fsidentity.Same(a, b)
 }
 
 func validateName(name string) error {

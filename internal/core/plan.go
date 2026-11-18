@@ -22,7 +22,11 @@ type Plan struct {
 // target resolution, preflight requirements and stage model as Run, but it
 // never checks or consumes an approval and never records history.
 type PlanReport struct {
-	Feature     string       `json:"feature"`
+	Feature string `json:"feature"`
+	// Fingerprint identifies the resolved inputs this plan was previewed
+	// against. The caller passes it back in Request.PlanFingerprint; Run
+	// refuses a selection that changed while the approval was on screen.
+	Fingerprint string       `json:"fingerprint,omitempty"`
 	Outcome     Outcome      `json:"outcome"`
 	Target      Target       `json:"target"`
 	Tools       ToolInfo     `json:"tools"`

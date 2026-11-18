@@ -19,7 +19,7 @@ func setup(t *testing.T) (string, *feature.Feature, *hooklib.Service) {
 	dir := t.TempDir()
 	writeExecutable(t, filepath.Join(dir, "scripts/pre.sh"), "#!/bin/sh\nexit 0\n")
 	writeExecutable(t, filepath.Join(dir, "scripts/post.sh"), "#!/bin/sh\nexit 0\n")
-	svc := hooklib.New(state.New(t.TempDir()), os.Getenv)
+	svc := hooklib.New(state.New(privateStateDir(t)), os.Getenv)
 	return dir, feature.New(svc), svc
 }
 

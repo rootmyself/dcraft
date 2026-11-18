@@ -345,6 +345,9 @@ func TestRunBindRefusesCorruptArtifactsBeforeStopping(t *testing.T) {
 func TestRunBindTakesThePerStackLockBeforeSelecting(t *testing.T) {
 	projectDir, targetDir, artifact, backend := bindRestoreFixture(t)
 	stateDir := t.TempDir()
+	if err := os.Chmod(stateDir, 0o700); err != nil {
+		t.Fatalf("chmod state dir: %v", err)
+	}
 	locks := state.New(stateDir)
 	in := restoreInvocation(t, projectDir, artifact, map[string]string{"bind": targetDir})
 	held, err := locks.AcquireStackLock(context.Background(), in.Target, state.LockHolder{

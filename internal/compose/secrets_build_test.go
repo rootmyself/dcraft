@@ -30,7 +30,7 @@ func fileHash(t *testing.T, path string) string {
 
 func buildSecretRuntime(t *testing.T, env map[string]string) (*state.Store, *secretref.Runtime) {
 	t.Helper()
-	store := state.New(t.TempDir())
+	store := state.New(privateStateDir(t))
 	return store, secretref.NewRuntime(store, func(name string) string { return env[name] })
 }
 

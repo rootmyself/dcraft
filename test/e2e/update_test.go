@@ -328,7 +328,7 @@ func TestUpdateJSONSeparatesOutcomeAndDoesNotLeakSecrets(t *testing.T) {
 	for _, st := range parsed.Stages {
 		stageNames = append(stageNames, st.Name)
 	}
-	want := "resolve_target,preflight,resolve_project,allocate_name,coordinate,plan,build,pull,apply,verify,record,history"
+	want := "resolve_target,preflight,resolve_project,coordinate,allocate_name,plan,build,pull,apply,verify,record,history"
 	if got := strings.Join(stageNames, ","); got != want {
 		t.Fatalf("stages = %q, want %q", got, want)
 	}
