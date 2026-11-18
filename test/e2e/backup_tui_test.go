@@ -25,6 +25,7 @@ func TestBackupTUIWizardSelectsVolumeAndShowsTheEffectBeforeRunning(t *testing.T
 		{wait: "> 호스트 스크립트 (hooks)", send: "up"},
 		{wait: "> Git 호스트 스크립트 생성 (generate-git-hook)", send: "up"},
 		{wait: "> 서비스 접속 (exec)", send: "up"},
+		{wait: "> 실행환경 별칭 (environments)", send: "up"},
 		{wait: "> 스택 제거 (down)", send: "up"},
 		{wait: "> 데이터 백업 (backup)", send: "\r"},
 		{wait: "데이터 백업 설정", send: "\r"}, // choose the first named volume
@@ -78,6 +79,7 @@ func TestBackupTUIWizardSelectsAMixOfVolumeAndBindFolder(t *testing.T) {
 		{wait: "> 호스트 스크립트 (hooks)", send: "up"},
 		{wait: "> Git 호스트 스크립트 생성 (generate-git-hook)", send: "up"},
 		{wait: "> 서비스 접속 (exec)", send: "up"},
+		{wait: "> 실행환경 별칭 (environments)", send: "up"},
 		{wait: "> 스택 제거 (down)", send: "up"},
 		{wait: "> 데이터 백업 (backup)", send: "\r"},
 		{wait: "백업할 데이터 선택", send: " "}, // check the first volume

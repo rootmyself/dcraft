@@ -99,6 +99,14 @@ func (r *Resolver) Resolve(ctx context.Context, req core.TargetRequest, cwd stri
 	// folder/Compose defaults instead.
 	if req.AllowMissingConfiguration {
 		tgt.Environment = ""
+		// An explicit alias plus explicit Compose inputs is two competing
+		// answers for a feature that cannot consume either alias expansion or
+		// a second merge language. Reject it instead of silently dropping the
+		// alias and letting an alias-management command create an ambiguous
+		// alias from the other flags.
+		if req.Environment != "" && (len(req.Files) > 0 || len(req.EnvFiles) > 0 || len(req.Profiles) > 0) {
+			return tgt, nil, environmentInputConflict()
+		}
 		return resolvePlain(req, tgt, cwd)
 	}
 

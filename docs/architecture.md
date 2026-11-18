@@ -5,11 +5,12 @@ fork these types or recreate these rules in a feature or UI package. Shared
 interface changes go to the integration owner as a change request (see the end
 of this file).
 
-Scope of this version: one working binary, fifteen registered features
+Scope of this version: one working binary, sixteen registered features
 (`status`, `install-compose`, `up`, `stop`, `down`, `restart`, `update`,
 `secrets`, `hooks`, `logs`, `exec`, `backup`, `restore`, `rollback`,
-`generate-git-hook`), the common operation seam, target resolution, named
-environments, automatic project-name allocation, same-stack coordination,
+`generate-git-hook`, `environments`), the common operation seam, target
+resolution, named environments with explicit CLI/TUI creation, automatic
+project-name allocation, same-stack coordination,
 runtime and build-time secret references, explicit host scripts with
 independent script trust, the guided Git host-script generator,
 service/instance selection, live terminal attach, versioned volume and declared
@@ -417,9 +418,35 @@ Rules:
   relative binds, resolve symlinks, compare IPv6 bracket port syntax, or follow
   what external scripts/users do. The Compose CLI remains the authority for
   merge, validation, paths and profiles.
-- Alias creation in this version is direct editing of `.dcraft.yaml`. There is
-  no TUI alias editor and no generated config file; adding one is a later
-  ticket, not a hidden write from this one.
+- Alias creation, listing and removal are available from both interfaces; they
+  are not hidden hand edits. CLI: `dcraft environments --add --name <alias>
+  [--file ...] [--env-file ...] [--profile ...]`, `--list`, and
+  `--remove --name <alias>`. The ordinary persistent `--path` selects the
+  project folder; `--file`/`--env-file`/`--profile` describe the new alias.
+  TUI: the `environments` feature's generic wizard collects name, Compose files
+  (defaulted from the current discovery), env files and profiles and shows the
+  resulting `.dcraft.yaml` section before one `enter` saves. Nothing is
+  preselected and `esc` saves nothing.
+- Creation writes only `.dcraft.yaml`. It edits YAML nodes, so unknown
+  top-level keys, the `secrets:`/`hooks:` sections and attached comments are
+  preserved where the YAML library can attach them; the file mode is kept and
+  the replacement is an atomic temp-file + fsync + rename. Writers take the
+  same project-local `.dcraft.lock` flock as the hooks registration writer, so
+  concurrent additions (and concurrent hooks edits) cannot lose updates.
+  Removing an alias edits only the config: running stacks, volumes and
+  per-environment state are not stopped or deleted.
+- Alias input is rejected as usage input (exit 2) when the name is missing or
+  invalid, the alias already exists, a list entry is empty/duplicated, a
+  profile contains whitespace, or no Compose/env/profile input is supplied.
+  Referenced Compose/env files must exist as regular files; a broken config
+  remains `environment_invalid` (exit 1). `--env` cannot be combined with
+  `-f`/`--env-file`/`--profile` on a target-optional feature because that
+  would give an alias-management action two different input answers. JSON
+  `data.environments` lists alias configuration only (name, resolved
+  files/env_files/profiles); env-file values are never read or printed.
+  Selection rules are unchanged: this feature never auto-selects an alias and
+  a newly created alias must still be selected explicitly with `--env` or the
+  TUI screen for every stack operation.
 
 ### 3.2 Read-only project identity (ticket #3 follow-up)
 
@@ -680,6 +707,16 @@ Persistent flags on every command:
 Feature-owned flags and `--service/-s` are added from the descriptor. Help and
 usage templates are Korean; command/flag names and machine values stay English.
 
+`dcraft environments` uses the persistent target flags directly:
+`--add --name <alias>` with `--file`, `--env-file` and `--profile` describing
+the new alias, `--list`, or `--remove --name <alias>`, plus `--path` for the
+project folder and `--json` for the one result object. Alias management is a
+target-optional command: registered aliases never require `--env` for it, and
+`--env` combined with `--file`/`--env-file`/`--profile` is rejected as an
+ambiguous-input usage error (exit 2) instead of being silently ignored. Missing
+explicit input (`--add`/`--list`/`--remove` not chosen, name absent or invalid,
+duplicate alias) also exits 2 without a prompt.
+
 Without a command:
 
 - interactive terminal → `Home` opens the TUI;
@@ -737,7 +774,12 @@ It derives everything from the registry:
   a mixed volume/bind selection and an output directory and to show
   affected/running services before anything is stopped. The source step is the
   published generic `Multi` step; the TUI adds no safety rule; the feature
-  rechecks selection, paths and consumers on the apply run;
+  rechecks selection, paths and consumers on the apply run. `environments`
+  uses the same flow to create an alias: it asks for a name, Compose files
+  (defaulted from discovery), env files and profiles, renders the exact
+  `.dcraft.yaml` section, and writes only after `enter` on the preview. The
+  preview states that aliases group Compose inputs only and do not isolate
+  external volumes, binds, networks or fixed host ports;
 - `r` re-runs read-only features directly, re-plans every Planner and asks for
   confirmation again for other mutating features. The selected environment is
   reused; `q` and `ctrl+c` quit outside an operation;
@@ -1537,7 +1579,7 @@ Desktop's VM-backed unix socket is **local**, not remote.
 | `update_failed` | a build, pull or detached apply failed; the stage and observed state are reported | error |
 | `readiness_failed` | post-update state was unhealthy, exited, restarting, not started/created or timed out | error |
 | `image_missing` | `--no-pull` found a required local image absent; nothing changed | error |
-| `invalid_option` | an explicit feature option is invalid (for example `--timeout`) or conflicts with the recorded rollback target | error (exit 2) |
+| `invalid_option` | an explicit feature option is invalid or missing (for example `--timeout`, `dcraft environments --add --name`) or conflicts with the recorded rollback target | error (exit 2) |
 | `rollback_unavailable` | no previous-good record for this stack and environment; nothing inferred | error |
 | `rollback_record_invalid` | stored record is malformed, belongs elsewhere or no longer matches the recorded configuration | error |
 | `rollback_input_missing` | a recorded Compose/env file or folder is missing; nothing changed | error |
@@ -2237,8 +2279,9 @@ Docker or external network. Unrun platforms/paths are not claimed as verified.
   contract, `restore.Executor` and the v1 manifest. `backup` supports named
   volumes and stack-declared bind folders; volume restore is implemented by
   ticket #18.
-- TUI alias creation/editing: aliases are created by editing `.dcraft.yaml` in
-  this version (selection is provided by both interfaces).
+- Editing an existing alias in place (create/list/remove are available from
+  both interfaces; change an alias by removing and adding it with the same
+  explicit inputs).
 - AWS Secrets Manager sources are implemented by ticket #10 below; generated
   Compose/Dockerfile files and the S3 generator flow, Kubernetes, remote
   engines, resident daemon/web UI are not implemented. Runtime environment/file
@@ -2279,8 +2322,9 @@ CLI (version/JSON probes), so a heavily patched Compose may pass probes and fail
 later; diagnostic details are tool output and could contain user-provided file
 content, though dcraft never fetches or prints secret values; status parses a
 subset of Compose/ps output, so unknown future fields are ignored by design; the
-TUI renders long status text without a scroll viewport. Environment alias files
-are hand-edited (no TUI editor); the host-resource conflict scan is static and
+TUI renders long status text without a scroll viewport. Environment aliases are
+created/listed/removed through the wizard or `dcraft environments` (in-place
+editing is remove + add); the host-resource conflict scan is static and
 best-effort (no interpolation/merge evaluation), so undetected sharing is
 possible and complete isolation is never claimed. Environment aliases and
 lifecycle names are separate: aliases partition state, files and profiles; the
@@ -2389,6 +2433,17 @@ Before changing a shared type/interface, send the integration owner:
 3. tests proving CLI and TUI still share the seam and no safety rule moved into
    a UI;
 4. documentation updates to this file.
+
+Published by the named-environment creation gap (consume, do not fork):
+`internal/environments.Add`/`Remove`/`RenderAdd`/`InputError`, the
+`.dcraft.yaml` `environments:` writer rules (node-level preservation, file
+mode, atomic replacement, `.dcraft.lock`), the `dcraft environments`
+`--add`/`--list`/`--remove`/`--name` flags, and the `data.environments`
+payload shape (`action`, `config_file`, `aliases[]` with
+`name`/`files`/`env_files`/`profiles`). Invalid creation input uses the
+existing `invalid_option` category (exit 2); a malformed config or failed
+write stays `environment_invalid` (exit 1); removing an unknown alias uses
+`environment_unknown` (exit 2).
 
 Published by ticket #16 (consume, do not fork): `internal/data` `Backend`,
 `DataSource`, `Kind`, `ServiceRuntime`, `ContainerConsumer`, `OpResult`,

@@ -29,5 +29,5 @@ var (
 	msgConfigActionTwo     = "실행환경 별칭은 소문자·숫자·하이픈·밑줄로 32자 이내여야 합니다."
 	msgEnvFileAction       = "설정에 적은 경로가 프로젝트 폴더 기준으로 실제 존재하는 파일인지 확인하세요."
 	msgUnknownEnvActionOne = "--env에 사용 가능한 실행환경 별칭을 지정하세요."
-	msgUnknownEnvActionTwo = "실행환경을 등록하려면 프로젝트 폴더의 .dcraft.yaml을 직접 편집하세요."
+	msgUnknownEnvActionTwo = "실행환경을 등록하려면 dcraft environments --add --name <별칭>을 실행하세요."
 )
