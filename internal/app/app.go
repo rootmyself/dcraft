@@ -65,6 +65,7 @@ func New(opts Options) (*App, error) {
 	store := state.New(stateRoot)
 	composeAdapter := compose.New(opts.Runner, opts.Getenv)
 	controller := lifecycle.New(composeAdapter, composeAdapter, composeAdapter, store, opts.Clock)
+	identityReader := identity.New(composeAdapter, store)
 	d := &deps.Deps{
 		Runner:     opts.Runner,
 		Getenv:     opts.Getenv,
@@ -74,13 +75,16 @@ func New(opts Options) (*App, error) {
 		Lifecycle:  controller,
 		Downloader: opts.Downloader,
 		Installer:  opts.Installer,
+		Data:       composeAdapter,
+		Identity:   identityReader,
+		Store:      store,
 	}
 
 	registry := core.NewRegistry()
 	all.Register(registry, d)
 
 	engine := core.NewEngine(registry, target.New(), composeAdapter, store, opts.Clock)
-	engine.Identity = identity.New(composeAdapter, store)
+	engine.Identity = identityReader
 	engine.CWD = opts.Getwd
 
 	return &App{Options: opts, Registry: registry, Engine: engine, Deps: d}, nil

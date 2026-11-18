@@ -41,6 +41,8 @@ const (
 	phaseLoading
 	phasePlanning
 	phaseConfirm
+	phaseOptions
+	phaseSelectingChoices
 	phaseReady
 )
 
@@ -75,6 +77,19 @@ type Model struct {
 	// no feature-specific branch is added here.
 	pendingApproval core.ApprovalKind
 	planText        string
+	planReady       bool
+
+	// Generic feature-flag input. Values are only collected here; the
+	// feature's own validation and Korean diagnostics remain authoritative.
+	optionValues   map[string]string
+	optionLists    map[string][]string
+	optionFocus    int
+	optionError    string
+	choices        []core.OptionChoice
+	choiceFlag     string
+	choiceSelected map[string]bool
+	choiceCursor   int
+	choiceLoading  bool
 }
 
 // NewModel builds the initial screen without running anything.
@@ -120,6 +135,11 @@ type environmentListMsg struct {
 	err  error
 }
 
+type choicesMsg struct {
+	flag   string
+	report core.ChoicesReport
+}
+
 func (m *Model) Init() tea.Cmd {
 	switch m.phase {
 	case phaseLoadingEnvironments:
@@ -156,6 +176,25 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.planText = msg.report.Text
 		m.phase = phaseConfirm
 		return m, nil
+	case choicesMsg:
+		if m.phase != phaseSelectingChoices {
+			return m, nil
+		}
+		if msg.report.Failed() {
+			res := msg.report.Result()
+			m.result = &res
+			m.phase = phaseReady
+			m.choiceLoading = false
+			return m, nil
+		}
+		m.choices = msg.report.Choices
+		m.choiceSelected = map[string]bool{}
+		for _, value := range m.optionLists[msg.flag] {
+			m.choiceSelected[value] = true
+		}
+		m.choiceCursor = 0
+		m.choiceLoading = false
+		return m, nil
 	case environmentListMsg:
 		if m.phase != phaseLoadingEnvironments {
 			return m, nil
@@ -183,6 +222,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case tea.KeyMsg:
+		if m.phase == phaseOptions {
+			return m.updateOptions(msg)
+		}
+		if m.phase == phaseSelectingChoices {
+			return m.updateChoices(msg)
+		}
 		if m.phase == phaseConfirm {
 			switch msg.String() {
 			case "q", "ctrl+c":
@@ -194,6 +239,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.declineApproval()
 				} else {
 					m.pending = nil
+					m.planReady = false
+					m.planText = ""
 					m.phase = phaseReady
 					m.notice = ""
 				}
@@ -210,13 +257,26 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					return m, m.runApproved(feature, approval)
 				}
+				if m.planReady {
+					f := m.active
+					m.planReady = false
+					m.planText = ""
+					if f == nil {
+						m.phase = phaseReady
+						return m, nil
+					}
+					m.phase = phaseLoading
+					m.runCtx, m.runCancel = context.WithCancel(m.ctx)
+					m.events = make(chan core.Stage, 64)
+					return m, tea.Batch(m.runCmd(f, nil, m.events, m.runCtx), waitStageCmd(m.events))
+				}
 				if m.pending == nil {
 					m.phase = phaseReady
 					return m, nil
 				}
 				f := m.pending
 				m.pending = nil
-				return m, m.begin(f)
+				return m, m.runCollected(f)
 			}
 			return m, nil
 		}
@@ -270,7 +330,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.active == nil || m.phase != phaseReady {
 				return m, nil
 			}
-			if m.active.Descriptor().ReadOnly || plannedApproval(m.active) {
+			if m.active.Descriptor().ReadOnly || plannedApproval(m.active) || needsOptions(m.active) {
 				return m, m.begin(m.active)
 			}
 			m.pending = m.active
@@ -290,7 +350,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			if m.phase == phaseReady && len(m.features) > 0 {
 				f := m.features[m.selected]
-				if f.Descriptor().ReadOnly || plannedApproval(f) {
+				if f.Descriptor().ReadOnly || plannedApproval(f) || needsOptions(f) {
 					return m, m.begin(f)
 				}
 				m.pending = f
@@ -347,11 +407,13 @@ func (m *Model) begin(f core.Feature) tea.Cmd {
 	m.events = make(chan core.Stage, 64)
 	if f != nil {
 		desc := f.Descriptor()
-		if desc.Approval != core.ApprovalNone {
-			if _, ok := f.(core.Planner); ok {
-				m.phase = phasePlanning
-				return tea.Batch(m.planCmd(f, m.events), waitStageCmd(m.events))
-			}
+		if needsOptions(f) {
+			m.startOptions(f)
+			return nil
+		}
+		if _, ok := f.(core.Planner); ok {
+			m.phase = phasePlanning
+			return tea.Batch(m.planCmd(f, m.events), waitStageCmd(m.events))
 		}
 	}
 	m.phase = phaseLoading
@@ -403,6 +465,8 @@ func (m *Model) runCmd(f core.Feature, approvals []core.ApprovalKind, events cha
 	req := core.Request{
 		Feature:     f.Descriptor().Name,
 		Target:      m.target,
+		Options:     cloneOptions(m.optionValues),
+		OptionLists: cloneOptionLists(m.optionLists),
 		Approvals:   approvals,
 		Interactive: true,
 	}
@@ -439,6 +503,8 @@ func (m *Model) planCmd(f core.Feature, events chan core.Stage) tea.Cmd {
 	req := core.Request{
 		Feature:     f.Descriptor().Name,
 		Target:      m.target,
+		Options:     cloneOptions(m.optionValues),
+		OptionLists: cloneOptionLists(m.optionLists),
 		Interactive: true,
 	}
 	return func() tea.Msg {

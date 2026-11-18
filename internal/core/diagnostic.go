@@ -49,13 +49,24 @@ const (
 	CategoryProjectNameConflict       Category = "project_name_conflict"
 	CategoryIdentityUnreadable        Category = "identity_unreadable"
 	CategoryServiceUnknown            Category = "service_unknown"
-	CategoryStackBusy                 Category = "stack_busy"
-	CategoryLifecycleFailed           Category = "lifecycle_failed"
-	CategoryStateFailed               Category = "state_failed"
-	CategoryVerificationFailed        Category = "verification_failed"
-	CategoryCanceled                  Category = "canceled"
-	CategoryHistoryFailed             Category = "history_failed"
-	CategoryInternal                  Category = "internal_error"
+	// Data backup (ticket #16). The three *_required/*_unknown values are
+	// missing or invalid caller input and map to exit code 2.
+	CategoryBackupOutputRequired     Category = "backup_output_required"
+	CategoryBackupVolumeRequired     Category = "backup_volume_required"
+	CategoryBackupVolumeUnknown      Category = "backup_volume_unknown"
+	CategoryBackupVolumeUnsupported  Category = "backup_volume_unsupported"
+	CategoryBackupOutputInvalid      Category = "backup_output_invalid"
+	CategoryBackupConsumerUnsafe     Category = "backup_consumer_unsafe"
+	CategoryBackupFailed             Category = "backup_failed"
+	CategoryBackupIntegrityFailed    Category = "backup_integrity_failed"
+	CategoryBackupStateRestoreFailed Category = "backup_state_restore_failed"
+	CategoryStackBusy                Category = "stack_busy"
+	CategoryLifecycleFailed          Category = "lifecycle_failed"
+	CategoryStateFailed              Category = "state_failed"
+	CategoryVerificationFailed       Category = "verification_failed"
+	CategoryCanceled                 Category = "canceled"
+	CategoryHistoryFailed            Category = "history_failed"
+	CategoryInternal                 Category = "internal_error"
 )
 
 // Severity separates blocking problems from information that still allows the

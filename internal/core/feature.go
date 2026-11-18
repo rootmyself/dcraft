@@ -71,6 +71,10 @@ type FlagKind string
 const (
 	FlagString FlagKind = "string"
 	FlagBool   FlagKind = "bool"
+	// FlagList is a repeatable string flag. Values are carried separately in
+	// Request.OptionLists/Invocation.OptionLists so a value containing a
+	// comma or space is never re-split by the feature.
+	FlagList FlagKind = "list"
 )
 
 // Flag declares a feature-owned CLI flag.
@@ -80,6 +84,11 @@ type Flag struct {
 	Usage     string
 	Kind      FlagKind
 	Default   string
+	// Required marks input a non-interactive run cannot invent. The TUI uses
+	// it to decide whether to show its generic input screen; the CLI still
+	// passes whatever was given and the feature returns a usage diagnostic
+	// (exit 2) for a missing required value.
+	Required bool
 }
 
 var (
@@ -153,7 +162,7 @@ func validateDescriptor(d Descriptor) error {
 			return fmt.Errorf("feature %q: flag --%s needs Korean usage text", d.Name, f.Name)
 		}
 		switch f.Kind {
-		case FlagString:
+		case FlagString, FlagList:
 		case FlagBool:
 			switch f.Default {
 			case "", "true", "false":
