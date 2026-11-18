@@ -282,19 +282,19 @@ func (e *Engine) Run(ctx context.Context, req Request, sink Sink) (res Result) {
 	}
 
 	// Data describes a completed feature result. It is attached only after
-	// verification and cancellation checks, so a failure or cancellation can
-	// never carry a payload that looks like a success.
-	res.Data = payload
-
-	// A wizard "steps" run only collects answers; the "apply" run is the
-	// actual operation. Recording the preview would write a success history
-	// entry for work the user has not confirmed yet.
+	// verification, cancellation and post-hook checks, so a failure or
+	// cancellation can never carry a payload that looks like a success.
 	if canceled := e.runHooksPost(ctx, rec, &res, res.Action, res.OperationID, target, hookEntriesForStage(hookPlan, HookStagePost)); canceled {
 		res.Outcome = OutcomeCanceled
 		addCanceledDiagnostic(&res)
 		return res
 	}
 
+	res.Data = payload
+
+	// A wizard "steps" run only collects answers; the "apply" run is the
+	// actual operation. Recording the preview would write a success history
+	// entry for work the user has not confirmed yet.
 	if desc.RecordsHistory && req.Options["wizard"] != "steps" {
 		historyErr := RunStage(rec, "history", msgStageHistory, func() error {
 			if e.State == nil {
