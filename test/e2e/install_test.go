@@ -120,6 +120,38 @@ func TestInstallWithoutApprovalExitsTwoWithoutChanges(t *testing.T) {
 	}
 }
 
+func TestInstallWithMissingDockerCLIReportsDockerNotCompose(t *testing.T) {
+	pluginDir := t.TempDir()
+	env := buildEnv(map[string]string{
+		"PATH":                       "/usr/bin:/bin",
+		"DCRAFT_STATE_DIR":           t.TempDir(),
+		"DCRAFT_COMPOSE_PLUGIN_DIR":  pluginDir,
+		"DCRAFT_COMPOSE_RELEASE_API": "http://127.0.0.1:1/latest",
+	})
+	res := runProcess(t, t.TempDir(), env, strings.NewReader(""), "install-compose", "--approve", "install", "--json")
+	if res.code != 1 {
+		t.Fatalf("exit = %d, want 1 (stderr=%q)", res.code, res.stderr)
+	}
+	parsed := parseInstallResult(t, res.stdout)
+	if parsed.Outcome != core.OutcomeFailure {
+		t.Fatalf("outcome = %q", parsed.Outcome)
+	}
+	d, ok := findDiagnostic(parsed, core.CategoryDockerMissing)
+	if !ok {
+		t.Fatalf("diagnostics = %+v", parsed.Diagnostics)
+	}
+	actions := joinActions(d)
+	if strings.Contains(actions, "install-compose") {
+		t.Fatalf("Docker missing was misread as Compose install: %v", d.NextActions)
+	}
+	if !strings.Contains(actions, "Docker") {
+		t.Fatalf("Docker missing actions = %v", d.NextActions)
+	}
+	if _, err := os.Stat(filepath.Join(pluginDir, "docker-compose")); !os.IsNotExist(err) {
+		t.Fatalf("plugin created without Docker: %v", err)
+	}
+}
+
 func TestInstallWithBlockedSourceFailsCleanly(t *testing.T) {
 	fake := newInstallFakeDocker(t)
 	pluginDir := t.TempDir()

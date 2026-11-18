@@ -175,7 +175,8 @@ change anything. `PlanReport` carries feature, outcome, target, tools, stages,
 diagnostics and the Korean plan text. Both paths share the same target and
 preflight code, so a preview cannot silently use a different selection. Plan
 text must state the concrete source, version, destination, permission need and
-effect, and never contain secret values.
+effect, and never contain secret values. `PlanReport.Result()` converts a failed
+plan into the common result shape for both interfaces to render.
 
 `core.Invocation` gives a feature: resolved `Target`, `Services`, `Args`,
 `Options`, `Interactive`, `Preflight` report, `Reporter`, `Clock`, `State`.
@@ -419,9 +420,11 @@ nothing to stderr for operation outcomes. Usage errors remain human text.
 
 The CLI never prompts. An approval-gated command without `--approve <kind>`
 returns the engine's approval failure (exit 2) with Korean text describing the
-effect; non-interactive and interactive terminals behave identically. The plan
-(source, version, destination, permission, integrity) is printed as the first
-stage after approval, before any download.
+effect; non-interactive and interactive terminals behave identically. When the
+approval is supplied, human mode calls `Engine.Plan` and prints the plan
+(source, version, destination, permission, integrity) to stderr before
+`Engine.Run`, so nothing is downloaded before the user sees it. JSON mode does
+not make a separate plan call; the result carries the same public metadata.
 
 ### TUI (`internal/ui/tui`)
 

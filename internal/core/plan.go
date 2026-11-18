@@ -33,3 +33,30 @@ type PlanReport struct {
 
 // Failed reports whether this plan cannot be offered to the user.
 func (r PlanReport) Failed() bool { return r.Outcome != OutcomeSuccess }
+
+// Result converts a failed plan into the common result shape so both
+// interfaces can render the same failure. A successful plan is a preview, not
+// an operation result; callers use its Text before running the feature.
+func (r PlanReport) Result() Result {
+	outcome := r.Outcome
+	if outcome == "" {
+		outcome = OutcomeFailure
+	}
+	res := Result{
+		SchemaVersion: SchemaVersion,
+		Action:        r.Feature,
+		Outcome:       outcome,
+		Target:        r.Target,
+		Tools:         r.Tools,
+		Stages:        r.Stages,
+		Diagnostics:   r.Diagnostics,
+	}
+	if res.Stages == nil {
+		res.Stages = []Stage{}
+	}
+	if res.Diagnostics == nil {
+		res.Diagnostics = []Diagnostic{}
+	}
+	res.Target.Normalize()
+	return res
+}

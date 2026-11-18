@@ -141,7 +141,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case planMsg:
 		m.currentStage = nil
 		if msg.report.Failed() {
-			m.result = resultFromPlan(msg.report)
+			res := msg.report.Result()
+			m.result = &res
 			m.phase = phaseReady
 			return m, nil
 		}
@@ -303,23 +304,6 @@ func (m *Model) declineApproval() {
 	m.pendingApproval = ""
 	m.planText = ""
 	m.phase = phaseReady
-}
-
-func resultFromPlan(report core.PlanReport) *core.Result {
-	res := core.Result{
-		SchemaVersion: core.SchemaVersion,
-		Action:        report.Feature,
-		Outcome:       report.Outcome,
-		Target:        report.Target,
-		Tools:         report.Tools,
-		Stages:        report.Stages,
-		Diagnostics:   report.Diagnostics,
-	}
-	if res.Outcome == "" {
-		res.Outcome = core.OutcomeFailure
-	}
-	res.Target.Normalize()
-	return &res
 }
 
 func (m *Model) runCmd(f core.Feature, approvals []core.ApprovalKind, events chan core.Stage) tea.Cmd {
