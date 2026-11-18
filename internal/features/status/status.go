@@ -53,6 +53,36 @@ func (f *Feature) Run(ctx context.Context, in core.Invocation) (any, error) {
 	return Payload{Stack: snap}, nil
 }
 
+// Services implements core.ServiceCatalog. It uses the same read-only inspect
+// path as the status screen so an interactive service-scope choice sees the
+// same stack facts; it never writes state or contacts Docker itself (the
+// backend adapter does).
+func (f *Feature) Services(ctx context.Context, in core.Invocation) ([]core.ServiceStatus, error) {
+	if f.backend == nil {
+		return nil, core.Fail(core.Diagnostic{
+			Category:    core.CategoryInternal,
+			Severity:    core.SeverityError,
+			Message:     msgNoBackend,
+			NextActions: []string{msgNoBackendAction},
+		})
+	}
+	snap, err := f.backend.Inspect(ctx, in.Target)
+	if err != nil {
+		return nil, err
+	}
+	services := make([]core.ServiceStatus, 0, len(snap.Services))
+	for _, svc := range snap.Services {
+		services = append(services, core.ServiceStatus{
+			Name:       svc.Name,
+			State:      string(svc.State),
+			Health:     string(svc.Health),
+			Instances:  len(svc.Instances),
+			Configured: svc.Configured,
+		})
+	}
+	return services, nil
+}
+
 // Present implements core.Presenter for successful results.
 func (f *Feature) Present(res core.Result, width int) string {
 	payload, ok := payloadFrom(res.Data)

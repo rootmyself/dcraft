@@ -243,6 +243,11 @@ type core.InputProvider interface {
     Inputs(ctx context.Context, in core.Invocation) ([]core.InputField, error)
     WithInputs(req core.Request, values map[string]string) (core.Request, error)
 }
+// ServiceCatalog: a read-only feature (status) publishes the current stack
+// services for the generic TUI scope screen.
+type core.ServiceCatalog interface {
+    Services(ctx context.Context, in core.Invocation) ([]core.ServiceStatus, error)
+}
 // CanceledReporter: a feature-specific cancellation effect, normalized by the
 // engine to the canceled/warning/exit-130 contract.
 type core.CanceledReporter interface {
@@ -259,6 +264,18 @@ preflight requirements as `Run`, then calls the feature's `InputProvider`
 implementation. It never checks an approval, never runs the feature and never
 writes history, so the TUI can show the service, instance and command before
 attaching. The CLI never calls it and never prompts.
+
+`Engine.Services(ctx, req, sink) core.ServicesReport` resolves the same target
+and preflight requirements as `Run` for a `SupportsServices` feature, then asks
+the first registered read-only `core.ServiceCatalog` (status) for the current
+services. It adds the stable `service_catalog` stage, never checks an approval,
+never runs the requested feature and never writes history. `ServiceStatus`
+carries the Compose service name, machine `state`/`health` values, instance
+count and whether the service is in the active configuration. This is a query,
+not a second execution path: the selection still travels through
+`Request.Services` into `Plan`/confirm/`Run`, and the CLI does not use it. The
+TUI never contacts Docker directly; `status` implements the catalog on its
+existing `stack.Backend.Inspect` path.
 
 `Engine.Plan(ctx, req, sink) core.PlanReport` resolves the same target and
 preflight requirements as `Run`, then calls the feature's `Plan`. It never
@@ -641,12 +658,20 @@ is in the payload and in every Compose call.
 
 - The menu lists every registered feature in Korean. Selecting a mutating
   feature first shows a confirmation screen with the requested target
-  (path/files/profiles/project name), the whole-stack scope and the effect.
-  `enter` runs the same engine path, `esc` cancels, `q` quits without running.
-  Lifecycle screens still operate on the whole stack; service selection for
-  those mutations stays the CLI `-s/--service`. The ticket-05 logs/exec screens
-  select a service/instance through the published selector and a generic
-  `core.InputProvider` form, without a feature-specific branch in the TUI.
+  (path/files/profiles/project name), the exact scope and the effect. `enter`
+  runs the same engine path, `esc` cancels, `q` quits without running.
+  The TUI is not whole-stack-only: any feature whose descriptor declares
+  `SupportsServices` (up/stop/restart/update/logs at minimum) first shows a
+  read-only service list from the current stack (state, health and instance
+  count). The first row `전체 (스택 전체)` is selected by default; `space`
+  toggles individual services, `enter` confirms, and `esc`/`q` runs nothing.
+  The choice feeds `Request.Services` into the same plan/confirm/run path as
+  `-s/--service`, and the plan/confirm screen states the exact scope
+  (`스택 전체` or the service names), so an explicit selection never silently
+  widens back to the whole stack. A list that cannot be read is shown as a
+  failure and blocks the operation. Features that collect their own service
+  input keep it: the exec form and wizard steps are unchanged. Instance-level
+  selection remains specific to logs/exec.
 - During an in-flight mutating operation, `q` explains that the operation is
   running and that quitting can leave partial effects (it does not orphan the
   Compose process). `ctrl+c` requests safe cancellation: the per-run context is
@@ -725,8 +750,14 @@ It derives everything from the registry:
   a feature. An explicit `--env` skips the screen. A broken alias file is not
   hidden: running the feature surfaces the same `resolve_target` failure.
 - selecting a mutating feature that has no independent approval shows the small
-  confirmation screen (requested target and environment, whole-stack scope,
+  confirmation screen (requested target and environment, exact service scope,
   effect); `esc` returns to the menu;
+- for a `SupportsServices` feature the TUI first loads the current service list
+  through `core.Engine.Services` (the registered read-only `core.ServiceCatalog`,
+  implemented by `status` on its existing inspect path) and collects an explicit
+  scope. TUI selection is a convenience over the same engine rules: the selected
+  names travel in `Request.Services` and the feature validates them again. No
+  Docker call is made by the TUI package itself;
 - a feature that implements `core.Planner` starts the read-only plan screen
   instead of the generic confirmation. For an approval-gated feature the plan is
   the approval confirmation (flow below); for an ordinary `update` the same plan
@@ -2160,7 +2191,9 @@ Tested seams:
 - pty process tests: TUI enter+quit, environment selection screen and keyboard
   choice, quit-from-selection runs nothing, no mutating Docker command,
   mutating confirmation before running, up through the same engine, install plan
-  shown, decline changes nothing, approval installs and re-checks;
+  shown, decline changes nothing, approval installs and re-checks; generic
+  service scope screen selecting one service, whole stack and cancel, with the
+  logs screen targeting the chosen service and stopping nothing;
 - guarded real install (`DCRAFT_COMPOSE_REAL_INSTALL=1`): official download,
   published checksum, temp plugin directory, independent `docker compose
   version`, real home Compose untouched;
@@ -2177,7 +2210,9 @@ Tested seams:
   from `-p`/`name:`/`.env`/exported `COMPOSE_PROJECT_NAME`, suffixed-folder
   status reporting `hello-world-1` and the same container IDs with unchanged
   state files, another stack's container IDs/data unchanged, TUI quit leaving
-  services running, cleanup with its own projects only.
+  services running, TUI service-scope stop/restart/update selecting one service
+  while the other service's container ID and Created stay unchanged, cleanup
+  with its own projects only.
 - runtime secret references: config parse/validation/persistence (no values),
   unknown service, duplicate target, unsupported build phase, AWS shape
   validation (name/ARN, field path, region, profile, credentials-like fields),
@@ -2291,9 +2326,11 @@ Docker or external network. Unrun platforms/paths are not claimed as verified.
   and requires one `enter` to run, not an approval; rollback shows the same plan
   screen and collects only `previous_version`. `up` also goes through the
   generic plan because it declares the hook scope; with no hooks the plan text
-  is empty and only the ordinary confirmation remains. TUI service/instance
-  selection exists for the ticket-05 live screens through `core.InputProvider`;
-  lifecycle mutations still use the CLI `-s/--service`.
+  is empty and only the ordinary confirmation remains. TUI service selection
+  is generic for every `SupportsServices` feature that does not collect its own
+  input; it is a convenience over the same engine rules and the selected scope
+  is shown on the plan/confirm screen. Instance-level selection remains
+  logs/exec-specific.
 - Docker itself (installation, repair, replacement), administrator escalation,
   Docker Desktop/WSL integration changes.
 
