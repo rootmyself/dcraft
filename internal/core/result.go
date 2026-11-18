@@ -156,6 +156,7 @@ func (r Result) ExitCode() int {
 				CategoryBackupOutputRequired, CategoryBackupVolumeRequired, CategoryBackupVolumeUnknown,
 				CategoryBackupBindUnknown,
 				CategoryRestoreBackupRequired, CategoryRestoreVolumeUnknown,
+				CategoryRestoreBindUnknown,
 				CategorySelectionRequired, CategoryInstanceUnknown:
 				return 2
 			}

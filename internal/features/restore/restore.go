@@ -37,7 +37,12 @@ func (f *Feature) Descriptor() core.Descriptor {
 			{
 				Name:  "volume",
 				Kind:  core.FlagString,
-				Usage: "복원 대상 볼륨 키. 생략하면 백업에 기록된 볼륨을 사용하며, 다른 키는 --allow-source-mismatch가 필요합니다.",
+				Usage: "복원 대상 볼륨 키. 생략하면 백업에 기록된 볼륨을 사용하며, 다른 키는 --allow-source-mismatch가 필요합니다. 연결 폴더 백업에는 사용할 수 없습니다.",
+			},
+			{
+				Name:  "bind",
+				Kind:  core.FlagString,
+				Usage: "복원 대상 연결 폴더. 현재 스택의 Compose 파일이 선언한 폴더(경로 또는 마운트 대상)만 지정할 수 있습니다. 생략하면 백업에 기록된 경로와 같은 선언 폴더를 사용합니다.",
 			},
 			{
 				Name:  "safety-output",
@@ -47,7 +52,12 @@ func (f *Feature) Descriptor() core.Descriptor {
 			{
 				Name:  "allow-source-mismatch",
 				Kind:  core.FlagBool,
-				Usage: "백업의 프로젝트·실행환경·볼륨이 현재 대상과 달라도 명시적으로 매핑합니다. 경고를 표시하며 기본은 거부입니다.",
+				Usage: "백업의 프로젝트·실행환경이 현재 대상과 달라도 명시적으로 매핑합니다. 경고를 표시하며 기본은 거부입니다. 연결 폴더 경로 매핑은 --allow-path-mismatch로 별도로 허용해야 합니다.",
+			},
+			{
+				Name:  "allow-path-mismatch",
+				Kind:  core.FlagBool,
+				Usage: "연결 폴더 백업에 기록된 경로와 현재 스택의 선언 폴더가 달라도 --bind로 지정한 폴더에 명시적으로 매핑합니다. 경고를 표시하며 기본은 거부입니다.",
 			},
 		},
 	}
@@ -62,29 +72,48 @@ func (f *Feature) Run(ctx context.Context, in core.Invocation) (any, error) {
 			NextActions: []string{restoreimpl.MsgNoBackendAction},
 		})
 	}
-	if in.Option("wizard") == "steps" {
+	switch in.Option("wizard") {
+	case "steps":
 		return f.control.WizardSteps(ctx, in)
-	}
-	if in.Option("wizard") == "apply" {
-		// The TUI wizard answers use the same names as the CLI flags.
-		if len(in.OptionLists["volume"]) == 0 {
-			if volume := strings.TrimSpace(in.Option("volume")); volume != "" {
-				if in.OptionLists == nil {
-					in.OptionLists = map[string][]string{}
-				}
-				in.OptionLists["volume"] = []string{volume}
-			}
-		}
-		if strings.TrimSpace(in.Option("safety-output")) == "" {
-			if safety := strings.TrimSpace(in.Option("safety")); safety != "" {
-				if in.Options == nil {
-					in.Options = map[string]string{}
-				}
-				in.Options["safety-output"] = safety
-			}
-		}
+	case "apply":
+		in = normalizeWizardInvocation(in)
 	}
 	return f.control.Run(ctx, in)
+}
+
+// normalizeWizardInvocation maps the TUI's single target answer onto the same
+// option names the CLI uses. The command still validates and resolves
+// everything through the shared controller.
+func normalizeWizardInvocation(in core.Invocation) core.Invocation {
+	if in.OptionLists == nil {
+		in.OptionLists = map[string][]string{}
+	}
+	if in.Options == nil {
+		in.Options = map[string]string{}
+	}
+	volumes, binds := restoreimpl.ParseWizardTarget(in.Option("target"))
+	if len(in.OptionLists["volume"]) == 0 {
+		if len(volumes) > 0 {
+			in.OptionLists["volume"] = volumes
+		} else if volume := strings.TrimSpace(in.Option("volume")); volume != "" {
+			in.OptionLists["volume"] = []string{volume}
+		}
+	}
+	if len(in.OptionLists["bind"]) == 0 && len(binds) > 0 {
+		in.OptionLists["bind"] = binds
+	}
+	if strings.TrimSpace(in.Option("volume")) == "" && len(volumes) > 0 {
+		in.Options["volume"] = volumes[0]
+	}
+	if strings.TrimSpace(in.Option("bind")) == "" && len(binds) > 0 {
+		in.Options["bind"] = binds[0]
+	}
+	if strings.TrimSpace(in.Option("safety-output")) == "" {
+		if safety := strings.TrimSpace(in.Option("safety")); safety != "" {
+			in.Options["safety-output"] = safety
+		}
+	}
+	return in
 }
 
 // Plan shows the verified target, overwrite impact, interruption and safety
@@ -97,6 +126,11 @@ func (f *Feature) Plan(ctx context.Context, in core.Invocation) (core.Plan, erro
 			Message:     restoreimpl.MsgNoBackend,
 			NextActions: []string{restoreimpl.MsgNoBackendAction},
 		})
+	}
+	if in.Option("wizard") == "apply" {
+		// The generic plan runs before approval and must see the same selected
+		// target the later apply run will use.
+		in = normalizeWizardInvocation(in)
 	}
 	return f.control.Plan(ctx, in)
 }
