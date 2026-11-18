@@ -269,7 +269,7 @@ func TestRestoreTUIWizardUsesTheGenericPlanAndDataRestoreApproval(t *testing.T) 
 		{wait: "> 스택 상태 (status)", send: strings.Repeat("\x1b[B", menuDownPresses(t, "restore"))},
 		{wait: "> 데이터 복원 (restore)", send: "\r"},
 		{wait: "복원할 백업 선택", send: "\r"},
-		{wait: "복원 대상 볼륨 선택", send: "\r"},
+		{wait: "복원 대상 선택", send: "\r"},
 		{wait: "안전 백업 폴더", send: "\r"},
 		{wait: "복원 계획", send: "\r"}, // wizard preview is not an approval
 		{wait: "승인 확인", send: ""},

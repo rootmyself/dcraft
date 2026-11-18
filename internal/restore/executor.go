@@ -40,6 +40,9 @@ type ExecutionRequest struct {
 	Affected    []string
 	Running     []string
 	Explicit    bool
+	// ExplicitPath permits a documented bind-folder path mapping. It is
+	// independent of the source (project/environment) mapping flag.
+	ExplicitPath bool
 	// Warnings are the read-only warnings observed during selection (for
 	// example an unknown current size). They are carried into the report.
 	Warnings []string
@@ -58,6 +61,7 @@ type ExecutionReport struct {
 	TargetKind       data.Kind      `json:"target_kind"`
 	VolumeKey        string         `json:"volume_key,omitempty"`
 	VolumeName       string         `json:"volume_name,omitempty"`
+	HostPath         string         `json:"host_path,omitempty"`
 	ArtifactPath     string         `json:"artifact_path"`
 	BackupContent    ContentSummary `json:"backup_content"`
 	CurrentContent   ContentSummary `json:"current_content"`
@@ -69,6 +73,7 @@ type ExecutionReport struct {
 	Stage            string         `json:"stage"`
 	DataState        DataState      `json:"data_state"`
 	ExplicitMapping  bool           `json:"explicit_mapping"`
+	PathMapping      bool           `json:"path_mapping,omitempty"`
 	Warnings         []string       `json:"warnings"`
 	Notices          []string       `json:"notices"`
 }
@@ -98,8 +103,6 @@ func (e *Executor) Execute(ctx context.Context, in core.Invocation, req Executio
 	report = ExecutionReport{
 		ProjectName:      req.ProjectName,
 		TargetKind:       req.Destination.Kind(),
-		VolumeKey:        req.Destination.Key(),
-		VolumeName:       req.Destination.Name(),
 		ArtifactPath:     req.Artifact.Path,
 		BackupContent:    ContentSummary{Bytes: req.Artifact.Manifest.Totals.Bytes, Entries: int64(req.Artifact.Manifest.Totals.Entries)},
 		AffectedServices: append([]string{}, req.Affected...),
@@ -108,8 +111,15 @@ func (e *Executor) Execute(ctx context.Context, in core.Invocation, req Executio
 		Restarted:        []string{},
 		DataState:        DataUntouched,
 		ExplicitMapping:  req.Explicit,
+		PathMapping:      req.ExplicitPath,
 		Warnings:         append([]string{}, req.Warnings...),
 		Notices:          []string{},
+	}
+	if report.TargetKind == data.KindBind {
+		report.HostPath = req.Destination.Name()
+	} else {
+		report.VolumeKey = req.Destination.Key()
+		report.VolumeName = req.Destination.Name()
 	}
 	if e == nil || e.Backend == nil || e.Locks == nil || req.Destination == nil {
 		return report, core.Fail(core.Diagnostic{
@@ -167,10 +177,10 @@ func (e *Executor) Execute(ctx context.Context, in core.Invocation, req Executio
 	err = core.RunStage(in.Reporter, "inspect_consumers", msgStageConsumers, func() error {
 		warnings, matchErr := req.Destination.Match(req.Artifact.Manifest, req.Explicit)
 		if matchErr != nil {
-			report.Warnings = append(report.Warnings, warnings...)
+			report.Warnings = appendUniqueWarnings(report.Warnings, warnings)
 			return targetError(matchErr)
 		}
-		report.Warnings = append(report.Warnings, warnings...)
+		report.Warnings = appendUniqueWarnings(report.Warnings, warnings)
 		if prepareErr := req.Destination.Prepare(ctx); prepareErr != nil {
 			return targetError(prepareErr)
 		}
@@ -304,9 +314,17 @@ func (e *Executor) Execute(ctx context.Context, in core.Invocation, req Executio
 		}
 	}
 	finalized = true
-	report.Notices = append(report.Notices,
-		msgOverwrite, msgInterrupt, msgSafetyNotice, msgOwnership, msgBindNotice, msgNoHooks, msgNoAutoDelete, msgOnlyRunning,
-	)
+	if report.TargetKind == data.KindBind {
+		report.Notices = append(report.Notices,
+			msgOverwrite, msgBindReplace, msgInterrupt, msgSafetyNotice, msgBindOwnershipNotice,
+			msgNoHooks, msgNoAutoDelete, msgOnlyRunning,
+		)
+	} else {
+		report.Notices = append(report.Notices,
+			msgOverwrite, msgInterrupt, msgSafetyNotice, msgOwnership,
+			msgNoHooks, msgNoAutoDelete, msgOnlyRunning,
+		)
+	}
 	return report, nil
 }
 
@@ -324,6 +342,24 @@ func (e *Executor) restoreState(ctx context.Context, in core.Invocation, target 
 		*restarted = append(*restarted, services...)
 		return nil
 	})
+}
+
+// appendUniqueWarnings avoids reporting the same mapping warning twice when a
+// controller already carried it from selection into the execution request.
+func appendUniqueWarnings(existing, extra []string) []string {
+	for _, warning := range extra {
+		found := false
+		for _, current := range existing {
+			if current == warning {
+				found = true
+				break
+			}
+		}
+		if !found {
+			existing = append(existing, warning)
+		}
+	}
+	return existing
 }
 
 func pausedServices(runtime []data.ServiceRuntime, affected []string) []string {

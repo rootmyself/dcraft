@@ -31,6 +31,7 @@ type fakeBackend struct {
 	sources         []data.DataSource
 	runtime         []data.ServiceRuntime
 	consumers       map[string][]data.ContainerConsumer
+	bindConsumers   map[string][]data.ContainerConsumer
 	events          []string
 	stops           [][]string
 	starts          [][]string
@@ -69,9 +70,9 @@ func (f *fakeBackend) VolumeConsumers(_ context.Context, _ core.Target, volume s
 }
 
 // BindConsumers keeps this fake compatible with the published data.Backend
-// when bind-folder backup (#17) extends it; restore itself never calls it.
-func (f *fakeBackend) BindConsumers(context.Context, core.Target, string) ([]data.ContainerConsumer, error) {
-	return nil, nil
+// when bind-folder backup (#17) extends it; bind restore (#19) queries it.
+func (f *fakeBackend) BindConsumers(_ context.Context, _ core.Target, hostPath string) ([]data.ContainerConsumer, error) {
+	return append([]data.ContainerConsumer{}, f.bindConsumers[hostPath]...), nil
 }
 
 func (f *fakeBackend) StopServices(_ context.Context, _ core.Target, services []string) (data.OpResult, error) {
@@ -354,7 +355,7 @@ func TestRunRefusesWrongStackAndWrongVolumeWithoutStopping(t *testing.T) {
 	}
 }
 
-func TestRunRefusesABindArtifactWithTheVolumeCommand(t *testing.T) {
+func TestRunRefusesABindArtifactWithoutADeclaredTarget(t *testing.T) {
 	artifactDir, _ := writeArtifact(t, referenceEntries(), func(src *backup.Source) {
 		src.Kind = data.KindBind
 		src.HostPath = "/host/folder"
@@ -364,8 +365,8 @@ func TestRunRefusesABindArtifactWithTheVolumeCommand(t *testing.T) {
 	backend := defaultBackend()
 	controller, _, _ := newRestoreController(t, backend, "proj", &fakeSpace{available: 1 << 30})
 	_, err := controller.Run(context.Background(), restoreInvocation(t, t.TempDir(), artifactDir, nil))
-	if err == nil || !hasCategory(err, core.CategoryRestoreTargetUnsupported) {
-		t.Fatalf("bind artifact err = %v", err)
+	if err == nil || !hasCategory(err, core.CategoryRestoreTargetMismatch) {
+		t.Fatalf("bind artifact without a declared target err = %v", err)
 	}
 	if len(backend.events) != 0 {
 		t.Fatalf("bind artifact touched the backend: %v", backend.events)
