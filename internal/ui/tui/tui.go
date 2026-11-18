@@ -557,15 +557,6 @@ func (m *Model) beginWithOptions(f core.Feature, options map[string]string) tea.
 	return m.startRun(f, options)
 }
 
-// beginWithOptionsAndApprovals runs a feature with the answers and the
-// independent approvals the wizard's preview screen collected and displayed.
-func (m *Model) beginWithOptionsAndApprovals(f core.Feature, options map[string]string, approvals []core.ApprovalKind) tea.Cmd {
-	m.ensureRequest(f)
-	m.resetRunState()
-	m.setupLive(f)
-	return m.launchRun(f, approvals, options)
-}
-
 // ensureRequest resets collected inputs when the selected feature changes, so
 // one feature's service/argument choices never leak into another operation.
 func (m *Model) ensureRequest(f core.Feature) {

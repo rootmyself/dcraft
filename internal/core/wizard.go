@@ -26,8 +26,10 @@ type WizardSpec struct {
 	Steps []WizardStep `json:"steps"`
 	// RequiredApprovals are the independent approvals the final apply run
 	// needs in addition to Descriptor.Approval. The TUI shows them on the
-	// preview screen and passes exactly these kinds with the "apply" request;
-	// the engine still enforces them. Empty means none.
+	// preview screen and, when non-empty, routes the apply through the generic
+	// plan + confirmation screen so the engine collects exactly these kinds;
+	// the feature must implement core.Planner. The engine still enforces them.
+	// Empty means none.
 	RequiredApprovals []ApprovalKind `json:"required_approvals,omitempty"`
 }
 

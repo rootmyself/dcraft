@@ -49,6 +49,10 @@ func (f *extendedWizard) RequiredApproval(ctx context.Context, in core.Invocatio
 	return f.needs, nil
 }
 
+func (f *extendedWizard) Plan(ctx context.Context, in core.Invocation) (core.Plan, error) {
+	return core.Plan{Text: f.preview}, nil
+}
+
 func (f *extendedWizard) Present(res core.Result, width int) string { return "EXTENDED-SAVED" }
 
 func newExtendedWizardModel(t *testing.T, wizard *extendedWizard) *Model {
@@ -207,9 +211,23 @@ func TestWizardPreviewShowsAndPassesIndependentApprovals(t *testing.T) {
 		}
 	}
 
+	// The wizard preview is not the approval. The apply is routed through the
+	// generic plan + confirmation screen, exactly like any approval operation.
+	feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeyEnter}})
+	if m.phase != phaseConfirm {
+		t.Fatalf("phase = %v, want the approval confirmation; view:\n%s", m.phase, m.View())
+	}
+	for _, want := range []string{"승인 확인", "파일 덮어쓰기", "file_overwrite"} {
+		if !strings.Contains(m.View(), want) {
+			t.Fatalf("confirmation missing %q:\n%s", want, m.View())
+		}
+	}
+	if wizard.applied {
+		t.Fatal("wizard applied before the independent approval confirmation")
+	}
 	feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeyEnter}})
 	if !wizard.applied {
-		t.Fatal("wizard did not apply")
+		t.Fatal("wizard did not apply after the approval")
 	}
 	if m.result == nil || m.result.Outcome != core.OutcomeSuccess {
 		t.Fatalf("result = %+v, want success with the collected approval", m.result)
