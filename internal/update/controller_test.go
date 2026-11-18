@@ -126,7 +126,7 @@ func healthyContainer(service, imageID string, hasHealth bool, health string) st
 
 func newTestController(t *testing.T, u stack.Updater, id stack.Identity) (*Controller, *state.Store, *stageLog) {
 	t.Helper()
-	store := state.New(t.TempDir())
+	store := state.New(privateStateDir(t))
 	c := New(u, id, store, core.SystemClock{})
 	log := &stageLog{}
 	configureTestClock(c)
@@ -184,6 +184,48 @@ func wantCategory(t *testing.T, err error, category core.Category) {
 }
 
 // ---- tests -------------------------------------------------------------
+
+// cancelAfterPublishStore completes the record and then cancels, simulating a
+// cancellation that lands just after the atomic publish.
+type cancelAfterPublishStore struct {
+	*state.Store
+	cancel context.CancelFunc
+}
+
+func (s *cancelAfterPublishStore) SaveGoodVersion(ctx context.Context, target core.Target, rec state.GoodVersion) error {
+	err := s.Store.SaveGoodVersion(ctx, target, rec)
+	s.cancel()
+	return err
+}
+
+func TestCancellationAfterTheRecordIsPublishedIsSuccessWithANotice(t *testing.T) {
+	u := &fakeUpdater{
+		model:      oneServiceModel(false, true),
+		containers: []stack.Container{healthyContainer("web", "sha256:new", true, "healthy")},
+		imageIDs:   map[string]string{"nginx:1.27": "sha256:new"},
+	}
+	id := &fakeIdentity{cfg: stack.ConfigInfo{EffectiveName: "app", Services: []string{"web"}}, derived: "app"}
+	base := state.New(privateStateDir(t))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	store := &cancelAfterPublishStore{Store: base, cancel: cancel}
+	c := New(u, id, store, core.SystemClock{})
+	configureTestClock(c)
+
+	payload, err := c.Run(ctx, invocation(t, nil), Options{Pull: true, Timeout: 30 * time.Second})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if payload.Update.RecordStatus != RecordRecorded {
+		t.Fatalf("record status = %q, want recorded", payload.Update.RecordStatus)
+	}
+	if !strings.Contains(strings.Join(payload.Update.Notices, " "), msgGoodLateCancel) {
+		t.Fatalf("late-cancellation notice missing: %v", payload.Update.Notices)
+	}
+	if _, ok, err := base.LoadGoodVersion(core.Target{ProjectDir: "/work/app"}); err != nil || !ok {
+		t.Fatalf("published record missing: ok=%v err=%v", ok, err)
+	}
+}
 
 func TestRunHealthyImageUpdateRecordsGoodVersion(t *testing.T) {
 	u := &fakeUpdater{
@@ -286,7 +328,7 @@ func TestVerifyStageFailsAndPlanRunsBeforeApply(t *testing.T) {
 	in := invocation(t, nil)
 	in.Reporter = st
 	_, _ = c.Run(context.Background(), in, Options{Pull: true, Timeout: 30 * time.Second})
-	want := "resolve_project:allocate_name:coordinate:plan:build:pull:apply:verify"
+	want := "resolve_project:coordinate:allocate_name:plan:build:pull:apply:verify"
 	if got := strings.Join(st.begun, ":"); got != want {
 		t.Fatalf("stage order = %q, want %q", got, want)
 	}
@@ -376,7 +418,7 @@ func TestSuccessfulUpdateReplacesPreviousGoodRecord(t *testing.T) {
 	c, store, _ := newTestController(t, u, &fakeIdentity{cfg: stack.ConfigInfo{Services: []string{"web"}}, derived: "app"})
 	target := core.Target{ProjectDir: "/work/app"}
 	old := state.GoodVersion{Version: state.GoodVersionVersion, OperationID: "op_old"}
-	if err := store.SaveGoodVersion(target, old); err != nil {
+	if err := store.SaveGoodVersion(context.Background(), target, old); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := c.Run(context.Background(), invocation(t, nil), Options{Pull: true, Timeout: 30 * time.Second}); err != nil {
@@ -545,7 +587,7 @@ func TestUnhealthyUpdateFailsAndKeepsPreviousGoodRecord(t *testing.T) {
 	c, store, _ := newTestController(t, u, &fakeIdentity{cfg: stack.ConfigInfo{Services: []string{"web"}}, derived: "app"})
 	target := core.Target{ProjectDir: "/work/app"}
 	old := state.GoodVersion{Version: state.GoodVersionVersion, OperationID: "op_old"}
-	if err := store.SaveGoodVersion(target, old); err != nil {
+	if err := store.SaveGoodVersion(context.Background(), target, old); err != nil {
 		t.Fatal(err)
 	}
 
@@ -806,7 +848,7 @@ func TestPreviewShowsTargetPlanAndHonestLimits(t *testing.T) {
 
 func TestLockIsHeldAndReleasedOnSuccessFailureAndCancel(t *testing.T) {
 	identity := &fakeIdentity{cfg: stack.ConfigInfo{Services: []string{"web"}}, derived: "app"}
-	storePath := t.TempDir()
+	storePath := privateStateDir(t)
 
 	runWith := func(t *testing.T, u *fakeUpdater, ctx context.Context, opts Options) {
 		t.Helper()
@@ -840,10 +882,20 @@ func TestLockIsHeldAndReleasedOnSuccessFailureAndCancel(t *testing.T) {
 }
 
 func TestConcurrentOperationOnSameStackFailsBusy(t *testing.T) {
-	store := state.New(t.TempDir())
+	store := state.New(privateStateDir(t))
 	identity := &fakeIdentity{cfg: stack.ConfigInfo{Services: []string{"web"}}, derived: "app"}
 	u := &fakeUpdater{model: oneServiceModel(false, false)}
 	c := New(u, identity, store, core.SystemClock{})
+	if _, err := store.AllocateName(context.Background(), state.NameRequest{
+		Target: core.Target{ProjectDir: "/work/app"}, BaseName: "app",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	namesPath := filepath.Join(store.Root(), "names.json")
+	before, err := os.ReadFile(namesPath)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	holder, err := store.AcquireStackLock(context.Background(), core.Target{ProjectDir: "/work/app"}, state.LockHolder{Action: "up", PID: 4321})
 	if err != nil {
@@ -855,6 +907,13 @@ func TestConcurrentOperationOnSameStackFailsBusy(t *testing.T) {
 		t.Fatal("busy stack received an apply")
 	}
 	_ = holder.Release()
+	after, err := os.ReadFile(namesPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Fatalf("busy update changed names.json:\nbefore=%s\nafter=%s", before, after)
+	}
 
 	other := &fakeUpdater{
 		model: oneServiceModel(false, false), containers: []stack.Container{healthyContainer("web", "sha256:new", false, "")},
@@ -876,7 +935,7 @@ func TestCancellationDuringApplyIsNotSuccess(t *testing.T) {
 	}
 	c, store, _ := newTestController(t, u, &fakeIdentity{cfg: stack.ConfigInfo{Services: []string{"web"}}, derived: "app"})
 	old := state.GoodVersion{Version: state.GoodVersionVersion, OperationID: "op_old"}
-	if err := store.SaveGoodVersion(core.Target{ProjectDir: "/work/app"}, old); err != nil {
+	if err := store.SaveGoodVersion(context.Background(), core.Target{ProjectDir: "/work/app"}, old); err != nil {
 		t.Fatal(err)
 	}
 
@@ -910,7 +969,7 @@ func TestRecordFailureIsAWarningAndKeepsOldRecord(t *testing.T) {
 	c, store, _ := newTestController(t, u, &fakeIdentity{cfg: stack.ConfigInfo{Services: []string{"web"}}, derived: "app"})
 	target := core.Target{ProjectDir: "/work/app"}
 	old := state.GoodVersion{Version: state.GoodVersionVersion, OperationID: "op_old"}
-	if err := store.SaveGoodVersion(target, old); err != nil {
+	if err := store.SaveGoodVersion(context.Background(), target, old); err != nil {
 		t.Fatal(err)
 	}
 

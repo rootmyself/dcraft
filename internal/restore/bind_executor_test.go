@@ -96,9 +96,13 @@ func executeBindFault(t *testing.T, dest *faultBindDestination) (ExecutionReport
 	backend.bindConsumers = map[string][]data.ContainerConsumer{
 		dest.root: {{Name: "proj-app-1", Project: "proj", Service: "app", State: "running"}},
 	}
+	stateDir := t.TempDir()
+	if err := os.Chmod(stateDir, 0o700); err != nil {
+		t.Fatalf("chmod state dir: %v", err)
+	}
 	exec := &Executor{
 		Backend: backend,
-		Locks:   state.New(t.TempDir()),
+		Locks:   state.New(stateDir),
 		Clock:   fixedClock{now: time.Unix(1700000000, 0)},
 		Tool:    backup.Tool{Version: "test"},
 		PID:     4242,

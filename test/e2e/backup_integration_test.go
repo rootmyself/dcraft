@@ -13,6 +13,7 @@ import (
 
 	"github.com/rootmyself/dcraft/internal/backup"
 	"github.com/rootmyself/dcraft/internal/core"
+	"github.com/rootmyself/dcraft/internal/data"
 )
 
 func backupIntegrationCompose(name string) string {
@@ -406,7 +407,7 @@ func TestIntegrationVolumeBackupInterruptionAndConcurrentUp(t *testing.T) {
 	if got := serviceState(t, app); got != "running" {
 		t.Fatalf("app was not restored after interruption: %s", got)
 	}
-	assertNoBackupHelpers(t)
+	assertNoBackupHelpers(t, dir)
 
 	// The immediately following backup of the same volume must succeed: a
 	// helper left behind would be seen as an outside consumer and refuse.
@@ -423,7 +424,7 @@ func TestIntegrationVolumeBackupInterruptionAndConcurrentUp(t *testing.T) {
 	if _, err := backup.Verify(afterArtifacts[0].Path); err != nil {
 		t.Fatalf("backup after cancellation did not verify: %v", err)
 	}
-	assertNoBackupHelpers(t)
+	assertNoBackupHelpers(t, dir)
 
 	// Concurrent up while the slow helper holds the lock. Wait until a
 	// service is actually stopped: that proves the backup acquired the lock
@@ -471,7 +472,7 @@ func TestIntegrationVolumeBackupInterruptionAndConcurrentUp(t *testing.T) {
 	if artifacts, _ := backup.List(concurrentOut); len(artifacts) != 1 {
 		t.Fatalf("slow backup did not publish after the concurrent up was refused: %v", artifacts)
 	}
-	assertNoBackupHelpers(t)
+	assertNoBackupHelpers(t, dir)
 
 	// Helper failure after stop: no valid artifact, services restored, and no
 	// helper container left behind.
@@ -495,15 +496,16 @@ func TestIntegrationVolumeBackupInterruptionAndConcurrentUp(t *testing.T) {
 	if artifacts, _ := backup.List(failOut); len(artifacts) != 0 {
 		t.Fatalf("failed helper published an artifact: %v", artifacts)
 	}
-	assertNoBackupHelpers(t)
+	assertNoBackupHelpers(t, dir)
 	if got := serviceState(t, app); got != "running" {
 		t.Fatalf("app not restored after helper failure: %s", got)
 	}
 }
 
-func backupHelperNames(t *testing.T) []string {
+func backupHelperNames(t *testing.T, dir string) []string {
 	t.Helper()
-	out, err := exec.Command("docker", "ps", "-a", "--filter", "label=dcraft.backup=1", "--format", "{{.Names}}").Output()
+	token := data.HelperToken(core.Target{ProjectDir: dir})
+	out, err := exec.Command("docker", "ps", "-a", "--filter", "label=dcraft.backup="+token, "--format", "{{.Names}}").Output()
 	if err != nil {
 		t.Fatalf("list backup helpers: %v", err)
 	}
@@ -516,15 +518,15 @@ func backupHelperNames(t *testing.T) []string {
 	return names
 }
 
-func assertNoBackupHelpers(t *testing.T) {
+func assertNoBackupHelpers(t *testing.T, dir string) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		if names := backupHelperNames(t); len(names) == 0 {
+		if names := backupHelperNames(t, dir); len(names) == 0 {
 			return
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("backup helper containers survived the operation: %v", backupHelperNames(t))
+			t.Fatalf("backup helper containers survived the operation: %v", backupHelperNames(t, dir))
 		}
 		time.Sleep(100 * time.Millisecond)
 	}

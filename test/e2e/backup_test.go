@@ -67,6 +67,9 @@ func TestBackupWithoutExplicitInputFailsBeforeStoppingAnything(t *testing.T) {
 	fake := backupFake(t)
 	project := projectNamed(t, "backup-project")
 	stateDir := t.TempDir()
+	if err := os.Chmod(stateDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	env := fake.env(t, stateDir)
 
 	res := runProcess(t, project, env, strings.NewReader(""), "backup", "--path", project, "--json", "--volume", "data")
@@ -90,6 +93,9 @@ func TestBackupUnknownVolumeFailsWithAUsageError(t *testing.T) {
 	fake := backupFake(t)
 	project := projectNamed(t, "backup-project")
 	stateDir := t.TempDir()
+	if err := os.Chmod(stateDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	env := fake.env(t, stateDir)
 	outDir := filepath.Join(t.TempDir(), "backups")
 
@@ -111,6 +117,9 @@ func TestBackupCLIStopsOnlyRunningConsumersPublishesAndRestarts(t *testing.T) {
 	fake := backupFake(t)
 	project := projectNamed(t, "backup-project")
 	stateDir := t.TempDir()
+	if err := os.Chmod(stateDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	env := fake.env(t, stateDir)
 	outDir := filepath.Join(t.TempDir(), "backups")
 
@@ -197,6 +206,9 @@ func TestBackupRefusesAnotherStacksConsumerWithoutStoppingIt(t *testing.T) {
 	fake.writeConsumers(t, "other-stack-app-1\tother-stack\tapp\trunning\nbackup-test-app-1\tbackup-test\tapp\trunning\n")
 	project := projectNamed(t, "backup-project")
 	stateDir := t.TempDir()
+	if err := os.Chmod(stateDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	env := fake.env(t, stateDir)
 	outDir := filepath.Join(t.TempDir(), "backups")
 
@@ -225,6 +237,9 @@ func TestBackupFailsClearlyWhenTheStackIsBusy(t *testing.T) {
 	fake := backupFake(t)
 	project := projectNamed(t, "backup-project")
 	stateDir := t.TempDir()
+	if err := os.Chmod(stateDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	env := fake.env(t, stateDir)
 	outDir := filepath.Join(t.TempDir(), "backups")
 	resolved, err := filepath.EvalSymlinks(project)
@@ -298,6 +313,9 @@ func TestRepeatedBackupsBothRemain(t *testing.T) {
 	fake := backupFake(t)
 	project := projectNamed(t, "backup-project")
 	stateDir := t.TempDir()
+	if err := os.Chmod(stateDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	env := fake.env(t, stateDir)
 	outDir := filepath.Join(t.TempDir(), "backups")
 	for i := 0; i < 2; i++ {
@@ -380,6 +398,9 @@ func TestBackupBindFolderThroughTheCLIUsesTheV1Format(t *testing.T) {
 	fake.writeConfig(t, backupBindConfig(hostDir))
 	project := projectNamed(t, "backup-project")
 	stateDir := t.TempDir()
+	if err := os.Chmod(stateDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	env := fake.env(t, stateDir)
 	outDir := filepath.Join(t.TempDir(), "backups")
 

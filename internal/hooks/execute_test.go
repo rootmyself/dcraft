@@ -51,7 +51,7 @@ printf 'stderr-line\n' >&2
 	}
 	write(t, filepath.Join(dir, ".dcraft.yaml"), "hooks:\n  - path: scripts/pre.sh\n    stage: pre\n")
 	t.Setenv("HOOK_INHERITED", "inherited-value")
-	svc := hooks.New(state.New(t.TempDir()), os.Getenv)
+	svc := hooks.New(state.New(privateStateDir(t)), os.Getenv)
 	plan := planFor(t, svc, dir)
 	if err := svc.Approve(context.Background(), target(dir), plan, time.Now()); err != nil {
 		t.Fatal(err)
@@ -92,7 +92,7 @@ printf 'stderr-line\n' >&2
 
 func TestExecuteRefusesContentChangedAfterApproval(t *testing.T) {
 	dir, path := projectWithHook(t, "scripts/pre.sh", "pre")
-	svc := hooks.New(state.New(t.TempDir()), os.Getenv)
+	svc := hooks.New(state.New(privateStateDir(t)), os.Getenv)
 	plan := planFor(t, svc, dir)
 	if err := svc.Approve(context.Background(), target(dir), plan, time.Now()); err != nil {
 		t.Fatal(err)
@@ -110,7 +110,7 @@ func TestExecuteRefusesNonExecutableScriptWithGuidance(t *testing.T) {
 	path := filepath.Join(dir, "scripts/pre.sh")
 	write(t, path, "#!/bin/sh\nexit 0\n")
 	write(t, filepath.Join(dir, ".dcraft.yaml"), "hooks:\n  - path: scripts/pre.sh\n    stage: pre\n")
-	svc := hooks.New(state.New(t.TempDir()), os.Getenv)
+	svc := hooks.New(state.New(privateStateDir(t)), os.Getenv)
 	sha := shaOf(t, path)
 	entry := core.HookEntry{Path: "scripts/pre.sh", Stage: core.HookStagePre, SHA256: sha}
 	_, err := execute(t, svc, dir, entry, "up")
@@ -126,7 +126,7 @@ func TestExecuteRefusesAFileWithoutAWorkingInterpreter(t *testing.T) {
 		t.Fatal(err)
 	}
 	write(t, filepath.Join(dir, ".dcraft.yaml"), "hooks:\n  - path: scripts/pre.sh\n    stage: pre\n")
-	svc := hooks.New(state.New(t.TempDir()), os.Getenv)
+	svc := hooks.New(state.New(privateStateDir(t)), os.Getenv)
 	entry := core.HookEntry{Path: "scripts/pre.sh", Stage: core.HookStagePre, SHA256: shaOf(t, path)}
 	_, err := execute(t, svc, dir, entry, "up")
 	hasCategory(t, err, core.CategoryHookInvalid)
@@ -151,7 +151,7 @@ func TestExecuteReturnsNonZeroExitWithoutRunningTheRest(t *testing.T) {
 		t.Fatal(err)
 	}
 	write(t, filepath.Join(dir, ".dcraft.yaml"), "hooks:\n  - path: scripts/pre.sh\n    stage: pre\n")
-	svc := hooks.New(state.New(t.TempDir()), os.Getenv)
+	svc := hooks.New(state.New(privateStateDir(t)), os.Getenv)
 	plan := planFor(t, svc, dir)
 	exec, err := execute(t, svc, dir, plan.Entries[0], "update")
 	if err != nil {
@@ -173,7 +173,7 @@ func TestExecuteCancellationKillsTheProcessGroup(t *testing.T) {
 		t.Fatal(err)
 	}
 	write(t, filepath.Join(dir, ".dcraft.yaml"), "hooks:\n  - path: scripts/pre.sh\n    stage: pre\n")
-	svc := hooks.New(state.New(t.TempDir()), os.Getenv)
+	svc := hooks.New(state.New(privateStateDir(t)), os.Getenv)
 	plan := planFor(t, svc, dir)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -220,7 +220,7 @@ hooks:
 		t.Fatal(err)
 	}
 	t.Setenv("DCRAFT_HOOK_TEST_SECRET", "super-secret-value-42")
-	svc := hooks.New(state.New(t.TempDir()), os.Getenv)
+	svc := hooks.New(state.New(privateStateDir(t)), os.Getenv)
 	plan := planFor(t, svc, dir)
 	exec, err := execute(t, svc, dir, plan.Entries[0], "up")
 	if err != nil {

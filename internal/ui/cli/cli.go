@@ -236,6 +236,8 @@ func newFeatureCommand(opts Options, tf *targetFlags, feature core.Feature) *cob
 					fmt.Fprintln(opts.Stderr, text)
 					fmt.Fprintln(opts.Stderr)
 				}
+				// Bind the run to the exact target/files the user just saw.
+				req.PlanFingerprint = plan.Fingerprint
 				if core.HasApproval(approvals, core.ApprovalScriptTrust) {
 					// Bind the explicit trust to the identities the user just
 					// saw. A content change before Run invalidates it.

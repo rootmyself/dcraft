@@ -105,6 +105,7 @@ core.NewEngine(registry, target.New(), composeAdapter, stateStore, clock)
 | `Args []string` | positional arguments for features with `AcceptsArgs` |
 | `Options map[string]string` | parsed feature-flag values |
 | `Approvals []core.ApprovalKind` | explicit approvals supplied by the caller |
+| `PlanFingerprint string` | `PlanReport.Fingerprint` of the preview the user approved; CLI/TUI always pass it when a plan was displayed. Run recomputes it and fails `plan_stale` (exit 2) before any change when it differs. Empty means no preview was shown (direct JSON automation) |
 | `Interactive bool` | prompts are possible; never bypasses approval |
 | `IO core.IO` | caller-provided live terminal streams for logs/exec; nil fields mean the process standard streams |
 | `JSON bool` | the caller asked for one machine-readable result; a UI hint only, never a safety rule |
@@ -265,12 +266,24 @@ checks an approval, never calls `Run`, and never writes history. `Plan` must not
 change anything. Any Planner is previewed by both interfaces; for an
 approval-gated feature the plan is the approval confirmation, and for an
 ordinary `update` (no approval) it is the target/planned-work preview before the
-single deliberate run. `PlanReport` carries feature, outcome, target, tools, stages,
-diagnostics and the Korean plan text. Both paths share the same target and
-preflight code, so a preview cannot silently use a different selection. Plan
-text must state the concrete source, version, destination, permission need and
-effect, and never contain secret values. `PlanReport.Result()` converts a failed
-plan into the common result shape for both interfaces to render.
+single deliberate run. `PlanReport` carries feature, fingerprint, outcome,
+target, tools, stages, diagnostics and the Korean plan text. Both paths share
+the same target and preflight code, so a preview cannot silently use a
+different selection. Plan text must state the concrete source, version,
+destination, permission need and effect, and never contain secret values.
+`PlanReport.Result()` converts a failed plan into the common result shape for
+both interfaces to render.
+
+The fingerprint covers the resolved target fields, the filesystem identity of
+the project folder, the content of every effective Compose file and env file,
+the default `.env`, `.dcraft.yaml`, the resolved project name/environment and
+the state name map (`names.json`, through the optional
+`core.PlanStateReader` capability). CLI and TUI copy it into
+`Request.PlanFingerprint`; `Run` recomputes it before hooks or the feature and
+stops with `plan_stale` (exit 2), a Korean re-preview instruction and no stack
+or history change when any covered input changed while the confirmation was on
+screen. A direct JSON invocation that never displayed a plan has nothing to
+bind and leaves the field empty.
 
 `core.Invocation` gives a feature: resolved `Target`, `Services`, `Args`,
 `Options`, `Interactive`, `Preflight` report, `IO`, `JSON`, `Reporter`,
@@ -335,11 +348,16 @@ Rules (`internal/target.Resolver`):
 
 State identity is `ProjectDir + Environment`, not the Compose project name (the
 name itself is stored state). This keeps the same folder/environment tied to
-one helper-managed stack. The folder key is canonicalized with symlink
-resolution when it exists, so the same target invoked as the working directory
-or through a symlinked spelling (`/var` vs `/private/var` on macOS) shares one
-stack identity. The environment id is the alias from `.dcraft.yaml` exactly as
-written.
+one helper-managed stack. When the folder exists, its key is the filesystem
+identity (device+inode on Unix, `os.SameFile` semantics elsewhere), so a
+symlinked spelling (`/var` vs `/private/var` on macOS), a case variant on a
+case-insensitive filesystem (APFS/HFS+) and an NFC/NFD Korean spelling all
+resolve to one stack, one lock and one name claim. A folder that does not exist
+yet uses the documented canonical-path fallback. The environment id is the
+alias from `.dcraft.yaml` exactly as written. **Migration consequence:** state
+directories keyed by the previous path-hash scheme are not reused; an existing
+installation starts with fresh name/history/good-version state under the new
+key (Compose containers and volumes are untouched).
 
 ### 3.1 Named environments (ticket #4)
 
@@ -573,8 +591,12 @@ Published services:
 - `state.Store.AllocateName` and `state.AcquireStackLock` are reusable by later
   tickets (see §8).
 
-Stages (stable snake_case; Korean titles): `resolve_project`, `allocate_name`,
-`coordinate`, `<action>` (`up`/`stop`/`down`/`restart`), `observe`. On failure
+Stages (stable snake_case; Korean titles): `resolve_project`, `coordinate`,
+`allocate_name`, `<action>` (`up`/`stop`/`down`/`restart`), `observe`. The
+per-stack change lock is taken before the name claim: the lock key (project
+folder + environment) is already known, so a blocked operation fails
+`stack_busy` without writing a rename claim that the next run would adopt as a
+second project. On failure
 the result lists the completed stages, the failed stage, the observable current
 state in the diagnostic message and Korean recovery actions. Cancellation stays
 `canceled` (exit 130) and states that partial effects may remain.
@@ -602,7 +624,11 @@ is in the payload and in every Compose call.
   environment. A recorded name is reused on rerun, after stop and after down,
   even when containers are gone. An existing Compose project whose config file
   belongs to the same folder is reused (`existing`) instead of duplicated, so a
-  stack created by plain Compose or after state loss is identified.
+  stack created by plain Compose or after state loss is identified. The reuse
+  scan runs before suffix allocation and includes suffixed names (`app-1`, …):
+  when another folder owns the readable base, losing state still resolves to
+  the existing project rather than creating a second stack. A suffixed name
+  already claimed by another target is `project_name_conflict`.
 - Changing a recorded automatic name to a declared name updates the claim and
   emits a Korean notice; the old project is left untouched and is no longer
   managed. Dropping `-p` later reuses the recorded name instead of silently
@@ -1088,9 +1114,14 @@ type GoodService struct {
   after `verify` succeeded and while holding the per-stack lock. Rollback (#12)
   re-resolves these references; it never reads a stored value.
 - `(*state.Store).LoadGoodVersion(target)` returns
-  `(GoodVersion, bool, error)`; `SaveGoodVersion(target, rec)` is the atomic
-  writer. A first update on a previously unmanaged stack records the state it
-  verified; no earlier history is invented. `OperationID` is reserved for a
+  `(GoodVersion, bool, error)`; `SaveGoodVersion(ctx, target, rec)` is the
+  atomic, cancellation-aware writer. It checks the context immediately before
+  the publish rename: a canceled operation removes its temp file and leaves the
+  previous record byte-identical. A cancellation that arrives after the rename
+  means the record is complete; update then reports the verified result as
+  success with a Korean notice instead of pretending nothing was recorded or
+  rolling a completed commit back. A first update on a previously unmanaged
+  stack records the state it verified; no earlier history is invented. `OperationID` is reserved for a
   future engine-invocation id and is empty in this build; consumers must not
   treat it as required.
 - dcraft never deletes retention tags/images and never prunes. #12 (rollback)
@@ -1099,8 +1130,9 @@ type GoodService struct {
 
 ### Same-stack coordination
 
-`update` takes `state.AcquireStackLock` after name allocation and holds it across
-`plan`, `build`, `pull`, `apply`, `verify` and `record`; the release is deferred
+`update` takes `state.AcquireStackLock` before name allocation and holds it across
+`allocate_name`, `plan`, `build`, `pull`, `apply`, `verify` and `record`; a
+blocked run therefore leaves `names.json` byte-identical. The release is deferred
 and therefore happens on success, failure and cancellation. A concurrent `up`,
 `update`, rollback or backup on the same stack fails immediately with
 `stack_busy` (exit 1) and the holder in the detail; a different folder or
@@ -1400,11 +1432,25 @@ Layout:
     script-trust.json # machine-local hook approval, 0600 (see §7.2)
 ```
 
-- The key is derived from the canonical absolute project folder **and** the
-  environment id: same folder names in different places and different
-  environments never share state; the readable folder name stays in the key.
-  Symlinked spellings of an existing folder canonicalize to one identity.
-- Directories are created lazily with `0700`; files with `0600`.
+- The key is derived from the folder's filesystem identity (device+inode on
+  Unix; `os.SameFile`-equivalent elsewhere) **and** the environment id: same
+  folder names in different places and different environments never share
+  state; the readable folder name stays in the prefix. Symlinks, case variants
+  on case-insensitive filesystems and NFC/NFD spellings of one existing folder
+  share one key. A non-existent folder uses the canonical-path fallback. The
+  key is used identically by history, name claims, good-version records, hook
+  trust and every lock. Existing state keyed by the old path hash is not
+  reused (see §3).
+- The state root is private per user: created lazily with `0700`, then verified
+  to be a real directory (not a symlink) owned by the current user with mode
+  `0700`. A pre-created shared/misowned/world-readable root is refused with
+  `state_failed` guidance (chmod 700 or choose a private `DCRAFT_STATE_DIR`),
+  never silently used. Read-only lookups verify an existing root but never
+  create one.
+- State files (`history.jsonl`, `.lock`, `names.lock`, `names.json`,
+  `state.json`) are opened with `O_NOFOLLOW` on Unix (and an explicit symlink
+  check everywhere); a symlinked target is refused rather than followed.
+  Directories are created lazily with `0700`; files with `0600`.
 - History records contain operation id, action, outcome, timestamps, completed
   stages and diagnostics. The record-writing `history` stage itself, and any
   other still-open stage, is not persisted; a record never ends with a
@@ -1532,6 +1578,7 @@ Desktop's VM-backed unix socket is **local**, not remote.
 | `logs_failed` | the Compose log stream failed | error (exit 1) |
 | `exec_failed` | the command could not start or exited non-zero | error (exit 1) |
 | `stack_busy` | another operation holds the same stack lock | error |
+| `plan_stale` | the approved plan's target/files/env files/.dcraft.yaml/name map changed before the run; nothing was changed | error (exit 2) |
 | `lifecycle_failed` | a Compose lifecycle call failed | error |
 | `update_failed` | a build, pull or detached apply failed; the stage and observed state are reported | error |
 | `readiness_failed` | post-update state was unhealthy, exited, restarting, not started/created or timed out | error |
@@ -1690,7 +1737,11 @@ Stable stages: `output` (저장 위치 확인), `coordinate` (스택 잠금),
   grace window, because the daemon can complete a create whose CLI client was
   killed. `--rm` is not relied on. The stack lock is held until that
   confirmation, and services are restored only after it; a leaked helper can
-  never become a later "outside consumer" of the volume.
+  never become a later "outside consumer" of the volume. Helpers carry
+  `dcraft.backup=<stack token>` (`data.HelperToken`: filesystem identity +
+  environment) and the token in their name, so concurrent tests or another
+  stack's helper on the same Docker host are never mistaken for this
+  operation's helper.
 - Post-copy verification happens inside this lock. The feature must not use
   `core.Verifier`: the engine releases the lock before `Verifier.Verify` and
   writes history afterwards. Future data features (#17–#19) follow the same
@@ -2062,7 +2113,10 @@ Tested seams:
   verifier mapped to `internal_error`, data omitted on failure and
   cancellation, history stage excluded from its own record, cancellation,
   panic recovery, warnings, planned requirements, target
-  optionality, plan preview without approval/run);
+  optionality, plan preview without approval/run); plan fingerprint binding
+  (unchanged selection runs; a changed Compose file, `.dcraft.yaml` or name map
+  stops with `plan_stale`/exit 2 and no history; CLI and TUI pass the
+  fingerprint through);
 - backup format v1 (entry hashes for files/dirs/symlinks/hardlinks, truncated
   gzip rejected even when all names list, unsafe/absolute/duplicate names
   rejected, complete marker required, unsupported version, per-entry tampering,
@@ -2103,11 +2157,16 @@ Tested seams:
   hardlinks, uid/gid/xattr limits), other-stack consumer refusal and the
   TUI artifact+target selection including bind folders;
 - registry validation and CLI/TUI assembly from registries;
-- state layout and permissions, automatic-name allocation (first/suffix/reuse/
-  declared/conflict/external ownership/environment/concurrency), the read-only
-  `LookupName` (no creation, no lock, no rewrite, symlink-canonical identity,
-  corrupt registry) and the per-stack lock (busy holder, different stacks,
-  goroutine exclusivity, cancellation);
+- state layout and permissions, filesystem identity (symlink, case-variant and
+  NFC/NFD spellings share one key; different folders and environments do not),
+  private-root ownership/mode refusal and symlinked state-file refusal,
+  automatic-name allocation (first/suffix/reuse/declared/conflict/external
+  ownership/suffixed reuse after state loss/environment/concurrency), the
+  read-only `LookupName` (no creation, no lock, no rewrite, corrupt registry),
+  the per-stack lock (busy holder, different stacks, goroutine exclusivity,
+  cancellation, a busy rename leaves `names.json` byte-identical), the
+  cancellation-aware good-version publish (previous file byte-identical) and
+  the helper token scoping;
 - read-only identity resolution (explicit/declared/allocated priority, no
   Compose calls for `-p`, no state creation, no rewrite) and the engine seam
   (read-only features get the name without a new stage; mutating features do
@@ -2116,7 +2175,8 @@ Tested seams:
   --detach` + services, `stop` + services, project-wide `down` without `-v`,
   `restart --no-deps` for explicit services), config/project parsing and
   `lifecycle_failed`/`stack_busy`/`project_name_conflict`/`service_unknown`
-  diagnostics with the fake runner;
+  diagnostics with the fake runner, and redaction of Compose stop/down/up
+  output plus config/probe diagnostics before JSON or history;
 - update unit/fake-runner: every readiness classification (healthy,
   running_unverified, unhealthy, exited, restarting/crash-loop, not_started,
   not_created, timeout), settle re-read after an early exit/restart, bounded
@@ -2255,17 +2315,23 @@ gofmt -l .
 go vet ./...
 go build ./...
 go test -count=1 ./...
-DCRAFT_INTEGRATION=1 go test ./test/e2e/... -run TestIntegration -v
-DCRAFT_INTEGRATION=1 go test ./test/e2e/... -run TestIntegrationHook -v
-DCRAFT_INTEGRATION=1 go test ./test/e2e/... -run TestIntegrationVolumeBackup -v
-DCRAFT_INTEGRATION=1 go test ./test/e2e/... -run TestIntegrationBindBackup -v
-DCRAFT_INTEGRATION=1 go test ./test/e2e/... -run TestIntegrationVolumeRestore -v
-DCRAFT_INTEGRATION=1 go test ./test/e2e/... -run TestIntegrationBindRestore -v
-DCRAFT_COMPOSE_REAL_INSTALL=1 go test ./test/e2e/... -run TestRealComposeInstall -v
+DCRAFT_INTEGRATION=1 go test -count=1 -timeout 20m ./test/e2e/... -run TestIntegration -v
+DCRAFT_INTEGRATION=1 go test -count=1 -timeout 20m ./test/e2e/... -run TestIntegrationHook -v
+DCRAFT_INTEGRATION=1 go test -count=1 -timeout 20m ./test/e2e/... -run TestIntegrationVolumeBackup -v
+DCRAFT_INTEGRATION=1 go test -count=1 -timeout 20m ./test/e2e/... -run TestIntegrationBindBackup -v
+DCRAFT_INTEGRATION=1 go test -count=1 -timeout 20m ./test/e2e/... -run TestIntegrationVolumeRestore -v
+DCRAFT_INTEGRATION=1 go test -count=1 -timeout 20m ./test/e2e/... -run TestIntegrationBindRestore -v
+DCRAFT_INTEGRATION=1 go test -count=1 -timeout 20m ./test/e2e/... -run TestIntegrationBlockedRename -v
+DCRAFT_COMPOSE_REAL_INSTALL=1 go test -count=1 -timeout 20m ./test/e2e/... -run TestRealComposeInstall -v
 ```
 
-Real-Docker tests skip without their guard variable. Unit tests never require
-Docker or external network. Unrun platforms/paths are not claimed as verified.
+Real-Docker tests skip without their guard variable. The full real-Docker suite
+exceeds Go's default 10-minute test timeout, so the documented commands pass
+`-timeout 20m`. These tests require an **isolated Docker host** (a dedicated
+local engine or a disposable VM); they create and remove containers, volumes and
+images, and must not run against a host shared with real user stacks. Unit tests
+never require Docker or external network. Unrun platforms/paths are not claimed
+as verified.
 
 ---
 

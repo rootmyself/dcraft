@@ -108,7 +108,8 @@ func New(life stack.Lifecycle, identity stack.Identity, backend stack.Backend, s
 }
 
 // Run executes one lifecycle operation. Stages are reported in order:
-// resolve_project, allocate_name, coordinate, <action>, observe.
+// resolve_project, coordinate, allocate_name, <action>, observe. The change
+// lock is taken before the name claim so a blocked operation changes nothing.
 func (c *Controller) Run(ctx context.Context, in core.Invocation, action Action) (Payload, error) {
 	if !action.Valid() {
 		return Payload{}, core.Fail(core.Diagnostic{
@@ -186,37 +187,10 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation, action Action)
 		return Payload{}, err
 	}
 
-	err = core.RunStage(in.Reporter, StageAllocateName, msgStageAllocateName, func() error {
-		projects, err := c.identity.Projects(ctx)
-		if err != nil {
-			return err
-		}
-		external := make([]state.ExternalProject, 0, len(projects))
-		for _, p := range projects {
-			external = append(external, state.ExternalProject{Name: p.Name, ProjectDir: p.ProjectDir})
-		}
-		allocation, err = c.store.AllocateName(ctx, state.NameRequest{
-			Target:         target,
-			DeclaredName:   declared,
-			DeclaredSource: declaredSource,
-			BaseName:       base,
-			External:       external,
-		})
-		if err != nil {
-			return translateNameError(err, target)
-		}
-		if allocation.PreviousName != "" && allocation.PreviousName != allocation.Name {
-			notices = append(notices, fmt.Sprintf(msgRenameNotice, allocation.PreviousName, allocation.Name))
-		}
-		return nil
-	})
-	if err != nil {
-		return Payload{}, err
-	}
-
-	opTarget := target
-	opTarget.ProjectName = allocation.Name
-
+	// The change lock comes before the name claim. The lock key is already
+	// known (project folder + environment), so a blocked operation fails as
+	// stack_busy without persisting a rename claim that the next run would
+	// adopt as a second project.
 	var lock *state.StackLock
 	err = core.RunStage(in.Reporter, StageCoordinate, msgStageCoordinate, func() error {
 		if err := ctx.Err(); err != nil {
@@ -248,6 +222,37 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation, action Action)
 		return Payload{}, err
 	}
 	defer func() { _ = lock.Release() }()
+
+	err = core.RunStage(in.Reporter, StageAllocateName, msgStageAllocateName, func() error {
+		projects, err := c.identity.Projects(ctx)
+		if err != nil {
+			return err
+		}
+		external := make([]state.ExternalProject, 0, len(projects))
+		for _, p := range projects {
+			external = append(external, state.ExternalProject{Name: p.Name, ProjectDir: p.ProjectDir})
+		}
+		allocation, err = c.store.AllocateName(ctx, state.NameRequest{
+			Target:         target,
+			DeclaredName:   declared,
+			DeclaredSource: declaredSource,
+			BaseName:       base,
+			External:       external,
+		})
+		if err != nil {
+			return translateNameError(err, target)
+		}
+		if allocation.PreviousName != "" && allocation.PreviousName != allocation.Name {
+			notices = append(notices, fmt.Sprintf(msgRenameNotice, allocation.PreviousName, allocation.Name))
+		}
+		return nil
+	})
+	if err != nil {
+		return Payload{}, err
+	}
+
+	opTarget := target
+	opTarget.ProjectName = allocation.Name
 
 	actionTitle := stageTitle(action)
 	var opResult stack.OpResult

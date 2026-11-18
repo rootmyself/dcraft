@@ -288,6 +288,11 @@ func (f *fakeDocker) calls(t *testing.T) []string {
 }
 
 func buildEnv(overrides map[string]string) []string {
+	// dcraft requires a private state root. Go's t.TempDir is not 0700 on
+	// every platform, so make the test root private at the environment seam.
+	if dir := overrides["DCRAFT_STATE_DIR"]; dir != "" {
+		_ = os.Chmod(dir, 0o700)
+	}
 	var out []string
 	for _, kv := range os.Environ() {
 		key := strings.SplitN(kv, "=", 2)[0]
