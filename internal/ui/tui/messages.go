@@ -84,6 +84,7 @@ const (
 	msgServiceHealthy         = "healthy"
 	msgServiceHealthStarting  = "health 확인 중"
 	msgServiceUnhealthy       = "unhealthy"
+	msgServiceHealthNone      = "health 없음"
 	msgHintServiceSelect      = "↑/↓ 이동 · space 선택/해제 · enter 실행 · esc 취소 · q 종료"
 
 	// Live screens. Closing a screen only detaches; it never stops services.

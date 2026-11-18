@@ -582,6 +582,7 @@ func (m *Model) beginServiceSelection(f core.Feature) tea.Cmd {
 	// Never let a previous run's scope leak into this one before the user
 	// chooses again.
 	m.req.Services = nil
+	m.notice = ""
 	m.phase = phaseLoadingServices
 	engine := m.engine
 	ctx := m.ctx
@@ -1256,7 +1257,7 @@ func serviceStateLabel(state string) string {
 func serviceHealthLabel(health string) string {
 	switch health {
 	case "", "none":
-		return ""
+		return msgServiceHealthNone
 	case "healthy":
 		return msgServiceHealthy
 	case "starting":
