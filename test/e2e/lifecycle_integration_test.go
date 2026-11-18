@@ -111,25 +111,14 @@ func cleanupLifecycleCompose(t *testing.T, env []string, dir, project, file stri
 	}
 }
 
-// guardProjectNames keeps the real-Docker test from touching a stack that is
-// not its own. The test needs the exact readable names hello-world and
-// hello-world-1, so a pre-existing project with either name skips it.
-func guardProjectNames(t *testing.T, env []string) {
-	t.Helper()
-	projects := listComposeProjects(t, env)
-	for _, name := range []string{"hello-world", "hello-world-1"} {
-		if row, ok := projects[name]; ok {
-			t.Skipf("refusing to touch pre-existing project %q (%s)", name, row.ConfigFiles)
-		}
-	}
-}
-
 func TestIntegrationLifecycleStack(t *testing.T) {
 	env := requireIntegration(t)
-	guardProjectNames(t, env)
+	// A unique readable base keeps the suffix assertions meaningful without
+	// depending on unrelated projects that may exist on this Docker host.
+	base := "dcraft-hw-" + randomHex(t, 4)
 
 	root := t.TempDir()
-	project := filepath.Join(root, "a", "hello-world")
+	project := filepath.Join(root, "a", base)
 	if err := os.MkdirAll(project, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -168,14 +157,14 @@ func TestIntegrationLifecycleStack(t *testing.T) {
 		t.Fatalf("up exit=%d stderr=%q", up.code, up.stderr)
 	}
 	upParsed := tracked(up)
-	if got := upParsed.Data.Lifecycle.ProjectName; got != "hello-world" {
-		t.Fatalf("allocated name = %q, want hello-world", got)
+	if got := upParsed.Data.Lifecycle.ProjectName; got != base {
+		t.Fatalf("allocated name = %q, want %s", got, base)
 	}
 	registerCleanup(project, upParsed.Data.Lifecycle.ProjectName, composePath)
 	if !upParsed.Data.Lifecycle.ConfigApplied {
 		t.Fatal("up did not state that it applied the configuration")
 	}
-	webID := composeInspect(t, env, "hello-world", composePath, "web")
+	webID := composeInspect(t, env, base, composePath, "web")
 	if webID == "" || !containerRunning(t, webID) {
 		t.Fatalf("web container is not running: %q", webID)
 	}
@@ -194,7 +183,7 @@ func TestIntegrationLifecycleStack(t *testing.T) {
 		t.Fatalf("stop exit=%d stderr=%q", stop.code, stop.stderr)
 	}
 	stopParsed := tracked(stop)
-	if stopParsed.Data.Lifecycle.ProjectName != "hello-world" || stopParsed.Data.Lifecycle.ConfigApplied {
+	if stopParsed.Data.Lifecycle.ProjectName != base || stopParsed.Data.Lifecycle.ConfigApplied {
 		t.Fatalf("stop report = %+v", stopParsed.Data.Lifecycle)
 	}
 	if containerRunning(t, webID) {
@@ -206,10 +195,10 @@ func TestIntegrationLifecycleStack(t *testing.T) {
 	}
 
 	resume := tracked(run("up", "--json"))
-	if resume.Data.Lifecycle.ProjectName != "hello-world" {
+	if resume.Data.Lifecycle.ProjectName != base {
 		t.Fatalf("resume name = %q", resume.Data.Lifecycle.ProjectName)
 	}
-	resumedID := composeInspect(t, env, "hello-world", composePath, "web")
+	resumedID := composeInspect(t, env, base, composePath, "web")
 	if resumedID != webID {
 		t.Fatalf("resume recreated the container: %s -> %s", webID, resumedID)
 	}
@@ -231,7 +220,7 @@ func TestIntegrationLifecycleStack(t *testing.T) {
 	if restart.Data.Lifecycle.Scope != "services" || strings.Join(restart.Data.Lifecycle.Services, ",") != "web" {
 		t.Fatalf("restart scope = %+v", restart.Data.Lifecycle)
 	}
-	afterRestartID := composeInspect(t, env, "hello-world", composePath, "web")
+	afterRestartID := composeInspect(t, env, base, composePath, "web")
 	if afterRestartID != webID {
 		t.Fatalf("restart recreated the container: %s -> %s", webID, afterRestartID)
 	}
@@ -243,14 +232,14 @@ func TestIntegrationLifecycleStack(t *testing.T) {
 	if res := run("up", "--json"); res.code != 0 {
 		t.Fatalf("up after change exit=%d stderr=%q", res.code, res.stderr)
 	}
-	updatedID := composeInspect(t, env, "hello-world", composePath, "web")
+	updatedID := composeInspect(t, env, base, composePath, "web")
 	if got := containerEnv(t, updatedID, "MODE"); got != "two" {
 		t.Fatalf("up did not apply the new configuration: MODE=%q", got)
 	}
 
 	// Put a marker in the named volume so down can prove it kept the data.
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	execCmd := exec.CommandContext(ctx, "docker", "compose", "-p", "hello-world", "-f", composePath, "exec", "-T", "web", "sh", "-c", "echo marker >/data/marker")
+	execCmd := exec.CommandContext(ctx, "docker", "compose", "-p", base, "-f", composePath, "exec", "-T", "web", "sh", "-c", "echo marker >/data/marker")
 	execCmd.Dir = project
 	execCmd.Env = env
 	if out, err := execCmd.CombinedOutput(); err != nil {
@@ -296,13 +285,13 @@ volumes:
 	if down.Data.Lifecycle.VolumesRemoved {
 		t.Fatal("down claimed to remove volumes")
 	}
-	if ids := strings.TrimSpace(composeInspectAll(t, env, "hello-world", composePath)); ids != "" {
+	if ids := strings.TrimSpace(composeInspectAll(t, env, base, composePath)); ids != "" {
 		t.Fatalf("down left containers: %s", ids)
 	}
-	if !volumeExists(t, "hello-world_data") {
+	if !volumeExists(t, base+"_data") {
 		t.Fatal("down removed the named data volume")
 	}
-	readOut, err := exec.Command("docker", "run", "--rm", "-v", "hello-world_data:/data", "busybox:1.36", "cat", "/data/marker").Output()
+	readOut, err := exec.Command("docker", "run", "--rm", "-v", base+"_data:/data", "busybox:1.36", "cat", "/data/marker").Output()
 	if err != nil || strings.TrimSpace(string(readOut)) != "marker" {
 		t.Fatalf("volume data lost after down: %v %q", err, readOut)
 	}
@@ -316,16 +305,16 @@ volumes:
 
 	// A stopped stack resumes with up and keeps its data.
 	afterDown := tracked(run("up", "--json"))
-	if afterDown.Data.Lifecycle.ProjectName != "hello-world" {
+	if afterDown.Data.Lifecycle.ProjectName != base {
 		t.Fatalf("up after down used %q", afterDown.Data.Lifecycle.ProjectName)
 	}
-	catOut, err := exec.Command("docker", "compose", "-p", "hello-world", "-f", composePath, "exec", "-T", "web", "cat", "/data/marker").CombinedOutput()
+	catOut, err := exec.Command("docker", "compose", "-p", base, "-f", composePath, "exec", "-T", "web", "cat", "/data/marker").CombinedOutput()
 	if err != nil || strings.TrimSpace(string(catOut)) != "marker" {
 		t.Fatalf("data after up following down: %v %q", err, catOut)
 	}
 
 	// Two same-named folders in different places get readable suffixes.
-	secondDir := filepath.Join(t.TempDir(), "b", "hello-world")
+	secondDir := filepath.Join(t.TempDir(), "b", base)
 	if err := os.MkdirAll(secondDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -339,14 +328,14 @@ volumes:
 		t.Fatal(err)
 	}
 	secondUp := runProcess(t, secondDir, dcraftEnv, strings.NewReader(""), "up", "--json")
-	registerCleanup(secondDir, "hello-world-1", secondCompose)
+	registerCleanup(secondDir, base+"-1", secondCompose)
 	if secondUp.code != 0 {
 		t.Fatalf("second folder up exit=%d stderr=%q", secondUp.code, secondUp.stderr)
 	}
-	if got := parseLifecycle(t, secondUp.stdout).Data.Lifecycle.ProjectName; got != "hello-world-1" {
-		t.Fatalf("second folder name = %q, want hello-world-1", got)
+	if got := parseLifecycle(t, secondUp.stdout).Data.Lifecycle.ProjectName; got != base+"-1" {
+		t.Fatalf("second folder name = %q, want %q", got, base+"-1")
 	}
-	if ids := composeInspect(t, env, "hello-world", composePath, "web"); ids == "" || !containerRunning(t, ids) {
+	if ids := composeInspect(t, env, base, composePath, "web"); ids == "" || !containerRunning(t, ids) {
 		t.Fatal("first stack changed when the second folder started")
 	}
 
@@ -358,17 +347,17 @@ volumes:
 		t.Fatalf("suffixed status exit=%d stderr=%q", statusB.code, statusB.stderr)
 	}
 	statusBParsed := parseStatus(t, statusB.stdout)
-	if statusBParsed.Target.ProjectName != "hello-world-1" {
-		t.Fatalf("status target project = %q, want hello-world-1", statusBParsed.Target.ProjectName)
+	if statusBParsed.Target.ProjectName != base+"-1" {
+		t.Fatalf("status target project = %q, want %q", statusBParsed.Target.ProjectName, base+"-1")
 	}
-	if statusBParsed.Data.Stack.ProjectName != "hello-world-1" {
-		t.Fatalf("status payload project = %q, want hello-world-1", statusBParsed.Data.Stack.ProjectName)
+	if statusBParsed.Data.Stack.ProjectName != base+"-1" {
+		t.Fatalf("status payload project = %q, want %q", statusBParsed.Data.Stack.ProjectName, base+"-1")
 	}
 	webB := findService(t, statusBParsed.Data.Stack, "web")
 	if webB.State != stack.StateRunning || len(webB.Instances) != 1 {
 		t.Fatalf("status web = %+v", webB)
 	}
-	bContainerID := composeInspect(t, env, "hello-world-1", secondCompose, "web")
+	bContainerID := composeInspect(t, env, base+"-1", secondCompose, "web")
 	if bContainerID == "" {
 		t.Fatal("second stack has no web container")
 	}
@@ -388,12 +377,12 @@ volumes:
 	}
 
 	projects := listComposeProjects(t, env)
-	if _, ok := projects["hello-world-1"]; !ok {
-		t.Fatalf("compose has no hello-world-1 project: %+v", projects)
+	if _, ok := projects[base+"-1"]; !ok {
+		t.Fatalf("compose has no %s project: %+v", base+"-1", projects)
 	}
 
 	// An explicit name collision is refused before a second stack is created.
-	thirdDir := filepath.Join(t.TempDir(), "c", "hello-world")
+	thirdDir := filepath.Join(t.TempDir(), "c", base)
 	if err := os.MkdirAll(thirdDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -402,7 +391,7 @@ volumes:
 		t.Fatal(err)
 	}
 	collision := runProcess(t, thirdDir, dcraftEnv, strings.NewReader(""),
-		"up", "-p", "hello-world", "--json")
+		"up", "-p", base, "--json")
 	if collision.code != 2 {
 		t.Fatalf("collision exit = %d, want 2 (stderr=%q)", collision.code, collision.stderr)
 	}
@@ -410,19 +399,19 @@ volumes:
 	if cats := lifecycleCategories(collisionParsed); len(cats) != 1 || cats[0] != core.CategoryProjectNameConflict {
 		t.Fatalf("collision diagnostics = %+v", collisionParsed.Diagnostics)
 	}
-	if _, ok := listComposeProjects(t, env)["hello-world-1"]; !ok {
+	if _, ok := listComposeProjects(t, env)[base+"-1"]; !ok {
 		t.Fatal("second stack disappeared after the collision attempt")
 	}
-	if got := composeInspect(t, env, "hello-world", composePath, "web"); got == "" || !containerRunning(t, got) {
+	if got := composeInspect(t, env, base, composePath, "web"); got == "" || !containerRunning(t, got) {
 		t.Fatal("collision attempt changed the first stack")
 	}
 
 	// TUI quit does not change services.
-	tuiOutput, code := runPTY(t, project, dcraftEnv, "hello-world")
+	tuiOutput, code := runPTY(t, project, dcraftEnv, base)
 	if code != 0 {
 		t.Fatalf("TUI exit = %d\n%s", code, tuiOutput)
 	}
-	if ids := composeInspect(t, env, "hello-world", composePath, "web"); ids == "" || !containerRunning(t, ids) {
+	if ids := composeInspect(t, env, base, composePath, "web"); ids == "" || !containerRunning(t, ids) {
 		t.Fatal("TUI quit stopped the stack")
 	}
 	if got := composeInspect(t, env, otherName, otherCompose, "hold"); got != otherID || !containerRunning(t, otherID) {
@@ -721,7 +710,7 @@ func TestIntegrationLifecycleDeclaredNameSources(t *testing.T) {
 
 func TestIntegrationLifecycleConcurrentNameAllocation(t *testing.T) {
 	env := requireIntegration(t)
-	guardProjectNames(t, env)
+	base := "dcraft-hwc-" + randomHex(t, 4)
 	stateDir := t.TempDir()
 	dcraftEnv := buildEnv(map[string]string{"DCRAFT_STATE_DIR": stateDir})
 	doc := `services:
@@ -731,7 +720,7 @@ func TestIntegrationLifecycleConcurrentNameAllocation(t *testing.T) {
 `
 	var dirs []string
 	for i := 0; i < 2; i++ {
-		dir := filepath.Join(t.TempDir(), "hello-world")
+		dir := filepath.Join(t.TempDir(), base)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -803,8 +792,8 @@ func TestIntegrationLifecycleConcurrentNameAllocation(t *testing.T) {
 	if len(names) != 2 {
 		t.Fatalf("concurrent allocations produced %v, want two distinct names", names)
 	}
-	if !names["hello-world"] || !names["hello-world-1"] {
-		t.Fatalf("concurrent allocations = %v, want hello-world and hello-world-1", names)
+	if !names[base] || !names[base+"-1"] {
+		t.Fatalf("concurrent allocations = %v, want %s and %s", names, base, base+"-1")
 	}
 	projects := listComposeProjects(t, env)
 	for name, dir := range dirByName {

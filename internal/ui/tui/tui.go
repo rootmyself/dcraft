@@ -669,29 +669,88 @@ func (m *Model) View() string {
 		}
 	}
 
+	body := b.String()
+	var footer strings.Builder
 	if len(m.features) > 1 && m.phase == phaseReady {
-		b.WriteString("\n")
-		b.WriteString(msgMenu)
-		b.WriteString("\n")
-		for i, f := range m.features {
-			d := f.Descriptor()
-			marker := "  "
-			if i == m.selected {
-				marker = "> "
-			}
-			b.WriteString(marker + d.Title + " (" + d.Name + ")\n")
-		}
+		footer.WriteString("\n")
+		footer.WriteString(msgMenu)
+		footer.WriteString("\n")
+		footer.WriteString(m.menuView())
 	}
 
 	if m.notice != "" {
-		b.WriteString("\n")
-		b.WriteString(noticeStyle.Render(m.notice))
-		b.WriteString("\n")
+		footer.WriteString("\n")
+		footer.WriteString(noticeStyle.Render(m.notice))
+		footer.WriteString("\n")
 	}
 
-	b.WriteString("\n")
-	b.WriteString(hintStyle.Render(m.hints()))
+	footer.WriteString("\n")
+	footer.WriteString(hintStyle.Render(m.hints()))
+	return m.fitView(body, footer.String())
+}
+
+// menuWindow bounds how many feature rows the screen shows so a growing
+// feature registry cannot push the content off screen. The selection window
+// follows the cursor and the omitted rows are stated explicitly.
+const menuWindow = 7
+
+func (m *Model) menuView() string {
+	var b strings.Builder
+	start, end := 0, len(m.features)
+	if end > menuWindow {
+		start = m.selected - menuWindow/2
+		if start < 0 {
+			start = 0
+		}
+		if start+menuWindow > end {
+			start = end - menuWindow
+		}
+		end = start + menuWindow
+	}
+	if start > 0 {
+		b.WriteString(hintStyle.Render(msgMenuMoreAbove))
+		b.WriteString("\n")
+	}
+	for i := start; i < end; i++ {
+		d := m.features[i].Descriptor()
+		marker := "  "
+		if i == m.selected {
+			marker = "> "
+		}
+		b.WriteString(marker + d.Title + " (" + d.Name + ")\n")
+	}
+	if end < len(m.features) {
+		b.WriteString(hintStyle.Render(msgMenuMoreBelow))
+		b.WriteString("\n")
+	}
 	return b.String()
+}
+
+// fitView keeps the rendered screen within the terminal height. The footer
+// (menu, notice, hints) is always kept; the body is shortened with an explicit
+// notice instead of letting the terminal silently clip the top.
+func (m *Model) fitView(body, footer string) string {
+	body = strings.TrimRight(body, "\n")
+	footer = strings.TrimRight(footer, "\n")
+	if m.height <= 0 {
+		return body + "\n" + footer + "\n"
+	}
+	bodyLines := strings.Split(body, "\n")
+	footerLines := strings.Split(footer, "\n")
+	if len(bodyLines)+len(footerLines) <= m.height {
+		return body + "\n" + footer + "\n"
+	}
+	maxBody := m.height - len(footerLines)
+	if maxBody < 2 {
+		return footer + "\n"
+	}
+	keep := maxBody - 1
+	if keep > len(bodyLines) {
+		keep = len(bodyLines)
+	}
+	truncated := append([]string{}, bodyLines[:keep]...)
+	truncated = append(truncated, hintStyle.Render(msgViewTruncated))
+	return strings.Join(truncated, "\n") + "\n" + footer + "\n"
 }
 
 // confirmView explains the requested target and effect before a mutating
