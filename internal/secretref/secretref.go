@@ -45,13 +45,15 @@ type SourceType string
 const (
 	SourceEnv  SourceType = "env"
 	SourceFile SourceType = "file"
-	// SourceAWS is the published extension point for ticket #11. It is
-	// recognized here so the contract is stable, but not implemented.
+	// SourceAWS resolves the value through the operator's existing AWS
+	// authentication (the AWS CLI credential chain). dcraft never stores
+	// credentials.
 	SourceAWS SourceType = "aws"
 )
 
 // Reference is one saved connection. It contains only the service, phase,
-// delivery, source type, source reference and target name.
+// delivery, source type, source reference, target name and the non-secret
+// AWS selection options. It never contains a resolved value or credential.
 type Reference struct {
 	Service  string     `yaml:"service" json:"service"`
 	Phase    Phase      `yaml:"phase" json:"phase"`
@@ -59,6 +61,13 @@ type Reference struct {
 	Source   SourceType `yaml:"source" json:"source"`
 	Ref      string     `yaml:"ref" json:"ref"`
 	Target   string     `yaml:"target,omitempty" json:"target"`
+	// Field is an optional dot path into a JSON SecretString. It is valid
+	// only with source: aws and selects one scalar value.
+	Field string `yaml:"field,omitempty" json:"field,omitempty"`
+	// Region and Profile optionally pin the AWS CLI lookup. They are not
+	// credentials: the credential chain stays in the AWS CLI configuration.
+	Region  string `yaml:"region,omitempty" json:"region,omitempty"`
+	Profile string `yaml:"profile,omitempty" json:"profile,omitempty"`
 }
 
 // TargetPath is the container path for file delivery. Environment delivery
@@ -105,6 +114,9 @@ func sameReference(a, b Reference) bool {
 		a.Delivery == b.Delivery &&
 		a.Source == b.Source &&
 		a.Ref == b.Ref &&
+		a.Field == b.Field &&
+		a.Region == b.Region &&
+		a.Profile == b.Profile &&
 		a.EffectiveTarget() == b.EffectiveTarget()
 }
 
@@ -199,6 +211,16 @@ var (
 	serviceNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]*$`)
 	secretNameRe  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
 	controlRe     = regexp.MustCompile(`[\x00-\x1f\x7f]`)
+
+	// AWS selection syntax. A secret id is a name or a full Secrets Manager
+	// ARN; field is a dot path into a JSON SecretString; region and profile
+	// are optional CLI selectors. None of these carries credential material.
+	awsSecretNameRe   = regexp.MustCompile(`^[A-Za-z0-9/_+=.@-]{1,512}$`)
+	awsARNRe          = regexp.MustCompile(`^arn:aws[a-z-]*:secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:[A-Za-z0-9/_+=.@-]+$`)
+	awsRegionRe       = regexp.MustCompile(`^[a-z]{2}(-[a-z]+)+-[0-9]+$`)
+	awsProfileRe      = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
+	awsFieldSegmentRe = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
+	credentialFieldRe = regexp.MustCompile(`(?i)^(aws_)?(access_?key(_?id)?|secret_?access_?key|secret_?key|session_?token|credentials?|password|token|value|private_?key)$`)
 )
 
 // Validate checks one reference without touching the filesystem or Compose.
@@ -234,6 +256,9 @@ func Validate(r Reference) error {
 
 	switch r.Source {
 	case SourceEnv:
+		if err := rejectAWSOnlyFields(r); err != nil {
+			return err
+		}
 		ref := strings.TrimSpace(r.Ref)
 		if ref == "" {
 			return &ValidationError{Field: "ref", Reason: "환경변수 이름이 비어 있습니다."}
@@ -242,6 +267,9 @@ func Validate(r Reference) error {
 			return &ValidationError{Field: "ref", Reason: "환경변수 이름이 올바르지 않습니다: " + ref}
 		}
 	case SourceFile:
+		if err := rejectAWSOnlyFields(r); err != nil {
+			return err
+		}
 		ref := strings.TrimSpace(r.Ref)
 		if ref == "" {
 			return &ValidationError{Field: "ref", Reason: "파일 경로가 비어 있습니다."}
@@ -253,7 +281,9 @@ func Validate(r Reference) error {
 			return &ValidationError{Field: "ref", Reason: "파일 경로가 폴더로 끝납니다: " + ref}
 		}
 	case SourceAWS:
-		return &ValidationError{Field: "source", Reason: "AWS Secrets Manager 원본은 아직 지원하지 않습니다.", Unsupported: true}
+		if err := validateAWSReference(r); err != nil {
+			return err
+		}
 	default:
 		return &ValidationError{Field: "source", Reason: "지원하지 않는 원본 종류입니다: " + string(r.Source)}
 	}
@@ -270,6 +300,80 @@ func Validate(r Reference) error {
 	}
 	if r.Delivery == DeliveryFile && !secretNameRe.MatchString(target) {
 		return &ValidationError{Field: "target", Reason: "target 파일 비밀값 이름이 올바르지 않습니다: " + target}
+	}
+	return nil
+}
+
+// validateAWSReference validates the AWS selector syntax without any network
+// access and requires an explicit delivery target. The secret id is a name or
+// a full Secrets Manager ARN.
+func validateAWSReference(r Reference) error {
+	if err := validateAWSSelector(r); err != nil {
+		return err
+	}
+	// A secret name or ARN is not a delivery name. Requiring an explicit
+	// target keeps the container variable/file name intentional instead of
+	// deriving it from an ARN suffix.
+	if strings.TrimSpace(r.Target) == "" {
+		return &ValidationError{Field: "target", Reason: "AWS 원본은 전달 대상 이름을 target으로 지정해야 합니다."}
+	}
+	return nil
+}
+
+// validateAWSSelector checks the non-secret lookup fields only. Rollback uses
+// it for recorded references that do not store a delivery target.
+func validateAWSSelector(r Reference) error {
+	ref := strings.TrimSpace(r.Ref)
+	if ref == "" {
+		return &ValidationError{Field: "ref", Reason: "ref(AWS 비밀값 이름 또는 ARN)가 비어 있습니다."}
+	}
+	if len(ref) > 2048 || controlRe.MatchString(ref) {
+		return &ValidationError{Field: "ref", Reason: "ref(AWS 비밀값 이름 또는 ARN)에 사용할 수 없는 문자가 있습니다."}
+	}
+	if strings.HasPrefix(ref, "-") {
+		return &ValidationError{Field: "ref", Reason: "ref는 '-'로 시작할 수 없습니다."}
+	}
+	switch {
+	case awsSecretNameRe.MatchString(ref):
+	case awsARNRe.MatchString(ref):
+	default:
+		if strings.Contains(ref, ":") {
+			return &ValidationError{Field: "ref", Reason: "ref 값이 AWS Secrets Manager ARN 형식이 아닙니다: " + ref}
+		}
+		return &ValidationError{Field: "ref", Reason: "ref 값에 사용할 수 없는 문자가 있습니다: " + ref}
+	}
+
+	if field := strings.TrimSpace(r.Field); field != "" {
+		if len(field) > 512 || controlRe.MatchString(field) {
+			return &ValidationError{Field: "field", Reason: "field 경로에 사용할 수 없는 문자가 있습니다."}
+		}
+		for _, segment := range strings.Split(field, ".") {
+			if !awsFieldSegmentRe.MatchString(segment) {
+				return &ValidationError{Field: "field", Reason: "field 경로가 올바르지 않습니다: " + field}
+			}
+		}
+	}
+	if region := strings.TrimSpace(r.Region); region != "" && !awsRegionRe.MatchString(region) {
+		return &ValidationError{Field: "region", Reason: "region(리전) 값이 올바르지 않습니다: " + region}
+	}
+	if profile := strings.TrimSpace(r.Profile); profile != "" && !awsProfileRe.MatchString(profile) {
+		return &ValidationError{Field: "profile", Reason: "profile 이름이 올바르지 않습니다: " + profile}
+	}
+	return nil
+}
+
+// rejectAWSOnlyFields keeps env/file references free of selectors that only
+// an AWS source understands. A silently ignored field would make the saved
+// connection look different from what is delivered.
+func rejectAWSOnlyFields(r Reference) error {
+	if strings.TrimSpace(r.Field) != "" {
+		return &ValidationError{Field: "field", Reason: "field 항목은 source: aws일 때만 사용할 수 있습니다."}
+	}
+	if strings.TrimSpace(r.Region) != "" {
+		return &ValidationError{Field: "region", Reason: "region(리전) 항목은 source: aws일 때만 사용할 수 있습니다."}
+	}
+	if strings.TrimSpace(r.Profile) != "" {
+		return &ValidationError{Field: "profile", Reason: "profile 항목은 source: aws일 때만 사용할 수 있습니다."}
 	}
 	return nil
 }
@@ -485,6 +589,9 @@ func parseReferences(node *yaml.Node) ([]Reference, error) {
 				return nil, configError(msgSecretFieldKey, lineOf(keyNode))
 			}
 			field := keyNode.Value
+			if credentialFieldRe.MatchString(field) {
+				return nil, configError(fmt.Sprintf(msgSecretCredentialField, field), lineOf(keyNode))
+			}
 			if !allowedReferenceFields[field] {
 				return nil, configError(fmt.Sprintf(msgSecretUnknownField, field), lineOf(keyNode))
 			}
@@ -510,6 +617,9 @@ func parseReferences(node *yaml.Node) ([]Reference, error) {
 			Source:   SourceType(strings.TrimSpace(values["source"])),
 			Ref:      strings.TrimSpace(values["ref"]),
 			Target:   strings.TrimSpace(values["target"]),
+			Field:    strings.TrimSpace(values["field"]),
+			Region:   strings.TrimSpace(values["region"]),
+			Profile:  strings.TrimSpace(values["profile"]),
 		}
 		refs = append(refs, ref)
 	}
@@ -520,6 +630,7 @@ var (
 	allowedReferenceFields = map[string]bool{
 		"service": true, "phase": true, "delivery": true,
 		"source": true, "ref": true, "target": true,
+		"field": true, "region": true, "profile": true,
 	}
 	requiredReferenceFields = []string{"service", "phase", "delivery", "source", "ref"}
 )

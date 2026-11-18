@@ -39,6 +39,17 @@ func (f *Feature) Present(res core.Result, width int) string {
 			fmt.Fprintf(&b, "%s · %s\n", ref.Service, phaseLabel(secretrefPhase(ref.Phase)))
 			fmt.Fprintf(&b, "  %s: %s\n", msgPreviewDelivery, deliveryLabel(secretrefPhase(ref.Phase), secretrefDelivery(ref.Delivery), ref.Target))
 			fmt.Fprintf(&b, "  %s: %s (%s)\n", msgPreviewSource, sourceLabel(secretrefSource(ref.Source)), ref.Ref)
+			if secretrefSource(ref.Source) == secretref.SourceAWS {
+				if ref.Field != "" {
+					fmt.Fprintf(&b, "  %s: %s\n", msgPreviewField, ref.Field)
+				}
+				if ref.Region != "" {
+					fmt.Fprintf(&b, "  %s: %s\n", msgPreviewRegion, ref.Region)
+				}
+				if ref.Profile != "" {
+					fmt.Fprintf(&b, "  %s: %s\n", msgPreviewProfile, ref.Profile)
+				}
+			}
 			fmt.Fprintf(&b, "  %s: %s\n", msgPreviewEffect, ref.Effect)
 		}
 	}

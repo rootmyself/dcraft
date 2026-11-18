@@ -88,6 +88,7 @@ const (
 	msgHintWizardChoice    = "↑/↓ 선택 · enter 다음 · ← 이전 · esc 취소 · q 종료"
 	msgHintWizardMulti     = "↑/↓ 이동 · space 선택/해제 · enter 다음 · ← 이전 · esc 취소 · q 종료"
 	msgHintWizardInput     = "입력 후 enter · backspace 수정 · ← 이전 · esc 취소 · q 종료"
+	msgHintWizardOptional  = "입력 후 enter · 비우고 enter로 건너뛰기 · ← 이전 · esc 취소 · q 종료"
 	msgHintWizardPreview   = "enter 저장 · ← 이전 · esc 취소 · q 종료"
 	msgHintWizardInvalid   = "← 이전 · esc 취소 · q 종료"
 	msgHintWizardLoading   = "esc 취소 · q 종료"

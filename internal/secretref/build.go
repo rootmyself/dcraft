@@ -177,9 +177,10 @@ type buildState struct {
 	selected     []string
 	overridePath string
 	values       []string
-	// envFiles are environment-source materializations. They live only while
-	// one Compose build command runs and are removed afterwards.
-	envFiles []string
+	// transientFiles are environment-source and AWS materializations. They
+	// live only while one Compose build command runs and are removed
+	// afterwards so a fetched value never outlives the build.
+	transientFiles []string
 	// fileRefs are the file-source references selected for this build. Their
 	// private copies stay for a rebuild and are pruned at a safe point.
 	fileRefs []Reference
@@ -242,6 +243,7 @@ func (r *Runtime) PrepareBuild(ctx context.Context, target core.Target, services
 	}
 
 	// Resolve every source before writing anything.
+	fetcher := newAWSFetcher(r.runner)
 	items := make([]resolvedItem, 0, len(refs))
 	for _, ref := range refs {
 		if err := ctx.Err(); err != nil {
@@ -253,6 +255,8 @@ func (r *Runtime) PrepareBuild(ctx context.Context, target core.Target, services
 			value, err = r.readEnv(ref)
 		case SourceFile:
 			value, err = r.readSourceFile(target, ref)
+		case SourceAWS:
+			value, err = fetcher.fetch(ctx, ref)
 		default:
 			return BuildSession{}, applyError("지원하지 않는 빌드 비밀값 원본입니다.", string(ref.Source))
 		}
@@ -280,10 +284,11 @@ func (r *Runtime) PrepareBuild(ctx context.Context, target core.Target, services
 		if err := session.materialize(path, item.value); err != nil {
 			return BuildSession{}, session.abortError(err)
 		}
-		if item.ref.Source == SourceEnv {
-			session.state.envFiles = append(session.state.envFiles, path)
-		} else {
+		switch item.ref.Source {
+		case SourceFile:
 			session.state.fileRefs = append(session.state.fileRefs, item.ref)
+		case SourceEnv, SourceAWS:
+			session.state.transientFiles = append(session.state.transientFiles, path)
 		}
 	}
 	if err := r.writeBuildOverride(target, refs); err != nil {
@@ -298,16 +303,23 @@ func (r *Runtime) PrepareBuild(ctx context.Context, target core.Target, services
 
 	labels := make([]string, 0, len(items))
 	hasEnvSource := false
+	hasAWSSource := false
 	for _, item := range items {
 		labels = append(labels, item.ref.Service+":"+item.ref.EffectiveTarget())
-		if item.ref.Source == SourceEnv {
+		switch item.ref.Source {
+		case SourceEnv:
 			hasEnvSource = true
+		case SourceAWS:
+			hasAWSSource = true
 		}
 	}
 	session.Notices = append(session.Notices, fmt.Sprintf(msgBuildApplied, strings.Join(labels, ", "), session.state.overridePath))
 	session.Notices = append(session.Notices, msgBuildCacheNotice, msgBuildNoFallback, msgBuildImageDisclosure)
 	if hasEnvSource {
 		session.Notices = append(session.Notices, msgBuildEnvLifetime)
+	}
+	if hasAWSSource {
+		session.Notices = append(session.Notices, fmt.Sprintf(msgAWSFetchedBuild, awsSourceCount(items)), msgBuildAWSLifetime, msgAWSCredentialDisclosure)
 	}
 	session.Notices = append(session.Notices, mountNotices(items, hints)...)
 	return session, nil
@@ -392,18 +404,18 @@ func (s *BuildSession) materialize(path string, value []byte) error {
 	return nil
 }
 
-// Finish removes the environment-source materializations. It is called after
-// the Compose build command exits, whether the build succeeded or failed, so
-// those values never outlive the build they were fetched for. File-source
+// Finish removes the environment-source and AWS materializations. It is called
+// after the Compose build command exits, whether the build succeeded or failed,
+// so those values never outlive the build they were fetched for. File-source
 // copies stay for a rebuild.
 func (s *BuildSession) Finish() error {
 	var firstErr error
-	for _, path := range s.state.envFiles {
+	for _, path := range s.state.transientFiles {
 		if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) && firstErr == nil {
 			firstErr = applyError(msgBuildFinishFailed, err.Error())
 		}
 	}
-	s.state.envFiles = nil
+	s.state.transientFiles = nil
 	return firstErr
 }
 
@@ -414,7 +426,7 @@ func (s *BuildSession) Commit() {
 	if s.state.runtime == nil || s.state.runtime.dirs == nil {
 		return
 	}
-	if len(s.state.envFiles) > 0 {
+	if len(s.state.transientFiles) > 0 {
 		_ = s.Finish()
 	}
 	stackDir, err := s.state.runtime.dirs.StackDir(s.state.target)
@@ -446,16 +458,16 @@ func (s *BuildSession) Commit() {
 	}
 }
 
-// Abort removes environment-source materializations and private copies created
-// by a preparation that never reached the build command. An overwritten
-// private copy is left as-is: dcraft never stored the old value and does not
-// pretend to restore it.
+// Abort removes environment-source and AWS materializations and private copies
+// created by a preparation that never reached the build command. An
+// overwritten private copy is left as-is: dcraft never stored the old value and
+// does not pretend to restore it.
 func (s *BuildSession) Abort() (partial bool) {
 	partial = s.state.overwrote
-	for _, path := range append(append([]string{}, s.state.envFiles...), s.state.created...) {
+	for _, path := range append(append([]string{}, s.state.transientFiles...), s.state.created...) {
 		_ = os.Remove(path)
 	}
-	s.state.envFiles = nil
+	s.state.transientFiles = nil
 	s.state.created = nil
 	if s.state.wroteOverride && s.state.overridePath != "" {
 		_ = os.Remove(s.state.overridePath)

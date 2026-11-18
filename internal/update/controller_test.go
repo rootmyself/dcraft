@@ -400,6 +400,15 @@ func TestGoodVersionRecordsSecretReferencesWithoutValues(t *testing.T) {
     source: env
     ref: DB_PASSWORD
   - service: web
+    phase: runtime
+    delivery: file
+    source: aws
+    ref: prod/db
+    field: database.password
+    region: ap-northeast-2
+    profile: ops-admin
+    target: db_password
+  - service: web
     phase: build
     delivery: file
     source: file
@@ -424,20 +433,27 @@ func TestGoodVersionRecordsSecretReferencesWithoutValues(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("load: ok=%v err=%v", ok, err)
 	}
-	byPhase := map[string]state.SecretReference{}
+	byKey := map[string]state.SecretReference{}
 	for _, ref := range saved.Target.SecretRefs {
-		byPhase[ref.Phase] = ref
+		byKey[ref.Phase+"/"+ref.Delivery+"/"+ref.Name] = ref
 	}
-	build, ok := byPhase["build"]
+	build, ok := byKey["build/file/secrets/build-token.txt"]
 	if !ok {
 		t.Fatalf("build reference missing from the good-version record: %+v", saved.Target.SecretRefs)
 	}
-	if build.Service != "web" || build.Delivery != "file" || build.Source != "file" || build.Name != "secrets/build-token.txt" {
+	if build.Service != "web" || build.Source != "file" || build.Name != "secrets/build-token.txt" {
 		t.Fatalf("build reference = %+v", build)
 	}
-	runtime, ok := byPhase["runtime"]
-	if !ok || runtime.Name != "DB_PASSWORD" || runtime.Delivery != "environment" {
-		t.Fatalf("runtime reference = %+v", runtime)
+	runtimeEnv, ok := byKey["runtime/environment/DB_PASSWORD"]
+	if !ok || runtimeEnv.Service != "web" {
+		t.Fatalf("runtime environment reference = %+v", runtimeEnv)
+	}
+	aws, ok := byKey["runtime/file/prod/db"]
+	if !ok {
+		t.Fatalf("AWS reference missing from the good-version record: %+v", saved.Target.SecretRefs)
+	}
+	if aws.Source != "aws" || aws.Field != "database.password" || aws.Region != "ap-northeast-2" || aws.Profile != "ops-admin" {
+		t.Fatalf("AWS reference = %+v", aws)
 	}
 	encoded, err := json.Marshal(saved)
 	if err != nil {
