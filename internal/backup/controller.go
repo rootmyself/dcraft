@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rootmyself/dcraft/internal/core"
@@ -26,7 +27,7 @@ type ProjectNameReader interface {
 type Config struct {
 	Backend data.Backend
 	Names   ProjectNameReader
-	Store   *state.Store
+	Locks   state.Locker
 	Clock   core.Clock
 	Tool    Tool
 	PID     int
@@ -36,6 +37,9 @@ type Config struct {
 // interactive selection and later tickets.
 type Controller struct {
 	cfg Config
+
+	wizardMu         sync.Mutex
+	wizardCacheValue *wizardPreviewCache
 }
 
 // New builds the controller. A nil clock uses the system clock; a zero PID is
@@ -88,7 +92,7 @@ type ArtifactReport struct {
 // the completion manifest last, publishes atomically, and then starts only the
 // services it stopped. No part of this is bypassed on failure.
 func (c *Controller) Run(ctx context.Context, in core.Invocation) (payload any, err error) {
-	if c.cfg.Backend == nil || c.cfg.Names == nil || c.cfg.Store == nil {
+	if c.cfg.Backend == nil || c.cfg.Names == nil || c.cfg.Locks == nil {
 		return nil, core.Fail(core.Diagnostic{
 			Category:    core.CategoryInternal,
 			Severity:    core.SeverityError,
@@ -99,6 +103,9 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation) (payload any, 
 	clock := c.cfg.Clock
 	if in.Clock != nil {
 		clock = in.Clock
+	}
+	redact := func(text string) string {
+		return c.cfg.Backend.Redact(ctx, in.Target, text)
 	}
 
 	// 1. Validate the user-chosen output directory before anything is stopped.
@@ -125,7 +132,7 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation) (payload any, 
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return ctxErr
 		}
-		acquired, lockErr := c.cfg.Store.AcquireStackLock(ctx, in.Target, state.LockHolder{
+		acquired, lockErr := c.cfg.Locks.AcquireStackLock(ctx, in.Target, state.LockHolder{
 			Action: "backup", PID: c.cfg.PID, StartedAt: clock.Now(),
 		})
 		if lockErr == nil {
@@ -182,10 +189,33 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation) (payload any, 
 		return nil, err
 	}
 
+	// 5. Re-resolve immediately before any stop. A plan or interactive preview
+	// is only advisory; a changed volume identity must never be archived or
+	// attributed to the stack the user saw.
+	err = core.RunStage(in.Reporter, "recheck_selection", msgStageRecheck, func() error {
+		fresh, freshErr := Discover(ctx, c.cfg.Backend, target, projectName)
+		if freshErr != nil {
+			return freshErr
+		}
+		freshSelected, selectErr := fresh.Select(in.OptionList("volume"))
+		if selectErr != nil {
+			return selectionError(selectErr, fresh.Sources)
+		}
+		if !sameSelection(selected, freshSelected) {
+			return selectionChangedError(selected, freshSelected)
+		}
+		discovery = fresh
+		selected = freshSelected
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	affected := discovery.AffectedServices(selected)
 	running := discovery.RunningAmong(affected)
 
-	// 5. Refuse anything that cannot be stopped or restored safely.
+	// 6. Refuse anything that cannot be stopped or restored safely.
 	err = core.RunStage(in.Reporter, "inspect_consumers", msgStageConsumers, func() error {
 		report, cErr := discovery.CheckConsumers(ctx, c.cfg.Backend, selected)
 		if cErr != nil {
@@ -226,7 +256,7 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation) (payload any, 
 		}
 	}()
 
-	// 6. Stop only the affected services that were running.
+	// 7. Stop only the affected services that were running.
 	if len(running) > 0 {
 		stopped = append(stopped, running...)
 		err = core.RunStage(in.Reporter, "stop_consumers", msgStageStop, func() error {
@@ -235,7 +265,7 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation) (payload any, 
 				return ctxErr
 			}
 			if stopErr != nil {
-				return stopError(stopErr, res.Output)
+				return stopError(errors.New(redact(stopErr.Error())), redact(res.Output))
 			}
 			return nil
 		})
@@ -244,7 +274,7 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation) (payload any, 
 		}
 	}
 
-	// 7. Archive each selected volume. One failure stops the run; earlier
+	// 8. Archive each selected volume. One failure stops the run; earlier
 	// published artifacts are kept and named in the failure.
 	for _, src := range selected {
 		if ctxErr := ctx.Err(); ctxErr != nil {
@@ -252,12 +282,12 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation) (payload any, 
 		}
 		artifact, archiveErr := c.archiveOne(ctx, in, target, outputDir, src, projectName, affected, running, stopped, clock)
 		if archiveErr != nil {
-			return nil, archiveErr
+			return nil, annotatePublished(archiveErr, artifacts)
 		}
 		artifacts = append(artifacts, artifact)
 	}
 
-	// 8. Restore only the services this operation stopped.
+	// 9. Restore only the services this operation stopped.
 	if restoreErr := restore(); restoreErr != nil {
 		return nil, restoreErr
 	}
@@ -372,50 +402,6 @@ func (c *Controller) Plan(ctx context.Context, in core.Invocation) (core.Plan, e
 	return core.Plan{Text: b.String()}, nil
 }
 
-// Choices implements core.OptionChooser for the volume flag. It is read-only
-// and returns only named volumes; anonymous and bind sources are not offered.
-func (c *Controller) Choices(ctx context.Context, in core.Invocation, flag string) ([]core.OptionChoice, error) {
-	if flag != "volume" {
-		return nil, core.Fail(core.Diagnostic{
-			Category:    core.CategoryInternal,
-			Severity:    core.SeverityError,
-			Message:     msgVolumeUnknown,
-			NextActions: []string{msgVolumeUnknownAction},
-		})
-	}
-	if c.cfg.Backend == nil {
-		return nil, core.Fail(core.Diagnostic{
-			Category:    core.CategoryInternal,
-			Severity:    core.SeverityError,
-			Message:     msgNoBackend,
-			NextActions: []string{msgNoBackendAction},
-		})
-	}
-	target := in.Target
-	if c.cfg.Names != nil {
-		name, err := c.cfg.Names.ReadProjectName(ctx, target)
-		if err != nil {
-			return nil, identityError(err)
-		}
-		if name != "" {
-			target.ProjectName = name
-		}
-	}
-	sources, err := c.cfg.Backend.Sources(ctx, target)
-	if err != nil {
-		return nil, err
-	}
-	out := []core.OptionChoice{}
-	for _, src := range SelectableVolumes(sources) {
-		out = append(out, core.OptionChoice{
-			Value:  src.Key,
-			Label:  fmt.Sprintf("%s → %s", src.Key, src.Name),
-			Detail: sourceDetail(src),
-		})
-	}
-	return out, nil
-}
-
 func sourceDetail(src data.DataSource) string {
 	parts := []string{}
 	if len(src.Services) > 0 {
@@ -456,8 +442,11 @@ func (c *Controller) effectiveName(ctx context.Context, target core.Target) (str
 }
 
 func (c *Controller) archiveOne(ctx context.Context, in core.Invocation, target core.Target, outputDir string, src data.DataSource, projectName string, affected, running, stopped []string, clock core.Clock) (ArtifactReport, error) {
-	base := artifactName(SourceFrom(src, projectName, target.Environment, target.ProjectDir), clock.Now())
-	final, err := uniqueArtifactPath(outputDir, base)
+	redact := func(text string) string {
+		return c.cfg.Backend.Redact(ctx, target, text)
+	}
+	base := ArtifactName(SourceFrom(src, projectName, target.Environment, target.ProjectDir), clock.Now())
+	final, err := UniqueArtifactPath(outputDir, base)
 	if err != nil {
 		return ArtifactReport{}, outputError(err)
 	}
@@ -478,7 +467,7 @@ func (c *Controller) archiveOne(ctx context.Context, in core.Invocation, target 
 			return ctxErr
 		}
 		if archiveErr != nil {
-			return archiveFailure(res.Output, archiveErr, partial)
+			return archiveFailure(redact(res.Output), errors.New(redact(archiveErr.Error())), partial)
 		}
 		return nil
 	})
@@ -492,20 +481,25 @@ func (c *Controller) archiveOne(ctx context.Context, in core.Invocation, target 
 	err = core.RunStage(in.Reporter, "verify_archive", msgStageVerifyArchive, func() error {
 		inspected, inspectErr := InspectArchive(filepath.Join(partial, DataFile))
 		if inspectErr != nil {
-			return integrityError(inspectErr, partial)
+			return integrityError(errors.New(redact(inspectErr.Error())), partial)
 		}
 		var hashErr error
 		size, sum, hashErr = fileSHA256(filepath.Join(partial, DataFile))
 		if hashErr != nil {
-			return integrityError(hashErr, partial)
+			return integrityError(errors.New(redact(hashErr.Error())), partial)
+		}
+		if syncErr := syncFile(filepath.Join(partial, DataFile)); syncErr != nil {
+			return archiveFailure("", syncErr, partial)
 		}
 		manifest = Manifest{
 			Schema:        Schema,
 			FormatVersion: FormatVersion,
-			Complete:      true,
-			CreatedAt:     clock.Now().UTC(),
-			Tool:          c.cfg.Tool,
-			Source:        SourceFrom(src, projectName, target.Environment, target.ProjectDir),
+			// The completion marker is written only after the artifact is
+			// published. A partial directory is never marked complete.
+			Complete:  false,
+			CreatedAt: clock.Now().UTC(),
+			Tool:      c.cfg.Tool,
+			Source:    SourceFrom(src, projectName, target.Environment, target.ProjectDir),
 			Stack: StackState{
 				ProjectName:      projectName,
 				Services:         append([]string{}, affected...),
@@ -523,12 +517,16 @@ func (c *Controller) archiveOne(ctx context.Context, in core.Invocation, target 
 		if writeErr := WriteManifest(partial, manifest); writeErr != nil {
 			return archiveFailure("", writeErr, partial)
 		}
+		if syncErr := syncDir(partial); syncErr != nil {
+			return archiveFailure("", syncErr, partial)
+		}
 		return nil
 	})
 	if err != nil {
 		return ArtifactReport{}, decoratePartial(err, cleanup())
 	}
 
+	published := false
 	err = core.RunStage(in.Reporter, "publish", msgStagePublish, func() error {
 		if _, statErr := os.Lstat(final); statErr == nil {
 			return outputError(fmt.Errorf("%w: %s already exists", ErrOutputInvalid, final))
@@ -542,10 +540,43 @@ func (c *Controller) archiveOne(ctx context.Context, in core.Invocation, target 
 				NextActions: []string{msgPublishFailedAction},
 			})
 		}
+		published = true
+		if syncErr := syncDir(outputDir); syncErr != nil {
+			return core.FailCause(syncErr, core.Diagnostic{
+				Category:    core.CategoryBackupFailed,
+				Severity:    core.SeverityError,
+				Message:     msgPublishFailed,
+				Detail:      fmt.Sprintf("%s\n%s", syncErr.Error(), fmt.Sprintf(msgPartialLocation, final)),
+				NextActions: []string{msgPublishFailedAction},
+			})
+		}
 		return nil
 	})
 	if err != nil {
+		if published {
+			return ArtifactReport{}, decoratePublished(err, final)
+		}
 		return ArtifactReport{}, decoratePartial(err, cleanup())
+	}
+
+	// Write the completion marker last, in the final location, then re-verify.
+	// A failure here demotes the artifact back to `.partial` so it can never be
+	// mistaken for a complete backup.
+	err = core.RunStage(in.Reporter, "complete", msgStageComplete, func() error {
+		manifest.Complete = true
+		if writeErr := WriteManifest(final, manifest); writeErr != nil {
+			return invalidatePublished(final, writeErr)
+		}
+		if syncErr := syncDir(final); syncErr != nil {
+			return invalidatePublished(final, syncErr)
+		}
+		if _, verifyErr := Verify(final); verifyErr != nil {
+			return invalidatePublished(final, errors.New(redact(verifyErr.Error())))
+		}
+		return nil
+	})
+	if err != nil {
+		return ArtifactReport{}, err
 	}
 
 	artifactSize := size
@@ -571,7 +602,8 @@ func (c *Controller) restoreState(ctx context.Context, in core.Invocation, targe
 	return core.RunStage(in.Reporter, "restore_state", msgStageRestoreState, func() error {
 		res, err := c.cfg.Backend.StartServices(restoreCtx, target, services)
 		if err != nil {
-			return restoreError(err, services, artifacts, res.Output)
+			redactedOutput := c.cfg.Backend.Redact(ctx, target, res.Output)
+			return restoreError(errors.New(c.cfg.Backend.Redact(ctx, target, err.Error())), services, artifacts, redactedOutput)
 		}
 		*restarted = append(*restarted, services...)
 		return nil
@@ -873,4 +905,189 @@ func joinOrNone(values []string) string {
 		return msgPlanNoneRunning
 	}
 	return strings.Join(values, ", ")
+}
+
+// WizardSteps implements the read-only first half of the interactive flow. It
+// lists named volumes and asks for one output directory. It creates nothing
+// and never stops a service.
+func (c *Controller) WizardSteps(ctx context.Context, in core.Invocation) (core.WizardSpec, error) {
+	if c.cfg.Backend == nil || c.cfg.Names == nil {
+		return core.WizardSpec{}, core.Fail(core.Diagnostic{
+			Category:    core.CategoryInternal,
+			Severity:    core.SeverityError,
+			Message:     msgNoBackend,
+			NextActions: []string{msgNoBackendAction},
+		})
+	}
+	target := in.Target
+	name, err := c.effectiveName(ctx, target)
+	if err != nil {
+		return core.WizardSpec{}, err
+	}
+	target.ProjectName = name
+	discovery, err := Discover(ctx, c.cfg.Backend, target, name)
+	if err != nil {
+		return core.WizardSpec{}, err
+	}
+	selectable := SelectableVolumes(discovery.Sources)
+	if len(selectable) == 0 {
+		return core.WizardSpec{}, selectionError(ErrVolumeRequired, discovery.Sources)
+	}
+	options := make([]core.WizardOption, 0, len(selectable))
+	for _, src := range selectable {
+		label := fmt.Sprintf("%s → %s", src.Key, src.Name)
+		if detail := sourceDetail(src); detail != "" {
+			label += " · " + detail
+		}
+		options = append(options, core.WizardOption{Value: src.Key, Label: label})
+	}
+	c.cacheWizardPreview(discovery)
+	return core.WizardSpec{
+		Title: msgWizardTitle,
+		Steps: []core.WizardStep{
+			{
+				Name:    "volume",
+				Title:   msgWizardVolumeTitle,
+				Prompt:  msgWizardVolumePrompt,
+				Options: options,
+			},
+			{
+				Name:        "output",
+				Title:       msgWizardOutputTitle,
+				Prompt:      msgWizardOutputPrompt,
+				AllowCustom: true,
+				CustomHint:  msgWizardOutputHint,
+				Default:     msgWizardOutputDefault,
+			},
+		},
+	}, nil
+}
+
+// WizardPreview describes the collected answers using the last read-only
+// discovery. It is a preview only: Run re-resolves everything and refuses a
+// changed selection before stopping anything.
+func (c *Controller) WizardPreview(answers map[string]string) string {
+	volumeKey := strings.TrimSpace(answers["volume"])
+	output := strings.TrimSpace(answers["output"])
+	if output == "" {
+		output = msgWizardOutputDefault
+	}
+	var b strings.Builder
+	b.WriteString(msgPlanHeader)
+	b.WriteString("\n\n")
+	cached := c.wizardCache()
+	var matched *DataSource
+	if cached != nil {
+		if selected, err := cached.discovery.Select([]string{volumeKey}); err == nil && len(selected) > 0 {
+			matched = &selected[0]
+		}
+	}
+	if matched != nil {
+		affected := cached.discovery.AffectedServices([]DataSource{*matched})
+		running := cached.discovery.RunningAmong(affected)
+		stopped := difference(affected, running)
+		fmt.Fprintf(&b, "백업 대상 볼륨: %s → %s\n", matched.Key, matched.Name)
+		fmt.Fprintf(&b, msgPlanServices+"\n", joinOrNone(affected))
+		fmt.Fprintf(&b, msgPlanRunning+"\n", joinOrNone(running))
+		fmt.Fprintf(&b, msgPlanStopped+"\n", joinOrNone(stopped))
+	} else {
+		fmt.Fprintf(&b, "백업 대상 볼륨: %s\n", volumeKey)
+		b.WriteString(msgWizardRecheck)
+		b.WriteString("\n")
+	}
+	fmt.Fprintf(&b, msgPlanOutput+"\n", output)
+	b.WriteString(msgPlanStopStep)
+	b.WriteString("\n")
+	b.WriteString(msgPlanSensitive)
+	b.WriteString("\n")
+	b.WriteString(msgPlanNoAutoDelete)
+	return b.String()
+}
+
+type wizardPreviewCache struct {
+	discovery Discovery
+}
+
+func (c *Controller) cacheWizardPreview(d Discovery) {
+	c.wizardMu.Lock()
+	defer c.wizardMu.Unlock()
+	c.wizardCacheValue = &wizardPreviewCache{discovery: d}
+}
+
+func (c *Controller) wizardCache() *wizardPreviewCache {
+	c.wizardMu.Lock()
+	defer c.wizardMu.Unlock()
+	return c.wizardCacheValue
+}
+
+func sameSelection(a, b []DataSource) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].Key != b[i].Key || a[i].Name != b[i].Name ||
+			a[i].Kind != b[i].Kind || a[i].Anonymous != b[i].Anonymous ||
+			a[i].External != b[i].External ||
+			!sameStrings(a[i].Services, b[i].Services) ||
+			!sameStrings(a[i].MountTargets, b[i].MountTargets) {
+			return false
+		}
+	}
+	return true
+}
+
+func sameStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func selectionChangedError(before, after []DataSource) error {
+	describe := func(sources []DataSource) string {
+		var parts []string
+		for _, src := range sources {
+			parts = append(parts, src.Key+"="+src.Name)
+		}
+		return strings.Join(parts, ", ")
+	}
+	return core.Fail(core.Diagnostic{
+		Category:    core.CategoryBackupSelectionChanged,
+		Severity:    core.SeverityError,
+		Message:     msgSelectionChanged,
+		Detail:      msgSelectionChangedBefore + describe(before) + "\n" + msgSelectionChangedAfter + describe(after),
+		NextActions: []string{msgSelectionChangedAction},
+	})
+}
+
+// annotatePublished keeps already valid artifacts visible when a later volume
+// fails. They are never deleted to make the run look atomic.
+func annotatePublished(err error, artifacts []ArtifactReport) error {
+	if len(artifacts) == 0 {
+		return err
+	}
+	var ce *core.Error
+	if !errors.As(err, &ce) || len(ce.Diagnostics) == 0 {
+		return err
+	}
+	paths := make([]string, 0, len(artifacts))
+	for _, artifact := range artifacts {
+		paths = append(paths, artifact.Path)
+	}
+	ce.Diagnostics[0].Detail = strings.TrimSpace(ce.Diagnostics[0].Detail + "\n" + msgPublishedRemain + "\n" + strings.Join(paths, "\n"))
+	return ce
+}
+
+func decoratePublished(err error, final string) error {
+	var ce *core.Error
+	if errors.As(err, &ce) && len(ce.Diagnostics) > 0 {
+		ce.Diagnostics[0].Detail = strings.TrimSpace(ce.Diagnostics[0].Detail + "\n" + fmt.Sprintf(msgPublishedInvalid, final))
+		return ce
+	}
+	return err
 }

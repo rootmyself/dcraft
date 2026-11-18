@@ -38,6 +38,9 @@ type fakeBackend struct {
 	starts       [][]string
 	helperImage  string
 	projectError error
+	redact       func(string) string
+	sourcesSeq   [][]data.DataSource
+	sourcesCalls int
 }
 
 func (f *fakeBackend) record(event string) {
@@ -54,6 +57,17 @@ func (f *fakeBackend) ProjectName(ctx context.Context, target core.Target) (stri
 }
 
 func (f *fakeBackend) Sources(ctx context.Context, target core.Target) ([]data.DataSource, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.sourcesSeq) > 0 {
+		index := f.sourcesCalls
+		if index >= len(f.sourcesSeq) {
+			index = len(f.sourcesSeq) - 1
+		}
+		f.sourcesCalls++
+		return append([]data.DataSource{}, f.sourcesSeq[index]...), nil
+	}
+	f.sourcesCalls++
 	return append([]data.DataSource{}, f.sources...), nil
 }
 
@@ -61,7 +75,7 @@ func (f *fakeBackend) ServiceRuntime(ctx context.Context, target core.Target) ([
 	return append([]data.ServiceRuntime{}, f.runtime...), nil
 }
 
-func (f *fakeBackend) VolumeConsumers(ctx context.Context, volumeName string) ([]data.ContainerConsumer, error) {
+func (f *fakeBackend) VolumeConsumers(ctx context.Context, target core.Target, volumeName string) ([]data.ContainerConsumer, error) {
 	return append([]data.ContainerConsumer{}, f.consumers[volumeName]...), nil
 }
 
@@ -87,6 +101,13 @@ func (f *fakeBackend) ArchiveVolume(ctx context.Context, volumeName, hostDir str
 		return data.OpResult{}, errors.New("fake archive hook is not configured")
 	}
 	return data.OpResult{}, f.archive(volumeName, hostDir)
+}
+
+func (f *fakeBackend) Redact(ctx context.Context, target core.Target, text string) string {
+	if f.redact == nil {
+		return text
+	}
+	return f.redact(text)
 }
 
 func (f *fakeBackend) HelperImage() string {
@@ -119,7 +140,7 @@ func newController(t *testing.T, backend *fakeBackend, names fakeNames, stateDir
 	return New(Config{
 		Backend: backend,
 		Names:   names,
-		Store:   store,
+		Locks:   store,
 		Clock:   fixedClock{now: time.Date(2026, 11, 18, 12, 0, 0, 0, time.UTC)},
 		Tool:    Tool{Version: "test"},
 		PID:     4242,
@@ -591,4 +612,183 @@ func errorDetail(err error) string {
 		parts = append(parts, d.Detail)
 	}
 	return strings.Join(parts, "\n")
+}
+
+func TestToolOutputIsRedactedBeforeItBecomesADiagnostic(t *testing.T) {
+	projectDir := t.TempDir()
+	output := filepath.Join(t.TempDir(), "backups")
+	const sentinel = "SENTINEL-SECRET-VALUE"
+	backend := &fakeBackend{
+		projectName: "proj",
+		sources:     []data.DataSource{volumeSource("data", "proj_data", "app")},
+		runtime:     []data.ServiceRuntime{{Service: "app", State: "running"}},
+		consumers: map[string][]data.ContainerConsumer{
+			"proj_data": {{Name: "proj-app-1", Project: "proj", Service: "app", State: "running"}},
+		},
+		redact: func(text string) string {
+			return strings.ReplaceAll(text, sentinel, "[redacted]")
+		},
+	}
+	backend.archive = func(volume, dir string) error {
+		return errors.New("helper failed for /var/lib/docker/" + sentinel)
+	}
+	controller, _ := newController(t, backend, fakeNames{name: "proj"}, t.TempDir())
+	_, err := controller.Run(context.Background(), invocation(t, projectDir, output, "data"))
+	if err == nil {
+		t.Fatal("expected failure")
+	}
+	if strings.Contains(err.Error(), sentinel) || strings.Contains(errorDetail(err), sentinel) {
+		t.Fatalf("diagnostic leaked the sentinel: %v / %s", err, errorDetail(err))
+	}
+	if !strings.Contains(errorDetail(err), "[redacted]") {
+		t.Fatalf("redaction was not applied: %s", errorDetail(err))
+	}
+}
+
+func TestRunReResolvesTheSelectionBeforeStopping(t *testing.T) {
+	projectDir := t.TempDir()
+	output := filepath.Join(t.TempDir(), "backups")
+	backend := &fakeBackend{
+		projectName: "proj",
+		sourcesSeq: [][]data.DataSource{
+			{volumeSource("data", "proj_data", "app")},
+			{volumeSource("data", "renamed_data", "app")},
+		},
+		runtime: []data.ServiceRuntime{{Service: "app", State: "running"}},
+		consumers: map[string][]data.ContainerConsumer{
+			"proj_data": {{Name: "proj-app-1", Project: "proj", Service: "app", State: "running"}},
+		},
+	}
+	backend.defaultArchive(t)
+	controller, _ := newController(t, backend, fakeNames{name: "proj"}, t.TempDir())
+	_, err := controller.Run(context.Background(), invocation(t, projectDir, output, "data"))
+	if !hasCategory(err, core.CategoryBackupSelectionChanged) {
+		t.Fatalf("error = %v", err)
+	}
+	if len(backend.stops) != 0 {
+		t.Fatalf("changed selection was stopped: %v", backend.stops)
+	}
+	if entries, _ := os.ReadDir(output); len(entries) != 0 {
+		t.Fatalf("changed selection was archived: %v", entries)
+	}
+}
+
+func TestWizardStepsListsNamedVolumesAndPreviewShowsTheSelectedEffect(t *testing.T) {
+	projectDir := t.TempDir()
+	backend := &fakeBackend{
+		projectName: "proj",
+		sources: []data.DataSource{
+			volumeSource("data", "proj_data", "app", "worker"),
+			volumeSource("logs", "proj_logs", "app"),
+			{Kind: data.KindVolume, Anonymous: true, Services: []string{"app"}},
+			{Kind: data.KindBind, Name: "/host/bind", Services: []string{"app"}},
+		},
+		runtime: []data.ServiceRuntime{
+			{Service: "app", State: "running"},
+			{Service: "worker", State: "exited"},
+		},
+	}
+	controller, _ := newController(t, backend, fakeNames{name: "proj"}, t.TempDir())
+	in := invocation(t, projectDir, "")
+	in.Options["wizard"] = "steps"
+	spec, err := controller.WizardSteps(context.Background(), in)
+	if err != nil {
+		t.Fatalf("WizardSteps: %v", err)
+	}
+	if len(spec.Steps) != 2 || spec.Steps[0].Name != "volume" || spec.Steps[1].Name != "output" {
+		t.Fatalf("steps = %+v", spec.Steps)
+	}
+	if len(spec.Steps[0].Options) != 2 {
+		t.Fatalf("named volume options = %+v (anonymous/bind must not be offered)", spec.Steps[0].Options)
+	}
+	if !strings.Contains(spec.Steps[0].Options[0].Label, "proj_data") || !strings.Contains(spec.Steps[0].Options[0].Label, "app") {
+		t.Fatalf("option label = %q", spec.Steps[0].Options[0].Label)
+	}
+	if spec.Steps[1].Default == "" || !spec.Steps[1].AllowCustom {
+		t.Fatalf("output step = %+v", spec.Steps[1])
+	}
+	preview := controller.WizardPreview(map[string]string{"volume": "data", "output": "./out"})
+	for _, want := range []string{"proj_data", "app, worker", "실행 중", "app", "./out", "민감"} {
+		if !strings.Contains(preview, want) {
+			t.Fatalf("preview missing %q:\n%s", want, preview)
+		}
+	}
+	if strings.Contains(preview, "worker, app") {
+		t.Fatalf("preview order is unstable:\n%s", preview)
+	}
+}
+
+func TestDiskFullFromAFakeWriterFailsCleanlyAndRestoresServices(t *testing.T) {
+	projectDir := t.TempDir()
+	output := filepath.Join(t.TempDir(), "backups")
+	backend := &fakeBackend{
+		projectName: "proj",
+		sources:     []data.DataSource{volumeSource("data", "proj_data", "app")},
+		runtime:     []data.ServiceRuntime{{Service: "app", State: "running"}},
+		consumers: map[string][]data.ContainerConsumer{
+			"proj_data": {{Name: "proj-app-1", Project: "proj", Service: "app", State: "running"}},
+		},
+	}
+	backend.archive = func(volume, dir string) error {
+		if err := os.WriteFile(filepath.Join(dir, DataFile), make([]byte, 4096), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return errors.New("gzip: write error: No space left on device")
+	}
+	controller, _ := newController(t, backend, fakeNames{name: "proj"}, t.TempDir())
+	_, err := controller.Run(context.Background(), invocation(t, projectDir, output, "data"))
+	if !hasCategory(err, core.CategoryBackupFailed) {
+		t.Fatalf("error = %v", err)
+	}
+	var message string
+	var ce *core.Error
+	if errors.As(err, &ce) && len(ce.Diagnostics) > 0 {
+		message = ce.Diagnostics[0].Message
+	}
+	if !strings.Contains(message, "공간") {
+		t.Fatalf("disk-full guidance missing: %v", err)
+	}
+	if strings.Join(backend.starts[0], ",") != "app" {
+		t.Fatalf("services were not restarted: %v", backend.starts)
+	}
+	artifacts, listErr := List(output)
+	if listErr != nil {
+		t.Fatal(listErr)
+	}
+	if len(artifacts) != 0 {
+		t.Fatalf("disk-full partial was listed as valid: %+v", artifacts)
+	}
+}
+
+func TestAnEarlierPublishedBackupIsNamedWhenALaterVolumeFails(t *testing.T) {
+	projectDir := t.TempDir()
+	output := filepath.Join(t.TempDir(), "backups")
+	backend := &fakeBackend{
+		projectName: "proj",
+		sources: []data.DataSource{
+			volumeSource("data", "proj_data", "app"),
+			volumeSource("logs", "proj_logs", "app"),
+		},
+		runtime: []data.ServiceRuntime{{Service: "app", State: "running"}},
+		consumers: map[string][]data.ContainerConsumer{
+			"proj_data": {{Name: "proj-app-1", Project: "proj", Service: "app", State: "running"}},
+			"proj_logs": {{Name: "proj-app-1", Project: "proj", Service: "app", State: "running"}},
+		},
+	}
+	backend.archive = func(volume, dir string) error {
+		if volume == "proj_logs" {
+			return errors.New("helper failed")
+		}
+		writeValidArchive(t, dir)
+		return nil
+	}
+	controller, _ := newController(t, backend, fakeNames{name: "proj"}, t.TempDir())
+	_, err := controller.Run(context.Background(), invocation(t, projectDir, output, "data", "logs"))
+	if err == nil {
+		t.Fatal("expected a failure")
+	}
+	detail := errorDetail(err)
+	if !strings.Contains(detail, "dcraft-proj-volume-data") || !strings.Contains(detail, "이미 완료된 백업") {
+		t.Fatalf("published artifact not named: %s", detail)
+	}
 }

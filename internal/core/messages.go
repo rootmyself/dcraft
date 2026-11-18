@@ -40,10 +40,6 @@ const (
 	msgInternalError       = "예상하지 못한 오류가 발생했습니다."
 	msgInternalErrorAction = "dcraft status로 다시 확인하고, 같은 문제가 반복되면 출력 내용을 보관하세요."
 
-	msgStageChoices             = "선택 항목 확인"
-	msgChoicesUnsupported       = "이 작업은 대화형 선택 항목을 제공하지 않습니다."
-	msgChoicesUnsupportedAction = "값을 명령줄 옵션으로 직접 지정하거나 dcraft --help로 사용법을 확인하세요."
-
 	msgPlanUnsupported       = "이 작업은 실행 전에 확인할 계획을 제공하지 않습니다."
 	msgPlanUnsupportedAction = "대화형 화면 없이 승인 옵션을 명시해 실행하거나 dcraft --help로 사용법을 확인하세요."
 )

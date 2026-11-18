@@ -281,7 +281,10 @@ func (e *Engine) Run(ctx context.Context, req Request, sink Sink) (res Result) {
 		return res
 	}
 
-	if desc.RecordsHistory {
+	// A wizard "steps" run only collects answers; the "apply" run is the
+	// actual operation. Recording the preview would write a success history
+	// entry for work the user has not confirmed yet.
+	if desc.RecordsHistory && req.Options["wizard"] != "steps" {
 		historyErr := RunStage(rec, "history", msgStageHistory, func() error {
 			if e.State == nil {
 				return errors.New("state store is not configured")
@@ -644,141 +647,4 @@ func generateOperationID() string {
 		return fmt.Sprintf("op_%d", time.Now().UnixNano())
 	}
 	return "op_" + hex.EncodeToString(b[:])
-}
-
-// Choices resolves the same target and preflight as Run, then asks an
-// OptionChooser for the valid values of one declared flag. It never checks an
-// approval, never runs the feature, never writes history and must not change
-// anything. Interactive interfaces use it for selection screens; the CLI never
-// does.
-func (e *Engine) Choices(ctx context.Context, req Request, flag string) (report ChoicesReport) {
-	clock := e.Clock
-	if clock == nil {
-		clock = SystemClock{}
-	}
-	report = ChoicesReport{
-		Feature:     req.Feature,
-		Flag:        flag,
-		Outcome:     OutcomeFailure,
-		Target:      Target{ProjectDir: req.Target.Path, Environment: req.Target.Environment},
-		Stages:      []Stage{},
-		Diagnostics: []Diagnostic{},
-		Choices:     []OptionChoice{},
-	}
-	report.Target.Normalize()
-	defer func() {
-		report.Target.Normalize()
-		if report.Stages == nil {
-			report.Stages = []Stage{}
-		}
-		if report.Diagnostics == nil {
-			report.Diagnostics = []Diagnostic{}
-		}
-		if report.Choices == nil {
-			report.Choices = []OptionChoice{}
-		}
-	}()
-
-	rec := &recorder{stages: &report.Stages, clock: clock}
-	if ctx.Err() != nil {
-		report.Outcome = OutcomeCanceled
-		addCanceledDiagnosticTo(&report.Diagnostics)
-		return report
-	}
-	feature, ok := e.lookup(req.Feature)
-	if !ok {
-		report.Diagnostics = append(report.Diagnostics, Diagnostic{
-			Category:    CategoryInternal,
-			Severity:    SeverityError,
-			Message:     fmt.Sprintf("등록되지 않은 작업입니다: %s", req.Feature),
-			NextActions: []string{"dcraft --help로 사용 가능한 명령을 확인하세요."},
-		})
-		return report
-	}
-	chooser, ok := feature.(OptionChooser)
-	if !ok {
-		report.Diagnostics = append(report.Diagnostics, Diagnostic{
-			Category:    CategoryInternal,
-			Severity:    SeverityError,
-			Message:     msgChoicesUnsupported,
-			NextActions: []string{msgChoicesUnsupportedAction},
-		})
-		return report
-	}
-	desc := feature.Descriptor()
-
-	var target Target
-	var warnings []Diagnostic
-	resolveErr := e.resolveTarget(ctx, rec, req, desc, &target, &warnings)
-	if len(target.ProjectDir) > 0 || target.Environment != "" || len(target.Files) > 0 {
-		report.Target = target
-	}
-	report.Diagnostics = append(report.Diagnostics, warnings...)
-	if resolveErr != nil {
-		if isCanceled(ctx, resolveErr) {
-			report.Outcome = OutcomeCanceled
-			addCanceledDiagnosticTo(&report.Diagnostics)
-			return report
-		}
-		report.Diagnostics = append(report.Diagnostics, failureDiagnostics(resolveErr)...)
-		return report
-	}
-
-	var pf PreflightReport
-	preflightErr := e.runPreflight(ctx, rec, desc, &pf)
-	if preflightErr != nil {
-		if isCanceled(ctx, preflightErr) {
-			report.Outcome = OutcomeCanceled
-			addCanceledDiagnosticTo(&report.Diagnostics)
-			return report
-		}
-		report.Diagnostics = append(report.Diagnostics, pf.Diagnostics...)
-		if !HasError(report.Diagnostics) {
-			report.Diagnostics = append(report.Diagnostics, Diagnostic{
-				Category:    CategoryInternal,
-				Severity:    SeverityError,
-				Message:     msgPreflightFailed,
-				Detail:      errDetail(preflightErr),
-				NextActions: []string{msgPreflightFailedAction},
-			})
-		}
-		return report
-	}
-	report.Diagnostics = append(report.Diagnostics, pf.Diagnostics...)
-
-	inv := Invocation{
-		Target:      target,
-		Services:    append([]string{}, req.Services...),
-		Args:        append([]string{}, req.Args...),
-		Options:     req.Options,
-		OptionLists: req.OptionLists,
-		Interactive: req.Interactive,
-		Preflight:   pf,
-		Reporter:    rec,
-		Clock:       clock,
-		State:       e.State,
-	}
-	var choices []OptionChoice
-	var choiceErr error
-	stageErr := RunStage(rec, "choices", msgStageChoices, func() error {
-		defer func() {
-			if recovered := recover(); recovered != nil {
-				choiceErr = fmt.Errorf("feature panic: %v", recovered)
-			}
-		}()
-		choices, choiceErr = chooser.Choices(ctx, inv, flag)
-		return choiceErr
-	})
-	if stageErr != nil {
-		if isCanceled(ctx, stageErr) {
-			report.Outcome = OutcomeCanceled
-			addCanceledDiagnosticTo(&report.Diagnostics)
-			return report
-		}
-		report.Diagnostics = append(report.Diagnostics, failureDiagnostics(stageErr)...)
-		return report
-	}
-	report.Choices = append([]OptionChoice{}, choices...)
-	report.Outcome = OutcomeSuccess
-	return report
 }

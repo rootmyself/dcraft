@@ -134,7 +134,7 @@ func TestVolumeConsumersQueryTheActualNameAndIncludeStoppedContainers(t *testing
 		return execx.Result{Stdout: []byte("other-app-1\tother\tapp\trunning\nproj-app-1\tproj\tapp\texited\n")}, nil
 	}}
 	c := New(runner, nil)
-	consumers, err := c.VolumeConsumers(context.Background(), "proj_data")
+	consumers, err := c.VolumeConsumers(context.Background(), dataTarget("/project"), "proj_data")
 	if err != nil {
 		t.Fatalf("VolumeConsumers: %v", err)
 	}

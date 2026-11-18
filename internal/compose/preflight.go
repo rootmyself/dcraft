@@ -30,6 +30,9 @@ type Compose struct {
 type SecretPreparer interface {
 	Prepare(ctx context.Context, target core.Target, services []string, mode secretref.Mode) (secretref.Session, error)
 	CleanupStack(target core.Target) error
+	// RedactText removes referenced values from tool output. Ticket #16's
+	// data diagnostics use it even though backup fetches no values itself.
+	RedactText(target core.Target, text string) string
 }
 
 func New(runner execx.Runner, getenv func(string) string) *Compose {

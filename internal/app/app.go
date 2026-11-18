@@ -81,7 +81,7 @@ func New(opts Options) (*App, error) {
 		Installer:  opts.Installer,
 		Data:       composeAdapter,
 		Identity:   identityReader,
-		Store:      store,
+		Locks:      store,
 	}
 
 	registry := core.NewRegistry()

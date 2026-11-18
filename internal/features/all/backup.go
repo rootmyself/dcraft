@@ -19,7 +19,7 @@ func init() {
 		reg.MustRegister(backupfeature.New(backupimpl.New(backupimpl.Config{
 			Backend: d.Data,
 			Names:   d.Identity,
-			Store:   d.Store,
+			Locks:   d.Locks,
 			Clock:   d.Clock,
 			Tool: backupimpl.Tool{
 				Version:   buildinfo.Version,

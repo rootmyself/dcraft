@@ -572,7 +572,8 @@ func compareEntries(want, got []Entry) error {
 			return fmt.Errorf("%w: archive is missing %q", ErrIntegrity, path)
 		}
 		if expected.Type != actual.Type || expected.SHA256 != actual.SHA256 ||
-			expected.SizeBytes != actual.SizeBytes || expected.LinkTarget != actual.LinkTarget {
+			expected.SizeBytes != actual.SizeBytes || expected.LinkTarget != actual.LinkTarget ||
+			expected.Mode != actual.Mode || expected.UID != actual.UID || expected.GID != actual.GID {
 			return fmt.Errorf("%w: entry %q does not match the manifest", ErrIntegrity, path)
 		}
 	}

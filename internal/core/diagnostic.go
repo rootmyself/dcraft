@@ -61,6 +61,7 @@ const (
 	CategoryBackupFailed             Category = "backup_failed"
 	CategoryBackupIntegrityFailed    Category = "backup_integrity_failed"
 	CategoryBackupStateRestoreFailed Category = "backup_state_restore_failed"
+	CategoryBackupSelectionChanged   Category = "backup_selection_changed"
 	CategoryStackBusy                Category = "stack_busy"
 	CategoryLifecycleFailed          Category = "lifecycle_failed"
 	CategoryUpdateFailed             Category = "update_failed"

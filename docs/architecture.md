@@ -404,6 +404,7 @@ type core.Feature interface {
 | `Requires` | preflight capabilities this feature needs; empty = full default |
 | `TargetOptional` | feature does not operate on a Compose project; a folder without Compose files is valid |
 | `AcceptsArgs` | allows positional args; flags then stop at the first arg |
+| `Wizard` | TUI entry uses the generic guided flow (`core.Wizard`) instead of the generic confirmation screen; the CLI path is unchanged |
 | `Flags []core.Flag` | feature-owned flags parsed by the shared CLI |
 
 Registry validation rejects duplicate names, invalid names, missing Korean text,
@@ -446,10 +447,18 @@ package under `Result.Data`; the status feature publishes
 `status.Payload{Stack stack.Snapshot}` → `data.stack`.
 
 Flags/args/services: declare them; the shared assembly parses them into
-`Options`, `Args`, `Services`. For `AcceptsArgs` features, options come before
-positional args (the rest is passed through unchanged, e.g. `exec`). The TUI
-currently invokes features with no options/args (defaults); a ticket that needs
-interactive flag collection adds that UI, not a new engine path.
+`Options`, `Args`, `Services`. `core.Flag{Name, Shorthand, Usage, Kind,
+Default, Required}` supports `FlagString`, `FlagBool` and `FlagList`. A
+`FlagList` is repeatable and is carried separately in
+`Request.OptionLists`/`Invocation.OptionLists` (`Invocation.OptionList(name)`),
+so values are never re-split by a UI. `Required` marks input a non-interactive
+run cannot invent: the CLI passes what was given and the feature returns its
+own Korean usage diagnostic (exit 2). For `AcceptsArgs` features, options come
+before positional args (the rest is passed through unchanged, e.g. `exec`).
+Interactive collection uses the published `core.Wizard` flow (§14): the feature
+supplies steps and an effect preview, the TUI only collects answers and runs the
+same engine path with `wizard=apply`. A feature must not add a TUI branch or a
+second engine path for input.
 
 Contract changes (new shared service, new flag kind, new approval kind, new
 result field) must be requested from the integration owner with the reason and
@@ -544,8 +553,10 @@ is in the payload and in every Compose call.
   Different folders and environments use different locks.
 - `state.AcquireStackLock(ctx, target, state.LockHolder)` and
   `(*state.StackLock).Release()` are published for update (#8), backup/restore
-  (#16–#19) and rollback (#12). `state.AllocateName` serializes claims with a
-  short bounded file lock and an atomic file replace.
+  (#16–#19) and rollback (#12). `state.Locker` is the narrow published
+  interface (`AcquireStackLock`); `deps.Deps.Locks` exposes it so a feature
+  never type-asserts the concrete `*state.Store`. `state.AllocateName`
+  serializes claims with a short bounded file lock and an atomic file replace.
 - No host-wide prune; another project's containers, networks, volumes and
   images are never removed.
 
@@ -635,6 +646,11 @@ It derives everything from the registry:
   the approval confirmation (flow below); for an ordinary `update` the same plan
   is the target/planned-work preview and one `enter` runs it without an extra
   approval kind;
+- a feature with `Descriptor.Wizard` starts the generic guided flow (`steps`
+  run, keyboard answers, effect preview, `apply` run). `backup` uses it to select
+  a named volume and an output directory and to show affected/running services
+  before anything is stopped. The wizard adds no safety rule; the feature
+  rechecks selection and consumers on the apply run;
 - `r` re-runs read-only features directly, re-plans every Planner and asks for
   confirmation again for other mutating features. The selected environment is
   reused; `q` and `ctrl+c` quit outside an operation;
@@ -1162,6 +1178,16 @@ Desktop's VM-backed unix socket is **local**, not remote.
 | `secret_unsupported` | build-phase or AWS-source reference is not implemented | error (exit 2) |
 | `secret_source_unavailable` | referenced environment/file source is missing, unreadable or empty | error |
 | `secret_apply_failed` | delivery preparation/materialization/override failed; a partial rotation may remain | error |
+| `backup_output_required` | no explicit backup output directory was given | error (exit 2) |
+| `backup_volume_required` | no data volume was selected | error (exit 2) |
+| `backup_volume_unknown` | selected volume key/name is not part of the stack | error (exit 2) |
+| `backup_volume_unsupported` | anonymous volume or bind folder cannot be archived here | error |
+| `backup_output_invalid` | output is not a writable directory or the artifact would escape it | error |
+| `backup_consumer_unsafe` | another stack, unmanaged container or paused service consumes the volume | error |
+| `backup_selection_changed` | the selected source identity changed between discovery and stop | error |
+| `backup_failed` | stop, archive helper, filesystem write, publish or completion-marker failure | error |
+| `backup_integrity_failed` | archive truncation, unsafe entry or manifest mismatch | error |
+| `backup_state_restore_failed` | stopped services could not be started again after the copy | error |
 | `internal_error` | unexpected error/parse failure/panic | error |
 
 Each diagnostic carries Korean `message`, optional raw `detail`, and Korean
@@ -1177,7 +1203,8 @@ the full `compose version` command confirms the classification.
 
 `Result.ExitCode` returns 2 for `approval_required`, `environment_required`,
 `environment_unknown`, `environment_input_conflict`, `project_name_conflict`,
-`service_unknown` and `invalid_option`: those mean the caller must supply a
+`service_unknown`, `invalid_option`, `backup_output_required`,
+`backup_volume_required` and `backup_volume_unknown`: those mean the caller must supply a
 different decision (an approval, an environment, a free name, an existing
 service, a valid option). dcraft never prompts to resolve them; non-interactive
 runs fail with the explanation instead. New categories are additive v1 values.
@@ -1187,6 +1214,220 @@ puts the observed `service=status` summary plus per-instance state in the
 diagnostic. A record-write failure after a verified update is not an operation
 failure: the stage is failed, the payload says `record_status=failed`, and the
 previous record is untouched.
+
+---
+
+## 10.1 Data backup and backup format v1 (ticket #16)
+
+Feature: flat command `dcraft backup`; no approval (it exports data, it never
+replaces it), `RecordsHistory: true`, `Wizard: true`, and two feature-owned
+flags: `--output/-o <dir>` (`FlagString`, required) and repeatable
+`--volume <key>` (`FlagList`, required). The CLI never invents a destination;
+a missing value is a `backup_output_required`/`backup_volume_required` failure
+(exit 2) with Korean guidance and no service stop. The TUI uses the published
+`core.Wizard` flow, not a feature-specific screen: the first read-only run
+(`Options["wizard"]="steps"`) lists named volumes and asks for the output
+directory, `WizardPreview` shows the selected volume, affected and running
+services and the effect, and only `enter` runs the same engine path with
+`wizard=apply`. A canceled wizard writes nothing.
+
+Stable stages: `output` (저장 위치 확인), `coordinate` (스택 잠금),
+`resolve_project` (프로젝트 확인), `discover` (데이터 선택),
+`recheck_selection` (선택 재확인), `inspect_consumers` (소비자 확인),
+`stop_consumers` (서비스 중지), `archive` (볼륨 복사),
+`verify_archive` (무결성 확인), `publish` (백업 공개),
+`complete` (완료 표시), `restore_state` (서비스 상태 복구).
+
+### Selection and consumers
+
+- The selected stack is the same identity as `status`/lifecycle: explicit `-p`,
+  a declared Compose name, then the recorded allocation; a read-only lookup is
+  used and the resolved name is pinned with `-p` on every Compose call. The
+  feature never allocates a name and never changes the stack's identity.
+- Volume identity comes from `docker compose config --format json`:
+  `volumes.<key>.name` (custom `name:` included), `external: true` as declared.
+  Engine queries always use the actual engine name, never the Compose key.
+  Anonymous volumes (a `volume` mount with no `source`) and bind mounts are
+  reported by `data.Sources` but are explicitly rejected by this command;
+  bind-folder backup is ticket #17 and restore is #18/#19.
+- Consumers are read with `docker ps -a --filter volume=<actual engine name>`
+  (`-a` is mandatory: a stopped container still references the volume). A
+  consumer is accepted only when its Compose project label equals the selected
+  project and its service is one of the configured services that mount the
+  volume. Any other container (another stack, an unmanaged container, an orphan
+  of this project) is a refusal: `backup_consumer_unsafe`, no service is
+  stopped, and the refusal names the containers, projects and states. dcraft
+  never stops another stack and never claims consistency it cannot provide.
+- A `paused` affected service is also refused (`backup_consumer_unsafe`): it
+  cannot be stopped and restored to its prior state safely. `running` and
+  `restarting` services are recorded as the prior running set and are the only
+  services stopped. Services already `exited`/`created` are never started.
+- Immediately before stopping, discovery and selection are repeated
+  (`recheck_selection`). A changed volume key, engine name, service set, mount
+  set or external flag is `backup_selection_changed` (exit 1) and nothing is
+  stopped or archived. This is the binding between a plan/wizard preview and the
+  actual operation; the preview is advisory, this recheck is authoritative.
+
+### Coordination and verification
+
+- The per-stack change lock is taken before the name read, consumer check and
+  every stop/copy/restart. It is held across the entire stop → copy → verify →
+  publish → restart sequence. A busy stack is `stack_busy` and nothing is
+  stopped. `deps.Deps.Locks` is the published `state.Locker` capability; no
+  feature type-asserts the concrete store.
+- Post-copy verification happens inside this lock. The feature must not use
+  `core.Verifier`: the engine releases the lock before `Verifier.Verify` and
+  writes history afterwards. Future data features (#17–#19) follow the same
+  rule: verify and restore state inside their own lock; history is only an
+  audit append.
+- Tool output is passed through `data.Backend.Redact` (the shared
+  `secretref.Runtime.RedactText` helper) before it becomes a diagnostic or
+  history record. It is best-effort redaction of values referenced by the
+  project's saved secret references; dcraft never prints file contents. Backup
+  itself fetches no secret value and never scans the volume for secrets.
+
+### Backup format v1 (published for #17/#18/#19)
+
+One backup is a directory:
+
+```text
+<output>/<name>/manifest.json    versioned identity, completion marker, integrity
+<output>/<name>/data.tar.gz      tar+gzip, member paths relative to the data root
+```
+
+`<name>` is `dcraft-<project>-<kind>-<key>-<UTC timestamp>` with unsafe
+characters replaced and a numeric suffix on collision; it is generated by
+`backup.ArtifactName` and proven to stay inside the user-chosen output directory
+(`backup.ArtifactPath`/`UniqueArtifactPath`). `manifest.json` v1:
+
+```json
+{
+  "schema": "dcraft.backup",
+  "format_version": 1,
+  "complete": true,
+  "created_at": "RFC3339",
+  "tool": {"version": "...", "commit": "...", "go_version": "...", "os": "...", "arch": "..."},
+  "source": {
+    "kind": "volume",
+    "project": "...", "environment": "", "project_dir": "/abs/project",
+    "volume_key": "data", "volume_name": "project_data",
+    "host_path": "", "mount_targets": ["/data"],
+    "external": false, "anonymous": false, "services": ["app"]
+  },
+  "stack": {
+    "project_name": "...",
+    "services": ["app"],
+    "running_before": ["app"],
+    "stopped_for_backup": ["app"]
+  },
+  "data": {"file": "data.tar.gz", "format": "tar.gz", "size_bytes": 123, "sha256": "64-hex"},
+  "entries": [
+    {"path": "./file.txt", "type": "file", "mode": "0644", "uid": 0, "gid": 0,
+     "size_bytes": 5, "sha256": "64-hex"},
+    {"path": "./dir", "type": "dir", "mode": "0755"},
+    {"path": "./link", "type": "symlink", "link_target": "file.txt"},
+    {"path": "./hard", "type": "hardlink", "link_target": "./file.txt"}
+  ],
+  "totals": {"entries": 4, "files": 1, "dirs": 1, "symlinks": 1, "hardlinks": 1, "other": 0, "bytes": 5},
+  "sensitive": true,
+  "ownership_note": "Korean limitation text"
+}
+```
+
+- `source.kind` is `volume` today; ticket #17 publishes `bind` with
+  `host_path` set (and `volume_*` empty). #18/#19 must not invent a second
+  manifest or a second data-file name.
+- Per-entry `sha256` covers regular-file content only. It excludes ownership,
+  mode, mtime and hardlink identity; those are separate fields. `mode` is the
+  tar permission bits as octal text. `uid`/`gid` record container ownership so
+  a root volume restore can check it. Symlinks and hardlinks carry
+  `link_target`; FIFOs/devices are type `other` and are not materialized by host
+  verification.
+- `stack.running_before` and `stack.stopped_for_backup` are audit metadata, not
+  a consistency promise. `sensitive` is always true: the selected volume may
+  contain secrets; dcraft does not scan, encrypt or classify it.
+- The completion marker is `complete`. An artifact is built and verified under
+  `<name>.partial`; `manifest.json` is first written with `complete: false` and
+  synced. The archive is decompressed, parsed and extracted into a fresh empty
+  temporary directory; every entry is compared with the manifest. Only then is
+  the directory renamed to `<name>`, the directory entry fsynced, and
+  `manifest.json` atomically rewritten with `complete: true`, followed by a
+  final `Verify`. If that last write fails, the artifact is demoted back to
+  `.partial` when possible; otherwise the `complete: false` marker keeps it out
+  of every valid listing. A kill between the rename and the completion marker
+  therefore leaves an invalid directory, never a "complete" marker on partial
+  data. A `.partial` directory is never a valid backup.
+- Integrity entry points: `backup.Verify(dir)` requires a supported schema and
+  format version, `complete: true`, the exact archive hash/size, and a full
+  extract-and-compare of every entry and total. `backup.InspectArchive(path)`
+  reads the whole gzip/tar stream into a fresh directory and rejects truncated
+  gzip/tar (a truncated tgz can still list every name: listing alone is never
+  integrity), unsafe names (`..`, absolute, NUL, backslash), duplicate entries
+  and unsupported tar types. `backup.ReadManifest` only parses;
+  `backup.List(root)` returns only complete, supported manifests and skips
+  `.partial`/dot-prefixed directories.
+- Extraction safety is part of the contract: a destination must be a fresh,
+  empty directory. No tar flag reliably prevents a pre-existing destination
+  symlink from being followed (GNU/BusyBox tar write outside with exit 0;
+  bsdtar refuses). Empty the destination first and never extract into a live
+  volume or folder. `backup.Verify` always creates its own fresh temporary
+  directory and never touches a restore destination.
+- Ownership/permission limits: the volume archive is created by a root helper
+  container reading `:ro`, so it stores exact uid/gid/modes/hardlinks/symlinks.
+  Host-side extraction cannot fully restore container ownership or setuid;
+  volume restore must use a root helper (#18). Recorded modes and uids are
+  integrity metadata, not a host restore guarantee.
+
+### Published interfaces (consume, do not fork)
+
+- `internal/data`: `Backend` (`ProjectName`, `Sources`, `ServiceRuntime`,
+  `VolumeConsumers(ctx, target, volumeName)`, `StopServices`, `StartServices`,
+  `ArchiveVolume`, `HelperImage`, `Redact`), `DataSource` (`Kind`, `Key`, `Name`,
+  `MountTargets`, `External`, `Anonymous`, `ReadOnly`, `Services`), `Kind`
+  (`volume`/`bind`), `ServiceRuntime`, `ContainerConsumer`, `OpResult`,
+  `VolumeHelperImage` and `ArchiveDataFile`. `internal/compose` is the only
+  implementation; tests substitute a fake.
+- `internal/backup`: `Schema`, `FormatVersion`, `ManifestFile`, `DataFile`,
+  `DataFormatTarGz`, `PartialSuffix`, `Manifest`, `Source`, `StackState`,
+  `ArchiveInfo`, `Entry`, `Totals`, `Tool`, `InspectArchive`, `Verify`,
+  `ReadManifest`, `WriteManifest`, `List`, `Artifact`, `SelectVolumeSources`,
+  `SelectableVolumes`, `SourceFrom`, `ArtifactName`, `ArtifactPath`,
+  `UniqueArtifactPath`, `Discovery`, `ConsumerReport`, `Discover`,
+  `CheckConsumers`.
+- `secretref.Runtime.RedactText(target, text)` is the shared redaction helper.
+- The feature-owned archive image is `alpine:3.20` by default and can be
+  overridden with `DCRAFT_BACKUP_IMAGE` (the image is shown in the plan/wizard
+  and notices). Docker may pull it if it is absent; no other network access is
+  performed by backup.
+
+### Output, retention and failure behavior
+
+- The output directory is explicit. `--output` is required in the CLI; the TUI
+  wizard shows `./dcraft-backups` as an editable default. Relative paths resolve
+  against the process working directory (not `--path`). Before any service is
+  stopped, the directory is created if missing, resolved with symlinks, checked
+  to be a directory and probed with a temporary file; a missing/invalid output
+  is `backup_output_required`/`backup_output_invalid` and nothing is stopped.
+- One invocation may select several volumes; each gets its own v1 artifact.
+  The stop set is the union of their configured services. A later volume's
+  failure keeps earlier published artifacts (and names them), plus the partial
+  path of the failing one; dcraft never deletes valid backups to make a run look
+  atomic.
+- There is no automatic deletion, retention policy, scheduling, remote upload
+  or backup hook. Two runs produce two artifacts. Output shows the location,
+  size, completion/integrity state and a Korean sensitive-data notice; images,
+  logs, whole environments and secret files are not collected.
+- Failure diagnostics state the completed/failed stage, the observable service
+  state, the partial-output location and whether cleanup succeeded. Only
+  services this operation stopped are started again; a restore failure is
+  `backup_state_restore_failed` and the artifact paths are included. Cancellation
+  attempts the same restoration with a fresh bounded context and reports
+  `canceled` (exit 130); it never claims the archive is valid.
+- New categories (additive v1): `backup_output_required`,
+  `backup_volume_required`, `backup_volume_unknown` (exit 2);
+  `backup_volume_unsupported`, `backup_output_invalid`,
+  `backup_consumer_unsafe`, `backup_failed`, `backup_integrity_failed`,
+  `backup_selection_changed`, `backup_state_restore_failed` (exit 1).
 
 ---
 
@@ -1208,6 +1449,24 @@ Tested seams:
 - engine seam with fake features (approval, stages, verification, history,
   cancellation, panic recovery, warnings, planned requirements, target
   optionality, plan preview without approval/run);
+- backup format v1 (entry hashes for files/dirs/symlinks/hardlinks, truncated
+  gzip rejected even when all names list, unsafe/absolute/duplicate names
+  rejected, complete marker required, unsupported version, per-entry tampering,
+  `List` ignoring `.partial`/incomplete output, artifact-name containment,
+  explicit writable output directory with a removed write probe);
+- backup controller with a fake data backend (actual engine-name selection,
+  named/custom/external/anonymous/bind mapping, `-a` consumer detection and
+  other-stack refusal without stopping, paused refusal, only-running stop and
+  only-stopped restart, lock busy before stop, output precheck before stop,
+  manifest running/stopped audit data, truncated/read-failure cleanup with no
+  published artifact, cancellation restoring services, selection re-resolution
+  and `backup_selection_changed`, two backups retained, multiple volumes,
+  sensitive notice, redacted tool output with a sentinel, wizard steps/preview);
+- backup CLI/TUI through the same engine: missing output/volume exit 2, unknown
+  volume, success JSON (`data.backup`), stop→archive→start order, read-only
+  source mount, actual volume name in the consumer filter, no environment value
+  in output, other-stack refusal, stack busy, helper failure cleanup/restart,
+  repeated backups, pty wizard selection/preview/apply;
 - registry validation and CLI/TUI assembly from registries;
 - state layout and permissions, automatic-name allocation (first/suffix/reuse/
   declared/conflict/external ownership/environment/concurrency), the read-only
@@ -1327,6 +1586,7 @@ go vet ./...
 go build ./...
 go test -count=1 ./...
 DCRAFT_INTEGRATION=1 go test ./test/e2e/... -run TestIntegration -v
+DCRAFT_INTEGRATION=1 go test ./test/e2e/... -run TestIntegrationVolumeBackup -v
 DCRAFT_COMPOSE_REAL_INSTALL=1 go test ./test/e2e/... -run TestRealComposeInstall -v
 ```
 
@@ -1337,8 +1597,9 @@ Docker or external network. Unrun platforms/paths are not claimed as verified.
 
 ## 12. Not implemented here (owned by later tickets)
 
-- `logs`, `exec`, `backup`, `restore`, `rollback`; no registration exists for
-  them and no menu action is shown.
+- `logs`, `exec`, `restore`, `rollback`; no registration exists for them and no
+  menu action is shown. Bind-folder backup (#17) and volume restore (#18) /
+  bind restore (#19) are not implemented; `backup` supports named volumes only.
 - TUI alias creation/editing: aliases are created by editing `.dcraft.yaml` in
   this version (selection is provided by both interfaces).
 - Build-time secrets (BuildKit mounts), AWS Secrets Manager sources, host
@@ -1348,11 +1609,11 @@ Docker or external network. Unrun platforms/paths are not claimed as verified.
   remote engines, resident daemon/web UI. Runtime environment/file references
   are implemented by ticket #9 below; Compose installation is implemented by
   ticket #6; update readiness and the previous-good record by ticket #7.
-- Good-version history beyond the single record, TUI flag collection for future
-  features, service selection in the TUI (CLI `-s` only). The TUI plan/confirm
-  component is generic; `install-compose` and `update` are planners in this
-  build. An ordinary update shows its plan and requires one `enter` to run, not
-  an approval.
+- Good-version history beyond the single record, service selection in the TUI
+  (CLI `-s` only). The TUI plan/confirm component is generic;
+  `install-compose`, `update` and `backup` are planners in this build, and
+  `secrets`/`backup` use the generic wizard. An ordinary update shows its plan
+  and requires one `enter`; backup uses its wizard preview.
 - Docker itself (installation, repair, replacement), administrator escalation,
   Docker Desktop/WSL integration changes.
 
@@ -1404,6 +1665,24 @@ fails first in normal use). Real-Docker verification ran on macOS arm64 with
 Docker Desktop; the registry scenario uses Docker host networking, so a machine
 without that support skips that part instead of claiming it passed.
 
+Backup residual risks: the archive helper image (`alpine:3.20`, override
+`DCRAFT_BACKUP_IMAGE`) may be pulled on first use (a hidden but announced
+network action); anonymous volumes and bind folders are deliberately rejected;
+`data.Backend.ArchiveVolume` output and any Compose failure text are redacted by
+the feature, but redaction is best-effort against values referenced by
+`.dcraft.yaml` and cannot remove values the helper or Compose invent/echo from
+elsewhere; the root helper records container ownership but host-side extraction
+cannot restore it; special files (FIFOs/devices) are recorded but not
+materialized during host verification; a crash between the final directory
+rename and the completion-marker rewrite leaves an invalid final directory with
+`complete: false` (listed nowhere, safe to delete, but visible); a plan/wizard
+preview is not cryptographically bound to the run, so the pre-stop
+`recheck_selection` is the authoritative check; concurrent backups to the same
+output directory are serialized per stack, not per directory, so different
+stacks can write different names concurrently; no retention/scheduling/remote
+copy exists by design. Real disk-full was not run; the disk-full path is tested
+with a fake helper writer and by classification of helper output.
+
 ---
 
 ## 13. Change request checklist
@@ -1416,6 +1695,19 @@ Before changing a shared type/interface, send the integration owner:
    a UI;
 4. documentation updates to this file.
 
+Published by ticket #16 (consume, do not fork): `internal/data` `Backend`,
+`DataSource`, `Kind`, `ServiceRuntime`, `ContainerConsumer`, `OpResult`,
+`VolumeHelperImage`, `ArchiveDataFile`; `internal/backup` `Schema`,
+`FormatVersion`, `ManifestFile`, `DataFile`, `DataFormatTarGz`, `PartialSuffix`,
+`Manifest`, `Source`, `StackState`, `ArchiveInfo`, `Entry`, `Totals`, `Tool`,
+`InspectArchive`, `Verify`, `ReadManifest`, `WriteManifest`, `List`, `Artifact`,
+`SelectVolumeSources`, `SelectableVolumes`, `SourceFrom`, `ArtifactName`,
+`ArtifactPath`, `UniqueArtifactPath`, `Discovery`, `ConsumerReport`;
+`state.Locker` and `deps.Deps.Locks`; `core.FlagList`,
+`Request.OptionLists`, `Invocation.OptionLists`/`OptionList`; the backup
+diagnostic categories and the archive-verification-inside-the-lock rule.
+`secretref.Runtime.RedactText` is the shared redaction entry point.
+
 Published by ticket #9 (consume, do not fork): `internal/secretref` types
 (`Phase`, `Delivery`, `SourceType`, `Reference`, `Catalog`, `Runtime`,
 `Session`, `Mode`), the `.dcraft.yaml` `secrets:` list schema, the
@@ -1423,6 +1715,14 @@ Published by ticket #9 (consume, do not fork): `internal/secretref` types
 `stack.ConfigInfo.Dependencies` map, `stack.OpResult.Notices`, and the
 `secret_invalid`/`secret_input_invalid`/`secret_unsupported`/
 `secret_source_unavailable`/`secret_apply_failed` diagnostic categories.
+
+### 14.6 Wizard runs and history
+
+`Options["wizard"]="steps"` is a read-only preview. The engine does not write a
+history record for a `RecordsHistory` feature's steps run; only the
+`wizard=apply` run (and the ordinary CLI run) is an operation. Both runs still
+use the same target resolution, preflight and feature `Run` path. A canceled
+wizard leaves no history and no stack change.
 
 Published by ticket #3 (consume, do not fork): `stack.Lifecycle`,
 `stack.Identity`, `stack.ConfigInfo`, `stack.ProjectInfo`, `stack.OpResult`,
@@ -1566,8 +1866,11 @@ materialized values are never left in the project folder.
   removed. `status` and `secrets` output include Korean guidance to move them
   to references; Docker's own storage/query boundary is not controlled.
 - Fetched values are redacted from all captured tool output, diagnostics,
-  errors and human/JSON results. dcraft does not control values the app,
-  Dockerfile or user scripts print themselves.
+  errors and human/JSON results. `Runtime.RedactText(target, text)` is the
+  shared best-effort helper for diagnostics outside a prepared session (backup
+  helper output); it reads only referenced sources and never returns or persists
+  a value. dcraft does not control values the app, Dockerfile or user scripts
+  print themselves.
 
 ### 14.5 Interfaces for tickets #10/#11
 

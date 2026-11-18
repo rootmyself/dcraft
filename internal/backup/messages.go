@@ -17,12 +17,14 @@ const (
 	msgStageCoordinate    = "스택 잠금"
 	msgStageResolve       = "프로젝트 확인"
 	msgStageDiscover      = "데이터 선택"
+	msgStageRecheck       = "선택 재확인"
 	msgStageConsumers     = "소비자 확인"
 	msgStageStop          = "서비스 중지"
 	msgStageArchive       = "볼륨 복사"
 	msgStageVerifyArchive = "무결성 확인"
 	msgStagePublish       = "백업 공개"
 	msgStageRestoreState  = "서비스 상태 복구"
+	msgStageComplete      = "완료 표시"
 
 	msgOutputRequired       = "백업 저장 위치를 지정하지 않았습니다."
 	msgOutputRequiredAction = "--output/-o로 백업을 저장할 폴더를 지정하세요. dcraft는 숨은 기본 위치를 선택하지 않습니다."
@@ -40,6 +42,11 @@ const (
 
 	msgVolumeUnsupported       = "이 데이터 원본은 이 명령으로 백업할 수 없습니다."
 	msgVolumeUnsupportedAction = "이름 있는 볼륨만 백업할 수 있습니다. 연결 폴더(bind mount)와 익명 볼륨은 별도 안내를 따르세요."
+
+	msgSelectionChanged       = "선택한 데이터 원본이 확인 후 바뀌어 백업하지 않았습니다."
+	msgSelectionChangedBefore = "확인한 선택: "
+	msgSelectionChangedAfter  = "다시 확인한 선택: "
+	msgSelectionChangedAction = "스택 구성을 바꾼 작업이 없는지 확인한 뒤 dcraft backup을 다시 실행하세요. dcraft는 바뀐 대상을 임의로 백업하지 않습니다."
 
 	msgConsumerUnsafe       = "다른 스택의 컨테이너가 같은 볼륨을 사용하고 있어 일관된 백업을 만들 수 없습니다."
 	msgConsumerUnsafeAction = "해당 컨테이너를 소유한 스택이나 사용자가 직접 중지한 뒤 다시 실행하세요."
@@ -67,16 +74,20 @@ const (
 	msgIntegrityFailed       = "백업 파일의 무결성을 확인하지 못했습니다."
 	msgIntegrityFailedAction = "백업 파일을 정상 백업으로 사용하지 마세요. 저장 공간과 파일 시스템 오류를 확인한 뒤 다시 실행하세요."
 
-	msgPublishFailed       = "검증된 백업을 최종 위치로 옮기지 못했습니다."
-	msgPublishFailedAction = "백업 폴더의 권한과 남은 공간을 확인하세요. .partial 폴더는 정상 백업이 아닙니다."
+	msgCompleteFailed       = "백업 데이터는 검증됐지만 완료 표시를 확정하지 못했습니다."
+	msgCompleteFailedAction = "이 백업을 정상 백업으로 사용하지 마세요. 저장 공간과 파일 시스템 권한을 확인한 뒤 다시 실행하세요."
+	msgPublishFailed        = "검증된 백업을 최종 위치로 옮기지 못했습니다."
+	msgPublishFailedAction  = "백업 폴더의 권한과 남은 공간을 확인하세요. .partial 폴더는 정상 백업이 아닙니다."
 
 	msgRestoreFailed       = "백업 후 서비스 상태를 원래대로 되돌리지 못했습니다."
 	msgRestoreFailedAction = "docker compose start <서비스>로 직접 다시 시작하고 dcraft status로 확인하세요."
 	msgRestoreFailedData   = "백업 파일은 이미 완료됐을 수 있습니다. 아래 위치를 확인하세요."
 
-	msgPartialCleaned  = "부분 출력은 정리했습니다."
-	msgPartialKept     = "부분 출력이 남아 있습니다. 정상 백업이 아니므로 사용하지 마세요."
-	msgPartialLocation = "부분 출력 위치: %s"
+	msgPublishedRemain  = "이미 완료된 백업은 그대로 남아 있습니다:"
+	msgPublishedInvalid = "게시된 폴더: %s (완료 표시가 없어 정상 백업이 아닙니다)"
+	msgPartialCleaned   = "부분 출력은 정리했습니다."
+	msgPartialKept      = "부분 출력이 남아 있습니다. 정상 백업이 아니므로 사용하지 마세요."
+	msgPartialLocation  = "부분 출력 위치: %s"
 
 	msgSensitiveNotice   = "선택한 볼륨에는 비밀번호·토큰·개인정보가 포함될 수 있습니다. dcraft는 내용을 검사하거나 암호화하지 않습니다. 백업 파일을 안전하게 보관하고 공유하지 마세요."
 	msgOwnershipNote     = "볼륨 백업은 컨테이너 파일의 uid/gid와 모드를 tar에 기록합니다. 호스트에서 직접 풀면 컨테이너 소유권을 완전히 복원할 수 없으므로 복원은 dcraft restore를 사용하세요."
@@ -115,4 +126,15 @@ const (
 	MsgUsage           = msgUsage
 	MsgNoBackend       = msgNoBackend
 	MsgNoBackendAction = msgNoBackendAction
+)
+
+const (
+	msgWizardTitle         = "데이터 백업 설정"
+	msgWizardVolumeTitle   = "백업할 볼륨 선택"
+	msgWizardVolumePrompt  = "현재 스택의 이름 있는 데이터 볼륨입니다. 이 명령은 연결 폴더와 익명 볼륨을 백업하지 않습니다."
+	msgWizardOutputTitle   = "백업 저장 폴더"
+	msgWizardOutputPrompt  = "백업 파일을 저장할 호스트 폴더를 입력하세요. dcraft는 숨은 기본 위치를 선택하지 않습니다."
+	msgWizardOutputHint    = "예: ./dcraft-backups (상대 경로는 현재 작업 폴더 기준)"
+	msgWizardOutputDefault = "./dcraft-backups"
+	msgWizardRecheck       = "실행 직전에 볼륨·소비자·서비스 상태를 다시 확인합니다. 선택이 바뀌면 백업하지 않습니다."
 )

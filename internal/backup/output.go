@@ -7,7 +7,10 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
+
+	"github.com/rootmyself/dcraft/internal/core"
 )
 
 // ErrOutputRequired is returned when no explicit output directory was chosen.
@@ -79,7 +82,9 @@ func ValidateOutputDir(raw, cwd string) (string, error) {
 // artifactName builds a readable, filesystem-safe directory name for one
 // backup. Timestamps are UTC and second-granularity; a collision gets a
 // numeric suffix so two backups are both kept.
-func artifactName(source Source, now time.Time) string {
+// ArtifactName is the published naming rule for every v1 artifact (#17 uses
+// it for bind-folder backups).
+func ArtifactName(source Source, now time.Time) string {
 	label := source.VolumeKey
 	if label == "" {
 		label = source.VolumeName
@@ -112,8 +117,8 @@ func safeComponent(raw string) string {
 	return raw
 }
 
-// artifactPath joins one generated name bellow root and proves containment.
-func artifactPath(root, name string) (string, error) {
+// ArtifactPath joins one generated name below root and proves containment.
+func ArtifactPath(root, name string) (string, error) {
 	if strings.TrimSpace(name) == "" {
 		return "", fmt.Errorf("%w: empty artifact name", ErrOutputInvalid)
 	}
@@ -128,14 +133,14 @@ func artifactPath(root, name string) (string, error) {
 	return path, nil
 }
 
-// uniqueArtifactPath returns the first free final/partial pair for base.
-func uniqueArtifactPath(root, base string) (string, error) {
+// UniqueArtifactPath returns the first free final/partial pair for base.
+func UniqueArtifactPath(root, base string) (string, error) {
 	for i := 0; i < 1000; i++ {
 		name := base
 		if i > 0 {
 			name = fmt.Sprintf("%s-%d", base, i+1)
 		}
-		final, err := artifactPath(root, name)
+		final, err := ArtifactPath(root, name)
 		if err != nil {
 			return "", err
 		}
@@ -152,4 +157,55 @@ func uniqueArtifactPath(root, base string) (string, error) {
 		return final, nil
 	}
 	return "", fmt.Errorf("%w: no free artifact name for %q", ErrOutputInvalid, base)
+}
+
+// syncFile flushes one artifact file before it is published.
+func syncFile(path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return f.Sync()
+}
+
+// syncDir flushes one directory entry so a rename or manifest replacement is
+// durable. Filesystems that do not support directory fsync are treated as a
+// no-op instead of a false failure.
+func syncDir(path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if err := f.Sync(); err != nil && !errors.Is(err, os.ErrInvalid) && !errors.Is(err, syscall.EINVAL) && !errors.Is(err, syscall.ENOTSUP) {
+		return err
+	}
+	return nil
+}
+
+// invalidatePublished moves a published-but-not-complete artifact back to its
+// partial name. If even that fails, the complete=false manifest still keeps it
+// out of every valid-backup listing.
+func invalidatePublished(final string, cause error) error {
+	detail := cause.Error()
+	if _, statErr := os.Lstat(final); statErr == nil {
+		partial := final + PartialSuffix
+		if _, existErr := os.Lstat(partial); errors.Is(existErr, os.ErrNotExist) {
+			if renameErr := os.Rename(final, partial); renameErr == nil {
+				detail += "\n" + fmt.Sprintf(msgPartialLocation, partial)
+			} else {
+				detail += "\n" + fmt.Sprintf(msgPartialLocation, final) + " (" + msgPartialKept + ")"
+			}
+		} else {
+			detail += "\n" + fmt.Sprintf(msgPartialLocation, final) + " (" + msgPartialKept + ")"
+		}
+	}
+	return core.FailCause(cause, core.Diagnostic{
+		Category:    core.CategoryBackupFailed,
+		Severity:    core.SeverityError,
+		Message:     msgCompleteFailed,
+		Detail:      detail,
+		NextActions: []string{msgCompleteFailedAction, msgPublishFailedAction},
+	})
 }

@@ -13,6 +13,7 @@ import (
 // consumes the same sources (including bind mounts) and the runtime states.
 type Discovery struct {
 	ProjectName string
+	Target      core.Target
 	Sources     []DataSource
 	Runtime     []data.ServiceRuntime
 	Running     []string
@@ -36,7 +37,7 @@ func Discover(ctx context.Context, backend data.Backend, target core.Target, pro
 	if err != nil {
 		return Discovery{}, err
 	}
-	d := Discovery{ProjectName: projectName, Sources: sources, Runtime: runtime}
+	d := Discovery{ProjectName: projectName, Target: target, Sources: sources, Runtime: runtime}
 	for _, svc := range runtime {
 		if svc.State == "running" || svc.State == "restarting" {
 			d.Running = append(d.Running, svc.Service)
@@ -109,7 +110,7 @@ func (d Discovery) CheckConsumers(ctx context.Context, backend data.Backend, sou
 	seenService := map[string]bool{}
 	seenOutside := map[string]bool{}
 	for _, src := range sources {
-		consumers, err := backend.VolumeConsumers(ctx, src.Name)
+		consumers, err := backend.VolumeConsumers(ctx, d.Target, src.Name)
 		if err != nil {
 			return ConsumerReport{}, err
 		}

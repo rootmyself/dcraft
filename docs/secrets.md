@@ -49,6 +49,10 @@ dcraft secrets --remove -s web --delivery environment --target DB_PASSWORD
 - 원본이 없거나 비어 있거나 읽을 수 없으면 서비스를 바꾸기 전에 실패합니다.
   dcraft가 읽은 값은 도구 출력·진단·JSON·이력에서 가려집니다. 앱이나 사용자
   스크립트가 직접 출력하는 값은 dcraft가 통제하지 않습니다.
+- 세션 밖에서 만든 진단(예: 백업 도우미 컨테이너 출력)은
+  `Runtime.RedactText(target, text)`로 같은 참조 값을 가립니다. 이 도우미는
+  참조된 원본만 읽고 값을 반환하거나 저장하지 않으며, 없는 원본은 건너뜁니다.
+  가림은 최선 노력이며 dcraft가 가져오지 않은 값까지 보장하지 않습니다.
 
 ## 기존 설정에서 옮기기
 

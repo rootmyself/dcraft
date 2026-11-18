@@ -231,11 +231,11 @@ func TestListOnlyReturnsCompleteBackupsAndIgnoresPartialOutput(t *testing.T) {
 
 func TestArtifactNameIsSafeAndStaysInsideTheOutputDirectory(t *testing.T) {
 	root := t.TempDir()
-	name := artifactName(Source{Project: "../../evil", VolumeKey: "data/../../x"}, time.Unix(1700000000, 0))
+	name := ArtifactName(Source{Project: "../../evil", VolumeKey: "data/../../x"}, time.Unix(1700000000, 0))
 	if strings.Contains(name, "..") || strings.ContainsAny(name, "/\\") {
 		t.Fatalf("unsafe artifact name %q", name)
 	}
-	path, err := artifactPath(root, name)
+	path, err := ArtifactPath(root, name)
 	if err != nil {
 		t.Fatalf("artifactPath: %v", err)
 	}
@@ -243,7 +243,7 @@ func TestArtifactNameIsSafeAndStaysInsideTheOutputDirectory(t *testing.T) {
 	if err != nil || strings.HasPrefix(rel, "..") {
 		t.Fatalf("artifact escaped the output directory: %q", path)
 	}
-	if _, err := artifactPath(root, "../escape"); err == nil {
+	if _, err := ArtifactPath(root, "../escape"); err == nil {
 		t.Fatal("escaping artifact name was accepted")
 	}
 }
@@ -356,5 +356,16 @@ func manifestForTest(t *testing.T, dir string) Manifest {
 		Entries:   inspected.Entries,
 		Totals:    inspected.Totals,
 		Sensitive: true,
+	}
+}
+
+func TestSourceFromKeepsVolumeAndBindIdentitySeparate(t *testing.T) {
+	vol := SourceFrom(DataSource{Kind: KindVolume, Key: "data", Name: "proj_data"}, "proj", "", "/work/proj")
+	if vol.VolumeKey != "data" || vol.VolumeName != "proj_data" || vol.HostPath != "" {
+		t.Fatalf("volume source = %+v", vol)
+	}
+	bind := SourceFrom(DataSource{Kind: KindBind, Name: "/host/folder"}, "proj", "", "/work/proj")
+	if bind.HostPath != "/host/folder" || bind.VolumeName != "" || bind.VolumeKey != "" {
+		t.Fatalf("bind source = %+v", bind)
 	}
 }

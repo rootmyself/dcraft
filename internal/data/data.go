@@ -81,8 +81,9 @@ type Backend interface {
 	// including stopped containers.
 	ServiceRuntime(ctx context.Context, target core.Target) ([]ServiceRuntime, error)
 	// VolumeConsumers lists containers that reference the actual engine
-	// volume name, including stopped ones.
-	VolumeConsumers(ctx context.Context, volumeName string) ([]ContainerConsumer, error)
+	// volume name, including stopped ones. The target supplies the project
+	// context for redaction.
+	VolumeConsumers(ctx context.Context, target core.Target, volumeName string) ([]ContainerConsumer, error)
 	// StopServices stops only the named Compose services.
 	StopServices(ctx context.Context, target core.Target, services []string) (OpResult, error)
 	// StartServices starts only the named, previously running services.
@@ -93,4 +94,8 @@ type Backend interface {
 	ArchiveVolume(ctx context.Context, volumeName, hostDir string) (OpResult, error)
 	// HelperImage is the image used by ArchiveVolume; it is shown in plans.
 	HelperImage() string
+	// Redact removes values referenced by the project's saved secret
+	// references from tool output before it becomes a diagnostic or history
+	// record. It is best-effort and never returns a value itself.
+	Redact(ctx context.Context, target core.Target, text string) string
 }

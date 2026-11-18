@@ -137,16 +137,21 @@ func SelectableVolumes(sources []data.DataSource) []data.DataSource {
 
 // SourceFrom resolves the manifest identity of one selected volume.
 func SourceFrom(src data.DataSource, project, environment, projectDir string) Source {
-	return Source{
+	source := Source{
 		Kind:         src.Kind,
 		Project:      project,
 		Environment:  environment,
 		ProjectDir:   projectDir,
 		VolumeKey:    src.Key,
-		VolumeName:   src.Name,
 		MountTargets: append([]string{}, src.MountTargets...),
 		External:     src.External,
 		Anonymous:    src.Anonymous,
 		Services:     append([]string{}, src.Services...),
 	}
+	if src.Kind == data.KindBind {
+		source.HostPath = src.Name
+	} else {
+		source.VolumeName = src.Name
+	}
+	return source
 }

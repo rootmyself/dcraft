@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -58,6 +59,30 @@ func (v dataConfigVolume) IsExternal() bool {
 	}
 }
 
+// Redact implements data.Backend. When no secret runtime is wired it is the
+// identity function; the backup feature still routes every helper output
+// through it so the boundary does not depend on a particular wiring.
+func (c *Compose) Redact(ctx context.Context, t core.Target, text string) string {
+	if c.secrets == nil || text == "" {
+		return text
+	}
+	return c.secrets.RedactText(t, text)
+}
+
+func (c *Compose) redactError(ctx context.Context, t core.Target, err error) error {
+	if err == nil {
+		return nil
+	}
+	var ce *core.Error
+	if errors.As(err, &ce) {
+		for i := range ce.Diagnostics {
+			ce.Diagnostics[i].Detail = c.Redact(ctx, t, ce.Diagnostics[i].Detail)
+			ce.Diagnostics[i].Message = c.Redact(ctx, t, ce.Diagnostics[i].Message)
+		}
+	}
+	return err
+}
+
 // ProjectName implements data.Backend. Compose's config document always
 // carries the effective name, including the folder default.
 func (c *Compose) ProjectName(ctx context.Context, t core.Target) (string, error) {
@@ -70,7 +95,7 @@ func (c *Compose) ProjectName(ctx context.Context, t core.Target) (string, error
 		return "", ctxErr
 	}
 	if err != nil || !res.Succeeded() {
-		return "", core.FailCause(err, classifyConfigFailure(res, err))
+		return "", c.redactError(ctx, t, core.FailCause(err, classifyConfigFailure(res, err)))
 	}
 	var doc struct {
 		Name string `json:"name"`
@@ -101,7 +126,7 @@ func (c *Compose) Sources(ctx context.Context, t core.Target) ([]data.DataSource
 		return nil, ctxErr
 	}
 	if err != nil || !res.Succeeded() {
-		return nil, core.FailCause(err, classifyConfigFailure(res, err))
+		return nil, c.redactError(ctx, t, core.FailCause(err, classifyConfigFailure(res, err)))
 	}
 	var doc dataConfigDoc
 	if err := json.Unmarshal(res.Stdout, &doc); err != nil {
@@ -170,12 +195,13 @@ func (c *Compose) Sources(ctx context.Context, t core.Target) ([]data.DataSource
 					continue
 				}
 				e := get("bind\x00"+hostPath, data.DataSource{
-					Kind: data.KindBind,
-					Name: hostPath,
+					Kind:     data.KindBind,
+					Name:     hostPath,
+					ReadOnly: true,
 				})
 				e.source.Services = appendUnique(e.source.Services, service)
 				e.source.MountTargets = appendUnique(e.source.MountTargets, mount.Target)
-				e.source.ReadOnly = e.source.ReadOnly || mount.ReadOnly
+				e.source.ReadOnly = e.source.ReadOnly && mount.ReadOnly
 			}
 		}
 	}
@@ -211,7 +237,7 @@ func (c *Compose) ServiceRuntime(ctx context.Context, t core.Target) ([]data.Ser
 		return nil, ctxErr
 	}
 	if err != nil || !res.Succeeded() {
-		return nil, core.FailCause(err, classifyPSFailure(res, err))
+		return nil, c.redactError(ctx, t, core.FailCause(err, classifyPSFailure(res, err)))
 	}
 	type row struct {
 		Service  string `json:"Service"`
@@ -249,7 +275,7 @@ func (c *Compose) ServiceRuntime(ctx context.Context, t core.Target) ([]data.Ser
 // VolumeConsumers implements data.Backend with `docker ps -a`: stopped
 // containers still reference the volume and must be considered. The query
 // uses the actual engine name, never the Compose key.
-func (c *Compose) VolumeConsumers(ctx context.Context, volumeName string) ([]data.ContainerConsumer, error) {
+func (c *Compose) VolumeConsumers(ctx context.Context, t core.Target, volumeName string) ([]data.ContainerConsumer, error) {
 	format := "{{.Names}}\t{{.Label \"com.docker.compose.project\"}}\t{{.Label \"com.docker.compose.service\"}}\t{{.State}}"
 	res, err := c.run(ctx, execx.Command{
 		Name: "docker",
@@ -262,13 +288,13 @@ func (c *Compose) VolumeConsumers(ctx context.Context, volumeName string) ([]dat
 		return nil, err
 	}
 	if !res.Succeeded() {
-		return nil, core.FailCause(nil, core.Diagnostic{
+		return nil, c.redactError(ctx, t, core.FailCause(nil, core.Diagnostic{
 			Category:    core.CategoryInternal,
 			Severity:    core.SeverityError,
 			Message:     msgConsumerListFailed,
 			Detail:      summarize(res.Combined()),
 			NextActions: []string{msgConsumerListFailedAction},
-		})
+		}))
 	}
 	var out []data.ContainerConsumer
 	for _, line := range strings.Split(strings.TrimSpace(string(res.Stdout)), "\n") {

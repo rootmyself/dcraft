@@ -88,10 +88,10 @@ type Flag struct {
 	Usage     string
 	Kind      FlagKind
 	Default   string
-	// Required marks input a non-interactive run cannot invent. The TUI uses
-	// it to decide whether to show its generic input screen; the CLI still
-	// passes whatever was given and the feature returns a usage diagnostic
-	// (exit 2) for a missing required value.
+	// Required marks input a non-interactive run cannot invent. The CLI still
+	// passes whatever was given and the feature returns its own Korean usage
+	// diagnostic (exit 2) for a missing required value. Interactive
+	// collection uses the generic core.Wizard flow, not a per-feature screen.
 	Required bool
 }
 
