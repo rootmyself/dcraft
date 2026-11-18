@@ -24,9 +24,11 @@ var (
 	ErrArtifactInvalid   = errors.New("backup artifact is not a complete valid dcraft backup")
 	ErrTargetUnsupported = errors.New("backup data source kind is not supported by this restore command")
 	ErrTargetMismatch    = errors.New("backup source does not match the restore target")
+	ErrTargetInvalid     = errors.New("restore target is not usable")
 	ErrUnsafeLink        = errors.New("backup contains a dangerous link")
 	ErrSafetyInvalid     = errors.New("safety backup location is not usable")
 	ErrSpaceInsufficient = errors.New("insufficient free space for the safety backup")
+	ErrVerifyFailed      = errors.New("restored content does not match the verified backup")
 )
 
 // Artifact is one validated backup directory.

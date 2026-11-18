@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/rootmyself/dcraft/internal/data"
 )
 
 // CompareInspect checks a fully inspected archive against a manifest. Verify
@@ -49,7 +51,7 @@ func BuildArtifact(dir string, source Source, stack StackState, tool Tool, creat
 		Entries:       inspected.Entries,
 		Totals:        inspected.Totals,
 		Sensitive:     true,
-		OwnershipNote: msgOwnershipNote,
+		OwnershipNote: ownershipNoteFor(source.Kind),
 	}
 	if err := WriteManifest(dir, m); err != nil {
 		return Manifest{}, err
@@ -65,6 +67,16 @@ func BuildArtifact(dir string, source Source, stack StackState, tool Tool, creat
 		return Manifest{}, err
 	}
 	return m, nil
+}
+
+// ownershipNoteFor records the fidelity limit of the storage kind. Safety
+// backups use the same BuildArtifact helper for volumes and bind folders, so
+// the note must describe the source rather than always claiming a volume.
+func ownershipNoteFor(kind data.Kind) string {
+	if kind == data.KindBind {
+		return msgBindOwnershipNote
+	}
+	return msgOwnershipNote
 }
 
 // EnsureEmptyDir creates dir (0700) when missing and refuses a non-empty one.

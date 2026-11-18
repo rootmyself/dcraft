@@ -219,11 +219,12 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation) (any, error) {
 	report, execErr := c.exec.Execute(ctx, in, ExecutionRequest{
 		Target: target, ProjectName: projectName, Artifact: artifact,
 		Destination: selection.dest, SafetyDir: selection.safetyDir,
-		Affected: selection.discovery.AffectedServices([]data.DataSource{selection.source}),
-		Running:  selection.discovery.RunningAmong(selection.discovery.AffectedServices([]data.DataSource{selection.source})),
-		Explicit: selection.explicit,
-		Warnings: selection.warnings,
-		Locked:   true,
+		Affected:     selection.discovery.AffectedServices([]data.DataSource{selection.source}),
+		Running:      selection.discovery.RunningAmong(selection.discovery.AffectedServices([]data.DataSource{selection.source})),
+		Explicit:     selection.explicit,
+		Warnings:     selection.warnings,
+		Locked:       true,
+		ExplicitPath: selection.explicitPath,
 	})
 	c.last.set(report)
 	if execErr != nil {
@@ -270,24 +271,36 @@ func (c *Controller) Plan(ctx context.Context, in core.Invocation) (core.Plan, e
 }
 
 type targetSelection struct {
-	discovery backup.Discovery
-	source    data.DataSource
-	dest      *VolumeDestination
-	safetyDir string
-	explicit  bool
-	warnings  []string
-	current   ContentSummary
+	discovery    backup.Discovery
+	source       data.DataSource
+	dest         Destination
+	safetyDir    string
+	explicit     bool
+	explicitPath bool
+	warnings     []string
+	current      ContentSummary
 }
 
 func (c *Controller) selectTarget(ctx context.Context, in core.Invocation, target core.Target, projectName string, artifact Artifact, cwd string, create bool) (targetSelection, error) {
+	switch artifact.Manifest.Source.Kind {
+	case data.KindVolume:
+		return c.selectVolumeTarget(ctx, in, target, projectName, artifact, cwd, create)
+	case data.KindBind:
+		return c.selectBindTarget(ctx, in, target, projectName, artifact, cwd, create)
+	default:
+		return targetSelection{}, targetError(fmt.Errorf("%w: %s artifact", ErrTargetUnsupported, artifact.Manifest.Source.Kind))
+	}
+}
+
+func (c *Controller) selectVolumeTarget(ctx context.Context, in core.Invocation, target core.Target, projectName string, artifact Artifact, cwd string, create bool) (targetSelection, error) {
 	cwdErr := ctx.Err()
 	if cwdErr != nil {
 		return targetSelection{}, cwdErr
 	}
 	var sel targetSelection
 	err := core.RunStage(in.Reporter, "select_target", msgStageSelect, func() error {
-		if artifact.Manifest.Source.Kind != data.KindVolume {
-			return targetError(fmt.Errorf("%w: %s artifact", ErrTargetUnsupported, artifact.Manifest.Source.Kind))
+		if strings.TrimSpace(in.Option("bind")) != "" {
+			return targetError(fmt.Errorf("%w: 이 백업은 연결 폴더가 아니라 이름 있는 볼륨 백업입니다. --volume을 사용하세요.", ErrTargetMismatch))
 		}
 		discovery, err := backup.Discover(ctx, c.cfg.Backend, target, projectName)
 		if err != nil {
@@ -308,7 +321,7 @@ func (c *Controller) selectTarget(ctx context.Context, in core.Invocation, targe
 			return safetyLocationError(err)
 		}
 		if err := ValidateLocation(dest, artifact.Path, safetyDir); err != nil {
-			return safetyLocationError(err)
+			return locationError(err)
 		}
 		if err := dest.Prepare(ctx); err != nil {
 			return targetError(err)
@@ -349,6 +362,187 @@ func (c *Controller) selectTarget(ctx context.Context, in core.Invocation, targe
 		return targetSelection{}, err
 	}
 	return sel, nil
+}
+
+// selectBindTarget resolves a bind artifact against the current stack's
+// declared bind sources. The archived host path is machine-specific, so the
+// target defaults to the declared source with the same path; selecting another
+// declared folder is an explicit path mapping. Undeclared paths are refused.
+func (c *Controller) selectBindTarget(ctx context.Context, in core.Invocation, target core.Target, projectName string, artifact Artifact, cwd string, create bool) (targetSelection, error) {
+	if err := ctx.Err(); err != nil {
+		return targetSelection{}, err
+	}
+	var sel targetSelection
+	err := core.RunStage(in.Reporter, "select_target", msgStageSelect, func() error {
+		if strings.TrimSpace(in.Option("volume")) != "" {
+			return targetError(fmt.Errorf("%w: 이 백업은 이름 있는 볼륨이 아니라 연결 폴더 백업입니다. --bind를 사용하세요.", ErrTargetMismatch))
+		}
+		discovery, err := backup.Discover(ctx, c.cfg.Backend, target, projectName)
+		if err != nil {
+			return err
+		}
+		source, err := selectBindSource(discovery, in.Option("bind"), artifact.Manifest)
+		if err != nil {
+			return err
+		}
+		explicit := in.BoolOption("allow-source-mismatch")
+		explicitPath := in.BoolOption("allow-path-mismatch")
+		dest := NewBindDestination(c.cfg.Backend, source, target, projectName)
+		dest.explicitPath = explicitPath
+		warnings, err := dest.Match(artifact.Manifest, explicit)
+		if err != nil {
+			return targetError(err)
+		}
+		// Resolve the safety location lexically first: an invalid location must
+		// not be created inside the target before containment is checked.
+		safetyDir, err := resolveSafetyDir(in.Option("safety-output"), projectName, artifact.Path, cwd, false)
+		if err != nil {
+			return safetyLocationError(err)
+		}
+		if err := ValidateLocation(dest, artifact.Path, safetyDir); err != nil {
+			return locationError(err)
+		}
+		if within(artifact.Path, dest.currentPath()) {
+			return targetError(fmt.Errorf("%w: 복원 대상이 백업 보관 폴더 안에 있습니다", ErrTargetMismatch))
+		}
+		if within(safetyDir, dest.currentPath()) {
+			return safetyLocationError(fmt.Errorf("%w: 복원 대상이 안전 백업 폴더 안에 있습니다", ErrSafetyInvalid))
+		}
+		if create {
+			safetyDir, err = resolveSafetyDir(in.Option("safety-output"), projectName, artifact.Path, cwd, true)
+			if err != nil {
+				return safetyLocationError(err)
+			}
+			if err := ValidateLocation(dest, artifact.Path, safetyDir); err != nil {
+				return locationError(err)
+			}
+		}
+		if err := dest.Prepare(ctx); err != nil {
+			return targetError(err)
+		}
+		unsafe, err := dest.UnsafeConsumers(ctx)
+		if err != nil {
+			return err
+		}
+		if len(unsafe) > 0 {
+			return outsideConsumerError(unsafe)
+		}
+		runtime, err := c.cfg.Backend.ServiceRuntime(ctx, target)
+		if err != nil {
+			return err
+		}
+		affected := discovery.AffectedServices([]data.DataSource{source})
+		if paused := pausedServices(runtime, affected); len(paused) > 0 {
+			return pausedServiceError(paused)
+		}
+		usage, usageErr := dest.Usage(ctx)
+		if usageErr != nil {
+			sel.warnings = append(sel.warnings, fmt.Sprintf("현재 폴더 크기를 확인하지 못했습니다: %s", usageErr.Error()))
+		} else {
+			sel.current = usage
+		}
+		sel.discovery = discovery
+		sel.source = source
+		sel.dest = dest
+		sel.safetyDir = safetyDir
+		sel.explicit = explicit
+		sel.explicitPath = explicitPath
+		sel.warnings = append(sel.warnings, warnings...)
+		if err := c.checkSpace(ctx, sel.current, safetyDir); err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return targetSelection{}, err
+	}
+	return sel, nil
+}
+
+// selectBindSource resolves --bind against the declared sources, or uses the
+// artifact's recorded path when it matches a declared spelling. It never adds
+// an arbitrary host folder and never guesses between different paths.
+func selectBindSource(discovery backup.Discovery, requested string, manifest backup.Manifest) (data.DataSource, error) {
+	requested = strings.TrimSpace(requested)
+	if requested != "" {
+		selected, err := discovery.Select(nil, []string{requested})
+		if err != nil {
+			return data.DataSource{}, bindSelectionError(err)
+		}
+		if len(selected) != 1 || selected[0].Kind != data.KindBind {
+			return data.DataSource{}, targetError(fmt.Errorf("%w: --bind %q is not a declared bind folder", ErrTargetMismatch, requested))
+		}
+		return selected[0], nil
+	}
+	archived := manifest.Source.HostPath
+	var declared []string
+	for _, src := range discovery.Sources {
+		if src.Kind != data.KindBind {
+			continue
+		}
+		declared = append(declared, src.Name)
+		spellings := append([]string{src.Name, src.Declared}, src.DeclaredPaths...)
+		for _, spelling := range spellings {
+			if sameHostPath(archived, spelling) {
+				return src, nil
+			}
+		}
+	}
+	sort.Strings(declared)
+	return data.DataSource{}, targetError(fmt.Errorf("%w: 백업 폴더 %q가 현재 스택에 선언되어 있지 않습니다. 선언된 폴더: %s. 다른 폴더로 복원하려면 --bind <폴더>와 --allow-path-mismatch를 함께 지정하세요.",
+		ErrTargetMismatch, archived, strings.Join(declared, ", ")))
+}
+
+func bindSelectionError(err error) error {
+	var unknown *backup.UnknownBindError
+	var ambiguous *backup.AmbiguousBindError
+	var bindAsVolume *backup.BindAsVolumeError
+	switch {
+	case errors.As(err, &unknown):
+		return core.Fail(core.Diagnostic{
+			Category:    core.CategoryRestoreBindUnknown,
+			Severity:    core.SeverityError,
+			Message:     msgBindUnknown,
+			Detail:      unknown.Error(),
+			NextActions: []string{msgBindUnknownAction},
+		})
+	case errors.As(err, &ambiguous):
+		return core.Fail(core.Diagnostic{
+			Category:    core.CategoryRestoreBindUnknown,
+			Severity:    core.SeverityError,
+			Message:     msgBindUnknown,
+			Detail:      ambiguous.Error(),
+			NextActions: []string{msgBindUnknownAction},
+		})
+	case errors.As(err, &bindAsVolume):
+		return targetError(fmt.Errorf("%w: %v", ErrTargetMismatch, err))
+	default:
+		return targetError(fmt.Errorf("%w: %v", ErrTargetMismatch, err))
+	}
+}
+
+// ParseWizardTarget splits the TUI target answer into volume keys and bind
+// paths. Values are prefixed so a host path can never be mistaken for a Compose
+// volume key; an unprefixed legacy value remains a volume key.
+func ParseWizardTarget(raw string) (volumes, binds []string) {
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		switch {
+		case line == "":
+			continue
+		case strings.HasPrefix(line, "volume:"):
+			if value := strings.TrimSpace(strings.TrimPrefix(line, "volume:")); value != "" {
+				volumes = append(volumes, value)
+			}
+		case strings.HasPrefix(line, "bind:"):
+			if value := strings.TrimSpace(strings.TrimPrefix(line, "bind:")); value != "" {
+				binds = append(binds, value)
+			}
+		default:
+			volumes = append(volumes, line)
+		}
+	}
+	return volumes, binds
 }
 
 func (c *Controller) checkSpace(ctx context.Context, current ContentSummary, safetyDir string) error {
@@ -487,6 +681,16 @@ func artifactError(err error) error {
 	}
 }
 
+// locationError classifies the shared containment check: a target/artifact
+// overlap is a target mismatch, while an unusable or overlapping safety folder
+// is a safety failure.
+func locationError(err error) error {
+	if errors.Is(err, ErrTargetMismatch) {
+		return targetError(err)
+	}
+	return safetyLocationError(err)
+}
+
 func safetyLocationError(err error) error {
 	return core.FailCause(err, core.Diagnostic{
 		Category:    core.CategoryRestoreSafetyFailed,
@@ -531,7 +735,14 @@ func buildPreview(project string, artifact Artifact, sel targetSelection, now ti
 	fmt.Fprintf(&b, msgPreviewProject+"\n", project)
 	fmt.Fprintf(&b, msgPreviewArtifact+"\n", artifact.Path, artifact.Manifest.CreatedAt.Local().Format("2006-01-02 15:04:05"))
 	fmt.Fprintf(&b, msgPreviewBackup+"\n", artifact.Manifest.Totals.Entries, humanBytes(artifact.Manifest.Totals.Bytes))
-	fmt.Fprintf(&b, msgPreviewTarget+"\n", sel.source.Key, sel.source.Name)
+	if sel.source.Kind == data.KindBind {
+		fmt.Fprintf(&b, msgPreviewBindTarget+"\n", sel.source.Name)
+		if declared := strings.TrimSpace(sel.source.Declared); declared != "" && declared != sel.source.Name {
+			fmt.Fprintf(&b, msgPreviewBindDeclared+"\n", declared)
+		}
+	} else {
+		fmt.Fprintf(&b, msgPreviewTarget+"\n", sel.source.Key, sel.source.Name)
+	}
 	if sel.current.Entries > 0 || sel.current.Bytes > 0 {
 		fmt.Fprintf(&b, msgPreviewCurrent+"\n", sel.current.Entries, humanBytes(sel.current.Bytes))
 	} else {
@@ -548,6 +759,10 @@ func buildPreview(project string, artifact Artifact, sel targetSelection, now ti
 		b.WriteString(msgPreviewExplicit)
 		b.WriteString("\n")
 	}
+	if sel.explicitPath {
+		b.WriteString(msgPreviewExplicitPath)
+		b.WriteString("\n")
+	}
 	if len(sel.warnings) > 0 {
 		b.WriteString(msgPreviewWarnings)
 		b.WriteString("\n")
@@ -561,11 +776,19 @@ func buildPreview(project string, artifact Artifact, sel targetSelection, now ti
 	b.WriteString("\n")
 	b.WriteString(msgOverwrite)
 	b.WriteString("\n")
+	if sel.source.Kind == data.KindBind {
+		b.WriteString(msgBindReplace)
+		b.WriteString("\n")
+	}
 	b.WriteString(msgInterrupt)
 	b.WriteString("\n")
 	b.WriteString(msgSafetyNotice)
 	b.WriteString("\n")
-	b.WriteString(msgOwnership)
+	if sel.source.Kind == data.KindBind {
+		b.WriteString(msgBindOwnershipNotice)
+	} else {
+		b.WriteString(msgOwnership)
+	}
 	return strings.TrimRight(b.String(), "\n")
 }
 
@@ -617,13 +840,13 @@ func (c *Controller) WizardSteps(ctx context.Context, in core.Invocation) (core.
 	if err != nil {
 		return core.WizardSpec{}, err
 	}
-	selectable := backup.SelectableVolumes(discovery.Sources)
+	selectable := backup.SelectableSources(discovery.Sources)
 	if len(selectable) == 0 {
 		return core.WizardSpec{}, core.Fail(core.Diagnostic{
 			Category:    core.CategoryRestoreVolumeUnknown,
 			Severity:    core.SeverityError,
 			Message:     msgVolumeUnknown,
-			Detail:      "현재 스택에 이름 있는 데이터 볼륨이 없습니다.",
+			Detail:      "현재 스택에 이름 있는 데이터 볼륨이나 연결 폴더가 없습니다.",
 			NextActions: []string{msgVolumeUnknownAction},
 		})
 	}
@@ -638,21 +861,34 @@ func (c *Controller) WizardSteps(ctx context.Context, in core.Invocation) (core.
 		artifactStep.Default = msgWizardArtifactDef
 	} else {
 		for _, art := range artifacts {
+			target := art.Manifest.Source.VolumeKey + " → " + art.Manifest.Source.VolumeName
+			kind := "볼륨"
+			if art.Manifest.Source.Kind == data.KindBind {
+				target = art.Manifest.Source.HostPath
+				kind = "폴더"
+			}
 			artifactStep.Options = append(artifactStep.Options, core.WizardOption{
 				Value: art.Path,
-				Label: fmt.Sprintf("%s · %s → %s · %s", filepath.Base(art.Path), art.Manifest.Source.VolumeKey, art.Manifest.Source.VolumeName, art.Manifest.CreatedAt.Local().Format("2006-01-02 15:04")),
+				Label: fmt.Sprintf("%s · %s %s · %s", filepath.Base(art.Path), kind, target, art.Manifest.CreatedAt.Local().Format("2006-01-02 15:04")),
 			})
 		}
 	}
 
-	volumeStep := core.WizardStep{
-		Name: "volume", Title: msgWizardVolume, Prompt: msgWizardVolumeWhy,
-		Options: []core.WizardOption{{Value: "", Label: msgWizardVolumeAuto}},
+	targetStep := core.WizardStep{
+		Name: "target", Title: msgWizardTarget, Prompt: msgWizardTargetWhy,
+		Options: []core.WizardOption{{Value: "", Label: msgWizardTargetAuto}},
 	}
 	for _, src := range selectable {
-		volumeStep.Options = append(volumeStep.Options, core.WizardOption{
-			Value: src.Key,
-			Label: fmt.Sprintf("%s → %s", src.Key, src.Name),
+		if src.Kind == data.KindBind {
+			targetStep.Options = append(targetStep.Options, core.WizardOption{
+				Value: "bind:" + src.Name,
+				Label: backup.DescribeSource(src),
+			})
+			continue
+		}
+		targetStep.Options = append(targetStep.Options, core.WizardOption{
+			Value: "volume:" + src.Key,
+			Label: "볼륨 " + src.Key + " → " + src.Name,
 		})
 	}
 	c.cacheWizard(wizardCache{projectName: name, target: target, discovery: discovery})
@@ -660,7 +896,7 @@ func (c *Controller) WizardSteps(ctx context.Context, in core.Invocation) (core.
 		Title: msgWizardTitle,
 		Steps: []core.WizardStep{
 			artifactStep,
-			volumeStep,
+			targetStep,
 			{
 				Name: "safety", Title: msgWizardSafety, Prompt: msgWizardSafetyWhy,
 				AllowCustom: true, CustomHint: msgWizardRecheck, Default: msgWizardSafetyDef,
@@ -689,13 +925,51 @@ func (c *Controller) WizardPreview(answers map[string]string) (string, error) {
 	if err != nil {
 		return "", artifactError(err)
 	}
-	source, err := selectVolumeSource(cache.discovery.Sources, answers["volume"], artifact.Manifest)
+	targetAnswer := answers["target"]
+	if strings.TrimSpace(targetAnswer) == "" {
+		targetAnswer = answers["volume"]
+	}
+	volumes, binds := ParseWizardTarget(targetAnswer)
+	var source data.DataSource
+	switch artifact.Manifest.Source.Kind {
+	case data.KindVolume:
+		if len(binds) > 0 {
+			return "", targetError(fmt.Errorf("%w: 이 백업은 연결 폴더가 아니라 볼륨 백업입니다. 대상 목록에서 볼륨을 선택하세요.", ErrTargetMismatch))
+		}
+		requested := ""
+		if len(volumes) > 0 {
+			requested = volumes[0]
+		}
+		source, err = selectVolumeSource(cache.discovery.Sources, requested, artifact.Manifest)
+	case data.KindBind:
+		if len(volumes) > 0 {
+			return "", targetError(fmt.Errorf("%w: 이 백업은 볼륨이 아니라 연결 폴더 백업입니다. 대상 목록에서 폴더를 선택하세요.", ErrTargetMismatch))
+		}
+		requested := ""
+		if len(binds) > 0 {
+			requested = binds[0]
+		}
+		source, err = selectBindSource(cache.discovery, requested, artifact.Manifest)
+	default:
+		err = targetError(fmt.Errorf("%w: %s artifact", ErrTargetUnsupported, artifact.Manifest.Source.Kind))
+	}
 	if err != nil {
 		return "", err
 	}
 	explicit := false
-	dest := NewVolumeDestination(c.cfg.Backend, source, cache.target, cache.projectName)
-	warnings, err := dest.Match(artifact.Manifest, explicit)
+	explicitPath := answers["allow-path-mismatch"] == "true"
+	var dest Destination
+	var warnings []string
+	if source.Kind == data.KindBind {
+		bind := NewBindDestination(c.cfg.Backend, source, cache.target, cache.projectName)
+		bind.explicitPath = explicitPath
+		warnings, err = bind.Match(artifact.Manifest, explicit)
+		dest = bind
+	} else {
+		volume := NewVolumeDestination(c.cfg.Backend, source, cache.target, cache.projectName)
+		warnings, err = volume.Match(artifact.Manifest, explicit)
+		dest = volume
+	}
 	if err != nil {
 		return "", targetError(err)
 	}
@@ -704,11 +978,19 @@ func (c *Controller) WizardPreview(answers map[string]string) (string, error) {
 		return "", safetyLocationError(err)
 	}
 	if err := ValidateLocation(dest, artifact.Path, safetyDir); err != nil {
-		return "", safetyLocationError(err)
+		return "", locationError(err)
+	}
+	if source.Kind == data.KindBind {
+		if within(artifact.Path, dest.Name()) {
+			return "", targetError(fmt.Errorf("%w: 복원 대상이 백업 보관 폴더 안에 있습니다", ErrTargetMismatch))
+		}
+		if within(safetyDir, dest.Name()) {
+			return "", safetyLocationError(fmt.Errorf("%w: 복원 대상이 안전 백업 폴더 안에 있습니다", ErrSafetyInvalid))
+		}
 	}
 	sel := targetSelection{
 		discovery: cache.discovery, source: source, dest: dest, safetyDir: safetyDir,
-		explicit: explicit, warnings: warnings,
+		explicit: explicit, explicitPath: explicitPath, warnings: warnings,
 	}
 	return buildPreview(cache.projectName, artifact, sel, c.cfg.Clock.Now()), nil
 }
@@ -732,7 +1014,8 @@ func (c *Controller) cachedWizard() *wizardCache {
 }
 
 // discoverArtifacts scans the current folder and the conventional backup
-// folder. Only complete, supported artifacts are offered.
+// folder. Only complete, supported artifacts are offered; both named-volume
+// and bind-folder backups are valid restore inputs.
 func discoverArtifacts(cwd string) ([]backup.Artifact, error) {
 	var all []backup.Artifact
 	seen := map[string]bool{}
@@ -742,7 +1025,12 @@ func discoverArtifacts(cwd string) ([]backup.Artifact, error) {
 			continue
 		}
 		for _, art := range artifacts {
-			if art.Manifest.Source.Kind != data.KindVolume || seen[art.Path] {
+			if seen[art.Path] {
+				continue
+			}
+			switch art.Manifest.Source.Kind {
+			case data.KindVolume, data.KindBind:
+			default:
 				continue
 			}
 			seen[art.Path] = true
