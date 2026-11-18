@@ -48,7 +48,7 @@ func (f *wizardStub) WizardPreview(answers map[string]string) (string, error) {
 
 func (f *wizardStub) Present(res core.Result, width int) string { return "SAVED-SCREEN" }
 
-func newWizardModel(t *testing.T, wizard *wizardStub) *Model {
+func newWizardModel(t *testing.T, wizard core.Feature) *Model {
 	t.Helper()
 	status := &stubFeature{desc: descriptor("status", true), body: "상태 본문"}
 	reg := core.NewRegistry()

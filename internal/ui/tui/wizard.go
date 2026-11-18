@@ -219,8 +219,34 @@ func (m *Model) applyWizard() tea.Cmd {
 	for key, value := range m.wizardAnswers {
 		options[key] = value
 	}
+	if m.req.Options == nil {
+		m.req.Options = map[string]string{}
+	}
+	for key, value := range options {
+		m.req.Options[key] = value
+	}
+	feature := m.wizardFeature
+	m.req.Feature = feature.Descriptor().Name
+	m.req.Target = m.target
+	// The wizard preview is not an approval. An approval-gated feature goes
+	// through the same generic plan + confirmation screen as any other
+	// approval operation; the collected answers stay in the request.
+	if feature.Descriptor().Approval != core.ApprovalNone {
+		m.wizardApplying = false
+		m.wizardAwaiting = false
+		m.wizardFeature = nil
+		m.wizardSpec = core.WizardSpec{}
+		m.wizardAnswers = nil
+		m.wizardPreview = ""
+		m.wizardPreviewErr = nil
+		m.wizardReturnRes = nil
+		m.wizardReturnFeat = nil
+		m.resetRunState()
+		m.phase = phasePlanning
+		return tea.Batch(m.planCmd(feature, m.events), waitStageCmd(m.events))
+	}
 	m.wizardApplying = true
-	cmd := m.beginWithOptions(m.wizardFeature, options)
+	cmd := m.beginWithOptions(feature, options)
 	m.phase = phaseLoading
 	return cmd
 }

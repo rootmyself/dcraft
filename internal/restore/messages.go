@@ -1,0 +1,143 @@
+package restore
+
+// Korean user-facing text owned by the restore feature and the shared safe
+// replacement contract. Machine values (stage names, data_state, JSON keys and
+// diagnostics categories) stay English.
+const (
+	MsgTitle   = "데이터 복원"
+	MsgSummary = "검증한 백업으로 지정한 데이터 볼륨을 안전 백업 후 교체합니다."
+	MsgUsage   = `dcraft restore --backup <백업 폴더> [--volume <볼륨 키>] [--safety-output <폴더>] [--approve data_restore] [--path <스택 폴더>]
+
+완료된 dcraft 백업 v1만 복원합니다. 덮어쓰기 전에 백업 형식·완료·무결성·원본/대상
+대응·경로를 검사하고, 대상 서비스를 잠시 중지한 뒤 현재 데이터의 별도 안전 백업을
+완성해야 교체합니다. 복원은 병합이 아니라 교체이며, 실패·중단 시 남은 상태와 안전
+백업 위치를 보고합니다. 연결 폴더 복원은 별도 명령입니다.`
+
+	msgNoBackend       = "복원 기능이 데이터 경계와 연결되지 않았습니다."
+	msgNoBackendAction = "dcraft를 다시 빌드하거나 설치한 뒤 실행하세요."
+
+	msgStageValidate     = "백업 검증"
+	msgStageCoordinate   = "스택 잠금"
+	msgStageResolve      = "프로젝트 확인"
+	msgStageSelect       = "복원 대상 확인"
+	msgStagePreview      = "복원 계획"
+	msgStageConsumers    = "소비자 확인"
+	msgStageSafetyCheck  = "안전 백업 공간 확인"
+	msgStageStop         = "서비스 중지"
+	msgStageSafetyBackup = "안전 백업"
+	msgStageReplace      = "데이터 교체"
+	msgStageVerify       = "복원 검증"
+	msgStageRestoreState = "서비스 상태 복구"
+
+	msgBackupRequired       = "복원할 백업 폴더를 지정하지 않았습니다."
+	msgBackupRequiredAction = "--backup으로 완료된 dcraft 백업 v1 폴더를 지정하세요. dcraft는 기본 백업을 추측하지 않습니다."
+	msgBackupUsageAction    = "예: dcraft restore --backup ./dcraft-backups/dcraft-proj-volume-data-20260101T000000Z --approve data_restore"
+
+	msgArtifactInvalid       = "백업을 복원 대상으로 사용할 수 없습니다."
+	msgArtifactInvalidAction = "백업 폴더에 manifest.json과 data.tar.gz가 있고 완료 표시가 있는지 확인하세요. 손상·미완료 백업은 복원하지 않습니다."
+	msgIntegrityFailed       = "백업의 무결성을 확인하지 못했습니다."
+	msgIntegrityFailedAction = "백업 파일이 손상됐거나 완료되지 않았습니다. 다른 정상 백업을 선택하세요."
+
+	msgTargetUnsupported       = "이 백업은 이 명령으로 복원할 수 없는 데이터 원본입니다."
+	msgTargetUnsupportedAction = "연결 폴더 백업은 별도 복원 명령을 사용하세요. 이 명령은 이름 있는 데이터 볼륨만 복원합니다."
+
+	msgTargetMismatch       = "백업의 원본과 복원 대상이 일치하지 않습니다."
+	msgTargetMismatchAction = "같은 프로젝트·실행환경·볼륨의 백업을 선택하거나, 의도한 매핑이면 --allow-source-mismatch를 명시하세요. dcraft는 기본적으로 다른 대상을 덮어쓰지 않습니다."
+
+	msgVolumeUnknown       = "복원 대상 볼륨을 현재 스택에서 찾지 못했습니다."
+	msgVolumeUnknownAction = "볼륨 키는 docker compose config의 volumes 키입니다. --volume으로 현재 스택의 키를 지정하거나 같은 스택에서 다시 실행하세요."
+
+	msgTargetInvalid       = "복원 대상 볼륨을 사용할 수 없습니다."
+	msgTargetInvalidAction = "볼륨이 존재하는지 docker volume ls로 확인하고, 익명 볼륨이 아닌 이름 있는 볼륨인지 확인하세요."
+
+	msgConsumerUnsafe       = "다른 스택이나 관리 밖 컨테이너가 대상 볼륨을 사용하고 있어 복원하지 않았습니다."
+	msgConsumerUnsafeAction = "해당 컨테이너를 소유한 사용자가 직접 중지한 뒤 다시 실행하세요. dcraft는 다른 스택을 중지하지 않습니다."
+	msgPausedUnsafe         = "일시 중지된 서비스를 안전하게 중지하고 원래 상태로 되돌릴 수 없습니다."
+	msgPausedUnsafeAction   = "해당 서비스를 재개하거나 중지한 뒤 다시 실행하세요."
+
+	msgIdentityFailed       = "스택 이름을 확인하지 못해 복원하지 않았습니다."
+	msgIdentityFailedAction = "dcraft status로 스택을 확인하고 상태 폴더(DCRAFT_STATE_DIR)의 권한을 확인하세요."
+
+	msgSafetyDirInvalid       = "안전 백업 위치를 사용할 수 없습니다."
+	msgSafetyDirInvalidAction = "--safety-output으로 쓰기 가능한 별도 폴더를 지정하세요. 대상 볼륨 안이나 백업 폴더와 겹치는 위치는 사용할 수 없습니다."
+
+	msgSpaceInsufficient       = "안전 백업에 필요한 공간이 부족해 복원을 시작하지 않았습니다."
+	msgSpaceInsufficientAction = "안전 백업 폴더가 있는 파일 시스템의 남은 공간을 확보한 뒤 다시 실행하세요. 원본 데이터는 변경되지 않았습니다."
+
+	msgStopFailed       = "서비스를 중지하지 못해 데이터를 교체하지 않았습니다."
+	msgStopFailedAction = "dcraft status로 서비스 상태를 확인하고 남아 있는 컨테이너를 직접 확인하세요."
+
+	msgSafetyFailed       = "현재 데이터의 안전 백업을 완성하지 못해 복원을 중단했습니다."
+	msgSafetyFailedAction = "안전 백업 폴더의 권한과 남은 공간을 확인한 뒤 다시 실행하세요. 원본 데이터는 교체하지 않았습니다."
+	msgSafetyPartial      = "안전 백업 시도 위치: %s (완성되지 않았으므로 정상 백업으로 사용하지 마세요)"
+
+	msgReplaceFailed       = "데이터 교체를 완료하지 못했습니다."
+	msgReplaceFailedAction = "대상 데이터가 일부만 바뀌었을 수 있습니다. 안전 백업 위치를 확인하고 필요하면 그 백업으로 다시 복원하세요. dcraft는 무결성이 확인되지 않은 상태에서 서비스를 다시 시작하지 않습니다."
+	msgVerifyFailed        = "복원한 데이터가 백업과 일치하지 않습니다."
+	msgVerifyFailedAction  = "안전 백업으로 되돌리거나 볼륨을 직접 확인하세요. dcraft는 이 상태를 복원 성공으로 표시하지 않으며 서비스를 다시 시작하지 않았습니다."
+
+	msgRestoreStateFailed       = "데이터 복원은 완료했지만 서비스 상태를 원래대로 되돌리지 못했습니다."
+	msgRestoreStateFailedAction = "docker compose start <서비스>로 직접 시작하고 dcraft status로 확인하세요. 데이터는 검증된 상태입니다."
+
+	msgDoneHeader   = "복원 완료"
+	msgInterrupt    = "복원 중 대상 서비스를 잠시 중지합니다. 짧은 서비스 중단이 발생할 수 있습니다."
+	msgOverwrite    = "대상 데이터의 현재 내용을 백업 내용으로 교체합니다. 이전 파일을 남기는 병합이 아닙니다."
+	msgSafetyNotice = "교체 전에 현재 데이터의 안전 백업을 별도 위치에 만들고 검증합니다."
+	msgOwnership    = "볼륨 복원은 root 헬퍼로 uid/gid·모드·하드링크를 보존합니다. xattr/ACL과 FIFO·장치 등 특수 파일은 플랫폼에 따라 완전히 복원되지 않을 수 있으며 dcraft는 보존을 보장하지 않습니다."
+	msgBindNotice   = "연결 폴더 복원은 이 명령의 범위가 아니며 별도 안전 복원 흐름을 사용합니다."
+	msgNoHooks      = "복원은 프로젝트 훅을 자동 실행하지 않습니다."
+	msgNoAutoDelete = "안전 백업을 포함한 기존 백업을 자동으로 삭제하지 않습니다."
+	msgOnlyRunning  = "dcraft가 중지한 실행 중 서비스만 원래 상태로 되돌립니다. 이미 중지된 서비스는 시작하지 않습니다."
+
+	msgPreviewHeader      = "복원 계획"
+	msgPreviewProject     = "프로젝트: %s"
+	msgPreviewArtifact    = "백업: %s (%s)"
+	msgPreviewBackup      = "백업 내용: %d개 항목, %s"
+	msgPreviewTarget      = "대상: %s → %s"
+	msgPreviewCurrent     = "현재 내용: %d개 항목, %s"
+	msgPreviewCurrentNone = "현재 내용: 확인하지 못했습니다(실행 직전에 다시 확인)."
+	msgPreviewSafety      = "안전 백업 위치: %s"
+	msgPreviewServices    = "영향 서비스: %s"
+	msgPreviewRunning     = "실행 중(중지 예정): %s"
+	msgPreviewStopped     = "이미 중지됨(시작하지 않음): %s"
+	msgPreviewExplicit    = "명시적 매핑: 백업과 대상이 다르며 경고를 표시했습니다."
+	msgPreviewWarnings    = "경고:"
+	msgPreviewSteps       = "서비스 중지 → 현재 데이터 안전 백업·검증 → 대상 비우기 → 백업 압축 해제 → 백업과 항목별 대조 → 중지한 서비스만 복구"
+	msgPreviewLock        = "실행 중에는 같은 스택의 다른 작업을 막고 다른 스택은 건드리지 않습니다."
+	msgPreviewNone        = "없음"
+
+	msgWizardTitle       = "데이터 복원 설정"
+	msgWizardArtifact    = "복원할 백업 선택"
+	msgWizardArtifactWhy = "완료된 dcraft 백업 v1만 표시합니다. 다른 경로의 백업은 CLI의 --backup으로 지정하세요."
+	msgWizardArtifactIn  = "복원할 백업 폴더 경로를 입력하세요."
+	msgWizardArtifactDef = "./dcraft-backups"
+	msgWizardVolume      = "복원 대상 볼륨 선택"
+	msgWizardVolumeWhy   = "백업에 기록된 볼륨을 기본으로 사용합니다. 다른 볼륨에 명시적으로 매핑하려면 대상 키를 고르세요."
+	msgWizardVolumeAuto  = "백업에 기록된 볼륨 사용 (권장)"
+	msgWizardSafety      = "안전 백업 폴더"
+	msgWizardSafetyWhy   = "현재 볼륨 데이터를 복원 전에 백업할 별도 호스트 폴더입니다. 대상 볼륨 안은 사용할 수 없습니다."
+	msgWizardSafetyDef   = "./dcraft-safety"
+	msgWizardRecheck     = "실행 직전에 백업 무결성·대상 볼륨·소비자·서비스 상태를 다시 확인합니다. 선택이 바뀌면 복원하지 않습니다."
+
+	// Exported text for the registration unit.
+	MsgNoBackend       = msgNoBackend
+	MsgNoBackendAction = msgNoBackendAction
+
+	msgDataStateUntouched  = "untouched"
+	msgDataStateUncertain  = "uncertain_partial"
+	msgDataStateReplaced   = "replaced_verified"
+	msgDataStateLabel      = "데이터 상태: %s"
+	msgStageLabel          = "단계: %s"
+	msgSafetyLocationLabel = "안전 백업 위치: %s"
+	msgArtifactLocation    = "백업 위치: %s"
+	msgRecoveryUntouched   = "원본 데이터는 변경되지 않았습니다. 서비스 상태만 원래대로 복구합니다."
+	msgRecoverySafety      = "복구: dcraft restore --backup %s --approve data_restore"
+	msgRecoveryUncertain   = "대상 데이터가 일부만 바뀌었을 수 있습니다. 안전 백업으로 되돌리거나 dcraft status로 상태를 확인하세요."
+	msgRecoveryNoSafety    = "완성된 안전 백업이 없습니다. 원본 데이터를 직접 확인하세요."
+	msgCanceledWithSafety  = "복원이 중단되었습니다. %s, %s, 안전 백업 위치: %s. 무결성이 확인되지 않아 서비스를 다시 시작하지 않았습니다."
+	msgCanceledUntouched   = "복원이 중단되었습니다. %s, %s. 원본 데이터는 교체되지 않았으며 중지한 서비스만 다시 시작합니다."
+	msgCanceledNoSafety    = "복원이 중단되었습니다. %s, %s. 완성된 안전 백업이 없습니다."
+	msgCanceledReplaced    = "복원이 중단되었지만 데이터 교체와 검증은 완료되었습니다. %s, %s, 안전 백업 위치: %s. 무결성이 확인된 범위에서 서비스를 복구했습니다."
+	msgCanceledActionOne   = "복원을 다시 실행하기 전에 대상 데이터와 서비스 상태를 확인하세요."
+	msgCanceledActionTwo   = "dcraft status로 현재 상태를 확인하세요."
+)

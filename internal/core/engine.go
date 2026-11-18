@@ -148,7 +148,13 @@ func (e *Engine) Run(ctx context.Context, req Request, sink Sink) (res Result) {
 		return res
 	}
 
-	if required := desc.Approval; required != ApprovalNone && !HasApproval(req.Approvals, required) {
+	// A wizard "steps" run only collects answers for a later, explicitly
+	// approved "apply" run. It returns a WizardSpec and performs no stack
+	// change, so the independent approval belongs to apply, not to the menu
+	// preview. The TUI routes the approval-gated apply through the generic
+	// plan + confirmation screen.
+	wizardSteps := req.Options["wizard"] == "steps"
+	if required := desc.Approval; required != ApprovalNone && !wizardSteps && !HasApproval(req.Approvals, required) {
 		if err := ctx.Err(); err != nil {
 			res.Outcome = OutcomeCanceled
 			addCanceledDiagnostic(&res)

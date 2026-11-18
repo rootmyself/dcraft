@@ -676,10 +676,12 @@ func (m *Model) runCmd(f core.Feature, approvals []core.ApprovalKind, options ma
 func (m *Model) planCmd(f core.Feature, events chan core.Stage) tea.Cmd {
 	engine := m.engine
 	ctx := m.ctx
-	req := core.Request{
-		Feature:     f.Descriptor().Name,
-		Target:      m.target,
-		Interactive: true,
+	req := m.req
+	req.Feature = f.Descriptor().Name
+	req.Target = m.target
+	req.Interactive = true
+	if req.Options == nil {
+		req.Options = map[string]string{}
 	}
 	return func() tea.Msg {
 		if engine == nil {
