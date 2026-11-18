@@ -52,8 +52,15 @@ type SecretReference struct {
 	Phase    string `json:"phase,omitempty"`
 	Delivery string `json:"delivery,omitempty"`
 	Source   string `json:"source,omitempty"`
-	Name     string `json:"name"`
-	Field    string `json:"field,omitempty"`
+	// Name is the source reference: an environment variable name, a
+	// project-relative/absolute file path or an AWS secret name/ARN.
+	Name string `json:"name"`
+	// Target is the delivery target: an environment variable name or the
+	// /run/secrets file name. It is recorded so a later rollback can explain
+	// and reproduce the same delivery without reading stale configuration.
+	Target string `json:"target,omitempty"`
+	// Field is the optional AWS dot path into a JSON SecretString.
+	Field string `json:"field,omitempty"`
 	// Region and Profile are optional AWS CLI selectors needed to reproduce
 	// the lookup. They are not credentials and never contain a value.
 	Region  string `json:"region,omitempty"`

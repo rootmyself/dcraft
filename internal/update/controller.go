@@ -792,10 +792,20 @@ func goodVersionSecretRefs(target core.Target) ([]state.SecretReference, error) 
 			Delivery: string(ref.Delivery),
 			Source:   string(ref.Source),
 			Name:     ref.Ref,
+			Target:   ref.EffectiveTarget(),
 			Field:    ref.Field,
 			Region:   ref.Region,
 			Profile:  ref.Profile,
 		})
 	}
+	sort.Slice(refs, func(i, j int) bool {
+		if refs[i].Service != refs[j].Service {
+			return refs[i].Service < refs[j].Service
+		}
+		if refs[i].Delivery != refs[j].Delivery {
+			return refs[i].Delivery < refs[j].Delivery
+		}
+		return refs[i].Target < refs[j].Target
+	})
 	return refs, nil
 }

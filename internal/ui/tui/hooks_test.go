@@ -34,21 +34,36 @@ func (s *stubHooks) Execute(context.Context, core.HookRequest) (core.HookExecuti
 func hookUpDescriptor() core.Descriptor {
 	return core.Descriptor{
 		Name: "up", Title: "시작", Summary: "스택을 시작합니다.", Usage: "dcraft up",
-		Primary: true, RecordsHistory: true, Hooks: core.HookUpUpdate,
+		RecordsHistory: true, Hooks: core.HookUpUpdate,
 	}
 }
 
+// newHookModel builds a menu with a read-only primary status feature and the
+// hook-capable up feature, then opens the up plan screen exactly as a user
+// would select it from the menu. Mutating features cannot be the TUI primary
+// without an independent approval.
 func newHookModel(t *testing.T, up *stubFeature, hooks *stubHooks) *Model {
 	t.Helper()
 	reg := core.NewRegistry()
+	status := &stubFeature{desc: descriptor("status", true), body: "상태 본문"}
+	if err := reg.Register(status); err != nil {
+		t.Fatalf("Register status: %v", err)
+	}
 	if err := reg.Register(up); err != nil {
-		t.Fatalf("Register: %v", err)
+		t.Fatalf("Register up: %v", err)
 	}
 	engine := core.NewEngine(reg, stubResolver{}, stubPreflight{}, stubState{}, stubClock{})
 	engine.CWD = func() (string, error) { return "/cwd", nil }
 	engine.NewOperationID = func() string { return "op_tui_hooks" }
 	engine.Hooks = hooks
-	return NewModel(context.Background(), Options{Engine: engine, Registry: reg})
+	m := NewModel(context.Background(), Options{Engine: engine, Registry: reg})
+	initModel(t, m)
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("down")})
+	m = nm.(*Model)
+	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(*Model)
+	feed(t, m, execute(t, cmd))
+	return m
 }
 
 func untrustedHookPlan() core.HookPlan {

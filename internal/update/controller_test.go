@@ -295,6 +295,78 @@ func TestVerifyStageFailsAndPlanRunsBeforeApply(t *testing.T) {
 	}
 }
 
+func TestSuccessfulUpdateRecordsSecretReferencesWithoutValues(t *testing.T) {
+	dir := t.TempDir()
+	config := `secrets:
+  - service: web
+    phase: runtime
+    delivery: environment
+    source: env
+    ref: APP_SECRET
+    target: APP_SECRET
+  - service: web
+    phase: runtime
+    delivery: file
+    source: file
+    ref: secrets/token.txt
+    target: app_token
+`
+	if err := os.WriteFile(filepath.Join(dir, ".dcraft.yaml"), []byte(config), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	const sentinel = "sentinel-record-4455"
+	t.Setenv("APP_SECRET", sentinel)
+
+	u := &fakeUpdater{
+		model: oneServiceModel(false, false),
+		containers: []stack.Container{
+			healthyContainer("web", "sha256:new", false, ""),
+		},
+		imageIDs: map[string]string{"nginx:1.27": "sha256:new"},
+	}
+	c, store, _ := newTestController(t, u, &fakeIdentity{cfg: stack.ConfigInfo{Services: []string{"web"}}, derived: "app"})
+	in := invocation(t, nil)
+	in.Target.ProjectDir = dir
+	in.Target.Files = []string{filepath.Join(dir, "compose.yaml")}
+	if _, err := c.Run(context.Background(), in, Options{Pull: true, Timeout: 30 * time.Second}); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	saved, ok, err := store.LoadGoodVersion(in.Target)
+	if err != nil || !ok {
+		t.Fatalf("load record: ok=%v err=%v", ok, err)
+	}
+	if len(saved.Target.SecretRefs) != 2 {
+		t.Fatalf("secret refs = %+v", saved.Target.SecretRefs)
+	}
+	byName := map[string]state.SecretReference{}
+	for _, ref := range saved.Target.SecretRefs {
+		byName[ref.Name] = ref
+	}
+	envRef, ok := byName["APP_SECRET"]
+	if !ok {
+		t.Fatalf("environment reference missing: %+v", saved.Target.SecretRefs)
+	}
+	if envRef.Service != "web" || envRef.Phase != "runtime" || envRef.Delivery != "environment" ||
+		envRef.Source != "env" || envRef.Target != "APP_SECRET" {
+		t.Fatalf("environment reference = %+v", envRef)
+	}
+	fileRef, ok := byName["secrets/token.txt"]
+	if !ok {
+		t.Fatalf("file reference missing: %+v", saved.Target.SecretRefs)
+	}
+	if fileRef.Service != "web" || fileRef.Delivery != "file" || fileRef.Source != "file" ||
+		fileRef.Target != "app_token" {
+		t.Fatalf("file reference = %+v", fileRef)
+	}
+	encoded, err := json.Marshal(saved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), sentinel) {
+		t.Fatalf("record contains a resolved secret value: %s", encoded)
+	}
+}
+
 func TestSuccessfulUpdateReplacesPreviousGoodRecord(t *testing.T) {
 	u := &fakeUpdater{
 		model:      oneServiceModel(false, false),
