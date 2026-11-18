@@ -11,6 +11,7 @@ import (
 	"github.com/rootmyself/dcraft/internal/deps"
 	"github.com/rootmyself/dcraft/internal/execx"
 	"github.com/rootmyself/dcraft/internal/features/all"
+	"github.com/rootmyself/dcraft/internal/hooks"
 	"github.com/rootmyself/dcraft/internal/identity"
 	"github.com/rootmyself/dcraft/internal/lifecycle"
 	"github.com/rootmyself/dcraft/internal/secretref"
@@ -65,6 +66,7 @@ func New(opts Options) (*App, error) {
 	}
 	store := state.New(stateRoot)
 	secretRuntime := secretref.NewRuntime(store, opts.Getenv)
+	hookService := hooks.New(store, opts.Getenv)
 	composeAdapter := compose.New(opts.Runner, opts.Getenv)
 	composeAdapter.SetSecretRuntime(secretRuntime)
 	controller := lifecycle.New(composeAdapter, composeAdapter, composeAdapter, store, opts.Clock)
@@ -76,6 +78,7 @@ func New(opts Options) (*App, error) {
 		Compose:    composeAdapter,
 		Lifecycle:  controller,
 		Secrets:    secretRuntime,
+		Hooks:      hookService,
 		Downloader: opts.Downloader,
 		Installer:  opts.Installer,
 	}
@@ -85,6 +88,7 @@ func New(opts Options) (*App, error) {
 
 	engine := core.NewEngine(registry, target.New(), composeAdapter, store, opts.Clock)
 	engine.Identity = identity.New(composeAdapter, store)
+	engine.Hooks = hookService
 	engine.CWD = opts.Getwd
 
 	return &App{Options: opts, Registry: registry, Engine: engine, Deps: d}, nil

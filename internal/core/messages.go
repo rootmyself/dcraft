@@ -2,12 +2,15 @@ package core
 
 // Korean user-facing messages owned by the shared operation seam.
 const (
-	msgStageResolveTarget = "대상 확인"
-	msgStagePreflight     = "환경 확인"
-	msgStageExecute       = "작업 실행"
-	msgStageVerify        = "결과 확인"
-	msgStageHistory       = "이력 기록"
-	msgStagePlan          = "작업 계획"
+	msgStageResolveTarget   = "대상 확인"
+	msgStagePreflight       = "환경 확인"
+	msgStageExecute         = "작업 실행"
+	msgStageVerify          = "결과 확인"
+	msgStageHistory         = "이력 기록"
+	msgStagePlan            = "작업 계획"
+	msgStageHooksPre        = "사전 스크립트"
+	msgStageRevalidateInput = "입력 재확인"
+	msgStageHooksPost       = "사후 스크립트"
 
 	msgWorkingDirUnknown = "현재 작업 폴더를 확인할 수 없습니다."
 	msgWorkingDirAction  = "터미널을 다시 열거나 --path로 대상 폴더를 지정하세요."

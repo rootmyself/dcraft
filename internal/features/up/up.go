@@ -25,6 +25,7 @@ func (f *Feature) Descriptor() core.Descriptor {
 		Usage:            msgUsage,
 		RecordsHistory:   true,
 		SupportsServices: true,
+		Hooks:            core.HookUpUpdate,
 	}
 }
 

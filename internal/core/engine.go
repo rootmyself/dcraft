@@ -24,6 +24,9 @@ type Engine struct {
 	// is strictly read-only; nil disables the lookup (tests and alternate
 	// wiring keep the previous behavior).
 	Identity IdentityReader
+	// Hooks is the registered host-script service. It is consulted only for
+	// features that declare a HookScope; nil is a wiring error for them.
+	Hooks HookService
 	// CWD returns the process working directory. Injected for tests.
 	CWD func() (string, error)
 	// NewOperationID returns the operation identifier.
@@ -223,6 +226,13 @@ func (e *Engine) Run(ctx context.Context, req Request, sink Sink) (res Result) {
 		State:       e.State,
 	}
 
+	hookPlan, hookErr := e.prepareHooks(ctx, rec, req, desc, clock, &res, &target)
+	if hookErr != nil {
+		e.applyFailure(ctx, &res, hookErr)
+		return res
+	}
+	inv.Target = target
+
 	stageCountBefore := len(res.Stages)
 	payload, runErr := e.runFeature(ctx, feature, inv)
 	if len(res.Stages) == stageCountBefore {
@@ -275,6 +285,12 @@ func (e *Engine) Run(ctx context.Context, req Request, sink Sink) (res Result) {
 	}
 
 	if ctx.Err() != nil {
+		res.Outcome = OutcomeCanceled
+		addCanceledDiagnostic(&res)
+		return res
+	}
+
+	if canceled := e.runHooksPost(ctx, rec, &res, res.Action, res.OperationID, target, hookEntriesForStage(hookPlan, HookStagePost)); canceled {
 		res.Outcome = OutcomeCanceled
 		addCanceledDiagnostic(&res)
 		return res
@@ -397,8 +413,8 @@ func (e *Engine) Plan(ctx context.Context, req Request, sink Sink) (report PlanR
 		return report
 	}
 	desc := feature.Descriptor()
-	planner, ok := feature.(Planner)
-	if !ok {
+	planner, hasPlanner := feature.(Planner)
+	if !hasPlanner && desc.Hooks == HookNone {
 		report.Diagnostics = append(report.Diagnostics, Diagnostic{
 			Category:    CategoryInternal,
 			Severity:    SeverityError,
@@ -448,6 +464,32 @@ func (e *Engine) Plan(ctx context.Context, req Request, sink Sink) (report PlanR
 	}
 	report.Diagnostics = append(report.Diagnostics, pf.Diagnostics...)
 
+	required := uniqueApprovals(desc.Approval)
+	var hookText string
+	if desc.Hooks != HookNone {
+		if e.Hooks == nil {
+			report.Diagnostics = append(report.Diagnostics, Diagnostic{
+				Category:    CategoryInternal,
+				Severity:    SeverityError,
+				Message:     "호스트 스크립트 연결이 준비되지 않았습니다.",
+				Detail:      "hook service is not configured",
+				NextActions: []string{"dcraft를 다시 빌드하거나 설치한 뒤 실행하세요."},
+			})
+			return report
+		}
+		plan, hookErr := e.Hooks.Plan(ctx, target)
+		if hookErr != nil {
+			report.Diagnostics = append(report.Diagnostics, failureDiagnostics(hookErr)...)
+			return report
+		}
+		hookText = hookPlanText(plan)
+		report.Hooks = plan.Entries
+		if plan.RequiresApproval {
+			required = append(required, ApprovalScriptTrust)
+		}
+	}
+	report.RequiredApprovals = uniqueApprovals(required...)
+
 	inv := Invocation{
 		Target:      target,
 		Services:    append([]string{}, req.Services...),
@@ -460,34 +502,38 @@ func (e *Engine) Plan(ctx context.Context, req Request, sink Sink) (report PlanR
 		State:       e.State,
 	}
 
-	stageCountBefore := len(report.Stages)
-	plan, planErr := e.runPlan(ctx, planner, inv)
-	if len(report.Stages) == stageCountBefore {
-		rec.Begin("plan", msgStagePlan)
-		status := StageSucceeded
-		if planErr != nil {
-			status = StageFailed
-			if isCanceled(ctx, planErr) {
-				status = StageCanceled
+	var planText string
+	if hasPlanner {
+		stageCountBefore := len(report.Stages)
+		plan, planErr := e.runPlan(ctx, planner, inv)
+		if len(report.Stages) == stageCountBefore {
+			rec.Begin("plan", msgStagePlan)
+			status := StageSucceeded
+			if planErr != nil {
+				status = StageFailed
+				if isCanceled(ctx, planErr) {
+					status = StageCanceled
+				}
 			}
+			rec.End("plan", status, "")
 		}
-		rec.End("plan", status, "")
-	}
-	if planErr != nil {
-		if isCanceled(ctx, planErr) {
-			report.Outcome = OutcomeCanceled
-			addCanceledDiagnosticTo(&report.Diagnostics)
+		if planErr != nil {
+			if isCanceled(ctx, planErr) {
+				report.Outcome = OutcomeCanceled
+				addCanceledDiagnosticTo(&report.Diagnostics)
+				return report
+			}
+			report.Diagnostics = append(report.Diagnostics, failureDiagnostics(planErr)...)
 			return report
 		}
-		report.Diagnostics = append(report.Diagnostics, failureDiagnostics(planErr)...)
-		return report
+		planText = plan.Text
 	}
 	if ctx.Err() != nil {
 		report.Outcome = OutcomeCanceled
 		addCanceledDiagnosticTo(&report.Diagnostics)
 		return report
 	}
-	report.Text = plan.Text
+	report.Text = strings.TrimSpace(strings.Join([]string{strings.TrimSpace(planText), hookText}, "\n\n"))
 	report.Outcome = OutcomeSuccess
 	return report
 }

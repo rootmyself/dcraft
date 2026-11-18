@@ -26,6 +26,7 @@ func (f *Feature) Descriptor() core.Descriptor {
 		Usage:            msgUsage,
 		RecordsHistory:   true,
 		SupportsServices: true,
+		Hooks:            core.HookUpUpdate,
 		Flags: []core.Flag{
 			{Name: "no-cache", Kind: core.FlagBool, Usage: msgFlagNoCache},
 			{Name: "build-pull", Kind: core.FlagBool, Usage: msgFlagBuildPull},

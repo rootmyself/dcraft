@@ -75,9 +75,13 @@ type Model struct {
 
 	// pendingApproval and planText hold the generic confirmation state. Any
 	// approval-gated feature that implements core.Planner reuses this screen;
-	// no feature-specific branch is added here.
-	pendingApproval core.ApprovalKind
-	planText        string
+	// no feature-specific branch is added here. pendingApprovals carries every
+	// independent approval one plan needs (for example a feature approval and
+	// script_trust).
+	pendingApproval  core.ApprovalKind
+	pendingApprovals []core.ApprovalKind
+	approvedHooks    []core.HookEntry
+	planText         string
 
 	// Wizard state is generic: the feature supplies the steps and the effect
 	// preview, the TUI only collects answers with the keyboard.
@@ -172,8 +176,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.planText = msg.report.Text
-		if m.active != nil && m.active.Descriptor().Approval != core.ApprovalNone {
-			m.pendingApproval = m.active.Descriptor().Approval
+		m.approvedHooks = append([]core.HookEntry{}, msg.report.Hooks...)
+		required := append([]core.ApprovalKind{}, msg.report.RequiredApprovals...)
+		if m.active != nil {
+			if own := m.active.Descriptor().Approval; own != core.ApprovalNone {
+				required = append(required, own)
+			}
+		}
+		required = uniqueApprovalKinds(required)
+		if len(required) > 0 {
+			m.pendingApprovals = required
+			m.pendingApproval = required[0]
 		} else {
 			// Ordinary update: the plan is the preview; one deliberate
 			// confirmation runs it without an extra approval kind.
@@ -246,14 +259,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "enter":
 				if m.pendingApproval != core.ApprovalNone {
 					feature := m.active
-					approval := m.pendingApproval
+					approvals := append([]core.ApprovalKind{}, m.pendingApprovals...)
 					m.pendingApproval = ""
+					m.pendingApprovals = nil
 					m.planText = ""
 					if feature == nil {
 						m.phase = phaseReady
 						return m, nil
 					}
-					return m, m.runApproved(feature, approval)
+					return m, m.runApproved(feature, approvals)
 				}
 				if m.pending == nil {
 					m.phase = phaseReady
@@ -385,8 +399,27 @@ func plansBeforeRun(f core.Feature) bool {
 	if f == nil {
 		return false
 	}
+	if f.Descriptor().Hooks != core.HookNone {
+		// up/update need the hook plan and the independent script_trust
+		// decision before anything runs, even when no Planner is registered.
+		return true
+	}
 	_, ok := f.(core.Planner)
 	return ok
+}
+
+// uniqueApprovalKinds keeps each independent approval once, in request order.
+func uniqueApprovalKinds(kinds []core.ApprovalKind) []core.ApprovalKind {
+	out := make([]core.ApprovalKind, 0, len(kinds))
+	seen := map[core.ApprovalKind]bool{}
+	for _, kind := range kinds {
+		if kind == core.ApprovalNone || seen[kind] {
+			continue
+		}
+		seen[kind] = true
+		out = append(out, kind)
+	}
+	return out
 }
 
 // begin starts a feature. Features that can describe their planned work go
@@ -397,6 +430,8 @@ func (m *Model) begin(f core.Feature) tea.Cmd {
 	m.result = nil
 	m.currentStage = nil
 	m.pendingApproval = ""
+	m.pendingApprovals = nil
+	m.approvedHooks = nil
 	m.planText = ""
 	m.pending = nil
 	m.notice = ""
@@ -423,6 +458,8 @@ func (m *Model) startRun(f core.Feature) tea.Cmd {
 	m.currentStage = nil
 	m.pending = nil
 	m.pendingApproval = ""
+	m.pendingApprovals = nil
+	m.approvedHooks = nil
 	m.planText = ""
 	m.notice = ""
 	if m.runCancel != nil {
@@ -434,12 +471,13 @@ func (m *Model) startRun(f core.Feature) tea.Cmd {
 	return tea.Batch(m.runCmd(f, nil, nil, m.events, m.runCtx), waitStageCmd(m.events))
 }
 
-func (m *Model) runApproved(f core.Feature, approval core.ApprovalKind) tea.Cmd {
+func (m *Model) runApproved(f core.Feature, approvals []core.ApprovalKind) tea.Cmd {
 	m.phase = phaseLoading
 	m.result = nil
 	m.currentStage = nil
 	m.pending = nil
 	m.pendingApproval = ""
+	m.pendingApprovals = nil
 	m.planText = ""
 	m.notice = ""
 	if m.runCancel != nil {
@@ -447,7 +485,7 @@ func (m *Model) runApproved(f core.Feature, approval core.ApprovalKind) tea.Cmd 
 	}
 	m.runCtx, m.runCancel = context.WithCancel(m.ctx)
 	m.events = make(chan core.Stage, 64)
-	return tea.Batch(m.runCmd(f, []core.ApprovalKind{approval}, nil, m.events, m.runCtx), waitStageCmd(m.events))
+	return tea.Batch(m.runCmd(f, approvals, nil, m.events, m.runCtx), waitStageCmd(m.events))
 }
 
 func (m *Model) beginWithOptions(f core.Feature, options map[string]string) tea.Cmd {
@@ -456,6 +494,8 @@ func (m *Model) beginWithOptions(f core.Feature, options map[string]string) tea.
 	m.currentStage = nil
 	m.pending = nil
 	m.pendingApproval = ""
+	m.pendingApprovals = nil
+	m.approvedHooks = nil
 	m.planText = ""
 	m.notice = ""
 	if m.runCancel != nil {
@@ -488,6 +528,8 @@ func (m *Model) declineApproval() {
 	res.Target.Normalize()
 	m.result = &res
 	m.pendingApproval = ""
+	m.pendingApprovals = nil
+	m.approvedHooks = nil
 	m.planText = ""
 	m.phase = phaseReady
 }
@@ -495,12 +537,14 @@ func (m *Model) declineApproval() {
 func (m *Model) runCmd(f core.Feature, approvals []core.ApprovalKind, options map[string]string, events chan core.Stage, ctx context.Context) tea.Cmd {
 	engine := m.engine
 	req := core.Request{
-		Feature:     f.Descriptor().Name,
-		Target:      m.target,
-		Approvals:   approvals,
-		Options:     options,
-		Interactive: true,
+		Feature:       f.Descriptor().Name,
+		Target:        m.target,
+		Approvals:     approvals,
+		ApprovedHooks: append([]core.HookEntry{}, m.approvedHooks...),
+		Options:       options,
+		Interactive:   true,
 	}
+	m.approvedHooks = nil
 	return func() tea.Msg {
 		if engine == nil {
 			close(events)
@@ -613,6 +657,12 @@ func (m *Model) View() string {
 				fmt.Fprintf(&b, "작업: %s (%s)\n", d.Title, d.Name)
 			}
 			fmt.Fprintf(&b, "승인: %s (%s)\n", m.pendingApproval.KoreanLabel(), m.pendingApproval)
+			for _, kind := range m.pendingApprovals {
+				if kind == m.pendingApproval {
+					continue
+				}
+				fmt.Fprintf(&b, "승인: %s (%s)\n", kind.KoreanLabel(), kind)
+			}
 			b.WriteString("\n")
 			b.WriteString(m.planText)
 			b.WriteString("\n\n")
