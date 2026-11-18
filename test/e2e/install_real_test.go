@@ -65,9 +65,24 @@ func TestRealComposeInstall(t *testing.T) {
 		t.Fatalf("installed size = %d, published %d", fileInfo.Size(), info.SizeBytes)
 	}
 
-	// Independent functional re-check through the real Docker CLI with the
-	// temporary config, proving the installed plugin is what makes Compose
-	// available in this isolated configuration.
+	// Execute the installed artifact directly once, then verify it through the
+	// real Docker CLI with the temporary config. Together they prove the bytes
+	// are a runnable native binary and that Docker discovers it as the Compose
+	// plugin in this isolated configuration.
+	direct := exec.Command(dest, "version")
+	direct.Env = []string{
+		"PATH=" + os.Getenv("PATH"),
+		"HOME=" + home,
+		"DOCKER_CONFIG=" + configDir,
+	}
+	directOut, err := direct.CombinedOutput()
+	if err != nil {
+		t.Fatalf("installed docker-compose version: %v\n%s", err, directOut)
+	}
+	if !strings.Contains(string(directOut), info.Version) {
+		t.Fatalf("installed binary output %q does not match %q", directOut, info.Version)
+	}
+
 	cmd := exec.Command(dockerPath, "compose", "version")
 	cmd.Env = []string{
 		"PATH=" + os.Getenv("PATH"),

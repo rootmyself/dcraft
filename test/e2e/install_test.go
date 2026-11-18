@@ -302,6 +302,7 @@ func TestTUIConfirmationShowsPlanDeclinesAndInstallsAfterApproval(t *testing.T) 
 	if !strings.Contains(strings.Join(fake.calls(t), "\n"), "compose version") {
 		t.Fatalf("post-install compose re-check was not executed: %v", fake.calls(t))
 	}
+	assertNoMutatingCalls(t, fake.calls(t))
 }
 
 // installComposeMenuSteps computes how many menu-down presses are needed from
