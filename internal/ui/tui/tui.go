@@ -22,7 +22,9 @@ type Options struct {
 }
 
 // Run starts the interactive program. Normal quit (q or ctrl+c) does not touch
-// services: this ticket only runs read-only features from the TUI.
+// services. Mutating features ask for confirmation first; ctrl+c during a
+// mutating operation requests safe cancellation and keeps the screen for the
+// canceled result.
 func Run(ctx context.Context, opts Options) error {
 	m := NewModel(ctx, opts)
 	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithContext(ctx))
@@ -61,6 +63,10 @@ type Model struct {
 	result       *core.Result
 	currentStage *core.Stage
 	events       chan core.Stage
+	pending      core.Feature
+	notice       string
+	runCtx       context.Context
+	runCancel    context.CancelFunc
 	width        int
 	height       int
 
@@ -169,27 +175,72 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.result = &res
 		m.currentStage = nil
 		m.phase = phaseReady
+		m.notice = ""
+		if m.runCancel != nil {
+			m.runCancel()
+			m.runCancel = nil
+			m.runCtx = nil
+		}
 		return m, nil
 	case tea.KeyMsg:
 		if m.phase == phaseConfirm {
 			switch msg.String() {
+			case "q", "ctrl+c":
+				// A confirmation is not an operation; quitting is safe and
+				// runs nothing.
+				return m, tea.Quit
 			case "esc", "n":
-				m.declineApproval()
+				if m.pendingApproval != core.ApprovalNone {
+					m.declineApproval()
+				} else {
+					m.pending = nil
+					m.phase = phaseReady
+					m.notice = ""
+				}
 				return m, nil
 			case "enter":
-				feature := m.active
-				approval := m.pendingApproval
-				m.pendingApproval = ""
-				m.planText = ""
-				if feature == nil {
+				if m.pendingApproval != core.ApprovalNone {
+					feature := m.active
+					approval := m.pendingApproval
+					m.pendingApproval = ""
+					m.planText = ""
+					if feature == nil {
+						m.phase = phaseReady
+						return m, nil
+					}
+					return m, m.runApproved(feature, approval)
+				}
+				if m.pending == nil {
+					m.phase = phaseReady
 					return m, nil
 				}
-				return m, m.runApproved(feature, approval)
+				f := m.pending
+				m.pending = nil
+				return m, m.begin(f)
 			}
 			return m, nil
 		}
 		switch msg.String() {
-		case "ctrl+c", "q":
+		case "q":
+			if m.phase == phaseLoading && m.active != nil && !m.active.Descriptor().ReadOnly {
+				// A mutating Compose process is still running. Quitting here
+				// would orphan a hidden change; say so instead of hiding it.
+				m.notice = msgBusyQuit
+				return m, nil
+			}
+			return m, tea.Quit
+		case "ctrl+c":
+			if m.phase == phaseLoading && m.active != nil && !m.active.Descriptor().ReadOnly {
+				// Safe interruption: stop the external process, keep the
+				// screen open so the canceled result and partial effects are
+				// reported. A later q quits.
+				if m.runCancel != nil {
+					m.runCancel()
+					m.runCancel = nil
+				}
+				m.notice = msgCanceling
+				return m, nil
+			}
 			return m, tea.Quit
 		}
 		if m.phase == phaseSelectingEnvironment {
@@ -216,9 +267,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch msg.String() {
 		case "r":
-			if m.active != nil && m.phase == phaseReady {
+			if m.active == nil || m.phase != phaseReady {
+				return m, nil
+			}
+			if m.active.Descriptor().ReadOnly || plannedApproval(m.active) {
 				return m, m.begin(m.active)
 			}
+			m.pending = m.active
+			m.phase = phaseConfirm
+			m.notice = ""
 			return m, nil
 		case "up", "k":
 			if len(m.features) > 1 && m.phase == phaseReady {
@@ -232,7 +289,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "enter":
 			if m.phase == phaseReady && len(m.features) > 0 {
-				return m, m.begin(m.features[m.selected])
+				f := m.features[m.selected]
+				if f.Descriptor().ReadOnly || plannedApproval(f) {
+					return m, m.begin(f)
+				}
+				m.pending = f
+				m.phase = phaseConfirm
+				m.notice = ""
 			}
 			return m, nil
 		}
@@ -250,6 +313,21 @@ func (m *Model) listEnvironmentsCmd() tea.Cmd {
 	}
 }
 
+// plannedApproval reports whether a feature's independent approval is
+// collected through the read-only plan screen. Such a feature needs no extra
+// generic confirmation: the plan itself is the confirmation.
+func plannedApproval(f core.Feature) bool {
+	if f == nil {
+		return false
+	}
+	d := f.Descriptor()
+	if d.Approval == core.ApprovalNone {
+		return false
+	}
+	_, ok := f.(core.Planner)
+	return ok
+}
+
 // begin starts a feature. Approval-gated features that can describe their
 // exact effect go through a read-only plan first; everything else runs
 // directly, preserving the ticket 01 behavior.
@@ -259,6 +337,13 @@ func (m *Model) begin(f core.Feature) tea.Cmd {
 	m.currentStage = nil
 	m.pendingApproval = ""
 	m.planText = ""
+	m.pending = nil
+	m.notice = ""
+	if m.runCancel != nil {
+		m.runCancel()
+		m.runCancel = nil
+		m.runCtx = nil
+	}
 	m.events = make(chan core.Stage, 64)
 	if f != nil {
 		desc := f.Descriptor()
@@ -270,15 +355,22 @@ func (m *Model) begin(f core.Feature) tea.Cmd {
 		}
 	}
 	m.phase = phaseLoading
-	return tea.Batch(m.runCmd(f, nil, m.events), waitStageCmd(m.events))
+	m.runCtx, m.runCancel = context.WithCancel(m.ctx)
+	return tea.Batch(m.runCmd(f, nil, m.events, m.runCtx), waitStageCmd(m.events))
 }
 
 func (m *Model) runApproved(f core.Feature, approval core.ApprovalKind) tea.Cmd {
 	m.phase = phaseLoading
 	m.result = nil
 	m.currentStage = nil
+	m.pending = nil
+	m.notice = ""
+	if m.runCancel != nil {
+		m.runCancel()
+	}
+	m.runCtx, m.runCancel = context.WithCancel(m.ctx)
 	m.events = make(chan core.Stage, 64)
-	return tea.Batch(m.runCmd(f, []core.ApprovalKind{approval}, m.events), waitStageCmd(m.events))
+	return tea.Batch(m.runCmd(f, []core.ApprovalKind{approval}, m.events, m.runCtx), waitStageCmd(m.events))
 }
 
 func (m *Model) declineApproval() {
@@ -306,9 +398,8 @@ func (m *Model) declineApproval() {
 	m.phase = phaseReady
 }
 
-func (m *Model) runCmd(f core.Feature, approvals []core.ApprovalKind, events chan core.Stage) tea.Cmd {
+func (m *Model) runCmd(f core.Feature, approvals []core.ApprovalKind, events chan core.Stage, ctx context.Context) tea.Cmd {
 	engine := m.engine
-	ctx := m.ctx
 	req := core.Request{
 		Feature:     f.Descriptor().Name,
 		Target:      m.target,
@@ -389,15 +480,20 @@ func waitStageCmd(events chan core.Stage) tea.Cmd {
 }
 
 var (
-	titleStyle = lipgloss.NewStyle().Bold(true)
-	hintStyle  = lipgloss.NewStyle().Faint(true)
+	titleStyle  = lipgloss.NewStyle().Bold(true)
+	hintStyle   = lipgloss.NewStyle().Faint(true)
+	noticeStyle = lipgloss.NewStyle().Bold(true)
 )
 
 func (m *Model) View() string {
 	var b strings.Builder
 	title := msgApp
-	if m.active != nil {
-		title += " · " + m.active.Descriptor().Title
+	shown := m.active
+	if m.phase == phaseConfirm && m.pending != nil {
+		shown = m.pending
+	}
+	if shown != nil {
+		title += " · " + shown.Descriptor().Title
 	}
 	b.WriteString(titleStyle.Render(title))
 	b.WriteString("\n\n")
@@ -414,20 +510,23 @@ func (m *Model) View() string {
 			b.WriteString("\n")
 		}
 	case phaseConfirm:
-		b.WriteString(titleStyle.Render(msgConfirmTitle))
-		b.WriteString("\n\n")
-		if m.active != nil {
-			d := m.active.Descriptor()
-			fmt.Fprintf(&b, "작업: %s (%s)\n", d.Title, d.Name)
-		}
 		if m.pendingApproval != core.ApprovalNone {
+			b.WriteString(titleStyle.Render(msgApprovalConfirmTitle))
+			b.WriteString("\n\n")
+			if m.active != nil {
+				d := m.active.Descriptor()
+				fmt.Fprintf(&b, "작업: %s (%s)\n", d.Title, d.Name)
+			}
 			fmt.Fprintf(&b, "승인: %s (%s)\n", m.pendingApproval.KoreanLabel(), m.pendingApproval)
+			b.WriteString("\n")
+			b.WriteString(m.planText)
+			b.WriteString("\n\n")
+			b.WriteString(hintStyle.Render(msgHintConfirm))
+			b.WriteString("\n")
+		} else {
+			b.WriteString(m.confirmView())
+			b.WriteString("\n")
 		}
-		b.WriteString("\n")
-		b.WriteString(m.planText)
-		b.WriteString("\n\n")
-		b.WriteString(hintStyle.Render(msgHintConfirm))
-		b.WriteString("\n")
 	case phaseLoadingEnvironments:
 		b.WriteString(msgEnvChecking)
 		b.WriteString("\n")
@@ -486,9 +585,52 @@ func (m *Model) View() string {
 		}
 	}
 
+	if m.notice != "" {
+		b.WriteString("\n")
+		b.WriteString(noticeStyle.Render(m.notice))
+		b.WriteString("\n")
+	}
+
 	b.WriteString("\n")
 	b.WriteString(hintStyle.Render(m.hints()))
 	return b.String()
+}
+
+// confirmView explains the requested target and effect before a mutating
+// feature runs. It shows only caller input; the engine resolves and reports
+// the Compose project name after the operation starts.
+func (m *Model) confirmView() string {
+	var b strings.Builder
+	b.WriteString(msgConfirmTitle)
+	b.WriteString("\n")
+	if m.pending == nil {
+		return strings.TrimRight(b.String(), "\n")
+	}
+	d := m.pending.Descriptor()
+	fmt.Fprintf(&b, "%s: %s (%s)\n", msgConfirmActionLabel, d.Title, d.Name)
+	target := m.target.Path
+	if target == "" {
+		target = msgConfirmTargetNow
+	}
+	fmt.Fprintf(&b, "%s: %s\n", msgConfirmTargetLabel, target)
+	if m.target.Environment != "" {
+		fmt.Fprintf(&b, "%s: %s\n", msgConfirmEnvironment, m.target.Environment)
+	}
+	if len(m.target.Files) > 0 {
+		fmt.Fprintf(&b, "%s: %s\n", msgConfirmFileLabel, strings.Join(m.target.Files, ", "))
+	}
+	if len(m.target.Profiles) > 0 {
+		fmt.Fprintf(&b, "%s: %s\n", msgConfirmProfile, strings.Join(m.target.Profiles, ", "))
+	}
+	if m.target.ProjectName != "" {
+		fmt.Fprintf(&b, "%s: %s\n", msgConfirmProject, m.target.ProjectName)
+	} else {
+		fmt.Fprintf(&b, "%s: %s\n", msgConfirmProject, msgConfirmProjectAuto)
+	}
+	fmt.Fprintf(&b, "%s: %s\n", msgConfirmScopeLabel, msgConfirmScope)
+	fmt.Fprintf(&b, "%s: %s\n", msgConfirmEffectLabel, d.Summary)
+	b.WriteString(msgConfirmRisk)
+	return strings.TrimRight(b.String(), "\n")
 }
 
 func (m *Model) contentWidth() int {
@@ -503,14 +645,20 @@ func (m *Model) contentWidth() int {
 }
 
 func (m *Model) hints() string {
+	if m.phase == phaseConfirm {
+		if m.pendingApproval != core.ApprovalNone {
+			return msgHintConfirm
+		}
+		return msgConfirmHints
+	}
 	if m.phase == phaseNoPrimary {
 		return msgHintQuit
 	}
-	if m.phase == phaseConfirm {
-		return msgHintConfirm
-	}
 	if m.phase == phaseSelectingEnvironment {
 		return msgHintEnvSelect
+	}
+	if m.phase == phaseLoading && m.active != nil && !m.active.Descriptor().ReadOnly {
+		return msgHintBusy
 	}
 	if m.phase != phaseReady {
 		return msgHintQuit

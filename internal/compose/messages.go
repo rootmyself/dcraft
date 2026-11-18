@@ -51,4 +51,11 @@ const (
 	msgInspectPSFailed                 = "스택의 컨테이너 상태를 조회하지 못했습니다."
 	msgInspectPSFailedActionOne        = "docker compose ps --all --format json을 직접 실행해 원인을 확인하세요."
 	msgInspectPSFailedActionTwo        = "dcraft status로 다시 확인하세요."
+
+	msgDerivedNameUnknown          = "Compose 프로젝트 기본 이름을 확인하지 못했습니다."
+	msgDerivedNameUnknownActionOne = "docker compose version으로 Compose 버전을 확인하세요."
+	msgDerivedNameUnknownActionTwo = "대상 Compose 파일과 프로젝트 폴더를 확인한 뒤 다시 실행하세요."
+	msgProjectListFailed           = "기존 Compose 프로젝트 목록을 확인하지 못했습니다."
+	msgProjectListFailedActionOne  = "docker compose ls -a --format json을 직접 실행해 원인을 확인하세요."
+	msgProjectListFailedActionTwo  = "이름 충돌을 확인할 수 없으므로 dcraft는 스택을 변경하지 않았습니다."
 )

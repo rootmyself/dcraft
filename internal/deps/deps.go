@@ -9,6 +9,7 @@ import (
 	"github.com/rootmyself/dcraft/internal/compose"
 	"github.com/rootmyself/dcraft/internal/core"
 	"github.com/rootmyself/dcraft/internal/execx"
+	"github.com/rootmyself/dcraft/internal/lifecycle"
 )
 
 // Deps is built once by the application and handed to every registration.
@@ -18,6 +19,10 @@ type Deps struct {
 	Clock   core.Clock
 	State   core.StateStore
 	Compose *compose.Compose
+	// Lifecycle executes and coordinates the four stack lifecycle commands.
+	// It is published by ticket 03 and is the only write-capable stack
+	// service in this version.
+	Lifecycle *lifecycle.Controller
 	// Downloader and Installer are the narrow external-artifact boundary
 	// used by the Compose install feature. Tests replace them with fakes.
 	Downloader artifacts.Downloader

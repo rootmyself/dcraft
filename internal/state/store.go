@@ -89,8 +89,11 @@ var unsafeKeyChars = regexp.MustCompile(`[^a-z0-9]+`)
 
 // key produces a stable, readable per-target directory name. The hash input is
 // the absolute project folder and the environment id, so equal folder names in
-// different places (or different environments) never share state.
+// different places (or different environments) never share state. The folder is
+// canonicalized so invoking the same target as the working directory or through
+// a symlinked path (for example /var vs /private/var on macOS) uses one stack.
 func key(projectDir, environment string) string {
+	projectDir = canonicalDir(projectDir)
 	sum := sha256.Sum256([]byte(projectDir + "\x00" + environment))
 	suffix := hex.EncodeToString(sum[:])[:12]
 	base := strings.ToLower(filepath.Base(projectDir))
@@ -107,4 +110,13 @@ func key(projectDir, environment string) string {
 		}
 	}
 	return base + "-" + suffix
+}
+
+// canonicalDir resolves symlinks when the path exists. State identity must not
+// depend on how an existing folder was spelled.
+func canonicalDir(dir string) string {
+	if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+		return resolved
+	}
+	return filepath.Clean(dir)
 }

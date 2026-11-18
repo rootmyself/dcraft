@@ -622,3 +622,105 @@ func TestContractEnumValuesAreStable(t *testing.T) {
 		}
 	}
 }
+
+type fakeIdentityReader struct {
+	name  string
+	err   error
+	calls int
+	got   core.Target
+}
+
+func (f *fakeIdentityReader) ReadProjectName(ctx context.Context, target core.Target) (string, error) {
+	f.calls++
+	f.got = target
+	return f.name, f.err
+}
+
+func TestReadOnlyFeaturesReceiveTheResolvedProjectIdentity(t *testing.T) {
+	var got core.Invocation
+	feature := &testFeature{
+		desc: readOnlyDescriptor("status"),
+		run: func(ctx context.Context, in core.Invocation) (any, error) {
+			got = in
+			return "ok", nil
+		},
+	}
+	h := newHarness(t, feature)
+	reader := &fakeIdentityReader{name: "hello-world-1"}
+	h.engine.Identity = reader
+	res := h.run(t, core.Request{Feature: "status"})
+	if res.Outcome != core.OutcomeSuccess {
+		t.Fatalf("outcome = %q (%+v)", res.Outcome, res.Diagnostics)
+	}
+	if reader.calls != 1 {
+		t.Fatalf("identity calls = %d, want 1", reader.calls)
+	}
+	if res.Target.ProjectName != "hello-world-1" || got.Target.ProjectName != "hello-world-1" {
+		t.Fatalf("result target = %+v, invocation target = %+v", res.Target, got.Target)
+	}
+	if got, want := stageNames(res), []string{"resolve_target", "preflight", "execute"}; strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("stages = %v, want %v (identity read must not add a stage)", got, want)
+	}
+}
+
+func TestMutatingFeaturesResolveIdentityThemselves(t *testing.T) {
+	feature := &testFeature{desc: core.Descriptor{
+		Name: "up", Title: "시작", Summary: "시작합니다.", Usage: "dcraft up",
+	}}
+	h := newHarness(t, feature)
+	reader := &fakeIdentityReader{name: "hello-world-1"}
+	h.engine.Identity = reader
+	res := h.run(t, core.Request{Feature: "up"})
+	if res.Outcome != core.OutcomeSuccess {
+		t.Fatalf("outcome = %q", res.Outcome)
+	}
+	if reader.calls != 0 {
+		t.Fatalf("engine resolved identity for a mutating feature: %d", reader.calls)
+	}
+	if res.Target.ProjectName != "" {
+		t.Fatalf("mutating target was rewritten: %+v", res.Target)
+	}
+}
+
+func TestExplicitProjectNameSkipsTheIdentityRead(t *testing.T) {
+	feature := &testFeature{desc: readOnlyDescriptor("status")}
+	h := newHarness(t, feature)
+	h.resolver.target.ProjectName = "explicit-name"
+	reader := &fakeIdentityReader{name: "allocated-name"}
+	h.engine.Identity = reader
+	res := h.run(t, core.Request{Feature: "status"})
+	if reader.calls != 0 {
+		t.Fatalf("identity read ran with an explicit -p: %d", reader.calls)
+	}
+	if res.Target.ProjectName != "explicit-name" {
+		t.Fatalf("target = %+v", res.Target)
+	}
+}
+
+func TestIdentityReadFailureIsAWarningAndFallsBack(t *testing.T) {
+	var got core.Invocation
+	feature := &testFeature{
+		desc: readOnlyDescriptor("status"),
+		run: func(ctx context.Context, in core.Invocation) (any, error) {
+			got = in
+			return "ok", nil
+		},
+	}
+	h := newHarness(t, feature)
+	h.engine.Identity = &fakeIdentityReader{err: errors.New("names.json is unreadable")}
+	res := h.run(t, core.Request{Feature: "status"})
+	if res.Outcome != core.OutcomeSuccess {
+		t.Fatalf("outcome = %q", res.Outcome)
+	}
+	if !hasCategory(res, core.CategoryIdentityUnreadable) {
+		t.Fatalf("diagnostics = %+v", res.Diagnostics)
+	}
+	for _, d := range res.Diagnostics {
+		if d.Category == core.CategoryIdentityUnreadable && d.Severity != core.SeverityWarning {
+			t.Fatalf("identity diagnostic severity = %q", d.Severity)
+		}
+	}
+	if res.Target.ProjectName != "" || got.Target.ProjectName != "" {
+		t.Fatalf("fallback changed the target: %+v / %+v", res.Target, got.Target)
+	}
+}

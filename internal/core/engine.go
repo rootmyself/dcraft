@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -19,6 +20,10 @@ type Engine struct {
 	Preflight Preflight
 	State     StateStore
 	Clock     Clock
+	// Identity resolves the effective project name for read-only features. It
+	// is strictly read-only; nil disables the lookup (tests and alternate
+	// wiring keep the previous behavior).
+	Identity IdentityReader
 	// CWD returns the process working directory. Injected for tests.
 	CWD func() (string, error)
 	// NewOperationID returns the operation identifier.
@@ -181,6 +186,30 @@ func (e *Engine) Run(ctx context.Context, req Request, sink Sink) (res Result) {
 		return res
 	}
 	res.Diagnostics = append(res.Diagnostics, pf.Diagnostics...)
+
+	// Read-only features must identify the same stack as stack-changing
+	// features. Resolve the recorded/declared project name without writing or
+	// locking anything; no stage is added because the target is already known.
+	if desc.ReadOnly && e.Identity != nil && strings.TrimSpace(target.ProjectName) == "" {
+		name, identErr := e.Identity.ReadProjectName(ctx, target)
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			res.Outcome = OutcomeCanceled
+			addCanceledDiagnostic(&res)
+			return res
+		}
+		if identErr != nil {
+			res.Diagnostics = append(res.Diagnostics, Diagnostic{
+				Category:    CategoryIdentityUnreadable,
+				Severity:    SeverityWarning,
+				Message:     msgIdentityUnreadable,
+				Detail:      errDetail(identErr),
+				NextActions: []string{msgIdentityUnreadableActionOne, msgIdentityUnreadableActionTwo},
+			})
+		} else if name != "" {
+			target.ProjectName = name
+			res.Target.ProjectName = name
+		}
+	}
 
 	inv := Invocation{
 		Target:      target,

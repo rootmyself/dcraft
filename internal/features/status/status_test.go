@@ -217,7 +217,7 @@ func TestPresentShowsStackServicesInstancesConnectionsAndVerification(t *testing
 			t.Fatalf("output missing %q:\n%s", want, out)
 		}
 	}
-	for _, forbidden := range []string{"dcraft up", "dcraft update", "dcraft down", "dcraft logs", "dcraft backup"} {
+	for _, forbidden := range []string{"dcraft update", "dcraft logs", "dcraft backup", "dcraft restore", "dcraft rollback"} {
 		if strings.Contains(out, forbidden) {
 			t.Fatalf("output advertises unimplemented command %q:\n%s", forbidden, out)
 		}

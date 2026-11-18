@@ -31,5 +31,5 @@ const (
 
 	msgGuideRefresh     = "상태를 새로 고치려면: dcraft status"
 	msgGuideInteractive = "대화형 화면을 열려면: dcraft"
-	msgGuidePending     = "실행·갱신·중지·로그·백업 같은 관리 작업은 아직 제공되지 않습니다."
+	msgGuidePending     = "관리 작업 중 갱신·로그·백업은 아직 제공되지 않습니다. 실행·중지·제거·재시작은 dcraft up/stop/down/restart를 사용하세요."
 )
