@@ -35,19 +35,19 @@ const updateConfigJSON = `{"name":"fake-project","services":{
 }}`
 
 const updateInspectJSON = `[
- {"Id":"aaa","Image":"sha256:1111","Created":"2026-11-18T10:00:00Z","RestartCount":0,
+ {"Id":"aaa","Image":"sha256:1111111111111111111111111111111111111111111111111111111111111111","Created":"2026-11-18T10:00:00Z","RestartCount":0,
   "State":{"Status":"running","Running":true,"Restarting":false,"ExitCode":0,"Health":{"Status":"healthy"}},
   "Config":{"Image":"nginx:1.27","Labels":{"com.docker.compose.service":"web"}}},
- {"Id":"bbb","Image":"sha256:2222","Created":"2026-11-18T10:00:01Z","RestartCount":0,
+ {"Id":"bbb","Image":"sha256:2222222222222222222222222222222222222222222222222222222222222222","Created":"2026-11-18T10:00:01Z","RestartCount":0,
   "State":{"Status":"running","Running":true,"Restarting":false,"ExitCode":0},
   "Config":{"Image":"worker:local","Labels":{"com.docker.compose.service":"worker"}}},
- {"Id":"ccc","Image":"sha256:3333","Created":"2026-11-18T10:00:02Z","RestartCount":0,
+ {"Id":"ccc","Image":"sha256:3333333333333333333333333333333333333333333333333333333333333333","Created":"2026-11-18T10:00:02Z","RestartCount":0,
   "State":{"Status":"running","Running":true,"Restarting":false,"ExitCode":0},
   "Config":{"Image":"fake-project-builder","Labels":{"com.docker.compose.service":"builder"}}}
 ]`
 
-const updateImages = `nginx:1.27 sha256:1111
-worker:local sha256:2222
+const updateImages = `nginx:1.27 sha256:1111111111111111111111111111111111111111111111111111111111111111
+worker:local sha256:2222222222222222222222222222222222222222222222222222222222222222
 `
 
 func newUpdateFakeDocker(t *testing.T) *updateFakeDocker {
@@ -108,7 +108,8 @@ esac
 if [ "$1" = "inspect" ]; then cat "$DOCKER_FAKE_INSPECT"; exit 0; fi
 if [ "$1" = "image" ] && [ "$2" = "inspect" ]; then
   ref="$3"
-  id=$(awk -v r="$ref" '$1==r {print $2}' "$DOCKER_FAKE_IMAGES")
+  id=$(awk -v r="$ref" '$1==r {print $2; exit}' "$DOCKER_FAKE_IMAGES")
+  if [ -z "$id" ]; then id=$(awk -v r="$ref" '$2==r {print $2; exit}' "$DOCKER_FAKE_IMAGES"); fi
   if [ -z "$id" ]; then echo "Error response from daemon: No such image: $ref" >&2; exit 1; fi
   echo "$id"
   exit 0
@@ -416,7 +417,7 @@ func TestUpdateNoPullMissingImageFailsBeforeChanging(t *testing.T) {
 	writeProject(t, project)
 	fake.write(t, fake.config, `{"name":"fake-project","services":{"web":{"image":"localonly:1"}}}`)
 	fake.csq(t, "aaa")
-	fake.write(t, fake.inspect, `[{"Id":"aaa","Image":"sha256:1111","RestartCount":0,
+	fake.write(t, fake.inspect, `[{"Id":"aaa","Image":"sha256:1111111111111111111111111111111111111111111111111111111111111111","RestartCount":0,
 	 "State":{"Status":"running","Running":true},
 	 "Config":{"Image":"localonly:1","Labels":{"com.docker.compose.service":"web"}}}]`)
 

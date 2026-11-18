@@ -266,6 +266,7 @@ func TestRestoreTUIWizardUsesTheGenericPlanAndDataRestoreApproval(t *testing.T) 
 	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
 		{wait: "> 스택 상태 (status)", send: "up"},
 		{wait: "> 비밀값 연결 (secrets)", send: "up"},
+		{wait: "> 이전 버전 복원 (rollback)", send: "up"},
 		{wait: "> 데이터 복원 (restore)", send: "\r"},
 		{wait: "복원할 백업 선택", send: "\r"},
 		{wait: "복원 대상 볼륨 선택", send: "\r"},

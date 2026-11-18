@@ -264,11 +264,10 @@ func (e *Engine) Run(ctx context.Context, req Request, sink Sink) (res Result) {
 		addCanceledDiagnostic(&res)
 		return res
 	}
-	res.Data = payload
 
 	if verifier, ok := feature.(Verifier); ok {
 		verifyErr := RunStage(rec, "verify", msgStageVerify, func() error {
-			return verifier.Verify(ctx, inv, payload)
+			return runVerify(ctx, verifier, inv, payload)
 		})
 		if verifyErr != nil {
 			if isCanceled(ctx, verifyErr) {
@@ -277,18 +276,7 @@ func (e *Engine) Run(ctx context.Context, req Request, sink Sink) (res Result) {
 				return res
 			}
 			res.Outcome = OutcomeFailure
-			var ce *Error
-			if errors.As(verifyErr, &ce) && len(ce.Diagnostics) > 0 {
-				res.Diagnostics = append(res.Diagnostics, ce.Diagnostics...)
-			} else {
-				res.Diagnostics = append(res.Diagnostics, Diagnostic{
-					Category:    CategoryVerificationFailed,
-					Severity:    SeverityError,
-					Message:     msgVerificationFailed,
-					Detail:      errDetail(verifyErr),
-					NextActions: []string{msgVerificationFailedActionOne, msgVerificationFailedActionTwo},
-				})
-			}
+			res.Diagnostics = append(res.Diagnostics, verifyFailureDiagnostics(verifyErr)...)
 			return res
 		}
 	}
@@ -299,15 +287,20 @@ func (e *Engine) Run(ctx context.Context, req Request, sink Sink) (res Result) {
 		return res
 	}
 
-	// A wizard "steps" run only collects answers; the "apply" run is the
-	// actual operation. Recording the preview would write a success history
-	// entry for work the user has not confirmed yet.
+	// Data describes a completed feature result. It is attached only after
+	// verification, cancellation and post-hook checks, so a failure or
+	// cancellation can never carry a payload that looks like a success.
 	if canceled := e.runHooksPost(ctx, rec, &res, res.Action, res.OperationID, target, hookEntriesForStage(hookPlan, HookStagePost)); canceled {
 		res.Outcome = OutcomeCanceled
 		addCanceledDiagnostic(&res)
 		return res
 	}
 
+	res.Data = payload
+
+	// A wizard "steps" run only collects answers; the "apply" run is the
+	// actual operation. Recording the preview would write a success history
+	// entry for work the user has not confirmed yet.
 	if desc.RecordsHistory && req.Options["wizard"] != "steps" {
 		historyErr := RunStage(rec, "history", msgStageHistory, func() error {
 			if e.State == nil {
@@ -319,7 +312,7 @@ func (e *Engine) Run(ctx context.Context, req Request, sink Sink) (res Result) {
 				Outcome:     OutcomeSuccess,
 				StartedAt:   res.StartedAt,
 				FinishedAt:  clock.Now(),
-				Stages:      append([]Stage{}, res.Stages...),
+				Stages:      historyStages(res.Stages),
 				Diagnostics: append([]Diagnostic{}, res.Diagnostics...),
 			})
 		})
@@ -743,10 +736,68 @@ func failureDiagnostics(err error) []Diagnostic {
 func (e *Engine) runFeature(ctx context.Context, f Feature, in Invocation) (payload any, err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			err = fmt.Errorf("feature panic: %v", recovered)
+			err = &recoveredPanicError{value: recovered}
 		}
 	}()
 	return f.Run(ctx, in)
+}
+
+// recoveredPanicError marks a panic raised by feature code. It is reported as
+// internal_error (never as a feature-specific validation failure) while still
+// travelling through the normal stage/failure path.
+type recoveredPanicError struct {
+	value any
+}
+
+func (e *recoveredPanicError) Error() string {
+	return fmt.Sprintf("feature panic: %v", e.value)
+}
+
+func runVerify(ctx context.Context, v Verifier, in Invocation, payload any) (err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = &recoveredPanicError{value: recovered}
+		}
+	}()
+	return v.Verify(ctx, in, payload)
+}
+
+func verifyFailureDiagnostics(err error) []Diagnostic {
+	var panicErr *recoveredPanicError
+	if errors.As(err, &panicErr) {
+		return []Diagnostic{{
+			Category:    CategoryInternal,
+			Severity:    SeverityError,
+			Message:     msgInternalError,
+			Detail:      errDetail(err),
+			NextActions: []string{msgInternalErrorAction},
+		}}
+	}
+	var ce *Error
+	if errors.As(err, &ce) && len(ce.Diagnostics) > 0 {
+		return append([]Diagnostic{}, ce.Diagnostics...)
+	}
+	return []Diagnostic{{
+		Category:    CategoryVerificationFailed,
+		Severity:    SeverityError,
+		Message:     msgVerificationFailed,
+		Detail:      errDetail(err),
+		NextActions: []string{msgVerificationFailedActionOne, msgVerificationFailedActionTwo},
+	}}
+}
+
+// historyStages snapshots the completed stages for an operation record. An open
+// stage (including the history stage itself, which is still being recorded)
+// must not be persisted as if it had started and never finished.
+func historyStages(stages []Stage) []Stage {
+	out := make([]Stage, 0, len(stages))
+	for _, st := range stages {
+		if st.Status == StageStarted {
+			continue
+		}
+		out = append(out, st)
+	}
+	return out
 }
 
 func (e *Engine) lookup(name string) (Feature, bool) {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/rootmyself/dcraft/internal/core"
 	"github.com/rootmyself/dcraft/internal/execx"
+	"github.com/rootmyself/dcraft/internal/secretref"
 	"github.com/rootmyself/dcraft/internal/stack"
 )
 
@@ -230,9 +231,21 @@ func (c *Compose) Pull(ctx context.Context, t core.Target, services []string) (s
 
 // Apply implements stack.Updater. It is detached and never waits: readiness is
 // observed separately because `up --wait` returns success for crash-looping and
-// no-healthcheck containers.
+// no-healthcheck containers. Runtime secret delivery is prepared and committed
+// through the same boundary as Up, so an update recreates containers with the
+// current environment values and file materializations.
 func (c *Compose) Apply(ctx context.Context, t core.Target, services []string, opts stack.ApplyOptions) (stack.OpResult, error) {
-	args := append(t.ComposeArgs(), "up", "--detach")
+	prep, err := c.prepareSecrets(ctx, t, services, secretref.ModeCreate)
+	if err != nil {
+		return stack.OpResult{}, err
+	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		// The operation was canceled before any Compose process started, so
+		// no container can reference the new materialization.
+		prep.Abort()
+		return stack.OpResult{}, ctxErr
+	}
+	args := []string{"up", "--detach"}
 	if opts.ForceRecreate {
 		args = append(args, "--force-recreate")
 	}
@@ -242,7 +255,29 @@ func (c *Compose) Apply(ctx context.Context, t core.Target, services []string, o
 	}
 	args = append(args, "--pull", policy)
 	args = append(args, services...)
-	return c.lifecycleRun(ctx, t, "up", args)
+	res, err := c.run(ctx, execx.Command{
+		Name: "docker",
+		Args: composeArgsWith(t, prep.Files, args...),
+		Dir:  t.ProjectDir,
+		Env:  composeEnv(prep.Env),
+	})
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return stack.OpResult{Output: prep.Redact(summarize(res.Combined())), Notices: prep.Notices}, ctxErr
+	}
+	if err != nil {
+		// The Compose process never started, so no container can reference
+		// the new materialization.
+		prep.Abort()
+		return stack.OpResult{}, err
+	}
+	out := stack.OpResult{Output: prep.Redact(summarize(res.Combined())), Notices: prep.Notices}
+	if !res.Succeeded() {
+		// Compose ran and may have created containers; keep the files a
+		// restart may need. The next up/down cleans stale files.
+		return out, fmt.Errorf("docker compose up exited with status %d", res.ExitCode)
+	}
+	prep.Commit()
+	return out, nil
 }
 
 // ImageID implements stack.Updater. The full sha256: ID is the authoritative

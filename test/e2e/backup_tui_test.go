@@ -17,6 +17,7 @@ func TestBackupTUIWizardSelectsVolumeAndShowsTheEffectBeforeRunning(t *testing.T
 	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
 		{wait: "> 스택 상태 (status)", send: "up"},
 		{wait: "> 비밀값 연결 (secrets)", send: "up"},
+		{wait: "> 이전 버전 복원 (rollback)", send: "up"},
 		{wait: "> 데이터 복원 (restore)", send: "up"},
 		{wait: "> 스택 재시작 (restart)", send: "up"},
 		{wait: "> 로그 보기 (logs)", send: "up"},
