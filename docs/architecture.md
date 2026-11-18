@@ -5,16 +5,18 @@ fork these types or recreate these rules in a feature or UI package. Shared
 interface changes go to the integration owner as a change request (see the end
 of this file).
 
-Scope of this version: one working binary, thirteen registered features
+Scope of this version: one working binary, fourteen registered features
 (`status`, `install-compose`, `up`, `stop`, `down`, `restart`, `update`,
-`secrets`, `hooks`, `logs`, `exec`, `backup`, `rollback`), the common operation
-seam, target resolution, named environments, automatic project-name allocation,
+`secrets`, `hooks`, `logs`, `exec`, `backup`, `rollback`,
+`generate-git-hook`), the common operation seam, target resolution, named
+environments, automatic project-name allocation,
 same-stack coordination, runtime and build-time secret references, explicit
-host scripts with independent script trust, service/instance selection, live
+host scripts with independent script trust, the guided Git host-script
+generator, service/instance selection, live
 terminal attach, versioned volume backup, diagnostics, CLI/TUI assembly, state
 layout, machine-readable results, the approval/plan preview flow, explicit
 update with bounded readiness, the previous-good record, previous-good
-rollback, and tests. Generation, AWS Secrets Manager sources, bind-folder
+rollback, and tests. The S3 generator, AWS Secrets Manager sources, bind-folder
 backup and restore are later tickets.
 
 ---
@@ -207,11 +209,13 @@ Approval kinds (`core.ApprovalKind`), independent and non-substitutable:
 | `script_trust` | first execution or changed host script |
 | `previous_version` | return to the previous good deployment |
 | `data_restore` | replace data from a backup |
-| `file_overwrite` | replace existing generated files |
+| `file_overwrite` | save a generated project file (new file or replacement); it is never script trust |
 
 CLI supplies them with repeated `--approve <kind>`; the TUI collects them in a
-generic plan → confirm screen (see §6). Read-only features may not require an
-approval (registry validation).
+generic plan → confirm screen (see §6). A wizard feature with a descriptor
+approval shows that approval on its preview screen; the same generic screen is
+the confirmation that supplies it to the apply run. Read-only features may not
+require an approval (registry validation).
 
 Optional feature capabilities:
 
@@ -753,7 +757,8 @@ Approval flow (generic, engine-enforced):
 
 No feature action is selectable unless it is registered. The current build
 registers `status` (primary), `install-compose`, `up`, `stop`, `down`,
-`restart`, `update`, `secrets`, `logs` and `exec`.
+`restart`, `update`, `secrets`, `hooks`, `logs`, `exec`, `backup`, `rollback`
+and `generate-git-hook`.
 
 ---
 
@@ -1542,6 +1547,8 @@ Desktop's VM-backed unix socket is **local**, not remote.
 | `hook_content_changed` | approved content identity no longer matches; nothing was executed | error (exit 2) |
 | `hook_post_failed` | a post hook failed after the main operation completed (result stays successful) | warning |
 | `hook_output` | redacted hook output carried to human surfaces | info |
+| `generator_input_invalid` | generated-script input is missing or unsafe: empty value, traversal, project-root destination, script inside the destination, or embedded credentials | error (exit 2) |
+| `generator_failed` | the generated script file could not be published; nothing else changed | error |
 | `internal_error` | unexpected error/parse failure/panic | error |
 
 Each diagnostic carries Korean `message`, optional raw `detail`, and Korean
@@ -1560,7 +1567,7 @@ the full `compose version` command confirms the classification.
 `service_unknown`, `invalid_option`, `secret_input_invalid`,
 `secret_unsupported`, `selection_required`, `instance_unknown`,
 `backup_output_required`, `backup_volume_required`,
-`backup_volume_unknown`, `hook_input_invalid` and
+`backup_volume_unknown`, `hook_input_invalid`, `generator_input_invalid` and
 `hook_content_changed`: those mean the caller must supply a different decision
 (an approval, an environment, a free name, an existing service, a valid option,
 a valid secret reference, a service/instance selection, or a backup
@@ -2008,17 +2015,19 @@ Docker or external network. Unrun platforms/paths are not claimed as verified.
   and bind restore (#19) are not implemented.
 - TUI alias creation/editing: aliases are created by editing `.dcraft.yaml` in
   this version (selection is provided by both interfaces).
-- AWS Secrets Manager sources, generated Compose/Dockerfile files and generator
-  flows, Kubernetes, remote engines, resident daemon/web UI. Runtime
+- AWS Secrets Manager sources, generated Compose/Dockerfile files and the S3
+  generator flow, Kubernetes, remote engines, resident daemon/web UI. Runtime
   environment/file references are implemented by ticket #9 below; Compose
   installation by ticket #6; update readiness and the previous-good record by
-  ticket #7; host hooks and script trust by ticket #12; named-volume backup by
-  ticket #15; build-time delivery by ticket #10 and previous-good rollback by
-  ticket #11.
+  ticket #7; host hooks and script trust by ticket #12; the guided Git
+  host-script generator by ticket #13 (see `docs/host-script-generators.md`);
+  named-volume backup by ticket #15; build-time delivery by ticket #10 and
+  previous-good rollback by ticket #11.
 - Good-version history beyond the single record (rollback has no multi-version
   picker). The TUI plan/confirm component is generic; `install-compose`,
-  `update`, `backup` and `rollback` are planners in this build, and
-  `secrets`/`backup` use the generic wizard. An ordinary update shows its plan
+  `update`, `backup`, `rollback` and `generate-git-hook` are planners in this
+  build, and `secrets`/`backup`/`generate-git-hook` use the generic wizard. An
+  ordinary update shows its plan
   and requires one `enter` to run, not an approval; rollback shows the same plan
   screen and collects only `previous_version`. `up` also goes through the
   generic plan because it declares the hook scope; with no hooks the plan text

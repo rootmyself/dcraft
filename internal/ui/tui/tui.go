@@ -552,8 +552,23 @@ func (m *Model) runApproved(f core.Feature, approvals []core.ApprovalKind) tea.C
 	return m.launchRun(f, approvals, nil)
 }
 
+// beginWithOptions runs a wizard step listing or apply action. A wizard whose
+// descriptor requires an approval needs it for both engine calls: the steps
+// run only returns the questions (no write), and the preview screen is the
+// confirmation that supplies the same approval to the apply run. This is
+// generic UI collection; the engine still decides whether the approval is
+// enough, and script_trust remains a separate later decision.
 func (m *Model) beginWithOptions(f core.Feature, options map[string]string) tea.Cmd {
-	return m.startRun(f, options)
+	m.ensureRequest(f)
+	m.resetRunState()
+	m.setupLive(f)
+	var approvals []core.ApprovalKind
+	if f != nil {
+		if kind := f.Descriptor().Approval; kind != core.ApprovalNone {
+			approvals = []core.ApprovalKind{kind}
+		}
+	}
+	return m.launchRun(f, approvals, options)
 }
 
 // ensureRequest resets collected inputs when the selected feature changes, so

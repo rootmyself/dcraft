@@ -34,13 +34,13 @@ func TestRegistrationWiresStatusIntoBothInterfaces(t *testing.T) {
 	for _, f := range features {
 		byName[f.Descriptor().Name] = f
 	}
-	for _, name := range []string{"status", "install-compose", "up", "stop", "down", "restart", "update", "secrets", "hooks", "logs", "exec", "backup", "rollback"} {
+	for _, name := range []string{"status", "install-compose", "up", "stop", "down", "restart", "update", "secrets", "hooks", "logs", "exec", "backup", "rollback", "generate-git-hook"} {
 		if _, ok := byName[name]; !ok {
 			t.Fatalf("registered features = %v, missing %q", features, name)
 		}
 	}
-	if len(features) != 13 {
-		t.Fatalf("registered features = %d, want 13", len(features))
+	if len(features) != 14 {
+		t.Fatalf("registered features = %d, want 14", len(features))
 	}
 	for _, name := range []string{"up", "stop", "restart", "update"} {
 		if !byName[name].Descriptor().SupportsServices {

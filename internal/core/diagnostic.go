@@ -62,8 +62,14 @@ const (
 	CategoryBackupIntegrityFailed    Category = "backup_integrity_failed"
 	CategoryBackupStateRestoreFailed Category = "backup_state_restore_failed"
 	CategoryBackupSelectionChanged   Category = "backup_selection_changed"
-	CategoryStackBusy                Category = "stack_busy"
-	CategoryLifecycleFailed          Category = "lifecycle_failed"
+	// Host-script generators (tickets #14/#15). generator_input_invalid is
+	// missing or unsafe caller input (exit 2); generator_failed is a refused
+	// or failed script-file write (exit 1). Neither category carries script
+	// content or credentials.
+	CategoryGeneratorInputInvalid Category = "generator_input_invalid"
+	CategoryGeneratorFailed       Category = "generator_failed"
+	CategoryStackBusy             Category = "stack_busy"
+	CategoryLifecycleFailed       Category = "lifecycle_failed"
 	// Host scripts (ticket #12). hook_invalid is a registration/file problem;
 	// hook_failed is a pre-hook process failure that blocked the operation;
 	// hook_content_changed means the approved content identity no longer
