@@ -68,6 +68,12 @@ func (f *fakeBackend) VolumeConsumers(_ context.Context, _ core.Target, volume s
 	return append([]data.ContainerConsumer{}, f.consumers[volume]...), nil
 }
 
+// BindConsumers keeps this fake compatible with the published data.Backend
+// when bind-folder backup (#17) extends it; restore itself never calls it.
+func (f *fakeBackend) BindConsumers(context.Context, core.Target, string) ([]data.ContainerConsumer, error) {
+	return nil, nil
+}
+
 func (f *fakeBackend) StopServices(_ context.Context, _ core.Target, services []string) (data.OpResult, error) {
 	f.record("stop:" + strings.Join(services, ","))
 	f.stops = append(f.stops, append([]string{}, services...))
