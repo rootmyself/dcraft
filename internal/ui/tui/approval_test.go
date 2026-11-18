@@ -136,3 +136,51 @@ func TestPlanFailureIsShownInsteadOfConfirmation(t *testing.T) {
 		t.Fatalf("failed plan ran the feature: %d", install.runs)
 	}
 }
+
+// An ordinary update is not approval-gated: the same read-only plan screen is
+// shown as the preview, and one enter runs it without an extra approval kind.
+func TestOrdinaryPlannerShowsPlanAndRunsWithoutApproval(t *testing.T) {
+	upd := &stubPlanner{
+		stubFeature: &stubFeature{
+			desc: core.Descriptor{
+				Name: "update", Title: "갱신", Summary: "현재 설정을 적용합니다.",
+				Usage: "dcraft update", Primary: true, RecordsHistory: true,
+			},
+			body: "갱신 결과 본문",
+		},
+		plan: func(context.Context, core.Invocation) (core.Plan, error) {
+			return core.Plan{Text: "예정 작업\n  - web: 이미지 취득(nginx:1.27) 후 적용"}, nil
+		},
+	}
+	m := newTestModel(t, upd)
+	initModel(t, m)
+
+	view := m.View()
+	for _, want := range []string{"예정 작업", "이미지 취득", "다음 작업", "enter 실행", "esc 취소"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("preview confirmation missing %q:\n%s", want, view)
+		}
+	}
+	if upd.runs != 0 {
+		t.Fatalf("ordinary update ran before confirmation: %d", upd.runs)
+	}
+	if upd.planRuns != 1 {
+		t.Fatalf("plan runs = %d, want 1", upd.planRuns)
+	}
+
+	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(*Model)
+	feed(t, m, execute(t, cmd))
+	if upd.runs != 1 {
+		t.Fatalf("confirmed update runs = %d, want 1", upd.runs)
+	}
+	if m.result == nil || m.result.Outcome != core.OutcomeSuccess {
+		t.Fatalf("result = %+v", m.result)
+	}
+	if m.result.RequiredApproval != "" {
+		t.Fatalf("ordinary update required an approval: %q", m.result.RequiredApproval)
+	}
+	if !strings.Contains(m.View(), "갱신 결과 본문") {
+		t.Fatalf("result not shown:\n%s", m.View())
+	}
+}

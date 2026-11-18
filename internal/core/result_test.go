@@ -20,6 +20,7 @@ func TestExitCodesSeparateDecisionErrorsFromOperationFailures(t *testing.T) {
 		{core.OutcomeFailure, []core.Category{core.CategoryApprovalRequired}, 2},
 		{core.OutcomeFailure, []core.Category{core.CategoryProjectNameConflict}, 2},
 		{core.OutcomeFailure, []core.Category{core.CategoryServiceUnknown}, 2},
+		{core.OutcomeFailure, []core.Category{core.CategoryInvalidOption}, 2},
 	}
 	for _, tc := range cases {
 		res := core.Result{Outcome: tc.outcome}
