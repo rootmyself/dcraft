@@ -5,19 +5,18 @@ fork these types or recreate these rules in a feature or UI package. Shared
 interface changes go to the integration owner as a change request (see the end
 of this file).
 
-Scope of this version: one working binary, fifteen registered features
+Scope of this version: one working binary, sixteen registered features
 (`status`, `install-compose`, `up`, `stop`, `down`, `restart`, `update`,
 `secrets`, `hooks`, `logs`, `exec`, `backup`, `restore`, `rollback`,
-`generate-git-hook`), the common operation seam, target resolution, named
-environments, automatic project-name allocation, same-stack coordination,
-runtime and build-time secret references, explicit host scripts with
-independent script trust, the guided Git host-script generator,
+`generate-git-hook`, `generate-s3-hook`), the common operation seam, target
+resolution, named environments, automatic project-name allocation, same-stack
+coordination, runtime and build-time secret references, explicit host scripts
+with independent script trust, the guided Git and S3 host-script generators,
 service/instance selection, live terminal attach, versioned volume and declared
 bind-folder backup, safe volume and bind-folder restore, AWS Secrets Manager
 secret references, diagnostics, CLI/TUI assembly, state layout,
 machine-readable results, the approval/plan preview flow, explicit update with
 bounded readiness, the previous-good record, previous-good rollback, and tests.
-The S3 generator is a later ticket.
 
 ---
 
@@ -801,7 +800,7 @@ Approval flow (generic, engine-enforced):
 No feature action is selectable unless it is registered. The current build
 registers `status` (primary), `install-compose`, `up`, `stop`, `down`,
 `restart`, `update`, `secrets`, `hooks`, `logs`, `exec`, `backup`, `restore`,
-`rollback` and `generate-git-hook`.
+`rollback`, `generate-git-hook` and `generate-s3-hook`.
 
 ---
 
@@ -1614,7 +1613,7 @@ Desktop's VM-backed unix socket is **local**, not remote.
 | `hook_content_changed` | approved content identity no longer matches; nothing was executed | error (exit 2) |
 | `hook_post_failed` | a post hook failed after the main operation completed (result stays successful) | warning |
 | `hook_output` | redacted hook output carried to human surfaces | info |
-| `generator_input_invalid` | generated-script input is missing or unsafe: empty value, traversal, project-root destination, script inside the destination, or embedded credentials | error (exit 2) |
+| `generator_input_invalid` | generated-script input is missing or unsafe: empty value, traversal, project-root destination, script inside the destination, embedded credentials, an S3 URL/object-mode mismatch, a pre-signed S3 query, or an unsafe AWS profile name | error (exit 2) |
 | `generator_failed` | the generated script file could not be published; nothing else changed | error |
 | `internal_error` | unexpected error/parse failure/panic | error |
 
@@ -2310,19 +2309,20 @@ Docker or external network. Unrun platforms/paths are not claimed as verified.
 - TUI alias creation/editing: aliases are created by editing `.dcraft.yaml` in
   this version (selection is provided by both interfaces).
 - AWS Secrets Manager sources are implemented by ticket #10 below; generated
-  Compose/Dockerfile files and the S3 generator flow, Kubernetes, remote
-  engines, resident daemon/web UI are not implemented. Runtime environment/file
-  references are implemented by ticket #9 below; Compose installation by
-  ticket #6; update readiness and the previous-good record by ticket #7; host
-  hooks and script trust by ticket #12; the guided Git host-script generator by
-  ticket #13 (see `docs/host-script-generators.md`); named-volume backup by
+  Compose/Dockerfile files, Kubernetes, remote engines and the resident
+  daemon/web UI are not implemented. Runtime environment/file references are
+  implemented by ticket #9 below; Compose installation by ticket #6; update
+  readiness and the previous-good record by ticket #7; host hooks and script
+  trust by ticket #12; the guided Git and S3 host-script generators by tickets
+  #13/#14 (see `docs/host-script-generators.md`); named-volume backup by
   ticket #16 and bind-folder backup by ticket #17; build-time delivery by
   ticket #10 and previous-good rollback by ticket #11.
 - Good-version history beyond the single record (rollback has no multi-version
   picker). The TUI plan/confirm component is generic; `install-compose`,
-  `update`, `backup`, `restore`, `rollback` and `generate-git-hook` are
-  planners in this build, and `secrets`/`backup`/`restore`/`generate-git-hook`
-  use the generic wizard. An ordinary update shows its plan
+  `update`, `backup`, `restore`, `rollback`, `generate-git-hook` and
+  `generate-s3-hook` are planners in this build, and
+  `secrets`/`backup`/`restore`/`generate-git-hook`/`generate-s3-hook` use the
+  generic wizard. An ordinary update shows its plan
   and requires one `enter` to run, not an approval; rollback shows the same plan
   screen and collects only `previous_version`. `up` also goes through the
   generic plan because it declares the hook scope; with no hooks the plan text

@@ -1,9 +1,9 @@
 # Host-script generators
 
 Published by ticket #13 (issue #14). This document is the shared contract for
-generated `up`/`update` host scripts. The S3 generator (ticket #14 / issue #15)
-consumes the same scaffolding instead of duplicating path safety or the write
-step.
+generated `up`/`update` host scripts. The S3 generator (ticket #14 / issue #15,
+`dcraft generate-s3-hook`) consumes the same scaffolding instead of duplicating
+path safety or the write step; its own semantics are in §5.
 
 ## 1. Command and inputs
 
@@ -103,7 +103,7 @@ Execution location: hooks run with the project folder as cwd, but the script
 also derives `PROJECT_DIR` from its own location (or embeds it when the script
 was explicitly placed outside the project), so manual execution works too.
 
-## 4. Contract for the S3 generator (ticket #15)
+## 4. Contract consumed by the S3 generator
 
 Reuse, do not fork:
 
@@ -122,7 +122,65 @@ script, uses existing credentials, and avoids `--delete`/destructive sync by
 default. Tar extraction must validate a fresh destination and reject path
 escape/dangerous links as verified in the generator notes.
 
-## 5. Verification
+## 5. Generated S3 script semantics
+
+`dcraft generate-s3-hook` is the second flat generator feature. It reuses
+`ResolveLayout`, `WriteScript`, `ScriptMode`, `InputError`, the
+`file_overwrite` save approval and the generic planner/wizard/preview flow from
+§2; it adds no deployment backend, credential storage, auto-registration or
+automatic trust.
+
+| input | meaning |
+|---|---|
+| `--source` | `s3://bucket/prefix` for `sync`, or one concrete `s3://bucket/path/artifact.tar.gz` for `tar`. A bucket-only URL is a valid whole-bucket sync. Userinfo, query strings/pre-signed URLs, wildcards, empty/`.`/`..` path components and a `.tar.gz` object in `sync` mode are refused. |
+| `--mode` | `sync` or `tar`, required. It must match the object shape: `tar` needs one `.tar.gz` object, `sync` needs a prefix. |
+| `--dest` | project-scoped destination folder; the project root, the script's own folder, the script path itself and any path containing the script are refused. No `--allow-outside` escape is published for S3. |
+| `--output` | project-scoped script path, written atomically with mode `0755`. |
+| `--aws-profile` | optional existing AWS CLI profile name (not a secret). It is embedded only when explicitly supplied. |
+
+Generation contacts no S3 endpoint and runs no AWS CLI command. Non-interactive
+runs never prompt; missing or unsafe input is `generator_input_invalid` (exit
+2), a publish failure is `generator_failed` (exit 1), and a canceled run is
+exit 130. Saving uses the independent `file_overwrite` approval (a new file
+also needs it, as in §1); it is never `script_trust`. The success payload is
+`data.generator` with `action=generate-s3-hook`, paths, source, mode, sha256,
+`registered=false`, `trust_required=true` and the exact next commands:
+
+```
+dcraft hooks --add --stage pre --script <path>
+dcraft up --approve script_trust
+```
+
+Generated script rules:
+
+- `#!/usr/bin/env bash` and `set -euo pipefail`; Korean comments cover inputs,
+  execution location, changed files, effects, prerequisites, failure behavior
+  and how to edit. No `eval`, no interpolation of uncontrolled input, and no
+  credentials or credential exports.
+- Checks `aws` before any destination work; `tar` mode also checks `tar` and
+  `gzip`. It never installs tools. Existing AWS CLI configuration (environment,
+  `~/.aws`, SSO, role) is used; `aws configure` is not run and AWS CLI error
+  text is disclosed as the user's own CLI output.
+- Resolves the project folder from its own location (or embeds it when placed
+  outside), and refuses a destination outside the project, the project root,
+  the script's folder or a destination containing symlinks.
+- `sync`: `aws s3 sync <src> <dest> --only-show-errors --no-progress`
+  (optionally with `--profile`). `--delete` is never generated; files that
+  exist only in the destination stay.
+- `tar`: downloads to a private temporary file, verifies gzip integrity
+  (`gzip -t`), lists names and verbose metadata, and refuses absolute paths,
+  `..` components, hard links and unsupported member types before extraction.
+  It extracts only into a freshly created empty temporary folder, rescans the
+  extracted tree for symlinks that are absolute or resolve outside, and refuses
+  a destination that contains any symlink before copying. It copies the staged
+  tree into the destination without deleting files that exist only there, and
+  removes the temporary folder on exit. `-P` and extraction directly into the
+  destination are never generated.
+- A pre-hook failure blocks `up`/`update`. Download/validation failures leave
+  the destination untouched; a copy or sync failure reports that partial files
+  may remain. dcraft does not roll back either case.
+
+## 6. Verification
 
 - Unit: path traversal/root/symlink cases; branch/tag/SHA rendering; annotated
   tag peel; `bash -n`; no destructive commands or credentials; approval and
@@ -133,3 +191,30 @@ escape/dangerous links as verified in the generator notes.
   `dcraft hooks --add` → untrusted `up` blocked (exit 2) → trusted `up` runs
   the pre-hook, builds the Compose image from the synced source, and a dirty
   destination blocks the next `up` without changing the stack.
+
+S3 generator (ticket #14 / issue #15):
+
+- Unit: S3 URL shape and credentials/query refusal; `sync`/`tar` pairing;
+  destination outside/root/script-path refusal; profile validation; `bash -n`;
+  no `--delete`, credentials, tool installation or `eval`; approval and
+  overwrite preservation; wizard preview writes nothing; JSON purity.
+- Real process with a PATH `aws` shim (no real S3, no credentials): sync copies
+  a local fixture tree, stale destination files remain and the shim log has no
+  `--delete`; tar serves a valid `.tar.gz` (verify, extract, copy, internal
+  links preserved), a truncated archive fails before any destination change,
+  and hostile archives (absolute path, `..`, escaping symlinks, escaping hard
+  links) are rejected without writing outside; a destination or destination
+  file that is a symlink cannot be used to escape; temporary folders are
+  removed.
+- Real Docker integration (`DCRAFT_INTEGRATION=1`, PATH `aws` shim, no real
+  S3): generate → register → untrusted `up` blocked (exit 2, no destination and
+  no containers) → trusted `up` runs the pre-hook, builds the Compose image
+  from the synced folder, keeps a stale local file and reports success.
+- Linux GNU tar (`DCRAFT_INTEGRATION=1`, Debian bookworm, bash + GNU tar 1.34):
+  the generated tar script is executed in a container with the `aws` shim; a
+  valid archive with an internal symlink is copied, while escaping symlink and
+  hardlink archives are rejected with the destination unchanged and temporary
+  folders removed.
+- Not verified in this ticket: real AWS S3/credentials or an AWS CLI other than
+  the local shim; BusyBox tar (the script requires bash, which is not present
+  in the Alpine/BusyBox images used for the earlier tool probes); WSL2.

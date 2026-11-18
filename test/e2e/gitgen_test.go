@@ -163,15 +163,10 @@ func TestGenerateGitHookTUIWizardShowsThePreviewAndDeclineWritesNothing(t *testi
 	env := fake.env(t, t.TempDir())
 	steps := []lifecyclePTYStep{
 		{wait: "상태를 새로 고치려면", send: ""},
-	}
-	// The menu starts on status. The generator is eight entries above it:
-	// status, secrets, rollback, restore, restart, logs, install-compose,
-	// hooks, generate-git-hook.
-	for i := 0; i < 8; i++ {
-		steps = append(steps, lifecyclePTYStep{wait: "스택 상태 (status)", send: "up"})
-	}
-	steps = append(steps,
-		lifecyclePTYStep{wait: "> Git 호스트 스크립트 생성 (generate-git-hook)", send: "\r"},
+		// The menu order is the registration order; compute the distance from
+		// status so another ticket's feature does not break this journey.
+		{wait: "> 스택 상태 (status)", send: strings.Repeat("\x1b[B", menuDownPresses(t, "generate-git-hook"))},
+		{wait: "> Git 호스트 스크립트 생성 (generate-git-hook)", send: "\r"},
 		lifecyclePTYStep{wait: "저장소", send: "https://127.0.0.1:1/never.git"},
 		lifecyclePTYStep{wait: "never.git", send: "\r"},
 		lifecyclePTYStep{wait: "branch, tag 또는 전체 SHA", send: "main"},
@@ -184,7 +179,7 @@ func TestGenerateGitHookTUIWizardShowsThePreviewAndDeclineWritesNothing(t *testi
 		lifecyclePTYStep{wait: "file_overwrite", send: ""},
 		lifecyclePTYStep{wait: "dcraft hooks --add", send: "\x1b"},
 		lifecyclePTYStep{wait: "취소", send: ""},
-	)
+	}
 	output, code := runLifecyclePTYSteps(t, project, env, steps)
 	if code != 0 {
 		t.Fatalf("TUI exit = %d\n%s", code, output)
