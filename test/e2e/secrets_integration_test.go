@@ -49,15 +49,17 @@ func assertNoSentinelIn(t *testing.T, label, text string, sentinels ...string) {
 }
 
 // scanSecretMetadata checks dcraft state metadata and the project config. The
-// materialized files under <stack>/secrets are the intentional delivery
-// artifact and are excluded; every other state file must be value-free.
+// materialized files under <stack>/secrets and <stack>/build-secrets are the
+// intentional delivery artifacts and are excluded; every other state file must
+// be value-free.
 func scanSecretMetadata(t *testing.T, stateDir, projectDir string, sentinels ...string) {
 	t.Helper()
 	err := filepath.Walk(stateDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info == nil || info.IsDir() {
 			return nil
 		}
-		if strings.Contains(path, string(filepath.Separator)+"secrets"+string(filepath.Separator)) {
+		if strings.Contains(path, string(filepath.Separator)+"secrets"+string(filepath.Separator)) ||
+			strings.Contains(path, string(filepath.Separator)+"build-secrets"+string(filepath.Separator)) {
 			return nil
 		}
 		data, readErr := os.ReadFile(path)

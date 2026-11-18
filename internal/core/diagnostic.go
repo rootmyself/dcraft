@@ -85,25 +85,38 @@ const (
 	// selection_required and instance_unknown mean the caller must supply a
 	// different explicit selection; instance_stopped, logs_failed and
 	// exec_failed are operation failures.
-	CategorySelectionRequired  Category = "selection_required"
-	CategoryInstanceUnknown    Category = "instance_unknown"
-	CategoryInstanceStopped    Category = "instance_stopped"
-	CategoryLogsFailed         Category = "logs_failed"
-	CategoryExecFailed         Category = "exec_failed"
-	CategoryUpdateFailed       Category = "update_failed"
-	CategoryReadinessFailed    Category = "readiness_failed"
-	CategoryImageMissing       Category = "image_missing"
-	CategoryInvalidOption      Category = "invalid_option"
-	CategoryStateFailed        Category = "state_failed"
-	CategoryVerificationFailed Category = "verification_failed"
-	CategoryCanceled           Category = "canceled"
-	CategoryHistoryFailed      Category = "history_failed"
-	CategorySecretInvalid      Category = "secret_invalid"
-	CategorySecretInputInvalid Category = "secret_input_invalid"
-	CategorySecretUnsupported  Category = "secret_unsupported"
-	CategorySecretSource       Category = "secret_source_unavailable"
-	CategorySecretApplyFailed  Category = "secret_apply_failed"
-	CategoryInternal           Category = "internal_error"
+	CategorySelectionRequired Category = "selection_required"
+	CategoryInstanceUnknown   Category = "instance_unknown"
+	CategoryInstanceStopped   Category = "instance_stopped"
+	CategoryLogsFailed        Category = "logs_failed"
+	CategoryExecFailed        Category = "exec_failed"
+	CategoryUpdateFailed      Category = "update_failed"
+	CategoryReadinessFailed   Category = "readiness_failed"
+	CategoryImageMissing      Category = "image_missing"
+	CategoryInvalidOption     Category = "invalid_option"
+	// Previous-good rollback (ticket 11). Additive categories: the values
+	// and meanings are part of the machine contract.
+	CategoryRollbackUnavailable       Category = "rollback_unavailable"
+	CategoryRollbackRecordInvalid     Category = "rollback_record_invalid"
+	CategoryRollbackInputMissing      Category = "rollback_input_missing"
+	CategoryRollbackImageMissing      Category = "rollback_image_missing"
+	CategoryRollbackSecretUnavailable Category = "rollback_secret_unavailable"
+	CategoryRollbackFailed            Category = "rollback_failed"
+	CategoryRollbackVerifyFailed      Category = "rollback_verify_failed"
+	CategoryStateFailed               Category = "state_failed"
+	CategoryVerificationFailed        Category = "verification_failed"
+	CategoryCanceled                  Category = "canceled"
+	CategoryHistoryFailed             Category = "history_failed"
+	CategorySecretInvalid             Category = "secret_invalid"
+	CategorySecretInputInvalid        Category = "secret_input_invalid"
+	CategorySecretUnsupported         Category = "secret_unsupported"
+	CategorySecretSource              Category = "secret_source_unavailable"
+	CategorySecretApplyFailed         Category = "secret_apply_failed"
+	// CategoryBuildServiceInvalid means a build-phase secret reference names a
+	// service without a Compose build section. The build would silently do
+	// nothing, so it is a usage error (exit 2), never a silent skip.
+	CategoryBuildServiceInvalid Category = "build_service_invalid"
+	CategoryInternal            Category = "internal_error"
 )
 
 // Severity separates blocking problems from information that still allows the

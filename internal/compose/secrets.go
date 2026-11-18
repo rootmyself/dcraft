@@ -18,10 +18,11 @@ func (c *Compose) prepareSecrets(ctx context.Context, t core.Target, services []
 	if err != nil {
 		return secretref.Session{}, err
 	}
-	if !cat.Has() {
+	if !cat.HasPhase(secretref.PhaseRuntime) {
 		if mode == secretref.ModeCreate && c.secrets != nil {
 			// A previous configuration may have left a managed override.
 			// Removing it keeps the effective inputs equal to the user's files.
+			// Build-phase references are never runtime delivery.
 			return c.secrets.Prepare(ctx, t, nil, mode)
 		}
 		return secretref.Session{}, nil

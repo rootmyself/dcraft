@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/rootmyself/dcraft/internal/core"
+	"github.com/rootmyself/dcraft/internal/secretref"
 	"github.com/rootmyself/dcraft/internal/stack"
 	"github.com/rootmyself/dcraft/internal/state"
 )
@@ -288,6 +289,7 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation, opts Options) 
 				NoCache: opts.NoCache,
 				Pull:    opts.BuildPull,
 			})
+			notices = append(notices, result.Notices...)
 			if buildErr != nil {
 				if ctx.Err() != nil || errors.Is(buildErr, context.Canceled) || errors.Is(buildErr, context.DeadlineExceeded) {
 					return ctxError(ctx, buildErr)
@@ -626,6 +628,14 @@ func (c *Controller) recordGoodVersion(ctx context.Context, in core.Invocation, 
 		return state.GoodVersion{}, errors.New(msgGoodNoImages)
 	}
 	sort.Slice(services, func(i, j int) bool { return services[i].Service < services[j].Service })
+	// Store the saved references, never a resolved value. Rollback re-resolves
+	// them through their original sources and checks availability before it
+	// changes anything. Both runtime and build phases are recorded so a
+	// rollback can precheck build-time delivery too.
+	secretRefs, err := goodVersionSecretRefs(target)
+	if err != nil {
+		return state.GoodVersion{}, err
+	}
 	recordedAt := c.clock.Now()
 	if in.Clock != nil {
 		recordedAt = in.Clock.Now()
@@ -641,9 +651,8 @@ func (c *Controller) recordGoodVersion(ctx context.Context, in core.Invocation, 
 			ProjectName:    projectName,
 			Environment:    in.Target.Environment,
 			DefaultEnvFile: in.Target.DefaultEnvFile,
-			// Secret references are populated by the secret-source tickets; the
-			// record never stores a resolved value.
-			SecretRefs: []state.SecretReference{},
+			// Secret references are the saved sources and targets only.
+			SecretRefs: secretRefs,
 		},
 		Services: services,
 	}
@@ -765,4 +774,25 @@ func nonNil(items []string) []string {
 		return []string{}
 	}
 	return items
+}
+
+// goodVersionSecretRefs maps the project's saved references to the neutral
+// record shape. It reads only .dcraft.yaml; no source is resolved and no value
+// can enter the record.
+func goodVersionSecretRefs(target core.Target) ([]state.SecretReference, error) {
+	cat, err := secretref.Load(target.ProjectDir)
+	if err != nil {
+		return nil, err
+	}
+	refs := make([]state.SecretReference, 0, len(cat.References))
+	for _, ref := range cat.References {
+		refs = append(refs, state.SecretReference{
+			Service:  ref.Service,
+			Phase:    string(ref.Phase),
+			Delivery: string(ref.Delivery),
+			Source:   string(ref.Source),
+			Name:     ref.Ref,
+		})
+	}
+	return refs, nil
 }

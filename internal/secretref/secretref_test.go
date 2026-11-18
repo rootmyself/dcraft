@@ -90,10 +90,10 @@ func TestLoadRejectsInvalidReferences(t *testing.T) {
 			msg:  "중복",
 		},
 		{
-			name: "build phase is recognized but not implemented",
+			name: "build phase only accepts the buildkit mount",
 			text: "secrets:\n  - service: web\n    phase: build\n    delivery: environment\n    source: env\n    ref: X\n",
 			want: core.CategorySecretInvalid,
-			msg:  "빌드",
+			msg:  "BuildKit",
 		},
 		{
 			name: "aws source is recognized but not implemented",
@@ -239,6 +239,95 @@ func TestAddRejectsDuplicateAndUnknownInput(t *testing.T) {
 	var ce *core.Error
 	if !asCoreError(err, &ce) || ce.Diagnostics[0].Category != core.CategorySecretInputInvalid {
 		t.Fatalf("error = %v, want secret_input_invalid", err)
+	}
+}
+
+func TestLoadAcceptsBuildPhaseFileReferences(t *testing.T) {
+	dir := t.TempDir()
+	writeConfig(t, dir, `secrets:
+  - service: web
+    phase: build
+    delivery: file
+    source: env
+    ref: BUILD_TOKEN
+  - service: worker
+    phase: build
+    delivery: file
+    source: file
+    ref: secrets/token.txt
+`)
+
+	cat, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(cat.References) != 2 {
+		t.Fatalf("references = %+v", cat.References)
+	}
+	web := cat.References[0]
+	if web.Phase != PhaseBuild || web.Delivery != DeliveryFile || web.Source != SourceEnv {
+		t.Fatalf("web reference = %+v", web)
+	}
+	if web.Target != "BUILD_TOKEN" || web.TargetPath() != "/run/secrets/BUILD_TOKEN" {
+		t.Fatalf("web target = %q path = %q", web.Target, web.TargetPath())
+	}
+	worker := cat.References[1]
+	if worker.Phase != PhaseBuild || worker.Target != "token" {
+		t.Fatalf("worker reference = %+v", worker)
+	}
+	if got := cat.ForPhase(PhaseBuild); len(got) != 2 {
+		t.Fatalf("build refs = %+v", got)
+	}
+	if got := cat.ForPhase(PhaseRuntime); len(got) != 0 {
+		t.Fatalf("runtime refs = %+v, want none", got)
+	}
+	if got := cat.ForPhaseServices(PhaseBuild, []string{"worker"}); len(got) != 1 || got[0].Service != "worker" {
+		t.Fatalf("filtered build refs = %+v", got)
+	}
+}
+
+func TestAddRejectsBuildPhaseEnvironmentDelivery(t *testing.T) {
+	dir := t.TempDir()
+	_, err := Add(dir, Reference{
+		Service:  "web",
+		Phase:    PhaseBuild,
+		Delivery: DeliveryEnvironment,
+		Source:   SourceEnv,
+		Ref:      "BUILD_TOKEN",
+	})
+	if err == nil {
+		t.Fatal("Add accepted environment delivery for the build phase")
+	}
+	var ce *core.Error
+	if !asCoreError(err, &ce) || ce.Diagnostics[0].Category != core.CategorySecretInputInvalid {
+		t.Fatalf("error = %v, want secret_input_invalid", err)
+	}
+	if !strings.Contains(ce.Diagnostics[0].Message, "BuildKit") {
+		t.Fatalf("message = %q", ce.Diagnostics[0].Message)
+	}
+}
+
+func TestAddAcceptsBuildPhaseFileReferenceWithoutValues(t *testing.T) {
+	dir := t.TempDir()
+	cat, err := Add(dir, Reference{
+		Service:  "web",
+		Phase:    PhaseBuild,
+		Delivery: DeliveryFile,
+		Source:   SourceFile,
+		Ref:      "secrets/token.txt",
+	})
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	if len(cat.References) != 1 || cat.References[0].Phase != PhaseBuild || cat.References[0].Target != "token" {
+		t.Fatalf("catalog = %+v", cat)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, ".dcraft.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "value:") || strings.Contains(string(data), "secret-value") {
+		t.Fatalf("config persisted a value:\n%s", data)
 	}
 }
 

@@ -10,6 +10,6 @@ import (
 // secrets feature. CLI and TUI derive the command from the same descriptor.
 func init() {
 	register(func(reg *core.Registry, d *deps.Deps) {
-		reg.MustRegister(secrets.New(d.Compose, d.Secrets))
+		reg.MustRegister(secrets.New(d.Compose, d.Secrets, d.Compose))
 	})
 }

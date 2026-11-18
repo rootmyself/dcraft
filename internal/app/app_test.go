@@ -34,13 +34,13 @@ func TestRegistrationWiresStatusIntoBothInterfaces(t *testing.T) {
 	for _, f := range features {
 		byName[f.Descriptor().Name] = f
 	}
-	for _, name := range []string{"status", "install-compose", "up", "stop", "down", "restart", "update", "secrets", "hooks", "logs", "exec", "backup"} {
+	for _, name := range []string{"status", "install-compose", "up", "stop", "down", "restart", "update", "secrets", "hooks", "logs", "exec", "backup", "rollback"} {
 		if _, ok := byName[name]; !ok {
 			t.Fatalf("registered features = %v, missing %q", features, name)
 		}
 	}
-	if len(features) != 12 {
-		t.Fatalf("registered features = %d, want 12", len(features))
+	if len(features) != 13 {
+		t.Fatalf("registered features = %d, want 13", len(features))
 	}
 	for _, name := range []string{"up", "stop", "restart", "update"} {
 		if !byName[name].Descriptor().SupportsServices {
@@ -50,7 +50,7 @@ func TestRegistrationWiresStatusIntoBothInterfaces(t *testing.T) {
 	if byName["down"].Descriptor().SupportsServices {
 		t.Fatal("down must stay project-wide")
 	}
-	for _, name := range []string{"up", "stop", "down", "restart", "update"} {
+	for _, name := range []string{"up", "stop", "down", "restart", "update", "rollback"} {
 		d := byName[name].Descriptor()
 		if d.ReadOnly || !d.RecordsHistory {
 			t.Fatalf("%s descriptor = %+v", name, d)
@@ -71,7 +71,7 @@ func TestRegistrationWiresStatusIntoBothInterfaces(t *testing.T) {
 	for _, cmd := range root.Commands() {
 		commands[cmd.Name()] = true
 	}
-	for _, name := range []string{"status", "install-compose", "up", "stop", "down", "restart", "update", "secrets", "hooks", "logs", "exec", "backup"} {
+	for _, name := range []string{"status", "install-compose", "up", "stop", "down", "restart", "update", "secrets", "hooks", "logs", "exec", "backup", "rollback"} {
 		if !commands[name] {
 			t.Fatalf("command %q was not derived from the real registry", name)
 		}

@@ -50,6 +50,7 @@ const (
 	msgPlanNoPull          = "  - 이미지 전용 서비스 없음"
 	msgPlanFlagHeader      = "선택한 동작"
 	msgPlanNoCacheCost     = "  - 캐시 사용 안 함: 빌드 캐시를 쓰지 않아 모든 빌드 단계를 다시 실행하며 시간이 더 걸립니다."
+	msgPlanBuildSecrets    = "  - 빌드 시점 비밀값: 값 변경은 Docker 빌드 캐시를 무효화하지 않습니다. 새 값을 반영하려면 이 계획에서 캐시 사용 안 함(--no-cache)을 선택하세요. dcraft는 이전 값을 저장하거나 비교하지 않습니다."
 	msgPlanBuildPullCost   = "  - 베이스 이미지 새로 받기: 로컬 빌드의 기반 이미지를 새로 받습니다. 서비스 이미지 취득과 다릅니다."
 	msgPlanNoPullCost      = "  - 이미지 새로 고침 생략: 지정 태그를 새로 받지 않으며, 로컬 이미지가 없으면 변경 전에 실패합니다."
 	msgPlanForceCost       = "  - 강제 재생성: 변경이 없어도 대상 컨테이너를 모두 다시 만들어 짧은 중단이 늘어납니다."
