@@ -153,6 +153,7 @@ func (r Result) ExitCode() int {
 				CategorySecretInputInvalid, CategorySecretUnsupported,
 				CategoryBuildServiceInvalid,
 				CategoryBackupOutputRequired, CategoryBackupVolumeRequired, CategoryBackupVolumeUnknown,
+				CategoryBackupBindUnknown,
 				CategorySelectionRequired, CategoryInstanceUnknown:
 				return 2
 			}

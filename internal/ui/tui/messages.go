@@ -75,17 +75,18 @@ const (
 )
 
 const (
-	msgWizardLoading       = "비밀값 연결 설정 단계를 준비하는 중…"
+	msgWizardLoading       = "대화형 설정 단계를 준비하는 중…"
 	msgWizardProgress      = "단계"
 	msgWizardInputLabel    = "> "
 	msgWizardNeedValue     = "값을 입력한 뒤 enter를 누르세요."
-	msgWizardNeedChoice    = "↑/↓로 값을 선택한 뒤 enter를 누르세요."
+	msgWizardNeedChoice    = "↑/↓로 항목을 이동하고 enter로 선택하세요. 여러 항목은 space로 함께 선택할 수 있습니다."
 	msgWizardPreviewFailed = "입력을 저장할 수 없습니다. 이전 단계로 돌아가 수정하세요."
 	msgWizardPayload       = "대화형 설정 단계를 표시할 수 없습니다."
 	msgWizardPayloadAction = "dcraft secrets 명령으로 참조를 직접 추가하세요."
 	msgWizardUnavailable   = "이 기능은 대화형 설정을 지원하지 않습니다."
 	msgWizardCanceled      = "대화형 설정을 취소했습니다. 저장된 내용은 없습니다."
 	msgHintWizardChoice    = "↑/↓ 선택 · enter 다음 · ← 이전 · esc 취소 · q 종료"
+	msgHintWizardMulti     = "↑/↓ 이동 · space 선택/해제 · enter 다음 · ← 이전 · esc 취소 · q 종료"
 	msgHintWizardInput     = "입력 후 enter · backspace 수정 · ← 이전 · esc 취소 · q 종료"
 	msgHintWizardPreview   = "enter 저장 · ← 이전 · esc 취소 · q 종료"
 	msgHintWizardInvalid   = "← 이전 · esc 취소 · q 종료"

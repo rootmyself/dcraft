@@ -62,8 +62,14 @@ const (
 	CategoryBackupIntegrityFailed    Category = "backup_integrity_failed"
 	CategoryBackupStateRestoreFailed Category = "backup_state_restore_failed"
 	CategoryBackupSelectionChanged   Category = "backup_selection_changed"
-	CategoryStackBusy                Category = "stack_busy"
-	CategoryLifecycleFailed          Category = "lifecycle_failed"
+	// Bind-folder backup (ticket #17). These are additive v1 categories.
+	// backup_bind_unknown is invalid caller input (exit 2); bind_invalid and
+	// bind_unsafe are operation failures (exit 1).
+	CategoryBackupBindUnknown Category = "backup_bind_unknown"
+	CategoryBackupBindInvalid Category = "backup_bind_invalid"
+	CategoryBackupBindUnsafe  Category = "backup_bind_unsafe"
+	CategoryStackBusy         Category = "stack_busy"
+	CategoryLifecycleFailed   Category = "lifecycle_failed"
 	// Host scripts (ticket #12). hook_invalid is a registration/file problem;
 	// hook_failed is a pre-hook process failure that blocked the operation;
 	// hook_content_changed means the approved content identity no longer

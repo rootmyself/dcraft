@@ -108,18 +108,20 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation) (payload any, 
 		return c.cfg.Backend.Redact(ctx, in.Target, text)
 	}
 
-	// 1. Validate the user-chosen output directory before anything is stopped.
-	var outputDir string
+	// 1. Resolve the user-chosen output path before anything is stopped. The
+	// directory is not created yet: bind containment must be checked first so
+	// dcraft never writes the backup store inside a source folder.
+	var outputPlan string
 	err = core.RunStage(in.Reporter, "output", msgStageOutput, func() error {
 		cwd, cwdErr := os.Getwd()
 		if cwdErr != nil {
 			return outputError(cwdErr)
 		}
-		dir, dirErr := ValidateOutputDir(in.Option("output"), cwd)
+		dir, dirErr := ResolveOutputPath(in.Option("output"), cwd)
 		if dirErr != nil {
 			return outputError(dirErr)
 		}
-		outputDir = dir
+		outputPlan = dir
 		return nil
 	})
 	if err != nil {
@@ -178,7 +180,7 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation) (payload any, 
 			return dErr
 		}
 		discovery = d
-		sources, sErr := d.Select(in.OptionList("volume"))
+		sources, sErr := d.Select(in.OptionList("volume"), in.OptionList("bind"))
 		if sErr != nil {
 			return selectionError(sErr, d.Sources)
 		}
@@ -190,14 +192,14 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation) (payload any, 
 	}
 
 	// 5. Re-resolve immediately before any stop. A plan or interactive preview
-	// is only advisory; a changed volume identity must never be archived or
-	// attributed to the stack the user saw.
+	// is only advisory; a changed volume or bind identity must never be
+	// archived or attributed to the stack the user saw.
 	err = core.RunStage(in.Reporter, "recheck_selection", msgStageRecheck, func() error {
 		fresh, freshErr := Discover(ctx, c.cfg.Backend, target, projectName)
 		if freshErr != nil {
 			return freshErr
 		}
-		freshSelected, selectErr := fresh.Select(in.OptionList("volume"))
+		freshSelected, selectErr := fresh.Select(in.OptionList("volume"), in.OptionList("bind"))
 		if selectErr != nil {
 			return selectionError(selectErr, fresh.Sources)
 		}
@@ -206,6 +208,33 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation) (payload any, 
 		}
 		discovery = fresh
 		selected = freshSelected
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// 5.1 Validate host folders and prove the output location does not lie
+	// inside a selected source. The output directory is created only after the
+	// containment check, still before any service is stopped.
+	var outputDir string
+	err = core.RunStage(in.Reporter, "check_paths", msgStageCheckPaths, func() error {
+		cwd, cwdErr := os.Getwd()
+		if cwdErr != nil {
+			return outputError(cwdErr)
+		}
+		if bindErr := CheckBindSources(selected, outputPlan); bindErr != nil {
+			return bindSelectionError(bindErr)
+		}
+		dir, dirErr := ValidateOutputDir(outputPlan, cwd)
+		if dirErr != nil {
+			return outputError(dirErr)
+		}
+		outputDir = dir
+		// Recheck after creation with the final symlink-resolved path.
+		if bindErr := CheckBindSources(selected, outputDir); bindErr != nil {
+			return bindSelectionError(bindErr)
+		}
 		return nil
 	})
 	if err != nil {
@@ -296,13 +325,30 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation) (payload any, 
 	for _, src := range selected {
 		sources = append(sources, SourceFrom(src, projectName, target.Environment, target.ProjectDir))
 	}
-	notices := []string{
-		fmt.Sprintf(msgHelperImageNotice, c.cfg.Backend.HelperImage()),
-		msgSensitiveNotice,
-		msgOwnershipNote,
-		msgExcludedNotice,
-		msgNoAutoDeleteNote,
+	var anyVolume, anyBind bool
+	for _, src := range selected {
+		switch src.Kind {
+		case data.KindBind:
+			anyBind = true
+		default:
+			anyVolume = true
+		}
 	}
+	notices := []string{}
+	if anyVolume {
+		notices = append(notices, fmt.Sprintf(msgHelperImageNotice, c.cfg.Backend.HelperImage()))
+	}
+	if anyBind {
+		notices = append(notices, msgBindHostArchiveNotice)
+	}
+	notices = append(notices, msgSensitiveNotice)
+	if anyVolume {
+		notices = append(notices, msgOwnershipNote)
+	}
+	if anyBind {
+		notices = append(notices, msgBindOwnershipNote)
+	}
+	notices = append(notices, msgExcludedNotice, msgNoAutoDeleteNote)
 	if len(stopped) == 0 {
 		notices = append(notices, msgStoppedOnlyOurs)
 	}
@@ -352,9 +398,12 @@ func (c *Controller) Plan(ctx context.Context, in core.Invocation) (core.Plan, e
 	if err != nil {
 		return core.Plan{}, err
 	}
-	selected, err := discovery.Select(in.OptionList("volume"))
+	selected, err := discovery.Select(in.OptionList("volume"), in.OptionList("bind"))
 	if err != nil {
 		return core.Plan{}, selectionError(err, discovery.Sources)
+	}
+	if err := CheckBindSources(selected, outputDir); err != nil {
+		return core.Plan{}, bindSelectionError(err)
 	}
 	report, err := discovery.CheckConsumers(ctx, c.cfg.Backend, selected)
 	if err != nil {
@@ -382,10 +431,30 @@ func (c *Controller) Plan(ctx context.Context, in core.Invocation) (core.Plan, e
 	for _, src := range selected {
 		fmt.Fprintf(&b, "  - %s\n", DescribeSource(src))
 	}
+	var anyVolume, anyBind bool
+	for _, src := range selected {
+		if src.Kind == data.KindBind {
+			anyBind = true
+		} else {
+			anyVolume = true
+		}
+	}
+	if anyBind {
+		b.WriteString(msgPlanSharedNone)
+		b.WriteString("\n")
+	}
 	fmt.Fprintf(&b, msgPlanServices+"\n", joinOrNone(affected))
 	fmt.Fprintf(&b, msgPlanRunning+"\n", joinOrNone(running))
 	fmt.Fprintf(&b, msgPlanStopped+"\n", joinOrNone(stoppedAlready))
-	fmt.Fprintf(&b, msgPlanHelper+"\n", c.cfg.Backend.HelperImage())
+	if anyVolume {
+		fmt.Fprintf(&b, msgPlanHelper+"\n", c.cfg.Backend.HelperImage())
+	}
+	if anyBind {
+		b.WriteString(msgPlanHostTar)
+		b.WriteString("\n")
+		b.WriteString(msgPlanBindOwnership)
+		b.WriteString("\n")
+	}
 	b.WriteString(msgPlanStopStep)
 	b.WriteString("\n")
 	b.WriteString(msgPlanLock)
@@ -400,20 +469,6 @@ func (c *Controller) Plan(ctx context.Context, in core.Invocation) (core.Plan, e
 	b.WriteString("\n")
 	b.WriteString(msgPlanNoAutoDelete)
 	return core.Plan{Text: b.String()}, nil
-}
-
-func sourceDetail(src data.DataSource) string {
-	parts := []string{}
-	if len(src.Services) > 0 {
-		parts = append(parts, "서비스 "+strings.Join(src.Services, ", "))
-	}
-	if len(src.MountTargets) > 0 {
-		parts = append(parts, "마운트 "+strings.Join(src.MountTargets, ", "))
-	}
-	if src.External {
-		parts = append(parts, "external 볼륨")
-	}
-	return strings.Join(parts, " · ")
 }
 
 func (c *Controller) effectiveName(ctx context.Context, target core.Target) (string, error) {
@@ -451,7 +506,7 @@ func (c *Controller) archiveOne(ctx context.Context, in core.Invocation, target 
 		return ArtifactReport{}, outputError(err)
 	}
 	partial := final + PartialSuffix
-	if err := os.MkdirAll(partial, 0o700); err != nil {
+	if err := os.Mkdir(partial, 0o700); err != nil {
 		return ArtifactReport{}, archiveFailure("", err, partial)
 	}
 	cleanup := func() string {
@@ -461,13 +516,28 @@ func (c *Controller) archiveOne(ctx context.Context, in core.Invocation, target 
 		return msgPartialCleaned
 	}
 
-	err = core.RunStage(in.Reporter, "archive", fmt.Sprintf("%s: %s", msgStageArchive, src.Key), func() error {
-		res, archiveErr := c.cfg.Backend.ArchiveVolume(ctx, src.Name, partial)
+	archiveTitle := msgStageArchive + ": " + src.Key
+	if src.Kind == data.KindBind {
+		archiveTitle = msgStageArchiveBind + ": " + src.Name
+	}
+	err = core.RunStage(in.Reporter, "archive", archiveTitle, func() error {
+		var archiveErr error
+		var output string
+		if src.Kind == data.KindBind {
+			archiveErr = ArchiveHostDir(ctx, src.Name, filepath.Join(partial, DataFile))
+		} else {
+			var res data.OpResult
+			res, archiveErr = c.cfg.Backend.ArchiveVolume(ctx, src.Name, partial)
+			output = res.Output
+		}
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return ctxErr
 		}
 		if archiveErr != nil {
-			return archiveFailure(redact(res.Output), errors.New(redact(archiveErr.Error())), partial)
+			if src.Kind == data.KindBind {
+				return bindArchiveError(errors.New(redact(archiveErr.Error())), partial)
+			}
+			return archiveFailure(redact(output), errors.New(redact(archiveErr.Error())), partial)
 		}
 		return nil
 	})
@@ -491,6 +561,10 @@ func (c *Controller) archiveOne(ctx context.Context, in core.Invocation, target 
 		if syncErr := syncFile(filepath.Join(partial, DataFile)); syncErr != nil {
 			return archiveFailure("", syncErr, partial)
 		}
+		ownershipNote := msgOwnershipNote
+		if src.Kind == data.KindBind {
+			ownershipNote = msgBindOwnershipNote
+		}
 		manifest = Manifest{
 			Schema:        Schema,
 			FormatVersion: FormatVersion,
@@ -512,7 +586,7 @@ func (c *Controller) archiveOne(ctx context.Context, in core.Invocation, target 
 			Entries:       inspected.Entries,
 			Totals:        inspected.Totals,
 			Sensitive:     true,
-			OwnershipNote: msgOwnershipNote,
+			OwnershipNote: ownershipNote,
 		}
 		if writeErr := WriteManifest(partial, manifest); writeErr != nil {
 			return archiveFailure("", writeErr, partial)
@@ -681,20 +755,27 @@ func selectionError(err error, sources []DataSource) error {
 	var unknown *UnknownVolumeError
 	var unsupported *UnsupportedSourceError
 	var invalid *InvalidVolumeNameError
+	var unknownBind *UnknownBindError
+	var ambiguous *AmbiguousBindError
+	var bindAsVolume *BindAsVolumeError
 	switch {
 	case errors.Is(err, ErrVolumeRequired):
 		available := []string{}
-		for _, src := range SelectableVolumes(sources) {
-			available = append(available, src.Key)
+		for _, src := range SelectableSources(sources) {
+			if src.Kind == data.KindBind {
+				available = append(available, src.Name)
+			} else {
+				available = append(available, src.Key)
+			}
 		}
 		diag := core.Diagnostic{
 			Category:    core.CategoryBackupVolumeRequired,
 			Severity:    core.SeverityError,
-			Message:     msgVolumeRequired,
-			NextActions: []string{msgVolumeRequiredAction, msgVolumeListAction},
+			Message:     msgSourceRequired,
+			NextActions: []string{msgSourceRequiredAction, msgSourceListAction},
 		}
 		if len(available) > 0 {
-			diag.Detail = "사용 가능한 볼륨 키: " + strings.Join(available, ", ")
+			diag.Detail = "사용 가능한 데이터 원본: " + strings.Join(available, ", ")
 		}
 		return core.Fail(diag)
 	case errors.As(err, &unknown):
@@ -704,6 +785,30 @@ func selectionError(err error, sources []DataSource) error {
 			Message:     msgVolumeUnknown,
 			Detail:      unknown.Error(),
 			NextActions: []string{msgVolumeUnknownAction},
+		})
+	case errors.As(err, &unknownBind):
+		return core.Fail(core.Diagnostic{
+			Category:    core.CategoryBackupBindUnknown,
+			Severity:    core.SeverityError,
+			Message:     msgBindUnknown,
+			Detail:      unknownBind.Error(),
+			NextActions: []string{msgBindUnknownAction},
+		})
+	case errors.As(err, &ambiguous):
+		return core.Fail(core.Diagnostic{
+			Category:    core.CategoryBackupBindUnknown,
+			Severity:    core.SeverityError,
+			Message:     msgBindAmbiguous,
+			Detail:      ambiguous.Error(),
+			NextActions: []string{msgBindAmbiguousAction},
+		})
+	case errors.As(err, &bindAsVolume):
+		return core.Fail(core.Diagnostic{
+			Category:    core.CategoryBackupVolumeUnknown,
+			Severity:    core.SeverityError,
+			Message:     msgVolumeUnknown,
+			Detail:      bindAsVolume.Error(),
+			NextActions: []string{msgBindInsteadOfVolumeAction},
 		})
 	case errors.As(err, &unsupported), errors.As(err, &invalid):
 		return core.FailCause(err, core.Diagnostic{
@@ -716,6 +821,44 @@ func selectionError(err error, sources []DataSource) error {
 	default:
 		return err
 	}
+}
+
+// bindSelectionError maps a host-folder path failure to a stable category. An
+// unsafe selection (filesystem root or output inside the source) is refused
+// before any stop and never touches the source.
+func bindSelectionError(err error) error {
+	var pathErr *BindPathError
+	if errors.As(err, &pathErr) {
+		if pathErr.Reason == BindReasonOutputInside {
+			return core.FailCause(err, core.Diagnostic{
+				Category:    core.CategoryBackupBindUnsafe,
+				Severity:    core.SeverityError,
+				Message:     msgBindOutputInside,
+				Detail:      err.Error(),
+				NextActions: []string{msgBindOutputInsideAction, msgBindOutputInsideNoStop},
+			})
+		}
+		if pathErr.Reason == BindReasonFilesystemRoot {
+			return core.FailCause(err, core.Diagnostic{
+				Category:    core.CategoryBackupBindUnsafe,
+				Severity:    core.SeverityError,
+				Message:     msgBindRootUnsafe,
+				Detail:      err.Error(),
+				NextActions: []string{msgBindRootUnsafeAction},
+			})
+		}
+		return core.FailCause(err, core.Diagnostic{
+			Category:    core.CategoryBackupBindInvalid,
+			Severity:    core.SeverityError,
+			Message:     msgBindInvalid,
+			Detail:      err.Error(),
+			NextActions: []string{msgBindInvalidAction, msgBindInvalidPermissions},
+		})
+	}
+	if errors.Is(err, ErrOutputInvalid) {
+		return outputError(err)
+	}
+	return err
 }
 
 func outsideConsumerError(outside []data.ContainerConsumer) error {
@@ -792,6 +935,29 @@ func archiveFailure(output string, err error, location string) error {
 		return core.FailCause(err, diag)
 	}
 	return core.Fail(diag)
+}
+
+func bindArchiveError(err error, location string) error {
+	detail := err.Error()
+	lower := strings.ToLower(err.Error())
+	if strings.Contains(lower, "no space left") || strings.Contains(lower, "write error") {
+		detail += "\n" + fmt.Sprintf(msgPartialLocation, location)
+		return core.FailCause(err, core.Diagnostic{
+			Category:    core.CategoryBackupFailed,
+			Severity:    core.SeverityError,
+			Message:     msgArchiveDiskFull,
+			Detail:      detail,
+			NextActions: []string{msgArchiveDiskFullNext},
+		})
+	}
+	detail += "\n" + fmt.Sprintf(msgPartialLocation, location)
+	return core.FailCause(err, core.Diagnostic{
+		Category:    core.CategoryBackupBindInvalid,
+		Severity:    core.SeverityError,
+		Message:     msgBindArchiveFailed,
+		Detail:      detail,
+		NextActions: []string{msgBindInvalidAction, msgBindInvalidPermissions},
+	})
 }
 
 func integrityError(err error, location string) error {
@@ -908,8 +1074,9 @@ func joinOrNone(values []string) string {
 }
 
 // WizardSteps implements the read-only first half of the interactive flow. It
-// lists named volumes and asks for one output directory. It creates nothing
-// and never stops a service.
+// lists named volumes and declared bind folders in one keyboard-driven multi
+// selection and asks for one output directory. It creates nothing and never
+// stops a service.
 func (c *Controller) WizardSteps(ctx context.Context, in core.Invocation) (core.WizardSpec, error) {
 	if c.cfg.Backend == nil || c.cfg.Names == nil {
 		return core.WizardSpec{}, core.Fail(core.Diagnostic{
@@ -929,27 +1096,44 @@ func (c *Controller) WizardSteps(ctx context.Context, in core.Invocation) (core.
 	if err != nil {
 		return core.WizardSpec{}, err
 	}
-	selectable := SelectableVolumes(discovery.Sources)
+	selectable := SelectableSources(discovery.Sources)
 	if len(selectable) == 0 {
 		return core.WizardSpec{}, selectionError(ErrVolumeRequired, discovery.Sources)
 	}
+	shared := map[string][]data.ContainerConsumer{}
 	options := make([]core.WizardOption, 0, len(selectable))
 	for _, src := range selectable {
-		label := fmt.Sprintf("%s → %s", src.Key, src.Name)
-		if detail := sourceDetail(src); detail != "" {
-			label += " · " + detail
+		value := "volume:" + src.Key
+		label := "볼륨 " + DescribeSource(src)
+		if src.Kind == data.KindBind {
+			value = "bind:" + src.Name
+			label = DescribeSource(src)
+			if _, statErr := os.Lstat(src.Name); statErr != nil {
+				label += " · 경로를 읽을 수 없음"
+			}
+			outside, consumerErr := discovery.OutsideConsumers(ctx, c.cfg.Backend, src)
+			if consumerErr != nil {
+				return core.WizardSpec{}, consumerErr
+			}
+			shared[src.Name] = outside
+			if len(outside) > 0 {
+				label += " · 다른 스택 공유: " + consumerNames(outside)
+			} else {
+				label += " · 다른 스택 공유 없음"
+			}
 		}
-		options = append(options, core.WizardOption{Value: src.Key, Label: label})
+		options = append(options, core.WizardOption{Value: value, Label: label})
 	}
-	c.cacheWizardPreview(discovery)
+	c.cacheWizardPreview(discovery, shared)
 	return core.WizardSpec{
 		Title: msgWizardTitle,
 		Steps: []core.WizardStep{
 			{
-				Name:    "volume",
-				Title:   msgWizardVolumeTitle,
-				Prompt:  msgWizardVolumePrompt,
+				Name:    "sources",
+				Title:   msgWizardSourceTitle,
+				Prompt:  msgWizardSourcePrompt,
 				Options: options,
+				Multi:   true,
 			},
 			{
 				Name:        "output",
@@ -967,33 +1151,89 @@ func (c *Controller) WizardSteps(ctx context.Context, in core.Invocation) (core.
 // discovery. It is a preview only: Run re-resolves everything and refuses a
 // changed selection before stopping anything.
 func (c *Controller) WizardPreview(answers map[string]string) string {
-	volumeKey := strings.TrimSpace(answers["volume"])
+	text, _ := c.wizardPreview(answers)
+	return text
+}
+
+func (c *Controller) wizardPreview(answers map[string]string) (string, error) {
 	output := strings.TrimSpace(answers["output"])
 	if output == "" {
 		output = msgWizardOutputDefault
 	}
+	volumes, binds := ParseWizardSources(answers["sources"])
 	var b strings.Builder
 	b.WriteString(msgPlanHeader)
 	b.WriteString("\n\n")
 	cached := c.wizardCache()
-	var matched *DataSource
+	var selected []DataSource
 	if cached != nil {
-		if selected, err := cached.discovery.Select([]string{volumeKey}); err == nil && len(selected) > 0 {
-			matched = &selected[0]
+		chosen, err := cached.discovery.Select(volumes, binds)
+		if err != nil {
+			return "", selectionError(err, cached.discovery.Sources)
+		}
+		selected = chosen
+		cwd, cwdErr := os.Getwd()
+		if cwdErr != nil {
+			return "", outputError(cwdErr)
+		}
+		outputPath, resolveErr := ResolveOutputPath(output, cwd)
+		if resolveErr != nil {
+			return "", outputError(resolveErr)
+		}
+		if bindErr := CheckBindSources(selected, outputPath); bindErr != nil {
+			return "", bindSelectionError(bindErr)
 		}
 	}
-	if matched != nil {
-		affected := cached.discovery.AffectedServices([]DataSource{*matched})
+	if cached != nil && len(selected) > 0 {
+		fmt.Fprintf(&b, "프로젝트: %s\n", cached.discovery.ProjectName)
+	}
+	b.WriteString(msgPlanSources)
+	b.WriteString("\n")
+	if len(selected) == 0 {
+		for _, key := range volumes {
+			fmt.Fprintf(&b, "  - 볼륨 %s\n", key)
+		}
+		for _, path := range binds {
+			fmt.Fprintf(&b, "  - 폴더 %s\n", path)
+		}
+		b.WriteString(msgWizardRecheck)
+		b.WriteString("\n")
+	} else {
+		for _, src := range selected {
+			fmt.Fprintf(&b, "  - %s\n", DescribeSource(src))
+			if src.Kind == data.KindBind && cached != nil {
+				outside := cached.shared[src.Name]
+				if len(outside) > 0 {
+					fmt.Fprintf(&b, "    "+msgPlanSharedSome+"\n", consumerNames(outside))
+				} else {
+					b.WriteString("    " + msgPlanSharedNone + "\n")
+				}
+			}
+		}
+		affected := cached.discovery.AffectedServices(selected)
 		running := cached.discovery.RunningAmong(affected)
 		stopped := difference(affected, running)
-		fmt.Fprintf(&b, "백업 대상 볼륨: %s → %s\n", matched.Key, matched.Name)
 		fmt.Fprintf(&b, msgPlanServices+"\n", joinOrNone(affected))
 		fmt.Fprintf(&b, msgPlanRunning+"\n", joinOrNone(running))
 		fmt.Fprintf(&b, msgPlanStopped+"\n", joinOrNone(stopped))
-	} else {
-		fmt.Fprintf(&b, "백업 대상 볼륨: %s\n", volumeKey)
-		b.WriteString(msgWizardRecheck)
-		b.WriteString("\n")
+		hasBind := false
+		hasVolume := false
+		for _, src := range selected {
+			if src.Kind == data.KindBind {
+				hasBind = true
+			} else {
+				hasVolume = true
+			}
+		}
+		if hasVolume {
+			fmt.Fprintf(&b, msgPlanHelper+"\n", c.cfg.Backend.HelperImage())
+		}
+		if hasBind {
+			b.WriteString(msgPlanHostTar)
+			b.WriteString("\n")
+			b.WriteString(msgPlanBindOwnership)
+			b.WriteString("\n")
+		}
 	}
 	fmt.Fprintf(&b, msgPlanOutput+"\n", output)
 	b.WriteString(msgPlanStopStep)
@@ -1001,17 +1241,51 @@ func (c *Controller) WizardPreview(answers map[string]string) string {
 	b.WriteString(msgPlanSensitive)
 	b.WriteString("\n")
 	b.WriteString(msgPlanNoAutoDelete)
-	return b.String()
+	return b.String(), nil
+}
+
+// ParseWizardSources splits the mixed TUI answer into volume keys and bind
+// paths. Values are prefixed so a host path can never be mistaken for a
+// Compose volume key.
+func ParseWizardSources(raw string) (volumes, binds []string) {
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(line, "volume:"):
+			if value := strings.TrimSpace(strings.TrimPrefix(line, "volume:")); value != "" {
+				volumes = append(volumes, value)
+			}
+		case strings.HasPrefix(line, "bind:"):
+			if value := strings.TrimSpace(strings.TrimPrefix(line, "bind:")); value != "" {
+				binds = append(binds, value)
+			}
+		}
+	}
+	return volumes, binds
+}
+
+func consumerNames(consumers []data.ContainerConsumer) string {
+	var names []string
+	for _, consumer := range consumers {
+		name := consumer.Name
+		if consumer.Project != "" {
+			name += " (" + consumer.Project + ")"
+		}
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return strings.Join(names, ", ")
 }
 
 type wizardPreviewCache struct {
 	discovery Discovery
+	shared    map[string][]data.ContainerConsumer
 }
 
-func (c *Controller) cacheWizardPreview(d Discovery) {
+func (c *Controller) cacheWizardPreview(d Discovery, shared map[string][]data.ContainerConsumer) {
 	c.wizardMu.Lock()
 	defer c.wizardMu.Unlock()
-	c.wizardCacheValue = &wizardPreviewCache{discovery: d}
+	c.wizardCacheValue = &wizardPreviewCache{discovery: d, shared: shared}
 }
 
 func (c *Controller) wizardCache() *wizardPreviewCache {
@@ -1025,10 +1299,11 @@ func sameSelection(a, b []DataSource) bool {
 		return false
 	}
 	for i := range a {
-		if a[i].Key != b[i].Key || a[i].Name != b[i].Name ||
+		if a[i].Key != b[i].Key || a[i].Name != b[i].Name || a[i].Declared != b[i].Declared ||
 			a[i].Kind != b[i].Kind || a[i].Anonymous != b[i].Anonymous ||
 			a[i].External != b[i].External ||
 			!sameStrings(a[i].Services, b[i].Services) ||
+			!sameStrings(a[i].DeclaredPaths, b[i].DeclaredPaths) ||
 			!sameStrings(a[i].MountTargets, b[i].MountTargets) {
 			return false
 		}
