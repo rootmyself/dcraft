@@ -245,7 +245,7 @@ func newHelperCompose(t *testing.T, h *helperLifecycle) *Compose {
 func TestArchiveVolumeCreatesStartsAndRemovesTheHelper(t *testing.T) {
 	h := &helperLifecycle{}
 	c := newHelperCompose(t, h)
-	if _, err := c.ArchiveVolume(context.Background(), "proj_data", "/backups/work"); err != nil {
+	if _, err := c.ArchiveVolume(context.Background(), dataTarget("/project"), "proj_data", "/backups/work"); err != nil {
 		t.Fatalf("ArchiveVolume: %v", err)
 	}
 	lines := h.lines()
@@ -255,7 +255,7 @@ func TestArchiveVolumeCreatesStartsAndRemovesTheHelper(t *testing.T) {
 	create := lines[0]
 	for _, want := range []string{
 		"docker create --name dcraft-backup-",
-		"--label dcraft.backup=1",
+		"--label dcraft.backup=" + data.HelperToken(dataTarget("/project")),
 		"-v proj_data:/data:ro",
 		"-v /backups/work:/backup",
 		"--entrypoint tar alpine:3.20 -C /data -czf /backup/data.tar.gz .",
@@ -282,7 +282,7 @@ func TestArchiveVolumeRemovesTheHelperOnCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	h := &helperLifecycle{cancelOnStart: cancel, startErr: context.Canceled}
 	c := newHelperCompose(t, h)
-	_, err := c.ArchiveVolume(ctx, "proj_data", "/backups/work")
+	_, err := c.ArchiveVolume(ctx, dataTarget("/project"), "proj_data", "/backups/work")
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("error = %v", err)
 	}
@@ -305,7 +305,7 @@ func TestArchiveVolumeRetriesCleanupUntilTheContainerIsGone(t *testing.T) {
 		inspectResults: []execx.Result{{Stdout: []byte("cid")}, {Stderr: []byte("No such object"), ExitCode: 1}},
 	}
 	c := newHelperCompose(t, h)
-	if _, err := c.ArchiveVolume(context.Background(), "proj_data", "/backups/work"); err != nil {
+	if _, err := c.ArchiveVolume(context.Background(), dataTarget("/project"), "proj_data", "/backups/work"); err != nil {
 		t.Fatalf("ArchiveVolume: %v", err)
 	}
 	var removes int
@@ -323,7 +323,7 @@ func TestArchiveVolumeReportsACleanupFailure(t *testing.T) {
 	h := &helperLifecycle{alwaysExists: true}
 	c := newHelperCompose(t, h)
 	c.cleanupTimeout = 50 * time.Millisecond
-	_, err := c.ArchiveVolume(context.Background(), "proj_data", "/backups/work")
+	_, err := c.ArchiveVolume(context.Background(), dataTarget("/project"), "proj_data", "/backups/work")
 	if err == nil || !strings.Contains(err.Error(), "remove backup helper") {
 		t.Fatalf("error = %v", err)
 	}
@@ -332,7 +332,7 @@ func TestArchiveVolumeReportsACleanupFailure(t *testing.T) {
 func TestArchiveVolumeReportsTheHelperFailureOutput(t *testing.T) {
 	h := &helperLifecycle{startResult: execx.Result{Stderr: []byte("tar: can't open './secret': Permission denied"), ExitCode: 1}}
 	c := newHelperCompose(t, h)
-	out, err := c.ArchiveVolume(context.Background(), "proj_data", "/backups/work")
+	out, err := c.ArchiveVolume(context.Background(), dataTarget("/project"), "proj_data", "/backups/work")
 	if err == nil {
 		t.Fatal("archive failure was swallowed")
 	}
@@ -346,7 +346,7 @@ func TestArchiveVolumeRemovesTheHelperWhenTheContextIsAlreadyCanceled(t *testing
 	cancel()
 	h := &helperLifecycle{createErr: context.Canceled}
 	c := newHelperCompose(t, h)
-	if _, err := c.ArchiveVolume(ctx, "proj_data", "/backups/work"); err == nil {
+	if _, err := c.ArchiveVolume(ctx, dataTarget("/project"), "proj_data", "/backups/work"); err == nil {
 		t.Fatal("canceled archive did not fail")
 	}
 	var removed bool
@@ -388,7 +388,7 @@ func TestArchiveVolumeRemovesAContainerCreatedAfterACanceledCreate(t *testing.T)
 	}
 	c := newHelperCompose(t, h)
 	c.cleanupGrace = 500 * time.Millisecond
-	if _, err := c.ArchiveVolume(ctx, "proj_data", "/backups/work"); !errors.Is(err, context.Canceled) {
+	if _, err := c.ArchiveVolume(ctx, dataTarget("/project"), "proj_data", "/backups/work"); !errors.Is(err, context.Canceled) {
 		t.Fatalf("error = %v", err)
 	}
 	if names := backupHelperNamesFromCalls(h.lines()); len(names) == 0 {

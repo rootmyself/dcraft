@@ -35,7 +35,7 @@ func allocate(t *testing.T, s *state.Store, req state.NameRequest) state.NameAll
 }
 
 func TestAllocateNameUsesBaseForFirstTarget(t *testing.T) {
-	s := state.New(t.TempDir())
+	s := state.New(privateStateDir(t))
 	got := allocate(t, s, state.NameRequest{Target: target("/work/hello-world"), BaseName: "hello-world"})
 	if got.Name != "hello-world" || got.Source != state.NameSourceAllocated {
 		t.Fatalf("allocation = %+v", got)
@@ -43,7 +43,7 @@ func TestAllocateNameUsesBaseForFirstTarget(t *testing.T) {
 }
 
 func TestAllocateNameChoosesSmallestFreeSuffix(t *testing.T) {
-	s := state.New(t.TempDir())
+	s := state.New(privateStateDir(t))
 	first := allocate(t, s, state.NameRequest{Target: target("/work/a/hello-world"), BaseName: "hello-world"})
 	second := allocate(t, s, state.NameRequest{Target: target("/work/b/hello-world"), BaseName: "hello-world"})
 	third := allocate(t, s, state.NameRequest{Target: target("/work/c/hello-world"), BaseName: "hello-world"})
@@ -56,7 +56,7 @@ func TestAllocateNameChoosesSmallestFreeSuffix(t *testing.T) {
 }
 
 func TestAllocateNameReusesRecordedNameOnRerun(t *testing.T) {
-	s := state.New(t.TempDir())
+	s := state.New(privateStateDir(t))
 	first := allocate(t, s, state.NameRequest{Target: target("/work/b/hello-world"), BaseName: "hello-world"})
 	allocate(t, s, state.NameRequest{Target: target("/work/a/hello-world"), BaseName: "hello-world"})
 	again := allocate(t, s, state.NameRequest{Target: target("/work/b/hello-world"), BaseName: "hello-world"})
@@ -66,7 +66,7 @@ func TestAllocateNameReusesRecordedNameOnRerun(t *testing.T) {
 }
 
 func TestAllocateNameHonorsDeclaredNameAndRecordsIt(t *testing.T) {
-	s := state.New(t.TempDir())
+	s := state.New(privateStateDir(t))
 	got := allocate(t, s, state.NameRequest{
 		Target: target("/work/app"), BaseName: "app",
 		DeclaredName: "shared-name", DeclaredSource: state.NameSourceExplicit,
@@ -91,7 +91,7 @@ func TestAllocateNameHonorsDeclaredNameAndRecordsIt(t *testing.T) {
 }
 
 func TestAllocateNameRejectsDeclaredNameOwnedByAnotherTarget(t *testing.T) {
-	s := state.New(t.TempDir())
+	s := state.New(privateStateDir(t))
 	allocate(t, s, state.NameRequest{Target: target("/work/a/app"), BaseName: "app"})
 	_, err := s.AllocateName(context.Background(), state.NameRequest{
 		Target: target("/work/b/app"), DeclaredName: "app", DeclaredSource: state.NameSourceExplicit,
@@ -114,7 +114,7 @@ func TestAllocateNameRejectsDeclaredNameOwnedByAnotherTarget(t *testing.T) {
 }
 
 func TestAllocateNameSkipsExternalProjectForAutomaticName(t *testing.T) {
-	s := state.New(t.TempDir())
+	s := state.New(privateStateDir(t))
 	got := allocate(t, s, state.NameRequest{
 		Target: target("/work/b/hello-world"), BaseName: "hello-world",
 		External: []state.ExternalProject{{Name: "hello-world", ProjectDir: "/work/a/hello-world"}},
@@ -125,7 +125,7 @@ func TestAllocateNameSkipsExternalProjectForAutomaticName(t *testing.T) {
 }
 
 func TestAllocateNameReusesExternalProjectOwnedBySameFolder(t *testing.T) {
-	s := state.New(t.TempDir())
+	s := state.New(privateStateDir(t))
 	got := allocate(t, s, state.NameRequest{
 		Target: target("/work/hello-world"), BaseName: "hello-world",
 		External: []state.ExternalProject{{Name: "hello-world", ProjectDir: "/work/hello-world"}},
@@ -135,8 +135,72 @@ func TestAllocateNameReusesExternalProjectOwnedBySameFolder(t *testing.T) {
 	}
 }
 
+func TestAllocateNameReusesExistingSuffixedProjectAfterStateLoss(t *testing.T) {
+	s := state.New(privateStateDir(t))
+	// The readable base belongs to another folder and this folder's project
+	// already exists under a high suffix. Suffix allocation would pick the
+	// smallest free name (app-1) and create a duplicate stack; the reuse scan
+	// must choose the project that already belongs to this folder.
+	got := allocate(t, s, state.NameRequest{
+		Target: target("/work/app"), BaseName: "app",
+		External: []state.ExternalProject{
+			{Name: "app-3", ProjectDir: "/work/app"},
+			{Name: "app", ProjectDir: "/work/other/app"},
+		},
+	})
+	if got.Name != "app-3" || got.Source != state.NameSourceExisting {
+		t.Fatalf("allocation = %+v, want app-3/existing", got)
+	}
+	// The reuse is recorded, so a later run resolves the same stack without
+	// needing the external project list at all.
+	again := allocate(t, s, state.NameRequest{Target: target("/work/app"), BaseName: "app"})
+	if again.Name != "app-3" {
+		t.Fatalf("rerun allocated %q, want app-3", again.Name)
+	}
+}
+
+func TestPlanStateFingerprintTracksOnlyThisTarget(t *testing.T) {
+	s := state.New(privateStateDir(t))
+	a := target("/work/a")
+	b := target("/work/b")
+	if got := s.PlanStateFingerprint(a); got != "none" {
+		t.Fatalf("empty state fingerprint = %q, want none", got)
+	}
+	allocate(t, s, state.NameRequest{Target: a, BaseName: "a"})
+	first := s.PlanStateFingerprint(a)
+	if first == "" || first == "none" {
+		t.Fatalf("allocated fingerprint = %q", first)
+	}
+	allocate(t, s, state.NameRequest{Target: b, BaseName: "b"})
+	if got := s.PlanStateFingerprint(a); got != first {
+		t.Fatalf("unrelated allocation changed the target fingerprint: %q -> %q", first, got)
+	}
+	allocate(t, s, state.NameRequest{
+		Target: a, BaseName: "a", DeclaredName: "chosen", DeclaredSource: state.NameSourceExplicit,
+	})
+	if got := s.PlanStateFingerprint(a); got == first {
+		t.Fatal("a changed claim kept the old fingerprint")
+	}
+}
+
+func TestAllocateNameReportsConflictWhenSuffixedProjectNameBelongsToAnotherTarget(t *testing.T) {
+	s := state.New(privateStateDir(t))
+	allocate(t, s, state.NameRequest{Target: target("/work/other/app"), BaseName: "app"})
+	_, err := s.AllocateName(context.Background(), state.NameRequest{
+		Target: target("/work/app"), BaseName: "app",
+		External: []state.ExternalProject{{Name: "app", ProjectDir: "/work/app"}},
+	})
+	var conflict *state.NameConflictError
+	if !errors.As(err, &conflict) {
+		t.Fatalf("err = %v, want NameConflictError", err)
+	}
+	if conflict.Name != "app" || conflict.OwnerDir != "/work/other/app" {
+		t.Fatalf("conflict = %+v", conflict)
+	}
+}
+
 func TestAllocateNameRejectsDeclaredNameOwnedByAnotherFolderExternally(t *testing.T) {
-	s := state.New(t.TempDir())
+	s := state.New(privateStateDir(t))
 	_, err := s.AllocateName(context.Background(), state.NameRequest{
 		Target: target("/work/b/app"), DeclaredName: "shared", DeclaredSource: state.NameSourceExplicit,
 		External: []state.ExternalProject{{Name: "shared", ProjectDir: "/work/a/app"}},
@@ -151,7 +215,7 @@ func TestAllocateNameRejectsDeclaredNameOwnedByAnotherFolderExternally(t *testin
 }
 
 func TestAllocateNameReportsRenameOfARecordedTarget(t *testing.T) {
-	s := state.New(t.TempDir())
+	s := state.New(privateStateDir(t))
 	allocate(t, s, state.NameRequest{Target: target("/work/app"), BaseName: "app"})
 	got := allocate(t, s, state.NameRequest{
 		Target: target("/work/app"), BaseName: "app",
@@ -168,7 +232,7 @@ func TestAllocateNameReportsRenameOfARecordedTarget(t *testing.T) {
 }
 
 func TestAllocateNameIsConcurrencySafe(t *testing.T) {
-	s := state.New(t.TempDir())
+	s := state.New(privateStateDir(t))
 	const n = 20
 	names := make([]string, n)
 	errs := make([]error, n)
@@ -204,7 +268,7 @@ func TestAllocateNameIsConcurrencySafe(t *testing.T) {
 }
 
 func TestAllocateNameIncludesEnvironmentInBase(t *testing.T) {
-	s := state.New(t.TempDir())
+	s := state.New(privateStateDir(t))
 	tgt := target("/work/app")
 	tgt.Environment = "staging"
 	got := allocate(t, s, state.NameRequest{Target: tgt, BaseName: "app"})
@@ -214,7 +278,7 @@ func TestAllocateNameIncludesEnvironmentInBase(t *testing.T) {
 }
 
 func TestAllocateNameRegistersFilePrivately(t *testing.T) {
-	root := t.TempDir()
+	root := privateStateDir(t)
 	s := state.New(root)
 	allocate(t, s, state.NameRequest{Target: target("/work/app"), BaseName: "app"})
 	path := filepath.Join(root, "names.json")
@@ -251,7 +315,7 @@ func TestAllocateNameRegistersFilePrivately(t *testing.T) {
 }
 
 func TestAllocateNameRejectsCorruptRegistry(t *testing.T) {
-	root := t.TempDir()
+	root := privateStateDir(t)
 	if err := os.WriteFile(filepath.Join(root, "names.json"), []byte("{not json"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -264,7 +328,7 @@ func TestAllocateNameRejectsCorruptRegistry(t *testing.T) {
 }
 
 func TestAllocateNameStopsOnCanceledContext(t *testing.T) {
-	s := state.New(t.TempDir())
+	s := state.New(privateStateDir(t))
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if _, err := s.AllocateName(ctx, state.NameRequest{
@@ -326,7 +390,7 @@ func TestLookupNameIsReadOnlyAndReportsRecordedClaim(t *testing.T) {
 }
 
 func TestLookupNameSeparatesTargetsAndEnvironments(t *testing.T) {
-	s := state.New(t.TempDir())
+	s := state.New(privateStateDir(t))
 	dev := target("/work/hello-world")
 	staging := target("/work/hello-world")
 	staging.Environment = "staging"
@@ -345,7 +409,7 @@ func TestLookupNameSeparatesTargetsAndEnvironments(t *testing.T) {
 }
 
 func TestLookupNameRejectsCorruptRegistry(t *testing.T) {
-	root := t.TempDir()
+	root := privateStateDir(t)
 	if err := os.WriteFile(filepath.Join(root, "names.json"), []byte("{broken"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -355,9 +419,70 @@ func TestLookupNameRejectsCorruptRegistry(t *testing.T) {
 }
 
 func TestLookupNameRequiresAProjectFolder(t *testing.T) {
-	if _, _, err := state.New(t.TempDir()).LookupName(core.Target{}); err == nil {
+	if _, _, err := state.New(privateStateDir(t)).LookupName(core.Target{}); err == nil {
 		t.Fatal("empty target was accepted")
 	}
+}
+
+func TestStateIdentitySharesCaseVariantSpellings(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "CaseProject")
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	variant := filepath.Join(root, "caseproject")
+	info, err := os.Stat(variant)
+	if err != nil {
+		t.Skip("filesystem is case-sensitive")
+	}
+	base, _ := os.Stat(dir)
+	if !os.SameFile(base, info) {
+		t.Skip("case variants are not the same folder on this filesystem")
+	}
+	s := state.New(privateStateDir(t))
+	allocate(t, s, state.NameRequest{Target: target(dir), BaseName: "case-project"})
+	got, ok, err := s.LookupName(target(variant))
+	if err != nil || !ok || got.Name != "case-project" {
+		t.Fatalf("case variant lookup = %+v, %v, %v", got, ok, err)
+	}
+	if a, _ := s.StackDir(target(dir)); a != mustStackDir(t, s, target(variant)) {
+		t.Fatalf("case variant has a separate state dir: %q vs %q", a, mustStackDir(t, s, target(variant)))
+	}
+}
+
+func TestStateIdentitySharesUnicodeNormalizationSpellings(t *testing.T) {
+	root := t.TempDir()
+	nfc := filepath.Join(root, "한글")
+	if err := os.Mkdir(nfc, 0o700); err != nil {
+		t.Skipf("Unicode folder name unavailable: %v", err)
+	}
+	nfd := filepath.Join(root, "한글")
+	info, err := os.Stat(nfd)
+	if err != nil {
+		t.Skip("filesystem distinguishes NFC/NFD names")
+	}
+	base, _ := os.Stat(nfc)
+	if !os.SameFile(base, info) {
+		t.Skip("NFC/NFD spellings are not the same folder on this filesystem")
+	}
+	s := state.New(privateStateDir(t))
+	allocate(t, s, state.NameRequest{Target: target(nfc), BaseName: "korean"})
+	got, ok, err := s.LookupName(target(nfd))
+	if err != nil || !ok || got.Name != "korean" {
+		t.Fatalf("NFC/NFD lookup = %+v, %v, %v", got, ok, err)
+	}
+	if a, _ := s.StackDir(target(nfc)); a != mustStackDir(t, s, target(nfd)) {
+		t.Fatalf("NFC/NFD spellings have separate state dirs: %q vs %q", a, mustStackDir(t, s, target(nfd)))
+	}
+}
+
+func mustStackDir(t *testing.T, s *state.Store, target core.Target) string {
+	t.Helper()
+	dir, err := s.StackDir(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dir
 }
 
 func TestStateIdentityCanonicalizesSymlinkedFolders(t *testing.T) {
@@ -366,7 +491,7 @@ func TestStateIdentityCanonicalizesSymlinkedFolders(t *testing.T) {
 	if err := os.Symlink(realDir, link); err != nil {
 		t.Skipf("symlink unavailable: %v", err)
 	}
-	s := state.New(t.TempDir())
+	s := state.New(privateStateDir(t))
 	realTarget := target(realDir)
 	linkTarget := target(link)
 	realDirState, err := s.StackDir(realTarget)

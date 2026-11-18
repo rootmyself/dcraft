@@ -152,7 +152,7 @@ func (r Result) ExitCode() int {
 				CategoryEnvironmentRequired, CategoryEnvironmentUnknown, CategoryEnvironmentConflict,
 				CategoryProjectNameConflict, CategoryServiceUnknown, CategoryInvalidOption,
 				CategorySecretInputInvalid, CategorySecretUnsupported,
-				CategoryBuildServiceInvalid,
+				CategoryBuildServiceInvalid, CategoryPlanStale,
 				CategoryBackupOutputRequired, CategoryBackupVolumeRequired, CategoryBackupVolumeUnknown,
 				CategoryBackupBindUnknown,
 				CategoryRestoreBackupRequired, CategoryRestoreVolumeUnknown,

@@ -47,6 +47,11 @@ const (
 	msgPlanUnsupported       = "이 작업은 실행 전에 확인할 계획을 제공하지 않습니다."
 	msgPlanUnsupportedAction = "대화형 화면 없이 승인 옵션을 명시해 실행하거나 dcraft --help로 사용법을 확인하세요."
 
+	msgPlanStale          = "승인한 계획과 현재 대상이 달라 실행하지 않았습니다."
+	msgPlanStaleDetail    = "계획을 표시한 뒤 Compose 파일, 환경 파일, .dcraft.yaml, 프로젝트 이름 또는 이름 장부가 바뀌었습니다."
+	msgPlanStaleActionOne = "명령을 다시 실행해 최신 미리보기를 확인한 뒤 승인하세요."
+	msgPlanStaleActionTwo = "변경 중인 파일이 있다면 먼저 저장한 뒤 다시 미리보기하세요."
+
 	msgInputsUnsupported       = "이 작업은 대화형 입력을 제공하지 않습니다."
 	msgInputsUnsupportedAction = "명령과 옵션을 지정해 실행하거나 dcraft --help로 사용법을 확인하세요."
 )

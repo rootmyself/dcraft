@@ -97,7 +97,7 @@ func (d *VolumeDestination) Usage(ctx context.Context) (ContentSummary, error) {
 }
 
 func (d *VolumeDestination) SafetyBackup(ctx context.Context, hostDir string) (data.OpResult, error) {
-	return d.backend.ArchiveVolume(ctx, d.source.Name, hostDir)
+	return d.backend.ArchiveVolume(ctx, d.target, d.source.Name, hostDir)
 }
 
 func (d *VolumeDestination) Empty(ctx context.Context) (data.OpResult, error) {

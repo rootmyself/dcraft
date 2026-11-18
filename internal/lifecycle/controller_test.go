@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -165,6 +166,9 @@ type harness struct {
 func newHarness(t *testing.T) *harness {
 	t.Helper()
 	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	store := state.New(dir)
 	h := &harness{
 		life:     &fakeLifecycle{},
@@ -224,7 +228,7 @@ func TestUpSuccessReportsNameScopeAndObservedState(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 	rep := in.Reporter.(*reporter)
-	want := []string{"resolve_project", "allocate_name", "coordinate", "up", "observe"}
+	want := []string{"resolve_project", "coordinate", "allocate_name", "up", "observe"}
 	if got := rep.names(); strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("stages = %v, want %v", got, want)
 	}
@@ -347,6 +351,49 @@ func TestBusyStackFailsWithoutWaitingAndNamesTheHolder(t *testing.T) {
 	if strings.Contains(strings.Join(ce.Diagnostics[0].NextActions, " "), "기다리") &&
 		!strings.Contains(strings.Join(ce.Diagnostics[0].NextActions, " "), "끝난 뒤") {
 		t.Fatalf("next actions suggest unbounded waiting: %v", ce.Diagnostics[0].NextActions)
+	}
+}
+
+func TestBusyRenameLeavesTheNameRegistryByteIdentical(t *testing.T) {
+	h := newHarness(t)
+	if _, err := h.run(t, lifecycle.ActionUp, invocation()); err != nil {
+		t.Fatal(err)
+	}
+	namesPath := filepath.Join(h.stateDir, "names.json")
+	before, err := os.ReadFile(namesPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	lock, err := h.store.AcquireStackLock(context.Background(),
+		core.Target{ProjectDir: "/work/hello-world"}, state.LockHolder{Action: "down", PID: 4242, StartedAt: time.Now()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rename := invocation()
+	rename.Target.ProjectName = "renamed-stack"
+	h.identity.config.EffectiveName = "renamed-stack"
+	_, err = h.run(t, lifecycle.ActionUp, rename)
+	_ = lock.Release()
+	if category(err) != core.CategoryStackBusy {
+		t.Fatalf("err = %v, want stack_busy", err)
+	}
+
+	after, err := os.ReadFile(namesPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Fatalf("blocked rename changed names.json:\nbefore=%s\nafter=%s", before, after)
+	}
+	// The next operation still adopts the original name, never the blocked one.
+	h.identity.config.EffectiveName = ""
+	payload, err := h.run(t, lifecycle.ActionUp, invocation())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if payload.Lifecycle.ProjectName != "hello-world" {
+		t.Fatalf("next operation used %q, want hello-world", payload.Lifecycle.ProjectName)
 	}
 }
 

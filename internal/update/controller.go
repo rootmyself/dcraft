@@ -43,7 +43,7 @@ type lockStore interface {
 	AllocateName(ctx context.Context, req state.NameRequest) (state.NameAllocation, error)
 	LookupName(target core.Target) (state.NameAllocation, bool, error)
 	LoadGoodVersion(target core.Target) (state.GoodVersion, bool, error)
-	SaveGoodVersion(target core.Target, rec state.GoodVersion) error
+	SaveGoodVersion(ctx context.Context, target core.Target, rec state.GoodVersion) error
 }
 
 // Controller owns update behavior. CLI and TUI both reach it through the common
@@ -112,8 +112,9 @@ type Payload struct {
 	Update Report `json:"update"`
 }
 
-// Run executes one explicit update. Stages: resolve_project, allocate_name,
-// coordinate, plan, build, pull, apply, verify, record.
+// Run executes one explicit update. Stages: resolve_project, coordinate,
+// allocate_name, plan, build, pull, apply, verify, record. The change lock is
+// taken before the name claim so a blocked operation changes nothing.
 func (c *Controller) Run(ctx context.Context, in core.Invocation, opts Options) (Payload, error) {
 	if c == nil || c.updater == nil || c.identity == nil || c.store == nil {
 		return Payload{}, core.Fail(core.Diagnostic{
@@ -184,6 +185,38 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation, opts Options) 
 		return Payload{}, err
 	}
 
+	// Same-stack coordination starts before the name claim. The lock key is
+	// already known (project folder + environment), so a concurrent up/update/
+	// backup on this stack fails as stack_busy without persisting a rename
+	// claim that a later run would adopt as a second project. The lock covers
+	// plan (baseline read), build, pull, apply, verify and record, and is always
+	// released.
+	var lock *state.StackLock
+	err = core.RunStage(in.Reporter, StageCoordinate, msgStageCoordinate, func() error {
+		var err error
+		lock, err = ls.AcquireStackLock(ctx, target, state.LockHolder{
+			Action: "update", PID: c.pid, StartedAt: clock.Now(),
+		})
+		if err == nil {
+			return nil
+		}
+		var busy *state.BusyError
+		if errors.As(err, &busy) {
+			return core.Fail(stackBusyDiagnostic(busy))
+		}
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return err
+		}
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
+		return core.FailCause(err, stateFailedDiagnostic(err))
+	})
+	if err != nil {
+		return Payload{}, err
+	}
+	defer func() { _ = lock.Release() }()
+
 	err = core.RunStage(in.Reporter, StageAllocateName, msgStageAllocateName, func() error {
 		projects, err := c.identity.Projects(ctx)
 		if err != nil {
@@ -210,35 +243,6 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation, opts Options) 
 	}
 	opTarget := target
 	opTarget.ProjectName = allocation.Name
-
-	// Same-stack coordination covers plan (baseline read), build, pull, apply,
-	// verify and record. A concurrent up/update/backup on this stack fails with
-	// stack_busy instead of interleaving. The lock is always released.
-	var lock *state.StackLock
-	err = core.RunStage(in.Reporter, StageCoordinate, msgStageCoordinate, func() error {
-		var err error
-		lock, err = ls.AcquireStackLock(ctx, target, state.LockHolder{
-			Action: "update", PID: c.pid, StartedAt: clock.Now(),
-		})
-		if err == nil {
-			return nil
-		}
-		var busy *state.BusyError
-		if errors.As(err, &busy) {
-			return core.Fail(stackBusyDiagnostic(busy))
-		}
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return err
-		}
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return ctxErr
-		}
-		return core.FailCause(err, stateFailedDiagnostic(err))
-	})
-	if err != nil {
-		return Payload{}, err
-	}
-	defer func() { _ = lock.Release() }()
 
 	var model stack.UpdateModel
 	var baseline map[string]int
@@ -428,8 +432,13 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation, opts Options) 
 		payload.Update.RecordDetail = recordErr.Error()
 		payload.Update.Notices = append(payload.Update.Notices, msgGoodRecordFailed)
 	} else {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return Payload{}, ctxErr
+		// SaveGoodVersion checks cancellation immediately before publishing.
+		// A cancellation that arrives after the rename means the record is
+		// already complete; don't roll back a completed commit, and don't
+		// report the whole verified update as canceled. Report success with a
+		// notice instead.
+		if ctx.Err() != nil {
+			payload.Update.Notices = append(payload.Update.Notices, msgGoodLateCancel)
 		}
 		payload.Update.RecordStatus = RecordRecorded
 		payload.Update.GoodVersion = recorded
@@ -662,7 +671,7 @@ func (c *Controller) recordGoodVersion(ctx context.Context, in core.Invocation, 
 		return state.GoodVersion{}, err
 	}
 	ls := c.store.(lockStore)
-	if err := ls.SaveGoodVersion(target, rec); err != nil {
+	if err := ls.SaveGoodVersion(ctx, target, rec); err != nil {
 		return state.GoodVersion{}, err
 	}
 	return rec, nil

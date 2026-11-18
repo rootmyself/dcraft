@@ -37,7 +37,7 @@ func testFeature(t *testing.T, services ...string) (*Feature, string, *secretref
 	if err := os.WriteFile(filepath.Join(dir, ".dcraft.yaml"), []byte("environments:\n  dev:\n    compose_files: [compose.yaml]\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	rt := secretref.NewRuntime(state.New(t.TempDir()), nil)
+	rt := secretref.NewRuntime(state.New(privateStateDir(t)), nil)
 	return New(fakeIdentity{cfg: stack.ConfigInfo{Services: services}}, rt), dir, rt
 }
 

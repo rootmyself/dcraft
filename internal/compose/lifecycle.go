@@ -164,7 +164,10 @@ func (c *Compose) lifecycleRun(ctx context.Context, t core.Target, action string
 	if err != nil {
 		return stack.OpResult{}, err
 	}
-	out := stack.OpResult{Output: summarize(res.Combined())}
+	// stop/down do not prepare a secret session, but Compose can still echo an
+	// interpolated value from an env file. The same known-value redactor is
+	// applied before the output can become a diagnostic or history record.
+	out := stack.OpResult{Output: c.Redact(ctx, t, summarize(res.Combined()))}
 	if !res.Succeeded() {
 		return out, fmt.Errorf("docker compose %s exited with status %d", action, res.ExitCode)
 	}
@@ -184,7 +187,7 @@ func (c *Compose) ConfigInfo(ctx context.Context, t core.Target) (stack.ConfigIn
 		return stack.ConfigInfo{}, ctxErr
 	}
 	if err != nil || !res.Succeeded() {
-		return stack.ConfigInfo{}, core.FailCause(err, classifyConfigFailure(res, err))
+		return stack.ConfigInfo{}, c.redactError(ctx, t, core.FailCause(err, classifyConfigFailure(res, err)))
 	}
 	var doc configDoc
 	if err := json.Unmarshal(res.Stdout, &doc); err != nil {
@@ -277,21 +280,21 @@ func (c *Compose) DerivedProjectName(ctx context.Context, t core.Target) (string
 	if !res.Succeeded() {
 		text := res.Combined()
 		if looksLikeEngineFailure(strings.ToLower(text)) {
-			return "", core.FailCause(nil, engineDiagnostic(res))
+			return "", core.FailCause(nil, c.redactDiagnostic(ctx, t, engineDiagnostic(res)))
 		}
-		return "", core.FailCause(nil, unsupportedComposeDiagnostic(text))
+		return "", core.FailCause(nil, c.redactDiagnostic(ctx, t, unsupportedComposeDiagnostic(text)))
 	}
 	var probe struct {
 		Name string `json:"name"`
 	}
 	if err := json.Unmarshal(res.Stdout, &probe); err != nil || strings.TrimSpace(probe.Name) == "" {
-		return "", core.FailCause(err, core.Diagnostic{
+		return "", core.FailCause(err, c.redactDiagnostic(ctx, t, core.Diagnostic{
 			Category:    core.CategoryComposeUnsupported,
 			Severity:    core.SeverityError,
 			Message:     msgDerivedNameUnknown,
 			Detail:      summarize(res.Combined()),
 			NextActions: []string{msgDerivedNameUnknownActionOne, msgDerivedNameUnknownActionTwo},
-		})
+		}))
 	}
 	return strings.TrimSpace(probe.Name), nil
 }

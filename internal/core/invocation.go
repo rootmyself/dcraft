@@ -49,6 +49,12 @@ type Request struct {
 	// specific plan (for example JSON automation after checking
 	// `dcraft hooks --list`).
 	ApprovedHooks []HookEntry
+	// PlanFingerprint is the PlanReport.Fingerprint of the preview the caller
+	// showed and the user approved. CLI and TUI always pass it when a plan was
+	// displayed; Run refuses a changed selection with plan_stale (exit 2)
+	// before any change. Empty means no preview was shown (direct JSON
+	// automation), so there is nothing to bind.
+	PlanFingerprint string
 	// Interactive reports whether prompts are possible. It never bypasses an
 	// approval requirement.
 	Interactive bool

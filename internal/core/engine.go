@@ -224,6 +224,17 @@ func (e *Engine) Run(ctx context.Context, req Request, sink Sink) (res Result) {
 		}
 	}
 
+	// An approved plan is bound to the exact inputs it previewed. A change on
+	// disk or in the name map while the approval was on screen must stop the
+	// operation before any change, not silently apply a different selection.
+	if req.PlanFingerprint != "" {
+		if current := e.planFingerprint(req.Feature, target); current != req.PlanFingerprint {
+			res.Outcome = OutcomeFailure
+			res.Diagnostics = append(res.Diagnostics, planStaleDiagnostic())
+			return res
+		}
+	}
+
 	inv := Invocation{
 		Target:      target,
 		Services:    append([]string{}, req.Services...),
@@ -538,6 +549,29 @@ func (e *Engine) Plan(ctx context.Context, req Request, sink Sink) (report PlanR
 		return report
 	}
 	report.Diagnostics = append(report.Diagnostics, pf.Diagnostics...)
+
+	// The preview shows the same read-only identity Run will use.
+	if desc.ReadOnly && e.Identity != nil && strings.TrimSpace(target.ProjectName) == "" {
+		name, identErr := e.Identity.ReadProjectName(ctx, target)
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			report.Outcome = OutcomeCanceled
+			addCanceledDiagnosticTo(&report.Diagnostics)
+			return report
+		}
+		if identErr != nil {
+			report.Diagnostics = append(report.Diagnostics, Diagnostic{
+				Category:    CategoryIdentityUnreadable,
+				Severity:    SeverityWarning,
+				Message:     msgIdentityUnreadable,
+				Detail:      errDetail(identErr),
+				NextActions: []string{msgIdentityUnreadableActionOne, msgIdentityUnreadableActionTwo},
+			})
+		} else if name != "" {
+			target.ProjectName = name
+			report.Target.ProjectName = name
+		}
+	}
+
 	var hookText string
 	if desc.Hooks != HookNone {
 		if e.Hooks == nil {
@@ -611,8 +645,19 @@ func (e *Engine) Plan(ctx context.Context, req Request, sink Sink) (report PlanR
 		return report
 	}
 	report.Text = strings.TrimSpace(strings.Join([]string{strings.TrimSpace(planText), hookText}, "\n\n"))
+	report.Fingerprint = e.planFingerprint(req.Feature, target)
 	report.Outcome = OutcomeSuccess
 	return report
+}
+
+func planStaleDiagnostic() Diagnostic {
+	return Diagnostic{
+		Category:    CategoryPlanStale,
+		Severity:    SeverityError,
+		Message:     msgPlanStale,
+		Detail:      msgPlanStaleDetail,
+		NextActions: []string{msgPlanStaleActionOne, msgPlanStaleActionTwo},
+	}
 }
 
 // Inputs resolves the same target and preflight as Run, then asks a feature
