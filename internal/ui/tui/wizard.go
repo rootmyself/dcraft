@@ -28,6 +28,7 @@ func (m *Model) beginWizard(f core.Feature) tea.Cmd {
 	m.wizardChoice = 0
 	m.wizardInput = ""
 	m.wizardAnswers = map[string]string{}
+	m.wizardChecked = map[string]bool{}
 	m.wizardPreview = ""
 	m.wizardPreviewErr = nil
 	m.wizardAwaiting = true
@@ -105,6 +106,14 @@ func (m *Model) initWizardStep() {
 				break
 			}
 		}
+		m.wizardChecked = map[string]bool{}
+		if step.Multi {
+			for _, value := range strings.Split(m.wizardAnswers[step.Name], "\n") {
+				if value = strings.TrimSpace(value); value != "" {
+					m.wizardChecked[value] = true
+				}
+			}
+		}
 		return
 	}
 	m.wizardInput = m.wizardAnswers[step.Name]
@@ -126,8 +135,28 @@ func (m *Model) updateWizard(msg tea.KeyMsg) tea.Cmd {
 				m.wizardChoice = (m.wizardChoice - 1 + len(step.Options)) % len(step.Options)
 			case "down", "j":
 				m.wizardChoice = (m.wizardChoice + 1) % len(step.Options)
+			case " ":
+				if step.Multi {
+					value := step.Options[m.wizardChoice].Value
+					m.wizardChecked[value] = !m.wizardChecked[value]
+				}
 			case "enter":
-				m.wizardAnswers[step.Name] = step.Options[m.wizardChoice].Value
+				value := step.Options[m.wizardChoice].Value
+				if step.Multi {
+					var chosen []string
+					for _, option := range step.Options {
+						if m.wizardChecked[option.Value] {
+							chosen = append(chosen, option.Value)
+						}
+					}
+					if len(chosen) == 0 {
+						// Enter on an untouched list selects the highlighted
+						// option, preserving the simple one-choice flow.
+						chosen = append(chosen, value)
+					}
+					value = strings.Join(chosen, "\n")
+				}
+				m.wizardAnswers[step.Name] = value
 				m.advanceWizard()
 			case "left":
 				m.previousWizardStep()
@@ -281,6 +310,14 @@ func (m *Model) wizardView() string {
 				if i == m.wizardChoice {
 					marker = "> "
 				}
+				if step.Multi {
+					box := "[ ]"
+					if m.wizardChecked[option.Value] {
+						box = "[x]"
+					}
+					fmt.Fprintf(&b, "%s%s %s\n", marker, box, option.Label)
+					continue
+				}
 				fmt.Fprintf(&b, "%s%s\n", marker, option.Label)
 			}
 		} else if step.AllowCustom {
@@ -317,6 +354,9 @@ func (m *Model) wizardHints() string {
 	case phaseWizardStep:
 		if m.wizardTextInput() {
 			return msgHintWizardInput
+		}
+		if m.wizardStep >= 0 && m.wizardStep < len(m.wizardSpec.Steps) && m.wizardSpec.Steps[m.wizardStep].Multi {
+			return msgHintWizardMulti
 		}
 		return msgHintWizardChoice
 	case phaseWizardPreview:

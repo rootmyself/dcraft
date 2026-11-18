@@ -23,14 +23,24 @@ const (
 // engine volume name. For a bind mount, Name is the absolute host path.
 // Anonymous volumes have no Key and no Compose-declared Name.
 type DataSource struct {
-	Kind         Kind
-	Key          string
-	Name         string
-	MountTargets []string
-	External     bool
-	Anonymous    bool
-	ReadOnly     bool
-	Services     []string
+	Kind Kind
+	Key  string
+	// Name is the actual engine volume name for a volume, or the
+	// symlink-resolved absolute host path for a bind mount.
+	Name string
+	// Declared is the bind source exactly as the Compose configuration
+	// declared it (absolute but not symlink-resolved). It is empty for
+	// volumes. Consumer queries use both spellings because Docker may record
+	// either one as the mount source.
+	Declared string
+	// DeclaredPaths carries every distinct Compose spelling that resolves to
+	// the same host folder. It is used only for bind consumer queries.
+	DeclaredPaths []string
+	MountTargets  []string
+	External      bool
+	Anonymous     bool
+	ReadOnly      bool
+	Services      []string
 }
 
 // ServiceRuntime is the observed state of one Compose service before a data
@@ -84,6 +94,11 @@ type Backend interface {
 	// volume name, including stopped ones. The target supplies the project
 	// context for redaction.
 	VolumeConsumers(ctx context.Context, target core.Target, volumeName string) ([]ContainerConsumer, error)
+	// BindConsumers lists containers whose bind mount refers to hostPath,
+	// including stopped ones. hostPath may be the host spelling or the
+	// Docker-visible spelling (for example /host_mnt... on Docker Desktop);
+	// the implementation tries the platform mapping and returns the union.
+	BindConsumers(ctx context.Context, target core.Target, hostPath string) ([]ContainerConsumer, error)
 	// StopServices stops only the named Compose services.
 	StopServices(ctx context.Context, target core.Target, services []string) (OpResult, error)
 	// StartServices starts only the named, previously running services.

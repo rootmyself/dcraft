@@ -62,6 +62,12 @@ const (
 	CategoryBackupIntegrityFailed    Category = "backup_integrity_failed"
 	CategoryBackupStateRestoreFailed Category = "backup_state_restore_failed"
 	CategoryBackupSelectionChanged   Category = "backup_selection_changed"
+	// Bind-folder backup (ticket #17). These are additive v1 categories.
+	// backup_bind_unknown is invalid caller input (exit 2); bind_invalid and
+	// bind_unsafe are operation failures (exit 1).
+	CategoryBackupBindUnknown Category = "backup_bind_unknown"
+	CategoryBackupBindInvalid Category = "backup_bind_invalid"
+	CategoryBackupBindUnsafe  Category = "backup_bind_unsafe"
 	// Host-script generators (tickets #14/#15). generator_input_invalid is
 	// missing or unsafe caller input (exit 2); generator_failed is a refused
 	// or failed script-file write (exit 1). Neither category carries script

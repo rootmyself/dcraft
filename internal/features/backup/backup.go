@@ -37,8 +37,14 @@ func (f *Feature) Descriptor() core.Descriptor {
 			{
 				Name:     "volume",
 				Kind:     core.FlagList,
-				Required: true,
-				Usage:    "백업할 데이터 볼륨 키 (반복 지정 가능, 예: --volume data). 대화형 화면에서는 목록에서 선택합니다.",
+				Required: false,
+				Usage:    "백업할 이름 있는 데이터 볼륨 키 (반복 지정 가능, 예: --volume data). --bind와 함께 사용할 수 있습니다.",
+			},
+			{
+				Name:     "bind",
+				Kind:     core.FlagList,
+				Required: false,
+				Usage:    "백업할 호스트 연결 폴더 (반복 지정 가능, 예: --bind /srv/app/data). 현재 스택의 Compose 파일이 선언한 폴더만 지정할 수 있습니다.",
 			},
 		},
 	}
@@ -57,15 +63,22 @@ func (f *Feature) Run(ctx context.Context, in core.Invocation) (any, error) {
 	case "steps":
 		return f.control.WizardSteps(ctx, in)
 	case "apply":
-		// The TUI wizard answers use the same names as the CLI flags. A
-		// single selected volume becomes the one-element option list.
+		// The TUI wizard answers use the same names as the CLI flags. The
+		// mixed "sources" answer carries volume:<key> and bind:<path> lines;
+		// it becomes the two repeatable option lists on the same Run path.
+		if in.OptionLists == nil {
+			in.OptionLists = map[string][]string{}
+		}
+		volumes, binds := backupimpl.ParseWizardSources(in.Option("sources"))
 		if len(in.OptionLists["volume"]) == 0 {
-			if volume := strings.TrimSpace(in.Option("volume")); volume != "" {
-				if in.OptionLists == nil {
-					in.OptionLists = map[string][]string{}
-				}
+			if len(volumes) > 0 {
+				in.OptionLists["volume"] = volumes
+			} else if volume := strings.TrimSpace(in.Option("volume")); volume != "" {
 				in.OptionLists["volume"] = []string{volume}
 			}
+		}
+		if len(in.OptionLists["bind"]) == 0 && len(binds) > 0 {
+			in.OptionLists["bind"] = binds
 		}
 	}
 	return f.control.Run(ctx, in)

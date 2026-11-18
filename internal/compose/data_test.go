@@ -414,3 +414,47 @@ func backupHelperNamesFromCalls(lines []string) []string {
 	}
 	return names
 }
+
+func TestBindConsumersMergeTheHostAndDesktopVisibleSpellings(t *testing.T) {
+	var calls []string
+	runner := &execxtest.Runner{Handler: func(cmd execx.Command) (execx.Result, error) {
+		line := cmd.Name + " " + strings.Join(cmd.Args, " ")
+		calls = append(calls, line)
+		switch {
+		case strings.Contains(line, "volume=/host_mnt/host/data"):
+			return execx.Result{Stdout: []byte("desk-app-1\tdesk\tapp\trunning\n")}, nil
+		case strings.Contains(line, "volume=/host/data"):
+			return execx.Result{Stdout: []byte("native-app-1\tnative\tapp\texited\n")}, nil
+		default:
+			return execx.Result{}, nil
+		}
+	}}
+	c := New(runner, nil)
+	consumers, err := c.BindConsumers(context.Background(), dataTarget("/project"), "/host/data")
+	if err != nil {
+		t.Fatalf("BindConsumers: %v", err)
+	}
+	if len(consumers) != 2 {
+		t.Fatalf("consumers = %+v", consumers)
+	}
+	if consumers[0].Project != "desk" || consumers[1].State != "exited" {
+		t.Fatalf("consumers = %+v", consumers)
+	}
+	log := strings.Join(calls, "\n")
+	if !strings.Contains(log, "ps -a --filter volume=/host/data") || !strings.Contains(log, "ps -a --filter volume=/host_mnt/host/data") {
+		t.Fatalf("both spellings were not queried:\n%s", log)
+	}
+	// The same container returned by both spellings is reported once.
+	calls = nil
+	runner = &execxtest.Runner{Handler: func(cmd execx.Command) (execx.Result, error) {
+		return execx.Result{Stdout: []byte("same-app-1\tproj\tapp\trunning\n")}, nil
+	}}
+	c = New(runner, nil)
+	consumers, err = c.BindConsumers(context.Background(), dataTarget("/project"), "/host/data")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(consumers) != 1 {
+		t.Fatalf("duplicate consumers = %+v", consumers)
+	}
+}

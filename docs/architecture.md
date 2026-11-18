@@ -12,12 +12,11 @@ Scope of this version: one working binary, fourteen registered features
 environments, automatic project-name allocation,
 same-stack coordination, runtime and build-time secret references, explicit
 host scripts with independent script trust, the guided Git host-script
-generator, service/instance selection, live
-terminal attach, versioned volume backup, diagnostics, CLI/TUI assembly, state
-layout, machine-readable results, the approval/plan preview flow, explicit
-update with bounded readiness, the previous-good record, previous-good
-rollback, and tests. The S3 generator, AWS Secrets Manager sources, bind-folder
-backup and restore are later tickets.
+generator, service/instance selection, live terminal attach, versioned volume
+and declared bind-folder backup, diagnostics, CLI/TUI assembly, state layout,
+machine-readable results, the approval/plan preview flow, explicit update with
+bounded readiness, the previous-good record, previous-good rollback, and tests.
+The S3 generator, AWS Secrets Manager sources, and restore are later tickets.
 
 ---
 
@@ -160,7 +159,8 @@ Engine sequence (stage names are stable machine values; titles are Korean):
    verification. If a feature reports no stage, the engine adds a fallback
    `execute` stage.
 7. `verify` — only if the feature also implements `core.Verifier`. Raw errors
-   become `verification_failed`; no history is written.
+   become `verification_failed`; a panic is recovered and becomes
+   `internal_error`; no history is written.
 8. `hooks_post` — only for `HookUpUpdate`, after the feature's work and engine
    `verify` succeeded. Post scripts run in registration order. A failure is a
    `hook_post_failed` **warning** (or `hook_content_changed` for a changed
@@ -171,15 +171,17 @@ Engine sequence (stage names are stable machine values; titles are Korean):
    history write failure is a `history_failed` **warning**; the operation stays
    successful because the stack change already happened. Never report a
    completed change as failed solely because history failed, and never record a
-   failed verification as a good version.
+   failed verification as a good version. The record snapshots completed stages
+   only: the still-open `history` stage is not written into itself, so a
+   persisted record never ends with a `started` stage.
 
 Failure and interruption:
 
 - Features return `*core.Error` (built with `core.Fail` / `core.FailCause`).
   Diagnostics carry a stable category, Korean message and Korean next actions.
 - A raw Go error becomes `internal_error`.
-- A panic inside a feature is recovered and becomes `internal_error`; the
-  process must not crash the TUI.
+- A panic inside a feature or inside `core.Verifier.Verify` is recovered and
+  becomes `internal_error`; the process must not crash the TUI.
 - `context.Canceled` / deadline / canceled context yields outcome `canceled`, a
   `canceled` diagnostic that states partial effects may remain, and exit 130.
 - There is no hidden background handoff, no automatic rollback, no atomicity
@@ -195,11 +197,13 @@ Preflight capability values (`core.Requirement`):
 
 `docker_cli` alone skips endpoint/engine/Compose checks; `compose` additionally
 checks Compose presence/version/capability; `docker_engine` additionally checks
-engine reachability and permission. A remote endpoint is still refused whenever
-`docker_engine` or `compose` is required. A feature that genuinely needs no
-Docker capability is a future contract extension (an explicit "none" value);
-an empty slice never means "check nothing". Descriptor requirements are
-validated at registration.
+engine reachability and permission. `compose` and `docker_engine` implicitly
+include `docker_cli`; normalization adds it, so a narrower declaration can never
+disable the Docker lookup or the remote-endpoint refusal. A remote endpoint is
+still refused whenever `docker_engine` or `compose` is required. A feature that
+genuinely needs no Docker capability is a future contract extension (an explicit
+"none" value); an empty slice never means "check nothing". Descriptor
+requirements are validated at registration (unknown values are rejected).
 
 Approval kinds (`core.ApprovalKind`), independent and non-substitutable:
 
@@ -324,6 +328,10 @@ Rules (`internal/target.Resolver`):
   `Descriptor.TargetOptional`; callers never set it. It only turns "no Compose
   file in the folder" into a valid empty selection. The folder must still
   exist, and explicit `-f`/`--env-file` inputs are still validated as files.
+  Because a target-optional feature does not operate on a Compose project, it
+  also skips environment-alias resolution: registered aliases never make an
+  alias mandatory, a broken `.dcraft.yaml` never blocks the feature, and plain
+  folder/Compose defaults apply. An explicit `--env` has no effect there.
 
 State identity is `ProjectDir + Environment`, not the Compose project name (the
 name itself is stored state). This keeps the same folder/environment tied to
@@ -472,11 +480,13 @@ type core.Feature interface {
 | `Hooks` | registered host-script scope; `HookUpUpdate` only on `up`/`update`, rejected on read-only features |
 
 Registry validation rejects duplicate names, invalid names, missing Korean text,
-read-only+approval combinations, read-only+hooks combinations, a second primary,
-unknown preflight requirements, reserved flag names (`path`, `file`, `env-file`,
-`profile`, `project-name`, `env`, `json`, `approve`, `help`, `service`),
-reserved shorthands (`f`, `p`, `s`, `h`, `v`), duplicate flags and invalid bool
-defaults.
+read-only+approval combinations, read-only+history combinations,
+read-only+hooks combinations, a mutating primary feature without an independent
+approval (the TUI would otherwise run it as soon as it opens), a second
+primary, unknown preflight requirements, reserved flag names (`path`, `file`,
+`env-file`, `profile`, `project-name`, `env`, `json`, `approve`, `help`,
+`service`), reserved shorthands (`f`, `p`, `s`, `h`, `v`), duplicate flags and
+invalid bool defaults.
 
 ### Adding a feature (the only steps)
 
@@ -723,9 +733,10 @@ It derives everything from the registry:
   approval kind;
 - a feature with `Descriptor.Wizard` starts the generic guided flow (`steps`
   run, keyboard answers, effect preview, `apply` run). `backup` uses it to select
-  a named volume and an output directory and to show affected/running services
-  before anything is stopped. The wizard adds no safety rule; the feature
-  rechecks selection and consumers on the apply run;
+  a mixed volume/bind selection and an output directory and to show
+  affected/running services before anything is stopped. The source step is the
+  published generic `Multi` step; the TUI adds no safety rule; the feature
+  rechecks selection, paths and consumers on the apply run;
 - `r` re-runs read-only features directly, re-plans every Planner and asks for
   confirmation again for other mutating features. The selected environment is
   reused; `q` and `ctrl+c` quit outside an operation;
@@ -801,7 +812,7 @@ and `generate-git-hook`.
 
 - `action`, `target`, `stages`, `outcome` are separate from `diagnostics`.
 - `required_approval` appears on approval failures.
-- `data` is feature-specific and omitted on failure.
+- `data` is feature-specific and omitted on failure and on cancellation.
 - `stages` and `diagnostics` are always arrays (`[]`, never `null`).
 - Progress is not embedded in the final JSON. The `core.Sink` receives live
   `Stage` events; only human UIs consume them. `--json` stdout contains exactly
@@ -963,7 +974,7 @@ Stages (stable machine names; Korean titles in the UI):
 | `plan` | 갱신 계획 | read-only model + container baseline; `--no-pull` image check |
 | `build` | 로컬 이미지 빌드 | cached `compose build`; skipped when no build service |
 | `pull` | 이미지 취득 | `compose pull` for image-only services; skipped for `--no-pull` |
-| `apply` | 변경 적용 | `compose up --detach [--force-recreate] --pull missing|never` |
+| `apply` | 변경 적용 | `compose up --detach [--force-recreate] --pull missing|never`; runtime secret delivery prepared and committed through the same boundary as `up` |
 | `verify` | 실행 상태 확인 | bounded readback; failure marks this stage failed |
 | `record` | 정상 버전 기록 | retention tags + `state.json`; failure is a warning |
 
@@ -972,7 +983,10 @@ services pull their configured tag/digest. Unchanged services are not
 force-recreated; real Docker verifies identical container IDs and `Created` on a
 repeat update. `config --hash` is **not** image identity and is never used to
 claim "unchanged"; Compose itself compares the resolved image/config during
-`up`, so a moved tag recreates the service. `up --wait` is never used as proof:
+`up`, so a moved tag recreates the service. Runtime secret references are
+resolved by `apply` exactly as by `up` (current environment values in the
+Compose subprocess, file delivery rewritten from its source), so an update with
+`--force-recreate` delivers the current values; update never stores them. `up --wait` is never used as proof:
 it returns 0 for crash-looping `restart: always` containers, for a
 no-healthcheck container that dies right after, and for a re-up of an exited
 container.
@@ -1067,7 +1081,11 @@ type GoodService struct {
   `0600`).
 - It stores references only: file list in order, explicit env files, profiles,
   effective project name, environment and secret references. It never stores
-  resolved secret values or container environments.
+  resolved secret values or container environments. Every `GoodTarget.SecretRefs`
+  entry carries the service, phase, delivery, source kind, source name/ref and
+  delivery target; update populates it from the current `.dcraft.yaml` only
+  after `verify` succeeded and while holding the per-stack lock. Rollback (#12)
+  re-resolves these references; it never reads a stored value.
 - `(*state.Store).LoadGoodVersion(target)` returns
   `(GoodVersion, bool, error)`; `SaveGoodVersion(target, rec)` is the atomic
   writer. A first update on a previously unmanaged stack records the state it
@@ -1384,8 +1402,10 @@ Layout:
   environments never share state; the readable folder name stays in the key.
   Symlinked spellings of an existing folder canonicalize to one identity.
 - Directories are created lazily with `0700`; files with `0600`.
-- History records contain operation id, action, outcome, timestamps, stages and
-  diagnostics. Never resolved secret values.
+- History records contain operation id, action, outcome, timestamps, completed
+  stages and diagnostics. The record-writing `history` stage itself, and any
+  other still-open stage, is not persisted; a record never ends with a
+  `started` stage. Never resolved secret values.
 - `script-trust.json` is the machine-local script trust record. It is keyed by
   the same canonical folder+environment state directory and stores only the
   canonical script path, stage, sha256 and approval time. It is never a
@@ -1532,11 +1552,14 @@ Desktop's VM-backed unix socket is **local**, not remote.
 | `secret_source_unavailable` | referenced environment/file source is missing, unreadable or empty | error |
 | `secret_apply_failed` | delivery preparation/materialization/override failed; a partial rotation may remain | error |
 | `backup_output_required` | no explicit backup output directory was given | error (exit 2) |
-| `backup_volume_required` | no data volume was selected | error (exit 2) |
-| `backup_volume_unknown` | selected volume key/name is not part of the stack | error (exit 2) |
-| `backup_volume_unsupported` | anonymous volume or bind folder cannot be archived here | error |
+| `backup_volume_required` | no data source (named volume or declared bind folder) was selected | error (exit 2) |
+| `backup_volume_unknown` | selected volume key/name is not part of the stack, or a bind folder was passed through `--volume` | error (exit 2) |
+| `backup_volume_unsupported` | anonymous volume or another unarchivable volume selection | error |
+| `backup_bind_unknown` | `--bind` value is not a declared bind folder or a unique mount target | error (exit 2) |
+| `backup_bind_invalid` | a declared bind folder is missing, not a directory, unreadable, or contains an unsupported name/socket | error |
+| `backup_bind_unsafe` | the bind source is a filesystem root or the output is inside the source | error |
 | `backup_output_invalid` | output is not a writable directory or the artifact would escape it | error |
-| `backup_consumer_unsafe` | another stack, unmanaged container or paused service consumes the volume | error |
+| `backup_consumer_unsafe` | another stack, unmanaged container or paused service consumes the selected volume or bind folder | error |
 | `backup_selection_changed` | the selected source identity changed between discovery and stop | error |
 | `backup_failed` | stop, archive helper, filesystem write, publish or completion-marker failure | error |
 | `backup_integrity_failed` | archive truncation, unsafe entry or manifest mismatch | error |
@@ -1567,12 +1590,13 @@ the full `compose version` command confirms the classification.
 `service_unknown`, `invalid_option`, `secret_input_invalid`,
 `secret_unsupported`, `selection_required`, `instance_unknown`,
 `backup_output_required`, `backup_volume_required`,
-`backup_volume_unknown`, `hook_input_invalid`, `generator_input_invalid` and
+`backup_volume_unknown`, `backup_bind_unknown`, `hook_input_invalid`,
+`generator_input_invalid` and
 `hook_content_changed`: those mean the caller must supply a different decision
 (an approval, an environment, a free name, an existing service, a valid option,
 a valid secret reference, a service/instance selection, or a backup
-volume/output). dcraft never prompts to resolve them; non-interactive runs fail
-with the explanation instead. `instance_stopped`, `logs_failed` and
+volume/bind/output). dcraft never prompts to resolve them; non-interactive runs
+fail with the explanation instead. `instance_stopped`, `logs_failed` and
 `exec_failed` are operation failures (exit 1). New categories are additive v1
 values.
 
@@ -1587,9 +1611,10 @@ previous record is untouched.
 ## 10.1 Data backup and backup format v1 (ticket #16)
 
 Feature: flat command `dcraft backup`; no approval (it exports data, it never
-replaces it), `RecordsHistory: true`, `Wizard: true`, and two feature-owned
-flags: `--output/-o <dir>` (`FlagString`, required) and repeatable
-`--volume <key>` (`FlagList`, required). The CLI never invents a destination;
+replaces it), `RecordsHistory: true`, `Wizard: true`, and three feature-owned
+flags: `--output/-o <dir>` (`FlagString`, required), repeatable `--volume <key>`
+(`FlagList`) and repeatable `--bind <path-or-mount-target>` (`FlagList`). At
+least one volume or bind is required. The CLI never invents a destination;
 a missing value is a `backup_output_required`/`backup_volume_required` failure
 (exit 2) with Korean guidance and no service stop. The TUI uses the published
 `core.Wizard` flow, not a feature-specific screen: the first read-only run
@@ -1600,8 +1625,9 @@ services and the effect, and only `enter` runs the same engine path with
 
 Stable stages: `output` (저장 위치 확인), `coordinate` (스택 잠금),
 `resolve_project` (프로젝트 확인), `discover` (데이터 선택),
-`recheck_selection` (선택 재확인), `inspect_consumers` (소비자 확인),
-`stop_consumers` (서비스 중지), `archive` (볼륨 복사),
+`recheck_selection` (선택 재확인), `check_paths` (경로 안전 확인),
+`inspect_consumers` (소비자 확인),
+`stop_consumers` (서비스 중지), `archive` (볼륨/폴더 복사),
 `verify_archive` (무결성 확인), `publish` (백업 공개),
 `complete` (완료 표시), `restore_state` (서비스 상태 복구).
 
@@ -1614,9 +1640,10 @@ Stable stages: `output` (저장 위치 확인), `coordinate` (스택 잠금),
 - Volume identity comes from `docker compose config --format json`:
   `volumes.<key>.name` (custom `name:` included), `external: true` as declared.
   Engine queries always use the actual engine name, never the Compose key.
-  Anonymous volumes (a `volume` mount with no `source`) and bind mounts are
-  reported by `data.Sources` but are explicitly rejected by this command;
-  bind-folder backup is ticket #17 and restore is #18/#19.
+  Anonymous volumes (a `volume` mount with no `source`) are reported by
+  `data.Sources` but are explicitly rejected by this command. Declared bind
+  mounts are supported through `--bind` (§10.2); anonymous volumes and other
+  unarchivable selections remain rejected. Restore is #18/#19.
 - Consumers are read with `docker ps -a --filter volume=<actual engine name>`
   (`-a` is mandatory: a stopped container still references the volume). A
   consumer is accepted only when its Compose project label equals the selected
@@ -1759,19 +1786,22 @@ characters replaced and a numeric suffix on collision; it is generated by
 ### Published interfaces (consume, do not fork)
 
 - `internal/data`: `Backend` (`ProjectName`, `Sources`, `ServiceRuntime`,
-  `VolumeConsumers(ctx, target, volumeName)`, `StopServices`, `StartServices`,
+  `VolumeConsumers(ctx, target, volumeName)`,
+  `BindConsumers(ctx, target, hostPath)`, `StopServices`, `StartServices`,
   `ArchiveVolume`, `HelperImage`, `Redact`), `DataSource` (`Kind`, `Key`, `Name`,
-  `MountTargets`, `External`, `Anonymous`, `ReadOnly`, `Services`), `Kind`
-  (`volume`/`bind`), `ServiceRuntime`, `ContainerConsumer`, `OpResult`,
+  `Declared`, `DeclaredPaths`, `MountTargets`, `External`, `Anonymous`, `ReadOnly`, `Services`),
+  `Kind` (`volume`/`bind`), `ServiceRuntime`, `ContainerConsumer`, `OpResult`,
   `VolumeHelperImage` and `ArchiveDataFile`. `internal/compose` is the only
   implementation; tests substitute a fake.
 - `internal/backup`: `Schema`, `FormatVersion`, `ManifestFile`, `DataFile`,
   `DataFormatTarGz`, `PartialSuffix`, `Manifest`, `Source`, `StackState`,
   `ArchiveInfo`, `Entry`, `Totals`, `Tool`, `InspectArchive`, `Verify`,
-  `ReadManifest`, `WriteManifest`, `List`, `Artifact`, `SelectVolumeSources`,
-  `SelectableVolumes`, `SourceFrom`, `ArtifactName`, `ArtifactPath`,
-  `UniqueArtifactPath`, `Discovery`, `ConsumerReport`, `Discover`,
-  `CheckConsumers`.
+  `ReadManifest`, `WriteManifest`, `List`, `Artifact`, `Kind`,
+  `SelectVolumeSources`, `SelectableVolumes`, `SelectSources`,
+  `SelectableSources`, `NormalizeBindSource`, `CheckBindSources`,
+  `ResolveForContainment`, `ArchiveHostDir`, `ParseWizardSources`, `SourceFrom`,
+  `ArtifactName`, `ArtifactPath`, `UniqueArtifactPath`, `Discovery`,
+  `ConsumerReport`, `Discover`, `CheckConsumers`.
 - `secretref.Runtime.RedactText(target, text)` is the shared redaction helper.
 - The feature-owned archive image is `alpine:3.20` by default and can be
   overridden with `DCRAFT_BACKUP_IMAGE` (the image is shown in the plan/wizard
@@ -1809,12 +1839,65 @@ characters replaced and a numeric suffix on collision; it is generated by
 
 ---
 
+## 10.2 Bind-folder backup (ticket #17)
+
+`dcraft backup` also accepts repeatable `--bind <path-or-mount-target>` next to
+`--volume`. The source list is still only the current stack's
+`docker compose config --format json` bind mounts; dcraft never adds an
+arbitrary host folder. The TUI wizard lists named volumes first and bind
+folders second in one generic multi-select step (`core.WizardStep.Multi`, space
+toggles, enter confirms; enter on an untouched list selects the highlighted
+item). The apply run uses the same option lists as the CLI.
+
+Path rules:
+
+- `data.DataSource.Declared` keeps the absolute path as Compose declared it;
+  `DeclaredPaths` carries every distinct spelling that resolves to the same
+  folder (merged into one selectable source); `Name` is the symlink-resolved
+  path (`EvalSymlinks`) used for display, containment checks, archiving and
+  `manifest.source.host_path`. Relative and `~` inputs are accepted only as
+  spellings of a declared source; they resolve against the first Compose file's
+  directory, like Compose.
+- `CheckBindSources` requires an existing readable directory, refuses a
+  filesystem root, and refuses an output directory inside a selected source
+  (including after the output is created and resolved). The check runs before
+  any service stop. Volume-only backups keep their previous behavior.
+- Consumer detection mirrors #16: `docker ps -a --filter volume=<path>` is
+  tried with the host spelling and the Docker-visible `/host_mnt` spelling,
+  stopped containers included, and the union is compared with the selected
+  project/service. Any outside consumer refuses with
+  `backup_consumer_unsafe`; dcraft never stops another stack. The wizard labels
+  show the same shared-use probe before selection.
+- The archive is host-side tar (`backup.ArchiveHostDir`), not a container
+  helper. It stores `./`-relative names, dotfiles, modes (including
+  setuid/setgid/sticky), uid/gid, symlinks and hardlinks; FIFOs/devices are
+  recorded as `other` and not materialized by host verification. Sockets and
+  backslash names are refused; a file whose size changes while it is read fails
+  explicitly. Host tar is a live read, not a filesystem snapshot: an in-place
+  write that keeps the same size cannot be detected. The destination is opened
+  with `O_EXCL` inside a fresh `.partial` directory, so a pre-existing
+  destination symlink is never followed. Verification still uses
+  `backup.Verify` and a fresh temporary extraction directory.
+- `manifest.source.kind` is `bind` with `host_path`; `volume_key` and
+  `volume_name` are empty. `ownership_note` states that xattrs/ACLs are not
+  archived and ownership restoration limits exist. The report includes
+  `msgBindOwnershipNote` and the sensitive-data notice.
+- New additive categories: `backup_bind_unknown` (exit 2);
+  `backup_bind_invalid` and `backup_bind_unsafe` (exit 1). New stage:
+  `check_paths` (경로 안전 확인). No restore, retention, scheduling, remote
+  upload, hooks, auto-collection of secret files, or automatic deletion is
+  added.
+
+---
+
 ## 11. Verification
 
 Tested seams:
 
 - target resolution (temp folders, override order, explicit order, parent
-  isolation, env files, profiles, project name);
+  isolation, env files, profiles, project name); target-optional resolution
+  ignores registered environment aliases and broken `.dcraft.yaml` catalogs
+  while the same folder still requires an alias for stack features;
 - environment config parsing (missing file, empty file, alias order, relative
   paths, invalid/duplicate/missing fields), mandatory selection, no implicit
   choice, no-alias defaults, expansion order, explicit-input conflicts,
@@ -1822,10 +1905,15 @@ Tested seams:
   port/bind/external-resource overlap warnings;
 - preflight classification with `execxtest.Runner` (all diagnostic categories,
   local Desktop socket vs remote refusal, no engine contact for remote);
-- Compose inspection parsing (health, instances, connections, unconfigured
+  `compose`-only and `docker_engine`-only declarations still look up Docker,
+  refuse a remote endpoint, and check exactly their own capability, while
+  `docker_cli` alone stays minimal;
+- compose inspection parsing (health, instances, connections, unconfigured
   services, no secret leakage, stable Compose arguments);
-- engine seam with fake features (approval, stages, verification, history,
-  cancellation, panic recovery, warnings, planned requirements, target
+- engine seam with fake features (approval, stages, verification, a panicking
+  verifier mapped to `internal_error`, data omitted on failure and
+  cancellation, history stage excluded from its own record, cancellation,
+  panic recovery, warnings, planned requirements, target
   optionality, plan preview without approval/run);
 - backup format v1 (entry hashes for files/dirs/symlinks/hardlinks, truncated
   gzip rejected even when all names list, unsafe/absolute/duplicate names
@@ -1848,6 +1936,14 @@ Tested seams:
   interruption regression asserts no `dcraft-backup-*` container survives, no
   interrupted artifact is listed, prior services are restored and the
   immediately following backup of the same volume succeeds;
+- bind-folder backup through the same engine: Compose config relative/`~`/
+  symlink normalization, arbitrary-path rejection, output-inside-source and
+  root refusal before any stop, shared-consumer detection with the host and
+  `/host_mnt` spellings, mixed volume+bind artifacts (`kind=bind`,
+  `host_path`), host tar content fidelity (dotfiles, modes, uid/gid, symlinks,
+  hardlinks, FIFOs), destination-symlink refusal, unreadable folder, changed
+  names, cancellation after stop restoring services with no valid artifact,
+  and the TUI multi-select/preview/apply path;
 - registry validation and CLI/TUI assembly from registries;
 - state layout and permissions, automatic-name allocation (first/suffix/reuse/
   declared/conflict/external ownership/environment/concurrency), the read-only
@@ -1963,7 +2059,10 @@ Tested seams:
   changes the image identity; a source change rebuilds/recreates only that
   service; a tag moved in a temporary local registry (host-network `registry:2`,
   removed afterwards) recreates only the image-only service and records the new
-  exact image ID; a healthcheck pass is
+  exact image ID; runtime env/file secrets reach a force-recreated container
+  with their current values, the record stores references (service, source kind,
+  ref, target) without values, and `down` still removes the materialized file
+  and managed override; a healthcheck pass is
   success/healthy and a no-healthcheck service is `running_unverified` (never
   verified); unhealthy, crash-loop (`restart: always`), early exit and timeout
   all fail with the observed `service=status` and leave the previous record
@@ -2000,6 +2099,7 @@ go test -count=1 ./...
 DCRAFT_INTEGRATION=1 go test ./test/e2e/... -run TestIntegration -v
 DCRAFT_INTEGRATION=1 go test ./test/e2e/... -run TestIntegrationHook -v
 DCRAFT_INTEGRATION=1 go test ./test/e2e/... -run TestIntegrationVolumeBackup -v
+DCRAFT_INTEGRATION=1 go test ./test/e2e/... -run TestIntegrationBindBackup -v
 DCRAFT_COMPOSE_REAL_INSTALL=1 go test ./test/e2e/... -run TestRealComposeInstall -v
 ```
 
@@ -2011,7 +2111,7 @@ Docker or external network. Unrun platforms/paths are not claimed as verified.
 ## 12. Not implemented here (owned by later tickets)
 
 - `restore`; no registration exists and no menu action is shown. `backup`
-  supports named volumes only; bind-folder backup (#17), volume restore (#18)
+  supports named volumes and stack-declared bind folders; volume restore (#18)
   and bind restore (#19) are not implemented.
 - TUI alias creation/editing: aliases are created by editing `.dcraft.yaml` in
   this version (selection is provided by both interfaces).
@@ -2021,8 +2121,8 @@ Docker or external network. Unrun platforms/paths are not claimed as verified.
   installation by ticket #6; update readiness and the previous-good record by
   ticket #7; host hooks and script trust by ticket #12; the guided Git
   host-script generator by ticket #13 (see `docs/host-script-generators.md`);
-  named-volume backup by ticket #15; build-time delivery by ticket #10 and
-  previous-good rollback by ticket #11.
+  named-volume backup by ticket #16 and bind-folder backup by ticket #17;
+  build-time delivery by ticket #10 and previous-good rollback by ticket #11.
 - Good-version history beyond the single record (rollback has no multi-version
   picker). The TUI plan/confirm component is generic; `install-compose`,
   `update`, `backup`, `rollback` and `generate-git-hook` are planners in this
@@ -2099,7 +2199,10 @@ without that support skips that part instead of claiming it passed.
 
 Backup residual risks: the archive helper image (`alpine:3.20`, override
 `DCRAFT_BACKUP_IMAGE`) may be pulled on first use (a hidden but announced
-network action); anonymous volumes and bind folders are deliberately rejected;
+network action); anonymous volumes are deliberately rejected; bind folders are
+copied host-side with the running user's host permissions and the documented
+xattr/ACL/ownership limits; a host file that changes mid-copy fails the
+backup instead of being silently truncated;
 `data.Backend.ArchiveVolume` output and any Compose failure text are redacted by
 the feature, but redaction is best-effort against values referenced by
 `.dcraft.yaml` and cannot remove values the helper or Compose invent/echo from
@@ -2172,6 +2275,18 @@ Published by ticket #16 (consume, do not fork): `internal/data` `Backend`,
 `Request.OptionLists`, `Invocation.OptionLists`/`OptionList`; the backup
 diagnostic categories and the archive-verification-inside-the-lock rule.
 `secretref.Runtime.RedactText` is the shared redaction entry point.
+
+Published by ticket #17 (consume, do not fork): `data.Backend.BindConsumers`,
+`data.DataSource.Declared` (bind path as Compose declared it; `Name` is the
+symlink-resolved path), `core.WizardStep.Multi`, `core.WizardStep` multi-select
+answer convention (newline-joined option values), `backup.Kind`,
+`backup.SelectSources`, `backup.SelectableSources`,
+`backup.NormalizeBindSource`, `backup.CheckBindSources`,
+`backup.ResolveForContainment`, `backup.ArchiveHostDir`,
+`backup.ParseWizardSources`, the `check_paths` stage and the
+`backup_bind_unknown`/`backup_bind_invalid`/`backup_bind_unsafe` categories.
+Bind consumers are queried with both the host spelling and the Docker-visible
+`/host_mnt` spelling.
 
 Published by ticket #5 (consume, do not fork): `internal/selector` types and
 functions (`Service`, `Instance`, `Selection`, `Services`, `Select`,

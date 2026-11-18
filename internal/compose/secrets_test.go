@@ -12,6 +12,7 @@ import (
 	"github.com/rootmyself/dcraft/internal/execx"
 	"github.com/rootmyself/dcraft/internal/execx/execxtest"
 	"github.com/rootmyself/dcraft/internal/secretref"
+	"github.com/rootmyself/dcraft/internal/stack"
 	"github.com/rootmyself/dcraft/internal/state"
 )
 
@@ -336,6 +337,98 @@ func TestConfigInfoReportsDependencies(t *testing.T) {
 	_ = project
 }
 
+// Apply is the update path. It must prepare runtime delivery exactly like Up:
+// the managed override and current environment values reach Compose, file
+// secrets are rewritten from their source, and a successful apply commits the
+// materialization.
+func TestApplyPreparesRuntimeSecretsAndUsesCurrentValues(t *testing.T) {
+	project, target := secretProject(t, `secrets:
+  - service: web
+    phase: runtime
+    delivery: environment
+    source: env
+    ref: NEW_SECRET
+  - service: web
+    phase: runtime
+    delivery: file
+    source: file
+    ref: secrets/token.txt
+    target: app_token
+`)
+	if err := os.MkdirAll(filepath.Join(project, "secrets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "secrets", "token.txt"), []byte("file-value"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	const sentinel = "sentinel-apply-7788"
+	runner := secretRunner(t, "container printed "+sentinel)
+	c, rt := secretCompose(t, project, runner, map[string]string{"NEW_SECRET": sentinel})
+
+	res, err := c.Apply(context.Background(), target, nil, stack.ApplyOptions{
+		ForceRecreate: true,
+		PullPolicy:    "never",
+	})
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	var up execx.Command
+	for _, call := range runner.Calls() {
+		if strings.Contains(strings.Join(call.Args, " "), " up --detach") {
+			up = call
+		}
+	}
+	if up.Name != "docker" {
+		t.Fatal("apply did not invoke docker compose up")
+	}
+	line := strings.Join(up.Args, " ")
+	for _, want := range []string{" up --detach", "--force-recreate", "--pull never", "compose.secrets.yaml"} {
+		if !strings.Contains(line, want) {
+			t.Fatalf("apply args = %q, missing %q", line, want)
+		}
+	}
+	if !envHas(up.Env, "DCRAFT_SECRET_1="+sentinel) {
+		t.Fatalf("apply env missing the current environment value: %v", up.Env)
+	}
+	if strings.Contains(res.Output, sentinel) {
+		t.Fatalf("apply output leaked the secret value: %q", res.Output)
+	}
+	path, _ := rt.MaterializedPath(target, secretref.Reference{
+		Service: "web", Delivery: secretref.DeliveryFile, Target: "app_token",
+	})
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("file secret was not materialized by apply: %v", err)
+	}
+	if string(data) != "file-value" {
+		t.Fatalf("materialized file = %q", data)
+	}
+}
+
+func TestApplyFailsBeforeComposeWhenSourceMissing(t *testing.T) {
+	project, target := secretProject(t, `secrets:
+  - service: web
+    phase: runtime
+    delivery: environment
+    source: env
+    ref: MISSING_APPLY_SECRET
+`)
+	runner := secretRunner(t, "Container started")
+	c, _ := secretCompose(t, project, runner, nil)
+	_, err := c.Apply(context.Background(), target, nil, stack.ApplyOptions{PullPolicy: "never"})
+	if err == nil {
+		t.Fatal("Apply succeeded with a missing source")
+	}
+	var ce *core.Error
+	if !errors.As(err, &ce) || ce.Diagnostics[0].Category != core.CategorySecretSource {
+		t.Fatalf("error = %v", err)
+	}
+	for _, call := range runner.Calls() {
+		if strings.Contains(strings.Join(call.Args, " "), " up --detach") {
+			t.Fatalf("apply ran despite the missing source: %v", call.Args)
+		}
+	}
+}
 func containsArgs(args []string, flag, prefix string) bool {
 	for i := 0; i+1 < len(args); i++ {
 		if args[i] == flag && strings.HasPrefix(args[i+1], prefix) {

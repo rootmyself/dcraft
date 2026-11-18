@@ -23,7 +23,19 @@ Non-interactive runs never prompt. Missing or unsafe input is
 `generator_input_invalid` (exit 2). The file write uses the independent
 `file_overwrite` approval: automation must pass
 `--approve file_overwrite`; the TUI wizard preview is the confirmation that
-supplies it. `file_overwrite` is never reused as `script_trust`.
+supplies it. `file_overwrite` is never reused as `script_trust`. The descriptor
+approval is static, so a new file also requires it; this is stricter than a
+confirmation-only new-file save and keeps one published safe path for creation
+and replacement.
+
+The shared preflight contract has no "none" requirement, so the generator
+declares `docker_cli` (the smallest published set, like `hooks`). It never
+invokes Docker, contacts a remote, or requires Git at generation time; the
+generated script checks Git when it runs.
+
+A wizard feature with an approval shows that approval on its preview screen;
+the same preview confirmation supplies the approval to the apply run. This is
+generic TUI collection, not a generator-specific branch.
 
 Generation:
 

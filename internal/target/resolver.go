@@ -92,6 +92,16 @@ func (r *Resolver) Resolve(ctx context.Context, req core.TargetRequest, cwd stri
 		Environment: req.Environment,
 	}
 
+	// A target-optional feature does not operate on a Compose project, so the
+	// project's environment catalog is irrelevant to it. Requiring an alias
+	// (or failing on a broken catalog) here would make `install-compose` and
+	// similar features unusable in a project that uses aliases. Use plain
+	// folder/Compose defaults instead.
+	if req.AllowMissingConfiguration {
+		tgt.Environment = ""
+		return resolvePlain(req, tgt, cwd)
+	}
+
 	catalog, err := environments.Load(projectDir)
 	if err != nil {
 		return tgt, nil, err
@@ -136,6 +146,14 @@ func (r *Resolver) Resolve(ctx context.Context, req core.TargetRequest, cwd stri
 		return tgt, nil, environmentUnknownWithoutAliases(req.Environment)
 	}
 
+	return resolvePlain(req, tgt, cwd)
+}
+
+// resolvePlain applies standard Compose discovery and explicit inputs without
+// consulting the environment catalog. It is the no-alias path and the whole
+// path for target-optional features.
+func resolvePlain(req core.TargetRequest, tgt core.Target, cwd string) (core.Target, []core.Diagnostic, error) {
+	var warnings []core.Diagnostic
 	if len(req.Files) > 0 {
 		files, err := resolveExplicitFiles(req.Files, cwd, core.CategoryTargetInvalid, msgComposeFileMissing, msgComposeFileActions)
 		if err != nil {
@@ -143,7 +161,7 @@ func (r *Resolver) Resolve(ctx context.Context, req core.TargetRequest, cwd stri
 		}
 		tgt.Files = files
 	} else {
-		files, discoveredWarnings, err := discoverIn(projectDir, req.AllowMissingConfiguration)
+		files, discoveredWarnings, err := discoverIn(tgt.ProjectDir, req.AllowMissingConfiguration)
 		if err != nil {
 			return tgt, warnings, err
 		}
