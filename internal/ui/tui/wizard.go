@@ -358,6 +358,12 @@ func (m *Model) wizardView() string {
 			}
 		}
 	case phaseWizardPreview:
+		if m.wizardFeature != nil {
+			if kind := m.wizardFeature.Descriptor().Approval; kind != core.ApprovalNone {
+				fmt.Fprintf(&b, "필요 승인: %s (%s)\n", kind.KoreanLabel(), kind)
+				b.WriteString("enter 계획 확인 · left 이전 단계 · esc 취소\n\n")
+			}
+		}
 		b.WriteString(m.wizardPreview)
 		b.WriteString("\n")
 	}
