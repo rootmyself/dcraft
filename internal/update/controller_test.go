@@ -27,14 +27,15 @@ type fakeUpdater struct {
 	pullErr      error
 	applyHook    func()
 
-	builds     [][]string
-	buildOpts  []stack.BuildOptions
-	pulls      [][]string
-	applies    [][]string
-	applyOpts  []stack.ApplyOptions
-	tags       []string
-	pruned     bool
-	containers []stack.Container
+	builds       [][]string
+	buildOpts    []stack.BuildOptions
+	buildNotices []string
+	pulls        [][]string
+	applies      [][]string
+	applyOpts    []stack.ApplyOptions
+	tags         []string
+	pruned       bool
+	containers   []stack.Container
 }
 
 func (f *fakeUpdater) UpdateModel(context.Context, core.Target) (stack.UpdateModel, error) {
@@ -51,7 +52,7 @@ func (f *fakeUpdater) Containers(context.Context, core.Target) ([]stack.Containe
 func (f *fakeUpdater) Build(_ context.Context, _ core.Target, services []string, opts stack.BuildOptions) (stack.OpResult, error) {
 	f.builds = append(f.builds, append([]string{}, services...))
 	f.buildOpts = append(f.buildOpts, opts)
-	return stack.OpResult{Output: "built " + strings.Join(services, " ")}, f.buildErr
+	return stack.OpResult{Output: "built " + strings.Join(services, " "), Notices: append([]string{}, f.buildNotices...)}, f.buildErr
 }
 
 func (f *fakeUpdater) Pull(_ context.Context, _ core.Target, services []string) (stack.OpResult, error) {
@@ -387,6 +388,110 @@ func TestSuccessfulUpdateReplacesPreviousGoodRecord(t *testing.T) {
 	}
 	if saved.OperationID == "op_old" || len(saved.Services) != 1 || saved.Services[0].ImageID != "sha256:new" {
 		t.Fatalf("successful update did not replace the record: %+v", saved)
+	}
+}
+
+func TestGoodVersionRecordsSecretReferencesWithoutValues(t *testing.T) {
+	project := t.TempDir()
+	if err := os.WriteFile(filepath.Join(project, ".dcraft.yaml"), []byte(`secrets:
+  - service: web
+    phase: runtime
+    delivery: environment
+    source: env
+    ref: DB_PASSWORD
+  - service: web
+    phase: build
+    delivery: file
+    source: file
+    ref: secrets/build-token.txt
+    target: build_token
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	u := &fakeUpdater{
+		model:      oneServiceModel(false, false),
+		containers: []stack.Container{healthyContainer("web", "sha256:new", false, "")},
+		imageIDs:   map[string]string{"nginx:1.27": "sha256:new"},
+	}
+	c, store, _ := newTestController(t, u, &fakeIdentity{cfg: stack.ConfigInfo{Services: []string{"web"}}, derived: "app"})
+	in := invocation(t, nil)
+	in.Target.ProjectDir = project
+	in.Target.Files = []string{filepath.Join(project, "compose.yaml")}
+	if _, err := c.Run(context.Background(), in, Options{Pull: true, Timeout: 30 * time.Second}); err != nil {
+		t.Fatal(err)
+	}
+	saved, ok, err := store.LoadGoodVersion(in.Target)
+	if err != nil || !ok {
+		t.Fatalf("load: ok=%v err=%v", ok, err)
+	}
+	byPhase := map[string]state.SecretReference{}
+	for _, ref := range saved.Target.SecretRefs {
+		byPhase[ref.Phase] = ref
+	}
+	build, ok := byPhase["build"]
+	if !ok {
+		t.Fatalf("build reference missing from the good-version record: %+v", saved.Target.SecretRefs)
+	}
+	if build.Service != "web" || build.Delivery != "file" || build.Source != "file" || build.Name != "secrets/build-token.txt" {
+		t.Fatalf("build reference = %+v", build)
+	}
+	runtime, ok := byPhase["runtime"]
+	if !ok || runtime.Name != "DB_PASSWORD" || runtime.Delivery != "environment" {
+		t.Fatalf("runtime reference = %+v", runtime)
+	}
+	encoded, err := json.Marshal(saved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), "value") || strings.Contains(string(encoded), "secret-value") {
+		t.Fatalf("good-version record contains a value field: %s", encoded)
+	}
+}
+
+func TestBuildNoticesAreReported(t *testing.T) {
+	u := &fakeUpdater{
+		model:        oneServiceModel(true, false),
+		containers:   []stack.Container{healthyContainer("web", "sha256:new", false, "")},
+		imageIDs:     map[string]string{"app-web": "sha256:new"},
+		buildNotices: []string{"빌드 시점 비밀값 캐시 안내"},
+	}
+	c, _, _ := newTestController(t, u, &fakeIdentity{cfg: stack.ConfigInfo{Services: []string{"web"}}, derived: "app"})
+	payload, err := c.Run(context.Background(), invocation(t, nil), Options{Pull: false, Timeout: 30 * time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(payload.Update.Notices, "\n"), "빌드 시점 비밀값 캐시 안내") {
+		t.Fatalf("build notices were dropped: %v", payload.Update.Notices)
+	}
+}
+
+func TestPreviewExplainsBuildSecretCacheLimitation(t *testing.T) {
+	project := t.TempDir()
+	if err := os.WriteFile(filepath.Join(project, ".dcraft.yaml"), []byte(`secrets:
+  - service: web
+    phase: build
+    delivery: file
+    source: file
+    ref: secrets/build-token.txt
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	u := &fakeUpdater{
+		model:      oneServiceModel(true, false),
+		containers: []stack.Container{healthyContainer("web", "sha256:old", false, "")},
+	}
+	c, _, _ := newTestController(t, u, &fakeIdentity{cfg: stack.ConfigInfo{Services: []string{"web"}}, derived: "app"})
+	in := invocation(t, nil)
+	in.Target.ProjectDir = project
+	in.Target.Files = []string{filepath.Join(project, "compose.yaml")}
+	plan, err := c.Preview(context.Background(), in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"빌드 시점 비밀값", "--no-cache", "저장하거나 비교하지 않습니다"} {
+		if !strings.Contains(plan.Text, want) {
+			t.Fatalf("plan missing %q:\n%s", want, plan.Text)
+		}
 	}
 }
 

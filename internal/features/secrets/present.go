@@ -28,13 +28,16 @@ func (f *Feature) Present(res core.Result, width int) string {
 	if report.OverrideFile != "" {
 		fmt.Fprintf(&b, "%s: %s\n", msgListOverride, report.OverrideFile)
 	}
+	if report.BuildOverrideFile != "" {
+		fmt.Fprintf(&b, "%s: %s\n", msgListBuildOverride, report.BuildOverrideFile)
+	}
 	if len(report.References) == 0 {
 		fmt.Fprintf(&b, "\n%s\n", msgListEmpty)
 	} else {
 		for _, ref := range report.References {
 			b.WriteString("\n")
 			fmt.Fprintf(&b, "%s · %s\n", ref.Service, phaseLabel(secretrefPhase(ref.Phase)))
-			fmt.Fprintf(&b, "  %s: %s\n", msgPreviewDelivery, deliveryLabel(secretrefDelivery(ref.Delivery), ref.Target))
+			fmt.Fprintf(&b, "  %s: %s\n", msgPreviewDelivery, deliveryLabel(secretrefPhase(ref.Phase), secretrefDelivery(ref.Delivery), ref.Target))
 			fmt.Fprintf(&b, "  %s: %s (%s)\n", msgPreviewSource, sourceLabel(secretrefSource(ref.Source)), ref.Ref)
 			fmt.Fprintf(&b, "  %s: %s\n", msgPreviewEffect, ref.Effect)
 		}

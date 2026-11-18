@@ -177,9 +177,21 @@ func (c *Compose) Containers(ctx context.Context, t core.Target) ([]stack.Contai
 }
 
 // Build implements stack.Updater. The default build uses the normal cache;
-// cache bypass and base-image refresh are separate explicit choices.
+// cache bypass and base-image refresh are separate explicit choices. Build
+// secret references are delivered through Compose build.secrets and a
+// BuildKit secret mount: the managed build override is appended with -f, the
+// private sources are materialized for the command, and known values are
+// redacted from captured output. There is no ARG/ENV fallback.
 func (c *Compose) Build(ctx context.Context, t core.Target, services []string, opts stack.BuildOptions) (stack.OpResult, error) {
-	args := append(t.ComposeArgs(), "build")
+	prep, err := c.prepareBuildSecrets(ctx, t, services)
+	if err != nil {
+		return stack.OpResult{}, err
+	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		prep.Abort()
+		return stack.OpResult{}, ctxErr
+	}
+	args := composeArgsWith(t, prep.Files, "build")
 	if opts.NoCache {
 		args = append(args, "--no-cache")
 	}
@@ -187,7 +199,25 @@ func (c *Compose) Build(ctx context.Context, t core.Target, services []string, o
 		args = append(args, "--pull")
 	}
 	args = append(args, services...)
-	return c.lifecycleRun(ctx, t, "build", args)
+	res, err := c.run(ctx, execx.Command{Name: "docker", Args: args, Dir: t.ProjectDir})
+	finishErr := prep.Finish()
+	if finishErr != nil {
+		prep.Notices = append(prep.Notices, msgBuildFinishFailed)
+	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return stack.OpResult{Output: summarize(prep.Redact(res.Combined())), Notices: prep.Notices}, ctxErr
+	}
+	if err != nil {
+		prep.Abort()
+		return stack.OpResult{}, err
+	}
+	out := stack.OpResult{Output: summarize(prep.Redact(res.Combined())), Notices: prep.Notices}
+	if !res.Succeeded() {
+		// The source files a failed build may still need are kept for a retry.
+		return out, fmt.Errorf("docker compose build exited with status %d", res.ExitCode)
+	}
+	prep.Commit()
+	return out, nil
 }
 
 // Pull implements stack.Updater. It fetches only the configured references of
