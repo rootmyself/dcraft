@@ -201,6 +201,41 @@ func TestTUIFormCollectsCommandAndRunsThroughTheEngine(t *testing.T) {
 	}
 }
 
+type capturingFeature struct {
+	desc core.Descriptor
+	run  func(ctx context.Context, in core.Invocation) (any, error)
+}
+
+func (f *capturingFeature) Descriptor() core.Descriptor { return f.desc }
+func (f *capturingFeature) Run(ctx context.Context, in core.Invocation) (any, error) {
+	return f.run(ctx, in)
+}
+
+func TestTUIResetsCollectedInputsWhenTheFeatureChanges(t *testing.T) {
+	var got core.Invocation
+	upDesc := descriptor("up", false)
+	upDesc.ReadOnly = false
+	upDesc.RecordsHistory = true
+	up := &capturingFeature{desc: upDesc}
+	up.run = func(ctx context.Context, in core.Invocation) (any, error) {
+		got = in
+		return "ok", nil
+	}
+	primary := &stubFeature{desc: descriptor("status", true), body: "status body"}
+	m := newTestModel(t, primary, up)
+	initModel(t, m)
+	m.req = core.Request{
+		Feature:  "attach",
+		Target:   m.target,
+		Services: []string{"web"},
+		Args:     []string{"date"},
+	}
+	feed(t, m, execute(t, m.startRun(up, nil)))
+	if len(got.Services) != 0 || len(got.Args) != 0 {
+		t.Fatalf("exec inputs leaked into up: services=%v args=%v", got.Services, got.Args)
+	}
+}
+
 func TestTUILogsScreenStreamsAndReturnsToTheManagementView(t *testing.T) {
 	live := &fakeLiveFeature{
 		desc: descriptor("logs", true),

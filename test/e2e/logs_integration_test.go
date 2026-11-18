@@ -234,7 +234,7 @@ func TestIntegrationLogsExecScaledService(t *testing.T) {
 	ptyEnv := append([]string{}, dcraftEnv...)
 	s := startPTY(t, dir, ptyEnv, "--path", dir, "-p", name)
 	s.waitFor("로그 보기 (logs)", 30*time.Second)
-	s.press("k", "k", "\r")
+	s.pressMenuDown(menuDownPresses(t, "logs"))
 	s.waitFor("line-", 30*time.Second)
 	s.press("q")
 	s.waitFor("마지막 실시간 출력", 30*time.Second)

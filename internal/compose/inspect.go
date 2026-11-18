@@ -76,6 +76,7 @@ type configService struct {
 	Image       string          `json:"image"`
 	Build       json.RawMessage `json:"build"`
 	Healthcheck json.RawMessage `json:"healthcheck"`
+	DependsOn   json.RawMessage `json:"depends_on"`
 	Ports       []configPort    `json:"ports"`
 }
 

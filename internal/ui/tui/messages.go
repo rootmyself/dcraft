@@ -14,6 +14,9 @@ const (
 	msgNoPrimary            = "대화형 화면을 열 수 없습니다: 등록된 기본 화면이 없습니다."
 	msgNoEngine             = "작업을 실행할 준비가 되지 않았습니다."
 	msgNoEngineAction       = "dcraft를 다시 빌드하거나 설치한 뒤 실행하세요."
+	msgMenuMoreAbove        = "  … 위에 더 있음"
+	msgMenuMoreBelow        = "  … 아래에 더 있음"
+	msgViewTruncated        = "… 화면 높이에 맞춰 일부 내용을 생략했습니다. 전체 내용은 dcraft status로 확인하세요."
 
 	msgApprovalDeclined       = "승인하지 않아 아무것도 실행하지 않았습니다. 변경된 내용은 없습니다."
 	msgApprovalDeclinedAction = "필요할 때 다시 실행해 계획을 확인하고 승인하세요."
@@ -69,4 +72,22 @@ const (
 	msgHintAttach    = "ctrl+] 접속 종료 · 명령이 끝나면 자동 복귀"
 	msgLiveStopped   = "실시간 화면을 닫았습니다. 서비스는 계속 실행 중입니다."
 	msgLastOutput    = "마지막 실시간 출력"
+)
+
+const (
+	msgWizardLoading       = "비밀값 연결 설정 단계를 준비하는 중…"
+	msgWizardProgress      = "단계"
+	msgWizardInputLabel    = "> "
+	msgWizardNeedValue     = "값을 입력한 뒤 enter를 누르세요."
+	msgWizardNeedChoice    = "↑/↓로 값을 선택한 뒤 enter를 누르세요."
+	msgWizardPreviewFailed = "입력을 저장할 수 없습니다. 이전 단계로 돌아가 수정하세요."
+	msgWizardPayload       = "대화형 설정 단계를 표시할 수 없습니다."
+	msgWizardPayloadAction = "dcraft secrets 명령으로 참조를 직접 추가하세요."
+	msgWizardUnavailable   = "이 기능은 대화형 설정을 지원하지 않습니다."
+	msgWizardCanceled      = "대화형 설정을 취소했습니다. 저장된 내용은 없습니다."
+	msgHintWizardChoice    = "↑/↓ 선택 · enter 다음 · ← 이전 · esc 취소 · q 종료"
+	msgHintWizardInput     = "입력 후 enter · backspace 수정 · ← 이전 · esc 취소 · q 종료"
+	msgHintWizardPreview   = "enter 저장 · ← 이전 · esc 취소 · q 종료"
+	msgHintWizardInvalid   = "← 이전 · esc 취소 · q 종료"
+	msgHintWizardLoading   = "esc 취소 · q 종료"
 )

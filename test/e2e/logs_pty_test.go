@@ -13,6 +13,11 @@ import (
 
 	"github.com/creack/pty"
 	"golang.org/x/term"
+
+	"github.com/rootmyself/dcraft/internal/core"
+	"github.com/rootmyself/dcraft/internal/deps"
+	"github.com/rootmyself/dcraft/internal/execx/execxtest"
+	"github.com/rootmyself/dcraft/internal/features/all"
 )
 
 // ptySession runs the dcraft binary under a real pseudo-terminal so terminal
@@ -108,6 +113,44 @@ func (s *ptySession) wait() int {
 
 // assertRestored proves the terminal is not left in raw mode after a normal
 // exit or a failure.
+// menuDownPresses returns how many down-arrow presses move the menu cursor
+// from the primary status feature to the named feature. The menu order is the
+// registration order, so this stays correct when another ticket adds a feature.
+func menuDownPresses(t *testing.T, name string) int {
+	t.Helper()
+	reg := core.NewRegistry()
+	all.Register(reg, &deps.Deps{
+		Getenv:     func(string) string { return "" },
+		Runner:     &execxtest.Runner{},
+		Downloader: &noopDownloader{},
+		Installer:  &noopInstaller{},
+	})
+	features := reg.All()
+	statusIdx, targetIdx := -1, -1
+	for i, f := range features {
+		switch f.Descriptor().Name {
+		case "status":
+			statusIdx = i
+		case name:
+			targetIdx = i
+		}
+	}
+	if statusIdx < 0 || targetIdx < 0 {
+		t.Fatalf("features = %v (status=%d target=%d)", features, statusIdx, targetIdx)
+	}
+	return (targetIdx - statusIdx + len(features)) % len(features)
+}
+
+func (s *ptySession) pressMenuDown(count int) {
+	s.t.Helper()
+	keys := make([]string, 0, count+1)
+	for i := 0; i < count; i++ {
+		keys = append(keys, "\x1b[B")
+	}
+	keys = append(keys, "\r")
+	s.press(keys...)
+}
+
 func (s *ptySession) assertRestored() {
 	s.t.Helper()
 	after, err := term.GetState(int(s.master.Fd()))
@@ -180,9 +223,7 @@ func TestPTYTUILogsScreenReturnsToTheMenuAndKeepsServices(t *testing.T) {
 	env := fake.env(t, t.TempDir(), map[string]string{"DOCKER_FAKE_LOG_FOLLOW_LINE": "followed line"})
 	s := startPTY(t, project, env)
 	s.waitFor("로그 보기 (logs)", 15*time.Second)
-	// Menu order is registration order: down, exec, install-compose, logs,
-	// restart, status, stop, up. The primary status is selected first.
-	s.press("k", "k", "\r")
+	s.pressMenuDown(menuDownPresses(t, "logs"))
 	s.waitFor("followed line", 15*time.Second)
 	s.send("q")
 	s.waitFor("마지막 실시간 출력", 15*time.Second)
@@ -202,8 +243,7 @@ func TestPTYTUIExecScreenShowsTargetRunsAndReturnsToTheMenu(t *testing.T) {
 	env := fake.env(t, t.TempDir(), map[string]string{"DOCKER_FAKE_EXEC_STDOUT": "remote-stdout"})
 	s := startPTY(t, project, env)
 	s.waitFor("로그 보기 (logs)", 15*time.Second)
-	// status -> restart -> logs -> install-compose -> exec.
-	s.press("k", "k", "k", "k", "\r")
+	s.pressMenuDown(menuDownPresses(t, "exec"))
 	s.waitFor("실행 전 확인", 15*time.Second)
 	if !strings.Contains(s.out.String(), "서비스 인스턴스") || !strings.Contains(s.out.String(), "명령") {
 		t.Fatalf("exec form does not show service/instance/command:\n%s", s.out.String())
