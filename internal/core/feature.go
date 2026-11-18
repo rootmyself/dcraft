@@ -66,6 +66,10 @@ type Descriptor struct {
 	// the generic confirmation screen. The feature must implement Wizard and
 	// handle Options["wizard"]="steps"/"apply" in Run.
 	Wizard bool
+	// Hooks declares the registered host-script attachment point. The zero
+	// value runs no scripts. HookUpUpdate is only valid on `up` and `update`;
+	// read-only features may never declare it.
+	Hooks HookScope
 }
 
 // FlagKind is the supported shape of a feature flag. Supporting a new kind is
@@ -139,6 +143,14 @@ func validateDescriptor(d Descriptor) error {
 	// it cannot be registered this way.
 	if d.Primary && !d.ReadOnly && d.Approval == ApprovalNone {
 		return fmt.Errorf("feature %q: a mutating primary feature requires an approval", d.Name)
+	}
+	switch d.Hooks {
+	case HookNone, HookUpUpdate:
+	default:
+		return fmt.Errorf("feature %q: unknown hook scope %q", d.Name, d.Hooks)
+	}
+	if d.ReadOnly && d.Hooks != HookNone {
+		return fmt.Errorf("feature %q: read-only features cannot run host hooks", d.Name)
 	}
 	for _, r := range d.Requires {
 		switch r {
