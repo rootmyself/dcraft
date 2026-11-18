@@ -29,8 +29,14 @@ func TestRegistrationWiresStatusIntoBothInterfaces(t *testing.T) {
 		t.Fatalf("incomplete app graph: %+v", a)
 	}
 	features := a.Registry.All()
-	if len(features) != 1 || features[0].Descriptor().Name != "status" {
-		t.Fatalf("registered features = %v", features)
+	names := map[string]bool{}
+	for _, f := range features {
+		names[f.Descriptor().Name] = true
+	}
+	for _, want := range []string{"status", "install-compose"} {
+		if !names[want] {
+			t.Fatalf("registered features = %v, want %q", names, want)
+		}
 	}
 	primary, ok := a.Registry.Primary()
 	if !ok || primary.Descriptor().Name != "status" {
@@ -43,14 +49,14 @@ func TestRegistrationWiresStatusIntoBothInterfaces(t *testing.T) {
 		Stdout:   io.Discard,
 		Stderr:   io.Discard,
 	})
-	found := false
+	commands := map[string]bool{}
 	for _, cmd := range root.Commands() {
-		if cmd.Name() == "status" {
-			found = true
-		}
+		commands[cmd.Name()] = true
 	}
-	if !found {
-		t.Fatal("status command was not derived from the real registry")
+	for _, want := range []string{"status", "install-compose"} {
+		if !commands[want] {
+			t.Fatalf("%s command was not derived from the real registry: %v", want, commands)
+		}
 	}
 
 	model := tui.NewModel(nil, tui.Options{Engine: a.Engine, Registry: a.Registry})

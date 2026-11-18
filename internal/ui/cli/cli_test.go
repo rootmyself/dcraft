@@ -34,7 +34,7 @@ func (r *captureResolver) Resolve(ctx context.Context, req core.TargetRequest, c
 
 type emptyPreflight struct{}
 
-func (emptyPreflight) Check(ctx context.Context) core.PreflightReport {
+func (emptyPreflight) Check(ctx context.Context, requires core.Requirements) core.PreflightReport {
 	return core.PreflightReport{Diagnostics: []core.Diagnostic{}}
 }
 

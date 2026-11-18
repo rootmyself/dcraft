@@ -69,7 +69,7 @@ func (r *Resolver) Resolve(ctx context.Context, req core.TargetRequest, cwd stri
 		}
 		tgt.Files = files
 	} else {
-		files, discoveredWarnings, err := discoverIn(projectDir)
+		files, discoveredWarnings, err := discoverIn(projectDir, req.AllowMissingConfiguration)
 		if err != nil {
 			return tgt, warnings, err
 		}
@@ -178,8 +178,10 @@ func resolveExplicitFiles(paths []string, cwd string, category core.Category, mi
 }
 
 // discoverIn looks only inside dir. It returns the base file plus the matching
-// override, in Compose order.
-func discoverIn(dir string) ([]string, []core.Diagnostic, error) {
+// override, in Compose order. When allowMissing is set (a feature that does not
+// operate on a Compose project), a folder without Compose files is a valid
+// empty selection instead of a no_configuration failure.
+func discoverIn(dir string, allowMissing bool) ([]string, []core.Diagnostic, error) {
 	var present []string
 	for _, name := range defaultBaseFiles {
 		p := filepath.Join(dir, name)
@@ -189,6 +191,9 @@ func discoverIn(dir string) ([]string, []core.Diagnostic, error) {
 		}
 	}
 	if len(present) == 0 {
+		if allowMissing {
+			return []string{}, nil, nil
+		}
 		return nil, nil, core.Fail(core.Diagnostic{
 			Category:    core.CategoryNoConfiguration,
 			Severity:    core.SeverityError,

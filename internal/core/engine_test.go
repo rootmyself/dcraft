@@ -15,20 +15,24 @@ type fakeResolver struct {
 	warns  []core.Diagnostic
 	err    error
 	called bool
+	got    core.TargetRequest
 }
 
 func (f *fakeResolver) Resolve(ctx context.Context, req core.TargetRequest, cwd string) (core.Target, []core.Diagnostic, error) {
 	f.called = true
+	f.got = req
 	return f.target, f.warns, f.err
 }
 
 type fakePreflight struct {
-	report core.PreflightReport
-	called bool
+	report   core.PreflightReport
+	called   bool
+	requires core.Requirements
 }
 
-func (f *fakePreflight) Check(ctx context.Context) core.PreflightReport {
+func (f *fakePreflight) Check(ctx context.Context, requires core.Requirements) core.PreflightReport {
 	f.called = true
+	f.requires = requires
 	return f.report
 }
 

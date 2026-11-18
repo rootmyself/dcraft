@@ -18,10 +18,14 @@ type TargetRequest struct {
 	// resolves it from the project folder (ticket #3 later allocates reusable
 	// automatic names and populates this field before an operation runs).
 	ProjectName string
-	// Environment is an optional named-environment identifier. It is always
-	// empty until ticket #4 implements environment aliases; the field exists
-	// now so state and targets are partitioned per environment from the start.
+	// Environment is an optional named-environment identifier. Ticket #4
+	// fills it from an explicit alias selection.
 	Environment string
+	// AllowMissingConfiguration lets a feature that does not operate on a
+	// Compose project (Descriptor.TargetOptional) resolve a folder that has no
+	// Compose files. The engine sets it from the descriptor; callers never do.
+	// It does not relax explicit -f/--env-file validation.
+	AllowMissingConfiguration bool
 }
 
 // Target is the resolved stack selection. Every feature receives the same
