@@ -34,7 +34,7 @@ func (r *captureResolver) Resolve(ctx context.Context, req core.TargetRequest, c
 
 type emptyPreflight struct{}
 
-func (emptyPreflight) Check(ctx context.Context) core.PreflightReport {
+func (emptyPreflight) Check(ctx context.Context, requires core.Requirements) core.PreflightReport {
 	return core.PreflightReport{Diagnostics: []core.Diagnostic{}}
 }
 
@@ -90,12 +90,12 @@ type harness struct {
 	homeRan  bool
 }
 
-func newHarness(t *testing.T, features ...*stubFeature) *harness {
+func newHarness(t *testing.T, features ...core.Feature) *harness {
 	t.Helper()
 	return newInteractiveHarness(t, false, features...)
 }
 
-func newInteractiveHarness(t *testing.T, interactive bool, features ...*stubFeature) *harness {
+func newInteractiveHarness(t *testing.T, interactive bool, features ...core.Feature) *harness {
 	t.Helper()
 	reg := core.NewRegistry()
 	for _, f := range features {

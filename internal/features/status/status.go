@@ -292,11 +292,17 @@ func stateLabel(state stack.ServiceState) string {
 
 func writeGuidance(b *strings.Builder, width int) {
 	fmt.Fprintf(b, "다음 행동\n")
-	for _, line := range []string{
+	lines := []string{
 		msgGuideRefreshInteractive,
 		msgGuidePending,
-		msgGuideSecrets,
-	} {
+	}
+	// The TUI has a fixed viewport and no scroll yet; keep the status screen
+	// compact there. The same migration guidance is always shown by
+	// `dcraft secrets`, and by the CLI status output.
+	if width <= 0 {
+		lines = append(lines, msgGuideSecrets)
+	}
+	for _, line := range lines {
 		writeWrappedBullet(b, line, width)
 	}
 }

@@ -20,6 +20,7 @@ const (
 	msgComposeMissingActionOne   = "Docker Desktop에 포함된 Compose를 사용하거나 Compose 플러그인을 설치하세요."
 	msgComposeMissingActionTwo   = "설치 위치와 버전을 확인한 뒤 다시 실행하세요."
 	msgComposeMissingActionThree = "dcraft는 Docker를 자동으로 교체하거나 권한을 올리지 않습니다."
+	msgComposeMissingActionFour  = "공식 배포물로 안전하게 설치하려면 dcraft install-compose 를 실행하세요. 설치 계획을 확인한 뒤 승인합니다."
 
 	msgComposeUnsupported            = "설치된 Compose가 dcraft에 필요한 기능을 지원하지 않습니다."
 	msgComposeTooOld                 = "설치된 Compose 버전이 너무 낮습니다."

@@ -39,11 +39,12 @@ const (
 	phaseLoadingEnvironments
 	phaseSelectingEnvironment
 	phaseLoading
-	phaseReady
+	phasePlanning
 	phaseConfirm
 	phaseWizardLoading
 	phaseWizardStep
 	phaseWizardPreview
+	phaseReady
 )
 
 // Model is the Bubble Tea model. It is exported for behavior tests.
@@ -71,6 +72,12 @@ type Model struct {
 	runCancel    context.CancelFunc
 	width        int
 	height       int
+
+	// pendingApproval and planText hold the generic confirmation state. Any
+	// approval-gated feature that implements core.Planner reuses this screen;
+	// no feature-specific branch is added here.
+	pendingApproval core.ApprovalKind
+	planText        string
 
 	// Wizard state is generic: the feature supplies the steps and the effect
 	// preview, the TUI only collects answers with the keyboard.
@@ -125,6 +132,8 @@ type resultMsg struct{ res core.Result }
 
 type stageMsg struct{ stage core.Stage }
 
+type planMsg struct{ report core.PlanReport }
+
 type environmentListMsg struct {
 	envs []core.Environment
 	err  error
@@ -135,8 +144,7 @@ func (m *Model) Init() tea.Cmd {
 	case phaseLoadingEnvironments:
 		return m.listEnvironmentsCmd()
 	case phaseLoading:
-		m.runCtx, m.runCancel = context.WithCancel(m.ctx)
-		return tea.Batch(m.runCmd(m.active, m.events, m.runCtx, nil), waitStageCmd(m.events))
+		return m.begin(m.active)
 	default:
 		return nil
 	}
@@ -151,9 +159,21 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case stageMsg:
 		st := msg.stage
 		m.currentStage = &st
-		if m.phase == phaseLoading {
+		if m.phase == phaseLoading || m.phase == phasePlanning {
 			return m, waitStageCmd(m.events)
 		}
+		return m, nil
+	case planMsg:
+		m.currentStage = nil
+		if msg.report.Failed() {
+			res := msg.report.Result()
+			m.result = &res
+			m.phase = phaseReady
+			return m, nil
+		}
+		m.pendingApproval = m.active.Descriptor().Approval
+		m.planText = msg.report.Text
+		m.phase = phaseConfirm
 		return m, nil
 	case environmentListMsg:
 		if m.phase != phaseLoadingEnvironments {
@@ -201,6 +221,43 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.notice = ""
 		return m, nil
 	case tea.KeyMsg:
+		if m.phase == phaseConfirm {
+			switch msg.String() {
+			case "q", "ctrl+c":
+				// A confirmation is not an operation; quitting is safe and
+				// runs nothing.
+				return m, tea.Quit
+			case "esc", "n":
+				if m.pendingApproval != core.ApprovalNone {
+					m.declineApproval()
+				} else {
+					m.pending = nil
+					m.phase = phaseReady
+					m.notice = ""
+				}
+				return m, nil
+			case "enter":
+				if m.pendingApproval != core.ApprovalNone {
+					feature := m.active
+					approval := m.pendingApproval
+					m.pendingApproval = ""
+					m.planText = ""
+					if feature == nil {
+						m.phase = phaseReady
+						return m, nil
+					}
+					return m, m.runApproved(feature, approval)
+				}
+				if m.pending == nil {
+					m.phase = phaseReady
+					return m, nil
+				}
+				f := m.pending
+				m.pending = nil
+				return m, m.begin(f)
+			}
+			return m, nil
+		}
 		switch msg.String() {
 		case "q":
 			if m.wizardTextInput() {
@@ -229,12 +286,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, tea.Quit
 		case "esc":
-			if m.phase == phaseConfirm {
-				m.phase = phaseReady
-				m.pending = nil
-				m.notice = ""
-				return m, nil
-			}
 			if m.isWizardPhase() {
 				m.cancelWizard()
 			}
@@ -273,7 +324,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.active.Descriptor().Wizard {
 				return m, m.beginWizard(m.active)
 			}
-			if m.active.Descriptor().ReadOnly {
+			if m.active.Descriptor().ReadOnly || plannedApproval(m.active) {
 				return m, m.begin(m.active)
 			}
 			m.pending = m.active
@@ -291,21 +342,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "enter":
-			if m.phase == phaseConfirm {
-				if m.pending == nil {
-					m.phase = phaseReady
-					return m, nil
-				}
-				f := m.pending
-				m.pending = nil
-				return m, m.begin(f)
-			}
 			if m.phase == phaseReady && len(m.features) > 0 {
 				f := m.features[m.selected]
 				if f.Descriptor().Wizard {
 					return m, m.beginWizard(f)
 				}
-				if f.Descriptor().ReadOnly {
+				if f.Descriptor().ReadOnly || plannedApproval(f) {
 					return m, m.begin(f)
 				}
 				m.pending = f
@@ -328,19 +370,66 @@ func (m *Model) listEnvironmentsCmd() tea.Cmd {
 	}
 }
 
+// plannedApproval reports whether a feature's independent approval is
+// collected through the read-only plan screen. Such a feature needs no extra
+// generic confirmation: the plan itself is the confirmation.
+func plannedApproval(f core.Feature) bool {
+	if f == nil {
+		return false
+	}
+	d := f.Descriptor()
+	if d.Approval == core.ApprovalNone {
+		return false
+	}
+	_, ok := f.(core.Planner)
+	return ok
+}
+
+// begin starts a feature. Approval-gated features that can describe their
+// exact effect go through a read-only plan first; everything else runs
+// directly, preserving the ticket 01 behavior.
 func (m *Model) begin(f core.Feature) tea.Cmd {
 	m.active = f
+	m.result = nil
+	m.currentStage = nil
+	m.pendingApproval = ""
+	m.planText = ""
+	m.pending = nil
+	m.notice = ""
+	if m.runCancel != nil {
+		m.runCancel()
+		m.runCancel = nil
+		m.runCtx = nil
+	}
+	m.events = make(chan core.Stage, 64)
+	if f != nil {
+		desc := f.Descriptor()
+		if desc.Approval != core.ApprovalNone {
+			if _, ok := f.(core.Planner); ok {
+				m.phase = phasePlanning
+				return tea.Batch(m.planCmd(f, m.events), waitStageCmd(m.events))
+			}
+		}
+	}
+	m.phase = phaseLoading
+	m.runCtx, m.runCancel = context.WithCancel(m.ctx)
+	return tea.Batch(m.runCmd(f, nil, nil, m.events, m.runCtx), waitStageCmd(m.events))
+}
+
+func (m *Model) runApproved(f core.Feature, approval core.ApprovalKind) tea.Cmd {
 	m.phase = phaseLoading
 	m.result = nil
 	m.currentStage = nil
 	m.pending = nil
+	m.pendingApproval = ""
+	m.planText = ""
 	m.notice = ""
 	if m.runCancel != nil {
 		m.runCancel()
 	}
 	m.runCtx, m.runCancel = context.WithCancel(m.ctx)
 	m.events = make(chan core.Stage, 64)
-	return tea.Batch(m.runCmd(f, m.events, m.runCtx, nil), waitStageCmd(m.events))
+	return tea.Batch(m.runCmd(f, []core.ApprovalKind{approval}, nil, m.events, m.runCtx), waitStageCmd(m.events))
 }
 
 func (m *Model) beginWithOptions(f core.Feature, options map[string]string) tea.Cmd {
@@ -348,20 +437,49 @@ func (m *Model) beginWithOptions(f core.Feature, options map[string]string) tea.
 	m.result = nil
 	m.currentStage = nil
 	m.pending = nil
+	m.pendingApproval = ""
+	m.planText = ""
 	m.notice = ""
 	if m.runCancel != nil {
 		m.runCancel()
 	}
 	m.runCtx, m.runCancel = context.WithCancel(m.ctx)
 	m.events = make(chan core.Stage, 64)
-	return tea.Batch(m.runCmd(f, m.events, m.runCtx, options), waitStageCmd(m.events))
+	m.phase = phaseLoading
+	return tea.Batch(m.runCmd(f, nil, options, m.events, m.runCtx), waitStageCmd(m.events))
 }
 
-func (m *Model) runCmd(f core.Feature, events chan core.Stage, ctx context.Context, options map[string]string) tea.Cmd {
+func (m *Model) declineApproval() {
+	action := ""
+	if m.active != nil {
+		action = m.active.Descriptor().Name
+	}
+	res := core.Result{
+		SchemaVersion: core.SchemaVersion,
+		Action:        action,
+		Outcome:       core.OutcomeCanceled,
+		Target:        core.Target{ProjectDir: m.target.Path, Environment: m.target.Environment},
+		Stages:        []core.Stage{},
+		Diagnostics: []core.Diagnostic{{
+			Category:    core.CategoryCanceled,
+			Severity:    core.SeverityWarning,
+			Message:     msgApprovalDeclined,
+			NextActions: []string{msgApprovalDeclinedAction},
+		}},
+	}
+	res.Target.Normalize()
+	m.result = &res
+	m.pendingApproval = ""
+	m.planText = ""
+	m.phase = phaseReady
+}
+
+func (m *Model) runCmd(f core.Feature, approvals []core.ApprovalKind, options map[string]string, events chan core.Stage, ctx context.Context) tea.Cmd {
 	engine := m.engine
 	req := core.Request{
 		Feature:     f.Descriptor().Name,
 		Target:      m.target,
+		Approvals:   approvals,
 		Options:     options,
 		Interactive: true,
 	}
@@ -389,6 +507,42 @@ func (m *Model) runCmd(f core.Feature, events chan core.Stage, ctx context.Conte
 		res := engine.Run(ctx, req, sink)
 		close(events)
 		return resultMsg{res: res}
+	}
+}
+
+func (m *Model) planCmd(f core.Feature, events chan core.Stage) tea.Cmd {
+	engine := m.engine
+	ctx := m.ctx
+	req := core.Request{
+		Feature:     f.Descriptor().Name,
+		Target:      m.target,
+		Interactive: true,
+	}
+	return func() tea.Msg {
+		if engine == nil {
+			close(events)
+			return planMsg{report: core.PlanReport{
+				Feature: req.Feature,
+				Outcome: core.OutcomeFailure,
+				Target:  core.Target{ProjectDir: req.Target.Path, Environment: req.Target.Environment},
+				Stages:  []core.Stage{},
+				Diagnostics: []core.Diagnostic{{
+					Category:    core.CategoryInternal,
+					Severity:    core.SeverityError,
+					Message:     msgNoEngine,
+					NextActions: []string{msgNoEngineAction},
+				}},
+			}}
+		}
+		sink := core.SinkFunc(func(st core.Stage) {
+			select {
+			case events <- st:
+			default:
+			}
+		})
+		report := engine.Plan(ctx, req, sink)
+		close(events)
+		return planMsg{report: report}
 	}
 }
 
@@ -425,6 +579,31 @@ func (m *Model) View() string {
 	case phaseNoPrimary:
 		b.WriteString(msgNoPrimary)
 		b.WriteString("\n")
+	case phasePlanning:
+		b.WriteString(msgPlanning)
+		b.WriteString("\n")
+		if m.currentStage != nil {
+			b.WriteString(view.StageList([]core.Stage{*m.currentStage}))
+			b.WriteString("\n")
+		}
+	case phaseConfirm:
+		if m.pendingApproval != core.ApprovalNone {
+			b.WriteString(titleStyle.Render(msgApprovalConfirmTitle))
+			b.WriteString("\n\n")
+			if m.active != nil {
+				d := m.active.Descriptor()
+				fmt.Fprintf(&b, "작업: %s (%s)\n", d.Title, d.Name)
+			}
+			fmt.Fprintf(&b, "승인: %s (%s)\n", m.pendingApproval.KoreanLabel(), m.pendingApproval)
+			b.WriteString("\n")
+			b.WriteString(m.planText)
+			b.WriteString("\n\n")
+			b.WriteString(hintStyle.Render(msgHintConfirm))
+			b.WriteString("\n")
+		} else {
+			b.WriteString(m.confirmView())
+			b.WriteString("\n")
+		}
 	case phaseLoadingEnvironments:
 		b.WriteString(msgEnvChecking)
 		b.WriteString("\n")
@@ -442,9 +621,6 @@ func (m *Model) View() string {
 		}
 		b.WriteString("\n")
 		b.WriteString(hintStyle.Render(msgEnvIsolationNote))
-		b.WriteString("\n")
-	case phaseConfirm:
-		b.WriteString(m.confirmView())
 		b.WriteString("\n")
 	case phaseWizardLoading, phaseWizardStep, phaseWizardPreview:
 		b.WriteString(m.wizardView())
@@ -553,6 +729,9 @@ func (m *Model) hints() string {
 		return m.wizardHints()
 	}
 	if m.phase == phaseConfirm {
+		if m.pendingApproval != core.ApprovalNone {
+			return msgHintConfirm
+		}
 		return msgConfirmHints
 	}
 	if m.phase == phaseNoPrimary {

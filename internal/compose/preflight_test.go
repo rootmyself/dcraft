@@ -58,7 +58,7 @@ func defaults(overrides map[string]execx.Result) func(execx.Command) (execx.Resu
 
 func check(t *testing.T, runner execx.Runner, env map[string]string) core.PreflightReport {
 	t.Helper()
-	return compose.New(runner, envMap(env).getenv).Check(context.Background())
+	return compose.New(runner, envMap(env).getenv).Check(context.Background(), nil)
 }
 
 func onlyDiagnostic(t *testing.T, report core.PreflightReport) core.Diagnostic {

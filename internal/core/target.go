@@ -24,6 +24,11 @@ type TargetRequest struct {
 	// is never replaced with an implicit choice. With no aliases it stays
 	// empty and standard Compose defaults apply.
 	Environment string
+	// AllowMissingConfiguration lets a feature that does not operate on a
+	// Compose project (Descriptor.TargetOptional) resolve a folder that has no
+	// Compose files. The engine sets it from the descriptor; callers never do.
+	// It does not relax explicit -f/--env-file validation.
+	AllowMissingConfiguration bool
 }
 
 // Target is the resolved stack selection. Every feature receives the same
