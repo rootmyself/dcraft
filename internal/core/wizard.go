@@ -21,8 +21,14 @@ type Wizard interface {
 type WizardSpec struct {
 	// Title is Korean guidance for the whole flow.
 	Title string `json:"title"`
-	// Steps are answered in order.
+	// Steps are answered in order. A step may be conditional on an earlier
+	// answer.
 	Steps []WizardStep `json:"steps"`
+	// RequiredApprovals are the independent approvals the final apply run
+	// needs in addition to Descriptor.Approval. The TUI shows them on the
+	// preview screen and passes exactly these kinds with the "apply" request;
+	// the engine still enforces them. Empty means none.
+	RequiredApprovals []ApprovalKind `json:"required_approvals,omitempty"`
 }
 
 // WizardStep is one question. Options are rendered as a keyboard-selectable
@@ -40,6 +46,18 @@ type WizardStep struct {
 	CustomHint string `json:"custom_hint,omitempty"`
 	// Default is preselected for a choice step or prefilled for an input step.
 	Default string `json:"default,omitempty"`
+	// Optional lets an input step accept an empty answer. A choice step
+	// represents "none" with an empty option value instead.
+	Optional bool `json:"optional,omitempty"`
+	// DependsOn makes the step conditional on an earlier answer. The TUI skips
+	// the step unless the named answer is one of Values.
+	DependsOn *WizardCondition `json:"depends_on,omitempty"`
+}
+
+// WizardCondition selects a step by an earlier answer.
+type WizardCondition struct {
+	Name   string   `json:"name"`
+	Values []string `json:"values"`
 }
 
 // WizardOption is one selectable value. Value is machine data; Label is Korean

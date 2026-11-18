@@ -65,7 +65,7 @@ func (m *Model) beginWizardSteps(res core.Result) {
 		return
 	}
 	m.wizardSpec = spec
-	m.wizardStep = 0
+	m.wizardStep = m.firstWizardStep()
 	m.phase = phaseWizardStep
 	m.initWizardStep()
 }
@@ -85,6 +85,58 @@ func (m *Model) wizardTextInput() bool {
 	}
 	step := m.wizardSpec.Steps[m.wizardStep]
 	return len(step.Options) == 0 && step.AllowCustom
+}
+
+// wizardStepApplies decides whether a step is visible for the answers collected
+// so far. A conditional step is skipped entirely, never shown disabled.
+func (m *Model) wizardStepApplies(step core.WizardStep) bool {
+	if step.DependsOn == nil {
+		return true
+	}
+	answer := m.wizardAnswers[step.DependsOn.Name]
+	for _, value := range step.DependsOn.Values {
+		if answer == value {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *Model) firstWizardStep() int {
+	for i, step := range m.wizardSpec.Steps {
+		if m.wizardStepApplies(step) {
+			return i
+		}
+	}
+	return 0
+}
+
+func (m *Model) nextWizardStep(from int) int {
+	for i := from; i < len(m.wizardSpec.Steps); i++ {
+		if m.wizardStepApplies(m.wizardSpec.Steps[i]) {
+			return i
+		}
+	}
+	return -1
+}
+
+func (m *Model) previousWizardStepIndex(from int) int {
+	for i := from; i >= 0; i-- {
+		if m.wizardStepApplies(m.wizardSpec.Steps[i]) {
+			return i
+		}
+	}
+	return -1
+}
+
+// pruneWizardAnswers drops answers whose step no longer applies after an
+// earlier answer changed (for example switching from Dockerfile to image mode).
+func (m *Model) pruneWizardAnswers() {
+	for _, step := range m.wizardSpec.Steps {
+		if _, ok := m.wizardAnswers[step.Name]; ok && !m.wizardStepApplies(step) {
+			delete(m.wizardAnswers, step.Name)
+		}
+	}
 }
 
 func (m *Model) initWizardStep() {
@@ -128,6 +180,7 @@ func (m *Model) updateWizard(msg tea.KeyMsg) tea.Cmd {
 				m.wizardChoice = (m.wizardChoice + 1) % len(step.Options)
 			case "enter":
 				m.wizardAnswers[step.Name] = step.Options[m.wizardChoice].Value
+				m.pruneWizardAnswers()
 				m.advanceWizard()
 			case "left":
 				m.previousWizardStep()
@@ -143,11 +196,12 @@ func (m *Model) updateWizard(msg tea.KeyMsg) tea.Cmd {
 		switch msg.String() {
 		case "enter":
 			value := strings.TrimSpace(m.wizardInput)
-			if value == "" {
+			if value == "" && !step.Optional {
 				m.notice = msgWizardNeedValue
 				return nil
 			}
 			m.wizardAnswers[step.Name] = value
+			m.pruneWizardAnswers()
 			m.advanceWizard()
 		case "left":
 			if m.wizardInput == "" {
@@ -172,8 +226,8 @@ func (m *Model) updateWizard(msg tea.KeyMsg) tea.Cmd {
 				return m.applyWizard()
 			}
 		case "left":
-			if len(m.wizardSpec.Steps) > 0 {
-				m.wizardStep = len(m.wizardSpec.Steps) - 1
+			if previous := m.previousWizardStepIndex(len(m.wizardSpec.Steps) - 1); previous >= 0 {
+				m.wizardStep = previous
 				m.phase = phaseWizardStep
 				m.initWizardStep()
 			}
@@ -183,16 +237,16 @@ func (m *Model) updateWizard(msg tea.KeyMsg) tea.Cmd {
 }
 
 func (m *Model) previousWizardStep() {
-	if m.wizardStep > 0 {
-		m.wizardStep--
+	if previous := m.previousWizardStepIndex(m.wizardStep - 1); previous >= 0 {
+		m.wizardStep = previous
 		m.phase = phaseWizardStep
 		m.initWizardStep()
 	}
 }
 
 func (m *Model) advanceWizard() {
-	if m.wizardStep+1 < len(m.wizardSpec.Steps) {
-		m.wizardStep++
+	if next := m.nextWizardStep(m.wizardStep + 1); next >= 0 {
+		m.wizardStep = next
 		m.initWizardStep()
 		return
 	}
@@ -220,13 +274,17 @@ func (m *Model) applyWizard() tea.Cmd {
 		options[key] = value
 	}
 	m.wizardApplying = true
-	cmd := m.beginWithOptions(m.wizardFeature, options)
+	approvals := append([]core.ApprovalKind{}, m.wizardSpec.RequiredApprovals...)
+	cmd := m.beginWithOptionsAndApprovals(m.wizardFeature, options, approvals)
 	m.phase = phaseLoading
 	return cmd
 }
 
 func (m *Model) cancelWizard() {
-	if m.phase == phaseWizardLoading {
+	// Canceling the read-only steps run has no effect to report. Canceling the
+	// apply run must let the engine's canceled result (with partial-effect
+	// guidance) reach the screen instead of claiming nothing happened.
+	if m.phase == phaseWizardLoading && m.wizardAwaiting {
 		m.wizardCanceled = true
 	}
 	if m.runCancel != nil {
@@ -289,14 +347,29 @@ func (m *Model) wizardView() string {
 				input = " "
 			}
 			fmt.Fprintf(&b, "%s%s_\n", msgWizardInputLabel, input)
-			if step.CustomHint != "" {
-				b.WriteString(hintStyle.Render(step.CustomHint))
+			hint := step.CustomHint
+			if step.Optional {
+				if hint != "" {
+					hint += " · "
+				}
+				hint += msgWizardOptionalHint
+			}
+			if hint != "" {
+				b.WriteString(hintStyle.Render(hint))
 				b.WriteString("\n")
 			}
 		}
 	case phaseWizardPreview:
 		b.WriteString(m.wizardPreview)
 		b.WriteString("\n")
+		if len(m.wizardSpec.RequiredApprovals) > 0 {
+			b.WriteString("\n")
+			b.WriteString(titleStyle.Render(msgWizardRequiredApprovals))
+			b.WriteString("\n")
+			for _, kind := range m.wizardSpec.RequiredApprovals {
+				fmt.Fprintf(&b, "- %s (%s)\n", kind.KoreanLabel(), kind)
+			}
+		}
 	}
 	if m.notice != "" {
 		b.WriteString("\n")
@@ -338,7 +411,11 @@ func wizardSpecFrom(data any) (core.WizardSpec, bool) {
 func wizardErrorText(err error) string {
 	var ce *core.Error
 	if errorsAs(err, &ce) && len(ce.Diagnostics) > 0 {
-		return ce.Diagnostics[0].Message
+		d := ce.Diagnostics[0]
+		if strings.TrimSpace(d.Detail) != "" {
+			return d.Message + "\n" + d.Detail
+		}
+		return d.Message
 	}
 	return err.Error()
 }

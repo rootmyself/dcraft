@@ -35,6 +35,15 @@ const (
 	CategoryComposeInstallPermission  Category = "compose_install_permission"
 	CategoryComposeInstallFailed      Category = "compose_install_failed"
 	CategoryComposeRecheckFailed      Category = "compose_recheck_failed"
+	// First-run Compose generation (ticket #5). init_input_invalid is missing
+	// or invalid explicit input (exit 2); init_existing_configuration refuses
+	// to replace an existing stack without an explicit destination and the
+	// file_overwrite approval; init_invalid means Compose rejected the
+	// generated content before it was saved; init_failed is a save failure.
+	CategoryInitInputInvalid          Category = "init_input_invalid"
+	CategoryInitExistingConfiguration Category = "init_existing_configuration"
+	CategoryInitInvalid               Category = "init_invalid"
+	CategoryInitFailed                Category = "init_failed"
 	CategoryNoConfiguration           Category = "no_configuration"
 	CategoryInvalidConfiguration      Category = "invalid_configuration"
 	CategoryTargetInvalid             Category = "target_invalid"

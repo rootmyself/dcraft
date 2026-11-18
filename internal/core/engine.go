@@ -148,7 +148,12 @@ func (e *Engine) Run(ctx context.Context, req Request, sink Sink) (res Result) {
 		return res
 	}
 
-	if required := desc.Approval; required != ApprovalNone && !HasApproval(req.Approvals, required) {
+	required, approvalErr := e.requiredApproval(ctx, req, desc, feature, target)
+	if approvalErr != nil {
+		e.applyFailure(ctx, &res, approvalErr, feature)
+		return res
+	}
+	if required != ApprovalNone {
 		if err := ctx.Err(); err != nil {
 			res.Outcome = OutcomeCanceled
 			addCanceledDiagnostic(&res)
@@ -349,6 +354,52 @@ func (e *Engine) resolveTarget(ctx context.Context, rec *recorder, req Request, 
 	})
 }
 
+// requiredApproval returns the independent approval a run is missing. The
+// descriptor approval is checked first; a feature that implements
+// ConditionalApproval is then asked whether its particular inputs need another
+// one. A wizard "steps" run is the read-only preview that collects those
+// answers, so it is exempt from the conditional check; the "apply" run is not.
+func (e *Engine) requiredApproval(ctx context.Context, req Request, desc Descriptor, feature Feature, target Target) (ApprovalKind, error) {
+	if required := desc.Approval; required != ApprovalNone && !HasApproval(req.Approvals, required) {
+		return required, nil
+	}
+	conditional, ok := feature.(ConditionalApproval)
+	if !ok || req.Options["wizard"] == "steps" {
+		return ApprovalNone, nil
+	}
+	kind, err := e.conditionalApproval(ctx, conditional, req, target)
+	if err != nil {
+		return ApprovalNone, err
+	}
+	if kind != ApprovalNone && !HasApproval(req.Approvals, kind) {
+		return kind, nil
+	}
+	return ApprovalNone, nil
+}
+
+// conditionalApproval isolates a feature's read-only approval inspection from
+// the engine: a panic becomes an internal error instead of crashing the UI.
+func (e *Engine) conditionalApproval(ctx context.Context, feature ConditionalApproval, req Request, target Target) (kind ApprovalKind, err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = &recoveredPanicError{value: recovered}
+		}
+	}()
+	inv := Invocation{
+		Target:      target,
+		Services:    append([]string{}, req.Services...),
+		Args:        append([]string{}, req.Args...),
+		Options:     req.Options,
+		OptionLists: req.OptionLists,
+		Interactive: req.Interactive,
+		IO:          req.IO,
+		JSON:        req.JSON,
+		Clock:       e.Clock,
+		State:       e.State,
+	}
+	return feature.RequiredApproval(ctx, inv)
+}
+
 // runPreflight checks exactly the capabilities the descriptor declared.
 func (e *Engine) runPreflight(ctx context.Context, rec *recorder, desc Descriptor, pf *PreflightReport) error {
 	return RunStage(rec, "preflight", msgStagePreflight, func() error {
@@ -440,6 +491,23 @@ func (e *Engine) Plan(ctx context.Context, req Request, sink Sink) (report PlanR
 		return report
 	}
 
+	// A plan lists every independent approval the run will need, including a
+	// feature's conditionally required one. It never consumes an approval.
+	required := uniqueApprovals(desc.Approval)
+	if conditional, ok := feature.(ConditionalApproval); ok && req.Options["wizard"] != "steps" {
+		kind, condErr := e.conditionalApproval(ctx, conditional, req, target)
+		if condErr != nil {
+			if isCanceled(ctx, condErr) {
+				report.Outcome = OutcomeCanceled
+				addCanceledDiagnosticTo(&report.Diagnostics)
+				return report
+			}
+			report.Diagnostics = append(report.Diagnostics, failureDiagnostics(condErr)...)
+			return report
+		}
+		required = uniqueApprovals(append(required, kind)...)
+	}
+
 	var pf PreflightReport
 	preflightErr := e.runPreflight(ctx, rec, desc, &pf)
 	report.Tools = pf.Tools
@@ -462,8 +530,6 @@ func (e *Engine) Plan(ctx context.Context, req Request, sink Sink) (report PlanR
 		return report
 	}
 	report.Diagnostics = append(report.Diagnostics, pf.Diagnostics...)
-
-	required := uniqueApprovals(desc.Approval)
 	var hookText string
 	if desc.Hooks != HookNone {
 		if e.Hooks == nil {
