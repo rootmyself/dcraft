@@ -5,15 +5,18 @@ fork these types or recreate these rules in a feature or UI package. Shared
 interface changes go to the integration owner as a change request (see the end
 of this file).
 
-Scope of this version: one working binary, ten registered features (`status`,
+Scope of this version: one working binary, twelve registered features (`status`,
 `install-compose`, `up`, `stop`, `down`, `restart`, `update`, `secrets`,
-`logs`, `exec`), the common operation seam, target resolution, named
+`hooks`, `logs`, `exec`, `backup`), the common operation seam, target
+resolution, named
 environments, automatic project-name allocation, same-stack coordination,
-runtime secret references, service/instance selection, live terminal attach,
+runtime secret references, explicit host scripts with independent script
+trust, service/instance selection, live terminal attach, versioned volume
+backup,
 diagnostics, CLI/TUI assembly, state layout, machine-readable results, the
 approval/plan preview flow, explicit update with bounded readiness and the
-previous-good record, and tests. Generation, build-time/AWS secrets, hooks,
-backup/restore and rollback are later tickets.
+previous-good record, and tests. Generation, build-time/AWS secrets,
+bind-folder backup, restore and rollback are later tickets.
 
 ---
 
@@ -539,8 +542,9 @@ affected tickets. Do not copy the interface into a feature.
 ## 5. Stack lifecycle: up, stop, down, restart (ticket 03)
 
 Four flat, stack-changing commands run through `core.Engine.Run`; CLI and TUI
-share `lifecycle.Controller`. Nothing here builds, pulls, checks health, runs
-hooks, backs up data or rolls back.
+share `lifecycle.Controller`. Nothing here builds, pulls, checks health, backs
+up data or rolls back; `up` participates in the engine-owned hook seam (§7.2),
+but the lifecycle controller itself runs no scripts.
 
 | command | scope | Compose call | effect |
 |---|---|---|---|
