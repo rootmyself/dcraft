@@ -276,6 +276,174 @@ func TestEnterWhileLoadingDoesNotStartSecondOperation(t *testing.T) {
 	}
 }
 
+// --- named environment selection -------------------------------------------
+
+type stubEnvResolver struct {
+	stubResolver
+	envs       []core.Environment
+	envErr     error
+	envCalls   int
+	lastTarget core.TargetRequest
+}
+
+func (r *stubEnvResolver) Environments(ctx context.Context, req core.TargetRequest, cwd string) ([]core.Environment, []core.Diagnostic, error) {
+	r.envCalls++
+	if r.envErr != nil {
+		return nil, nil, r.envErr
+	}
+	return r.envs, nil, nil
+}
+
+func (r *stubEnvResolver) Resolve(ctx context.Context, req core.TargetRequest, cwd string) (core.Target, []core.Diagnostic, error) {
+	r.lastTarget = req
+	return core.Target{
+		ProjectDir:  "/project",
+		Files:       []string{"/project/compose.yaml"},
+		EnvFiles:    []string{},
+		Profiles:    []string{},
+		Environment: req.Environment,
+	}, nil, nil
+}
+
+func newEnvTestModel(t *testing.T, resolver *stubEnvResolver, target core.TargetRequest, features ...*stubFeature) *Model {
+	t.Helper()
+	reg := core.NewRegistry()
+	for _, f := range features {
+		if err := reg.Register(f); err != nil {
+			t.Fatalf("Register: %v", err)
+		}
+	}
+	engine := core.NewEngine(reg, resolver, stubPreflight{}, stubState{}, stubClock{})
+	engine.CWD = func() (string, error) { return "/cwd", nil }
+	engine.NewOperationID = func() string { return "op_tui_env" }
+	return NewModel(context.Background(), Options{Engine: engine, Registry: reg, Target: target})
+}
+
+func envResolver() *stubEnvResolver {
+	return &stubEnvResolver{envs: []core.Environment{
+		{Name: "dev", Files: []string{"/project/compose.yaml"}, Profiles: []string{"dev"}},
+		{Name: "prod", Files: []string{"/project/compose.yaml"}, Profiles: []string{"prod"}},
+	}}
+}
+
+func TestEnvironmentSelectionIsRequiredWhenAliasesExist(t *testing.T) {
+	status := &stubFeature{desc: descriptor("status", true), body: "body"}
+	resolver := envResolver()
+	m := newEnvTestModel(t, resolver, core.TargetRequest{}, status)
+	initModel(t, m)
+	view := m.View()
+	for _, want := range []string{"실행환경 선택", "dev", "prod", "직접 선택", "q 종료"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("selection view missing %q:\n%s", want, view)
+		}
+	}
+	if status.runs != 0 {
+		t.Fatalf("feature ran before an explicit environment selection: %d", status.runs)
+	}
+	if strings.Contains(view, "> dev") || strings.Contains(view, "> prod") {
+		t.Fatalf("a default environment was preselected:\n%s", view)
+	}
+}
+
+func TestEnvironmentSelectionRequiresAKeyBeforeRunning(t *testing.T) {
+	status := &stubFeature{desc: descriptor("status", true), body: "body"}
+	m := newEnvTestModel(t, envResolver(), core.TargetRequest{}, status)
+	initModel(t, m)
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd != nil {
+		t.Fatalf("enter with no selection returned a command")
+	}
+	if status.runs != 0 {
+		t.Fatalf("enter with no selection ran the feature")
+	}
+}
+
+func TestEnvironmentSelectionKeyboardChoosesAndRuns(t *testing.T) {
+	status := &stubFeature{desc: descriptor("status", true), body: "본문"}
+	resolver := envResolver()
+	m := newEnvTestModel(t, resolver, core.TargetRequest{}, status)
+	initModel(t, m)
+
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = nm.(*Model)
+	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(*Model)
+	feed(t, m, execute(t, cmd))
+
+	if status.runs != 1 {
+		t.Fatalf("runs = %d, want 1", status.runs)
+	}
+	if resolver.lastTarget.Environment != "dev" {
+		t.Fatalf("selected environment = %q, want dev", resolver.lastTarget.Environment)
+	}
+	if !strings.Contains(m.View(), "본문") {
+		t.Fatalf("result not shown:\n%s", m.View())
+	}
+}
+
+func TestEnvironmentSelectionCanChooseLaterEntry(t *testing.T) {
+	status := &stubFeature{desc: descriptor("status", true), body: "본문"}
+	resolver := envResolver()
+	m := newEnvTestModel(t, resolver, core.TargetRequest{}, status)
+	initModel(t, m)
+	for i := 0; i < 2; i++ {
+		nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+		m = nm.(*Model)
+	}
+	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(*Model)
+	feed(t, m, execute(t, cmd))
+	if resolver.lastTarget.Environment != "prod" {
+		t.Fatalf("selected environment = %q, want prod", resolver.lastTarget.Environment)
+	}
+}
+
+func TestQuitFromEnvironmentSelectionRunsNothing(t *testing.T) {
+	status := &stubFeature{desc: descriptor("status", true), body: "body"}
+	m := newEnvTestModel(t, envResolver(), core.TargetRequest{}, status)
+	initModel(t, m)
+	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	m = nm.(*Model)
+	if !isQuit(t, cmd) {
+		t.Fatal("q did not quit from the selection screen")
+	}
+	if status.runs != 0 {
+		t.Fatalf("quitting from selection ran the feature: %d", status.runs)
+	}
+}
+
+func TestExplicitEnvironmentSkipsTheSelectionScreen(t *testing.T) {
+	status := &stubFeature{desc: descriptor("status", true), body: "본문"}
+	resolver := envResolver()
+	m := newEnvTestModel(t, resolver, core.TargetRequest{Environment: "prod"}, status)
+	initModel(t, m)
+	if strings.Contains(m.View(), "실행환경 선택") {
+		t.Fatalf("explicit --env still prompted:\n%s", m.View())
+	}
+	if status.runs != 1 {
+		t.Fatalf("runs = %d, want 1", status.runs)
+	}
+	if resolver.lastTarget.Environment != "prod" {
+		t.Fatalf("environment = %q", resolver.lastTarget.Environment)
+	}
+}
+
+func TestNoAliasesRunsThePrimaryFeatureWithoutSelection(t *testing.T) {
+	status := &stubFeature{desc: descriptor("status", true), body: "본문"}
+	resolver := &stubEnvResolver{}
+	m := newEnvTestModel(t, resolver, core.TargetRequest{}, status)
+	initModel(t, m)
+	if strings.Contains(m.View(), "실행환경 선택") {
+		t.Fatalf("selection screen shown without aliases:\n%s", m.View())
+	}
+	if status.runs != 1 {
+		t.Fatalf("runs = %d, want 1", status.runs)
+	}
+	if resolver.lastTarget.Environment != "" {
+		t.Fatalf("environment changed without aliases: %q", resolver.lastTarget.Environment)
+	}
+}
+
 func mutatingDescriptor(name string) core.Descriptor {
 	d := descriptor(name, false)
 	d.ReadOnly = false

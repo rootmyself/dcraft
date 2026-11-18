@@ -45,6 +45,7 @@ type targetFlags struct {
 	envFiles    []string
 	profiles    []string
 	projectName string
+	environment string
 	approvals   []string
 }
 
@@ -86,6 +87,7 @@ func New(opts Options) *cobra.Command {
 	pf.StringArrayVar(&tf.envFiles, "env-file", nil, msgFlagEnvFile)
 	pf.StringArrayVar(&tf.profiles, "profile", nil, msgFlagProfile)
 	pf.StringVarP(&tf.projectName, "project-name", "p", "", msgFlagProjectName)
+	pf.StringVar(&tf.environment, "env", "", msgFlagEnvironment)
 	pf.StringArrayVar(&tf.approvals, "approve", nil, msgFlagApprove)
 
 	if opts.Registry != nil {
@@ -259,6 +261,7 @@ func (tf *targetFlags) targetRequest() core.TargetRequest {
 		EnvFiles:    append([]string{}, tf.envFiles...),
 		Profiles:    append([]string{}, tf.profiles...),
 		ProjectName: tf.projectName,
+		Environment: tf.environment,
 	}
 }
 

@@ -489,14 +489,14 @@ func historyFor(t *testing.T, stateDir string) string {
 	return out.String()
 }
 
-type ptyStep struct {
+type lifecyclePTYStep struct {
 	wait string
 	send string
 }
 
 // runPTYSteps drives the real binary through a pty, waiting for each screen
 // before sending the next key sequence, then quits with q.
-func runPTYSteps(t *testing.T, dir string, env []string, steps []ptyStep) (string, int) {
+func runLifecyclePTYSteps(t *testing.T, dir string, env []string, steps []lifecyclePTYStep) (string, int) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
 	defer cancel()
@@ -564,7 +564,7 @@ func TestLifecycleTUIMenuSelectsStopAndQuitsWithoutChangingServices(t *testing.T
 	fake := lifecycleFake(t)
 	project := projectNamed(t, "hello-world")
 	env := fake.env(t, t.TempDir())
-	output, code := runPTYSteps(t, project, env, []ptyStep{
+	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
 		{wait: "상태를 새로 고치려면", send: ""},
 		{wait: "> 스택 상태 (status)", send: "down"},
 		{wait: "> 스택 중지 (stop)", send: "\r"},
@@ -585,7 +585,7 @@ func TestLifecycleTUIRunsUpThroughTheSameEngine(t *testing.T) {
 	fake := lifecycleFake(t)
 	project := projectNamed(t, "hello-world")
 	env := fake.env(t, t.TempDir())
-	output, code := runPTYSteps(t, project, env, []ptyStep{
+	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
 		{wait: "상태를 새로 고치려면", send: ""},
 		{wait: "> 스택 상태 (status)", send: "down"},
 		{wait: "> 스택 중지 (stop)", send: "down"},

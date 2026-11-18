@@ -94,7 +94,7 @@ func containerRunning(t *testing.T, id string) bool {
 	return strings.TrimSpace(string(out)) == "true"
 }
 
-func cleanupCompose(t *testing.T, env []string, dir, project, file string, removeImages bool) {
+func cleanupLifecycleCompose(t *testing.T, env []string, dir, project, file string, removeImages bool) {
 	t.Helper()
 	args := []string{"compose", "-p", project, "-f", file, "down", "-v", "--remove-orphans"}
 	if removeImages {
@@ -143,7 +143,7 @@ func TestIntegrationLifecycleStack(t *testing.T) {
 	stateDir := t.TempDir()
 	dcraftEnv := buildEnv(map[string]string{"DCRAFT_STATE_DIR": stateDir})
 	registerCleanup := func(dir, name, file string) {
-		t.Cleanup(func() { cleanupCompose(t, env, dir, name, file, false) })
+		t.Cleanup(func() { cleanupLifecycleCompose(t, env, dir, name, file, false) })
 	}
 
 	run := func(args ...string) processResult {
@@ -435,7 +435,7 @@ func TestIntegrationLifecycleExistingProjectIsReused(t *testing.T) {
 	if err := os.WriteFile(composePath, []byte(doc), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { cleanupCompose(t, env, dir, name, composePath, false) })
+	t.Cleanup(func() { cleanupLifecycleCompose(t, env, dir, name, composePath, false) })
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
@@ -498,7 +498,7 @@ CMD ["sleep", "600"]
 	stateDir := t.TempDir()
 	dcraftEnv := buildEnv(map[string]string{"DCRAFT_STATE_DIR": stateDir})
 	name := filepath.Base(dir)
-	t.Cleanup(func() { cleanupCompose(t, env, dir, name, composePath, true) })
+	t.Cleanup(func() { cleanupLifecycleCompose(t, env, dir, name, composePath, true) })
 
 	type outcome struct {
 		res processResult
@@ -614,7 +614,7 @@ func TestIntegrationLifecycleDeclaredNameSources(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dirA, ".env"), []byte("COMPOSE_PROJECT_NAME="+envProject+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { cleanupCompose(t, env, dirA, envProject, fileA, false) })
+	t.Cleanup(func() { cleanupLifecycleCompose(t, env, dirA, envProject, fileA, false) })
 	upA := runProcess(t, dirA, dcraftEnv, strings.NewReader(""), "up", "--json")
 	if upA.code != 0 {
 		t.Fatalf("env-name up exit=%d stderr=%q", upA.code, upA.stderr)
@@ -649,7 +649,7 @@ func TestIntegrationLifecycleDeclaredNameSources(t *testing.T) {
 	if err := os.WriteFile(fileC, []byte(yamlDoc), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { cleanupCompose(t, env, dirC, yamlProject, fileC, false) })
+	t.Cleanup(func() { cleanupLifecycleCompose(t, env, dirC, yamlProject, fileC, false) })
 	upC := runProcess(t, dirC, dcraftEnv, strings.NewReader(""), "up", "--json")
 	if upC.code != 0 {
 		t.Fatalf("yaml-name up exit=%d stderr=%q", upC.code, upC.stderr)
@@ -666,7 +666,7 @@ func TestIntegrationLifecycleDeclaredNameSources(t *testing.T) {
 	if err := os.WriteFile(fileD, []byte(doc), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { cleanupCompose(t, env, dirD, exported, fileD, false) })
+	t.Cleanup(func() { cleanupLifecycleCompose(t, env, dirD, exported, fileD, false) })
 	exportedEnv := buildEnv(map[string]string{
 		"DCRAFT_STATE_DIR":     stateDir,
 		"COMPOSE_PROJECT_NAME": exported,
@@ -774,6 +774,6 @@ func TestIntegrationLifecycleConcurrentNameAllocation(t *testing.T) {
 			t.Fatalf("project %q missing after concurrent up: %+v", name, projects)
 		}
 		file := filepath.Join(dir, "compose.yaml")
-		t.Cleanup(func() { cleanupCompose(t, env, dir, name, file, false) })
+		t.Cleanup(func() { cleanupLifecycleCompose(t, env, dir, name, file, false) })
 	}
 }

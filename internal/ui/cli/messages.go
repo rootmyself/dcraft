@@ -14,6 +14,7 @@ const (
 	msgFlagEnvFile     = "Compose 환경 파일 (반복 가능)"
 	msgFlagProfile     = "활성화할 Compose 프로필 (반복 가능)"
 	msgFlagProjectName = "Compose 프로젝트 이름"
+	msgFlagEnvironment = "실행환경 별칭 (.dcraft.yaml에 등록된 경우 필수)"
 	msgFlagApprove     = "명시적 승인 (install, script_trust, previous_version, data_restore, file_overwrite)"
 	msgFlagService     = "대상 Compose 서비스 (반복 가능)"
 	msgHelpShort       = "명령 도움말을 표시합니다."

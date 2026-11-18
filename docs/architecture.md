@@ -7,9 +7,9 @@ of this file).
 
 Scope of this version: one working binary, five registered features (`status`,
 `up`, `stop`, `down`, `restart`), the common operation seam, target resolution,
-automatic project-name allocation, same-stack coordination, diagnostics,
-CLI/TUI assembly, state layout, machine-readable results and tests. Logs/exec,
-environments, generation, install, update, secrets, hooks, backup/restore and
+named environments, automatic project-name allocation, same-stack coordination,
+diagnostics, CLI/TUI assembly, state layout, machine-readable results and tests.
+Logs/exec, generation, install, update, secrets, hooks, backup/restore and
 rollback are later tickets.
 
 ---
@@ -28,7 +28,8 @@ cmd/dcraft                 process entry, signal context, TTY check, exit codes
                            Request/Invocation, Result/Stage/Outcome, Approval,
                            Diagnostic, Presenter/Verifier, StateStore, Clock
         |
-        +-- internal/target          Compose target discovery (filesystem only)
+        +-- internal/target          Compose target discovery + environment expansion
+        +-- internal/environments    .dcraft.yaml aliases + static host-resource scan
         +-- internal/lifecycle       shared up/stop/down/restart controller
         +-- internal/features/status reference read-only feature
         +-- internal/features/up     \
@@ -80,7 +81,7 @@ core.NewEngine(registry, target.New(), composeAdapter, stateStore, clock)
 | field | meaning |
 |---|---|
 | `Feature string` | registered machine name / CLI command |
-| `Target core.TargetRequest` | path, explicit files, env files, profiles, project name, environment |
+| `Target core.TargetRequest` | path, explicit files, env files, profiles, project name, environment alias |
 | `Services []string` | explicit Compose service selection (empty = stack) |
 | `Args []string` | positional arguments for features with `AcceptsArgs` |
 | `Options map[string]string` | parsed feature-flag values |
@@ -166,8 +167,8 @@ type Target struct {
     Files          []string // absolute Compose files, explicit order
     EnvFiles       []string // absolute explicit --env-file inputs
     Profiles       []string // selected Compose profiles
-    ProjectName    string   // explicit -p only; "" = Compose default
-    Environment    string   // always "" until ticket #4
+    ProjectName    string   // explicit -p only; "" = Compose default / ticket #3 allocation
+    Environment    string   // selected alias; "" only when no aliases are registered
     DefaultEnvFile string   // informational .env loaded by Compose, if used
 }
 ```
@@ -189,9 +190,10 @@ Rules (`internal/target.Resolver`):
   is reported as `DefaultEnvFile` (informational only; it is not passed through).
 - Profiles are passed as repeated global `--profile` flags.
 - `ProjectName` is only the explicit `-p` value. Empty means the lifecycle
-  controller allocates/reuses an automatic name (see §5). Ticket #4 fills
-  `Environment`, which is part of the name/state key. The read-only status
-  feature keeps letting Compose resolve the folder default and writes no state.
+  controller allocates or reuses an automatic name (see §5) and pins it with
+  `-p` on every Compose call. Ticket #4 fills `Environment`, which is part of the
+  name and state key. The read-only status feature keeps letting Compose resolve
+  the folder default and writes no state.
 - `Target.ComposeArgs()` is the single source of Compose global inputs:
   `compose -f <file>... --env-file <file>... --profile <profile>... [-p <name>]`.
   It deliberately does **not** pass `--project-directory`: Compose keeps its own
@@ -202,7 +204,79 @@ Rules (`internal/target.Resolver`):
 
 State identity is `ProjectDir + Environment`, not the Compose project name (the
 name itself is stored state). This keeps the same folder/environment tied to
-one helper-managed stack.
+one helper-managed stack. The environment id is the alias from `.dcraft.yaml`
+exactly as written.
+
+### 3.1 Named environments (ticket #4)
+
+A named environment is a **selection input**, not a Compose replacement: it
+bundles a Compose file list, explicit env files and profiles under an alias. It
+adds no merge rules, no deployment model and no project-name source.
+
+Config file: `<project folder>/.dcraft.yaml`. It is optional, lives next to the
+Compose files, is never passed to Compose and is never modified by dcraft.
+Unknown top-level keys are ignored so later tickets can add their own sections;
+fields inside an environment are strict.
+
+```yaml
+environments:
+  dev:
+    compose_files: [compose.yaml, compose.dev.yaml]
+    env_files: [.env.dev]
+    profiles: [dev, tools]
+  prod:
+    compose_files: [compose.yaml, compose.prod.yaml]
+    env_files: [.env.prod]
+    profiles: [prod]
+```
+
+Rules:
+
+- Aliases are lowercase letters/digits/`-`/`_`, at most 32 characters, unique.
+  Duplicate keys/fields/list entries, unknown fields, non-list values, empty
+  values and aliases with no inputs at all are `environment_invalid` errors.
+- Relative paths in the file are resolved against the project folder (not the
+  process working directory). Referenced files are checked for existence only
+  when that alias is selected, so one unfinished alias does not block others.
+- `compose_files` may be empty: standard Compose discovery applies inside the
+  project folder. File order, explicit env-file order and profiles are passed to
+  Compose unchanged. When no explicit env files are configured, Compose still
+  loads `.env` next to the first file and `DefaultEnvFile` reports it.
+- If at least one alias is registered, **every operation requires an explicit
+  selection**. CLI: `--env <alias>`; missing/unknown/conflicting input exits 2
+  with Korean guidance listing the aliases and no prompt. TUI: a selection
+  screen before the primary feature; nothing is preselected, first/prod/last is
+  never chosen implicitly, and `q` quits without running anything.
+- With no aliases, `Target.Environment` stays empty and standard Compose
+  defaults apply. `--env` with no registered aliases is an error, never a
+  fallback.
+- `--env` cannot be combined with `-f`, `--env-file` or `--profile`: the alias
+  is the single source of those inputs, so there is no second merge language.
+- The resolved `core.Target` carries `Environment=alias` plus the expanded
+  `Files`, `EnvFiles` and `Profiles`. `Target.ComposeArgs()` is unchanged.
+  Later features must consume this target and must not re-read `.dcraft.yaml`,
+  re-branch on the environment, or re-derive Compose inputs.
+- Helper state and history are keyed by `ProjectDir + Environment`, so dev and
+  prod aliases never share dcraft-managed state even when their Compose project
+  names or host resources coincide. Explicit Compose project names (`-p` or the
+  top-level `name:`) are always respected; dcraft never renames them.
+- Visible limitations are surfaced, never hidden: every selected alias emits an
+  `environment_isolation_limits` info diagnostic. Static declarations across
+  aliases of the same folder are compared for duplicate published host ports,
+  identical absolute/`~` bind sources, and equally named external volumes or
+  networks (`environment_overlap` warning). If the effective explicit project
+  name (`-p`, else the last declared top-level `name:` in the file list) is
+  shared by several aliases, `project_name_shared` warns before any apply; the
+  lifecycle controller still stops such an apply with `project_name_conflict`
+  because two environments must not share one Compose project (§5).
+- The scan is deliberately incomplete and does not claim isolation: it does not
+  interpolate variables, evaluate merge keys/`extends`/`!reset`, expand
+  relative binds, resolve symlinks, compare IPv6 bracket port syntax, or follow
+  what external scripts/users do. The Compose CLI remains the authority for
+  merge, validation, paths and profiles.
+- Alias creation in this version is direct editing of `.dcraft.yaml`. There is
+  no TUI alias editor and no generated config file; adding one is a later
+  ticket, not a hidden write from this one.
 
 ---
 
@@ -233,9 +307,9 @@ type core.Feature interface {
 
 Registry validation rejects duplicate names, invalid names, missing Korean text,
 read-only+approval combinations, a second primary, reserved flag names
-(`path`, `file`, `env-file`, `profile`, `project-name`, `json`, `approve`,
-`help`, `service`), reserved shorthands (`f`, `p`, `s`, `h`, `v`), duplicate
-flags and invalid bool defaults.
+(`path`, `file`, `env-file`, `profile`, `project-name`, `env`, `json`,
+`approve`, `help`, `service`), reserved shorthands (`f`, `p`, `s`, `h`, `v`),
+duplicate flags and invalid bool defaults.
 
 ### Adding a feature (the only steps)
 
@@ -407,6 +481,7 @@ Persistent flags on every command:
 | `--env-file` | explicit env files (repeatable) |
 | `--profile` | enabled Compose profiles (repeatable) |
 | `-p, --project-name` | explicit Compose project name |
+| `--env` | named environment alias; required when `.dcraft.yaml` registers any |
 | `--approve` | explicit approval kind (repeatable) |
 
 Feature-owned flags and `--service/-s` are added from the descriptor. Help and
@@ -434,12 +509,19 @@ It derives everything from the registry:
 - the stage sink shows the current stage while loading;
 - if more than one feature is registered, a Korean menu lists all features;
   `↑/↓` select, `enter` runs the selected feature through the same engine;
+- if the folder registers environment aliases and no `--env` was given, the TUI
+  first lists them through `core.Engine.Environments` and requires an explicit
+  `↑/↓` + `enter` selection. Nothing is preselected; `q` quits without running
+  a feature. An explicit `--env` skips the screen. A broken alias file is not
+  hidden: running the feature surfaces the same `resolve_target` failure.
 - selecting a mutating feature shows the small confirmation screen from §5
-  (requested target, whole-stack scope, effect); `esc` returns to the menu;
+  (requested target and environment, whole-stack scope, effect); `esc` returns
+  to the menu;
 - `r` re-runs read-only features directly and asks for confirmation again for
-  mutating features; `q` and `ctrl+c` quit;
+  mutating features. The selected environment is reused; `q` and `ctrl+c` quit
+  outside an operation;
 - normal quit is not an operation and does not touch services. During an
-  in-flight mutating operation `q` explains the risk; `ctrl+c` requests
+  in-flight mutating operation `q` explains the risk; `ctrl+c` requests safe
   cancellation and keeps the screen for the canceled result (see §5).
 
 No feature action is selectable unless it is registered. This ticket registers
@@ -503,6 +585,10 @@ Exit codes (`core.Result.ExitCode`):
 | 1 | operation/environment failure |
 | 2 | usage error or missing required input/approval |
 | 130 | canceled/interrupted |
+
+`environment_required`, `environment_unknown` and `environment_input_conflict`
+are missing/invalid required input and map to exit 2; `environment_invalid`
+config/file failures map to exit 1.
 
 Rules for later features:
 
@@ -636,7 +722,14 @@ Desktop's VM-backed unix socket is **local**, not remote.
 | `target_invalid` | path/file/env input is missing or not a file/folder | error |
 | `multiple_configuration_files` | several base files; first used | warning |
 | `approval_required` | missing independent approval | error (exit 2) |
-| `project_name_conflict` | declared/recorded project name belongs to another stack | error (exit 2) |
+| `environment_required` | aliases exist and no alias was selected | error (exit 2) |
+| `environment_unknown` | selected alias is not registered (or none exist) | error (exit 2) |
+| `environment_input_conflict` | `--env` combined with `-f`/`--env-file`/`--profile` | error (exit 2) |
+| `environment_invalid` | `.dcraft.yaml` syntax, fields, duplicates or referenced files are invalid | error |
+| `project_name_shared` | several aliases resolve to the same explicit project name | warning (apply still stops at `project_name_conflict`) |
+| `environment_overlap` | aliases declare the same host port/bind/external resource | warning |
+| `environment_isolation_limits` | environment isolation never covers host resources | info |
+| `project_name_conflict` | declared/recorded project name belongs to another stack (folder or environment) | error (exit 2) |
 | `service_unknown` | explicit `-s/--service` is not in the Compose configuration | error (exit 2) |
 | `stack_busy` | another operation holds the same stack lock | error |
 | `lifecycle_failed` | a Compose lifecycle call failed | error |
@@ -664,6 +757,11 @@ Tested seams:
 
 - target resolution (temp folders, override order, explicit order, parent
   isolation, env files, profiles, project name);
+- environment config parsing (missing file, empty file, alias order, relative
+  paths, invalid/duplicate/missing fields), mandatory selection, no implicit
+  choice, no-alias defaults, expansion order, explicit-input conflicts,
+  per-environment state keys, explicit project-name sharing and static
+  port/bind/external-resource overlap warnings;
 - preflight classification with `execxtest.Runner` (all diagnostic categories,
   local Desktop socket vs remote refusal, no engine contact for remote);
 - Compose inspection parsing (health, instances, connections, unconfigured
@@ -680,20 +778,33 @@ Tested seams:
   `lifecycle_failed`/`stack_busy`/`project_name_conflict`/`service_unknown`
   diagnostics with the fake runner;
 - process e2e with a fake `docker` shim: exit codes, JSON purity, non-interactive
-  no-args, help, parent isolation, SIGINT→130, repeated up/name reuse, same-name
-  folders, explicit and configured name conflicts, unknown service, no secret
-  values in output/history, TUI menu + confirmation + quit-without-run;
-- pty process tests: TUI enter+quit, no mutating Docker command, mutating
-  confirmation before running, up through the same engine;
-- real Docker integration behind `DCRAFT_INTEGRATION=1`: isolated projects,
-  up→status running, stop→exited, resume with the same container, restart not
-  applying changed configuration, down keeping named-volume data, repeated up
-  without duplicate project, two same-name folders (`hello-world`,
-  `hello-world-1`), explicit-name collision refused with exit 2, an existing
-  externally created project reused, concurrent up (one winner, one `stack_busy`),
-  another stack's container IDs/data unchanged, TUI quit leaving services
-  running, cleanup with its own projects only. No host-wide prune or other
-  project changes.
+  no-args, help, parent isolation, SIGINT→130, missing `--env` exit 2 with the
+  alias list, `--env` in `status`, `target.environment`, alias inputs in the
+  Compose argument order, no prompt when non-interactive, repeated up/name
+  reuse, same-name folders, explicit and configured name conflicts, unknown
+  service, no secret values in output/history, TUI menu + confirmation +
+  quit-without-run;
+- pty process tests: TUI enter+quit, environment selection screen and keyboard
+  choice, quit-from-selection runs nothing, no mutating Docker command,
+  mutating confirmation before running, up through the same engine;
+- real Docker integration behind `DCRAFT_INTEGRATION=1`: isolated
+  `dcraft-test-*` project, real healthchecks, connection info, compose file
+  unchanged, containers unchanged after TUI quit, nested-folder block, cleanup
+  with its own project only. No host-wide prune or other project changes.
+- real Docker lifecycle: up→status running, stop→exited, resume with the same
+  container, restart not applying changed configuration, down keeping
+  named-volume data, repeated up without duplicate project, two same-name
+  folders (`hello-world`, `hello-world-1`), explicit-name collision refused
+  with exit 2, an existing externally created project reused, concurrent up
+  (one winner, one `stack_busy`), concurrent name allocation, declared names
+  from `-p`/`name:`/`.env`/exported `COMPOSE_PROJECT_NAME`, another stack's
+  container IDs/data unchanged, TUI quit leaving services running, cleanup with
+  its own projects only.
+- real Docker environments: two aliases with different files/profiles/env files
+  run as separate stacks with separate declared project names and host ports,
+  env-file values reach the containers, status reports each environment and
+  never mixes their services, fixed-port/bind overlap is reported from static
+  declarations before applying, and an unrelated canary stack is unchanged.
 
 Commands:
 
@@ -714,28 +825,37 @@ Docker. Unrun platforms/paths are not claimed as verified.
 
 - `update`, `logs`, `exec`, `backup`, `restore`, `rollback`; no registration
   exists for them and no menu action is shown.
-- Named environments/aliases (`Target.Environment` is reserved; no flag yet;
-  ticket #4 fills it and owns the required selection rule).
+- TUI alias creation/editing: aliases are created by editing `.dcraft.yaml` in
+  this version (selection is provided by both interfaces).
 - Secrets, host scripts/hooks, generated Compose/Dockerfile files, Compose
   installation, previous-good records, Kubernetes, remote engines, resident
   daemon/web UI.
 - Good-version history (ticket #7/#11), TUI flag/approval collection for future
-  features, service selection in the TUI (CLI `-s` only), environment selection
-  (ticket #4).
+  features, service selection in the TUI (CLI `-s` only).
 
-Residual risks published by ticket #3: Compose capability detection is based on
+Residual risks (tickets #3 and #4): Compose capability detection is based on
 running the installed CLI (version/JSON probes), so a heavily patched Compose may
 pass probes and fail later; diagnostic details are tool output and could contain
 user-provided file content, though dcraft never fetches or prints secret values;
 status parses a subset of Compose/ps output, so unknown future fields are ignored
-by design; the TUI renders long status text without a scroll viewport; status
-does not read the allocated name (see §5), so a suffixed folder's status shows
-the folder-default project until integration wires the lookup; a declared name
-equal to Compose's derived default is treated as automatic; a declared rename
-of a recorded target leaves the old project unmanaged by design; per-stack
-coordination fails fast instead of queuing, so an automation caller must retry;
-`flock` coordination is verified on macOS (Linux/WSL2 use the same syscall but
-were not run on this machine).
+by design; the TUI renders long status text without a scroll viewport.
+Environment alias files are hand-edited (no TUI editor); the host-resource
+conflict scan is static and best-effort (no interpolation/merge evaluation), so
+undetected sharing is possible and complete isolation is never claimed.
+Environment aliases and lifecycle names are separate: aliases partition state,
+files and profiles; the lifecycle controller allocates or honors the Compose
+project name per folder+environment.
+Lifecycle residual risks: status does not read the allocated name (see §5), so a
+suffixed folder's status shows the folder-default project until integration
+wires the lookup; a declared name equal to Compose's derived default is treated
+as automatic; a declared rename of a recorded target leaves the old project
+unmanaged by design; per-stack coordination fails fast instead of queuing, so an
+automation caller must retry; `flock` coordination is verified on macOS
+(Linux/WSL2 use the same syscall but were not run on this machine); a declared
+project name shared by several environment aliases produces the ticket-04
+`project_name_shared` warning but still stops at apply time with
+`project_name_conflict`, because two environments must not operate on one
+Compose project.
 
 ---
 

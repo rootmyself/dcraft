@@ -22,7 +22,9 @@ type Options struct {
 }
 
 // Run starts the interactive program. Normal quit (q or ctrl+c) does not touch
-// services: this ticket only runs read-only features from the TUI.
+// services. Mutating features ask for confirmation first; ctrl+c during a
+// mutating operation requests safe cancellation and keeps the screen for the
+// canceled result.
 func Run(ctx context.Context, opts Options) error {
 	m := NewModel(ctx, opts)
 	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithContext(ctx))
@@ -34,6 +36,8 @@ type phase int
 
 const (
 	phaseNoPrimary phase = iota
+	phaseLoadingEnvironments
+	phaseSelectingEnvironment
 	phaseLoading
 	phaseReady
 	phaseConfirm
@@ -50,6 +54,9 @@ type Model struct {
 	primary  core.Feature
 	active   core.Feature
 	selected int
+
+	envs        []core.Environment
+	envSelected int
 
 	phase        phase
 	result       *core.Result
@@ -68,7 +75,7 @@ func NewModel(ctx context.Context, opts Options) *Model {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	m := &Model{ctx: ctx, engine: opts.Engine, registry: opts.Registry, target: opts.Target}
+	m := &Model{ctx: ctx, engine: opts.Engine, registry: opts.Registry, target: opts.Target, envSelected: -1}
 	if opts.Registry != nil {
 		m.features = opts.Registry.All()
 		if primary, ok := opts.Registry.Primary(); ok {
@@ -80,13 +87,17 @@ func NewModel(ctx context.Context, opts Options) *Model {
 		m.phase = phaseNoPrimary
 		return m
 	}
-	m.phase = phaseLoading
 	for i, f := range m.features {
 		if f.Descriptor().Name == m.primary.Descriptor().Name {
 			m.selected = i
 			break
 		}
 	}
+	if opts.Engine != nil && opts.Target.Environment == "" && opts.Engine.SupportsEnvironments() {
+		m.phase = phaseLoadingEnvironments
+		return m
+	}
+	m.phase = phaseLoading
 	m.events = make(chan core.Stage, 64)
 	return m
 }
@@ -95,12 +106,21 @@ type resultMsg struct{ res core.Result }
 
 type stageMsg struct{ stage core.Stage }
 
+type environmentListMsg struct {
+	envs []core.Environment
+	err  error
+}
+
 func (m *Model) Init() tea.Cmd {
-	if m.phase != phaseLoading {
+	switch m.phase {
+	case phaseLoadingEnvironments:
+		return m.listEnvironmentsCmd()
+	case phaseLoading:
+		m.runCtx, m.runCancel = context.WithCancel(m.ctx)
+		return tea.Batch(m.runCmd(m.active, m.events, m.runCtx), waitStageCmd(m.events))
+	default:
 		return nil
 	}
-	m.runCtx, m.runCancel = context.WithCancel(m.ctx)
-	return tea.Batch(m.runCmd(m.active, m.events, m.runCtx), waitStageCmd(m.events))
 }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -115,6 +135,20 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.phase == phaseLoading {
 			return m, waitStageCmd(m.events)
 		}
+		return m, nil
+	case environmentListMsg:
+		if m.phase != phaseLoadingEnvironments {
+			return m, nil
+		}
+		// A broken catalog is not hidden here: running the primary feature
+		// through the engine produces the same resolve_target failure with
+		// Korean guidance and no Docker contact.
+		if msg.err != nil || len(msg.envs) == 0 {
+			return m, m.begin(m.primary)
+		}
+		m.envs = msg.envs
+		m.envSelected = -1
+		m.phase = phaseSelectingEnvironment
 		return m, nil
 	case resultMsg:
 		res := msg.res
@@ -142,7 +176,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.phase == phaseLoading && m.active != nil && !m.active.Descriptor().ReadOnly {
 				// Safe interruption: stop the external process, keep the
 				// screen open so the canceled result and partial effects are
-				// reported. A second ctrl+c after completion quits.
+				// reported. A later q quits.
 				if m.runCancel != nil {
 					m.runCancel()
 					m.runCancel = nil
@@ -158,6 +192,30 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.notice = ""
 			}
 			return m, nil
+		}
+		if m.phase == phaseSelectingEnvironment {
+			switch msg.String() {
+			case "up", "k":
+				if len(m.envs) > 0 {
+					if m.envSelected <= 0 {
+						m.envSelected = len(m.envs) - 1
+					} else {
+						m.envSelected--
+					}
+				}
+			case "down", "j":
+				if len(m.envs) > 0 {
+					m.envSelected = (m.envSelected + 1) % len(m.envs)
+				}
+			case "enter":
+				if m.envSelected >= 0 && m.envSelected < len(m.envs) && m.primary != nil {
+					m.target.Environment = m.envs[m.envSelected].Name
+					return m, m.begin(m.primary)
+				}
+			}
+			return m, nil
+		}
+		switch msg.String() {
 		case "r":
 			if m.active == nil || m.phase != phaseReady {
 				return m, nil
@@ -189,7 +247,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.pending = nil
 				return m, m.begin(f)
 			}
-			if m.phase != phaseLoading && len(m.features) > 0 {
+			if m.phase == phaseReady && len(m.features) > 0 {
 				f := m.features[m.selected]
 				if f.Descriptor().ReadOnly {
 					return m, m.begin(f)
@@ -202,6 +260,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return m, nil
+}
+
+func (m *Model) listEnvironmentsCmd() tea.Cmd {
+	engine := m.engine
+	ctx := m.ctx
+	req := m.target
+	return func() tea.Msg {
+		envs, _, err := engine.Environments(ctx, req)
+		return environmentListMsg{envs: envs, err: err}
+	}
 }
 
 func (m *Model) begin(f core.Feature) tea.Cmd {
@@ -286,6 +354,24 @@ func (m *Model) View() string {
 	case phaseNoPrimary:
 		b.WriteString(msgNoPrimary)
 		b.WriteString("\n")
+	case phaseLoadingEnvironments:
+		b.WriteString(msgEnvChecking)
+		b.WriteString("\n")
+	case phaseSelectingEnvironment:
+		b.WriteString(titleStyle.Render(msgEnvSelectTitle))
+		b.WriteString("\n\n")
+		b.WriteString(msgEnvSelectIntro)
+		b.WriteString("\n\n")
+		for i, env := range m.envs {
+			marker := "  "
+			if i == m.envSelected {
+				marker = "> "
+			}
+			fmt.Fprintf(&b, "%s%s — %s\n", marker, env.Name, environmentSummary(env))
+		}
+		b.WriteString("\n")
+		b.WriteString(hintStyle.Render(msgEnvIsolationNote))
+		b.WriteString("\n")
 	case phaseConfirm:
 		b.WriteString(m.confirmView())
 		b.WriteString("\n")
@@ -315,7 +401,7 @@ func (m *Model) View() string {
 		}
 	}
 
-	if m.phase != phaseConfirm && len(m.features) > 1 {
+	if len(m.features) > 1 && m.phase == phaseReady {
 		b.WriteString("\n")
 		b.WriteString(msgMenu)
 		b.WriteString("\n")
@@ -357,6 +443,9 @@ func (m *Model) confirmView() string {
 		target = msgConfirmTargetNow
 	}
 	fmt.Fprintf(&b, "%s: %s\n", msgConfirmTargetLabel, target)
+	if m.target.Environment != "" {
+		fmt.Fprintf(&b, "%s: %s\n", msgConfirmEnvironment, m.target.Environment)
+	}
 	if len(m.target.Files) > 0 {
 		fmt.Fprintf(&b, "%s: %s\n", msgConfirmFileLabel, strings.Join(m.target.Files, ", "))
 	}
@@ -392,11 +481,33 @@ func (m *Model) hints() string {
 	if m.phase == phaseNoPrimary {
 		return msgHintQuit
 	}
+	if m.phase == phaseSelectingEnvironment {
+		return msgHintEnvSelect
+	}
 	if m.phase == phaseLoading && m.active != nil && !m.active.Descriptor().ReadOnly {
 		return msgHintBusy
+	}
+	if m.phase != phaseReady {
+		return msgHintQuit
 	}
 	if len(m.features) > 1 {
 		return msgHintMenu
 	}
 	return msgHintSingle
+}
+
+func environmentSummary(env core.Environment) string {
+	parts := []string{}
+	if len(env.Files) == 0 {
+		parts = append(parts, msgEnvDefaultFiles)
+	} else {
+		parts = append(parts, fmt.Sprintf("%s %d개", msgEnvComposeFiles, len(env.Files)))
+	}
+	if len(env.EnvFiles) > 0 {
+		parts = append(parts, fmt.Sprintf("%s %d개", msgEnvEnvFiles, len(env.EnvFiles)))
+	}
+	if len(env.Profiles) > 0 {
+		parts = append(parts, msgEnvProfiles+" "+strings.Join(env.Profiles, ", "))
+	}
+	return strings.Join(parts, " · ")
 }
