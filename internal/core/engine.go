@@ -1,0 +1,403 @@
+package core
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"os"
+	"time"
+)
+
+// Engine is the common operation seam. CLI and TUI only construct a Request
+// and render a Result; target resolution, preflight, approval policy, staged
+// execution, verification, history and failure reporting all happen here.
+type Engine struct {
+	Registry  *Registry
+	Resolver  Resolver
+	Preflight Preflight
+	State     StateStore
+	Clock     Clock
+	// CWD returns the process working directory. Injected for tests.
+	CWD func() (string, error)
+	// NewOperationID returns the operation identifier.
+	NewOperationID func() string
+}
+
+// NewEngine builds an engine with production defaults for clock, working
+// directory and operation IDs. Tests override the exported fields.
+func NewEngine(registry *Registry, resolver Resolver, preflight Preflight, state StateStore, clock Clock) *Engine {
+	if clock == nil {
+		clock = SystemClock{}
+	}
+	return &Engine{
+		Registry:       registry,
+		Resolver:       resolver,
+		Preflight:      preflight,
+		State:          state,
+		Clock:          clock,
+		CWD:            os.Getwd,
+		NewOperationID: generateOperationID,
+	}
+}
+
+// Run executes one operation. It never returns a Go error: every outcome is
+// expressed in the Result so both interfaces render the same truth.
+func (e *Engine) Run(ctx context.Context, req Request, sink Sink) (res Result) {
+	clock := e.Clock
+	if clock == nil {
+		clock = SystemClock{}
+	}
+	res = Result{
+		SchemaVersion: SchemaVersion,
+		OperationID:   e.operationID(),
+		Action:        req.Feature,
+		Outcome:       OutcomeFailure,
+		Target:        Target{ProjectDir: req.Target.Path, Environment: req.Target.Environment},
+		Stages:        []Stage{},
+		Diagnostics:   []Diagnostic{},
+		StartedAt:     clock.Now(),
+	}
+	res.Target.Normalize()
+	defer func() {
+		res.Target.Normalize()
+		res.FinishedAt = clock.Now()
+		if res.Stages == nil {
+			res.Stages = []Stage{}
+		}
+		if res.Diagnostics == nil {
+			res.Diagnostics = []Diagnostic{}
+		}
+	}()
+
+	rec := &recorder{stages: &res.Stages, clock: clock, sink: sink}
+
+	if err := ctx.Err(); err != nil {
+		res.Outcome = OutcomeCanceled
+		addCanceledDiagnostic(&res)
+		return res
+	}
+
+	feature, ok := e.lookup(req.Feature)
+	if !ok {
+		res.Diagnostics = append(res.Diagnostics, Diagnostic{
+			Category:    CategoryInternal,
+			Severity:    SeverityError,
+			Message:     fmt.Sprintf("등록되지 않은 작업입니다: %s", req.Feature),
+			NextActions: []string{"dcraft --help로 사용 가능한 명령을 확인하세요."},
+		})
+		return res
+	}
+	desc := feature.Descriptor()
+
+	if err := ctx.Err(); err != nil {
+		res.Outcome = OutcomeCanceled
+		addCanceledDiagnostic(&res)
+		return res
+	}
+
+	var target Target
+	var warnings []Diagnostic
+	resolveErr := RunStage(rec, "resolve_target", msgStageResolveTarget, func() error {
+		if e.Resolver == nil {
+			return errors.New("target resolver is not configured")
+		}
+		cwd, err := e.cwd()
+		if err != nil {
+			return FailCause(err, Diagnostic{
+				Category:    CategoryTargetInvalid,
+				Severity:    SeverityError,
+				Message:     msgWorkingDirUnknown,
+				NextActions: []string{msgWorkingDirAction},
+			})
+		}
+		target, warnings, err = e.Resolver.Resolve(ctx, req.Target, cwd)
+		return err
+	})
+	if len(target.ProjectDir) > 0 || target.Environment != "" || len(target.Files) > 0 {
+		res.Target = target
+	}
+	res.Diagnostics = append(res.Diagnostics, warnings...)
+	if resolveErr != nil {
+		e.applyFailure(ctx, &res, resolveErr)
+		return res
+	}
+
+	if required := desc.Approval; required != ApprovalNone && !HasApproval(req.Approvals, required) {
+		if err := ctx.Err(); err != nil {
+			res.Outcome = OutcomeCanceled
+			addCanceledDiagnostic(&res)
+			return res
+		}
+		res.RequiredApproval = required
+		res.Outcome = OutcomeFailure
+		res.Diagnostics = append(res.Diagnostics, Diagnostic{
+			Category:    CategoryApprovalRequired,
+			Severity:    SeverityError,
+			Message:     approvalRequiredMessage(required),
+			Detail:      string(required),
+			NextActions: []string{msgApprovalRequiredActionOne, msgApprovalRequiredActionTwo},
+		})
+		return res
+	}
+
+	var pf PreflightReport
+	preflightErr := RunStage(rec, "preflight", msgStagePreflight, func() error {
+		if e.Preflight == nil {
+			return errors.New("preflight is not configured")
+		}
+		pf = e.Preflight.Check(ctx)
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if HasError(pf.Diagnostics) {
+			return Fail(pf.Diagnostics...)
+		}
+		return nil
+	})
+	res.Tools = pf.Tools
+	if preflightErr != nil {
+		if isCanceled(ctx, preflightErr) {
+			res.Outcome = OutcomeCanceled
+			addCanceledDiagnostic(&res)
+			return res
+		}
+		res.Diagnostics = append(res.Diagnostics, pf.Diagnostics...)
+		res.Outcome = OutcomeFailure
+		if !HasError(res.Diagnostics) {
+			res.Diagnostics = append(res.Diagnostics, Diagnostic{
+				Category:    CategoryInternal,
+				Severity:    SeverityError,
+				Message:     msgPreflightFailed,
+				Detail:      errDetail(preflightErr),
+				NextActions: []string{msgPreflightFailedAction},
+			})
+		}
+		return res
+	}
+	res.Diagnostics = append(res.Diagnostics, pf.Diagnostics...)
+
+	inv := Invocation{
+		Target:      target,
+		Services:    append([]string{}, req.Services...),
+		Args:        append([]string{}, req.Args...),
+		Options:     req.Options,
+		Interactive: req.Interactive,
+		Preflight:   pf,
+		Reporter:    rec,
+		Clock:       clock,
+		State:       e.State,
+	}
+
+	stageCountBefore := len(res.Stages)
+	payload, runErr := e.runFeature(ctx, feature, inv)
+	if len(res.Stages) == stageCountBefore {
+		rec.Begin("execute", msgStageExecute)
+		status := StageSucceeded
+		if runErr != nil {
+			status = StageFailed
+			if isCanceled(ctx, runErr) {
+				status = StageCanceled
+			}
+		}
+		rec.End("execute", status, "")
+	}
+	if runErr != nil {
+		e.applyFailure(ctx, &res, runErr)
+		return res
+	}
+	if ctx.Err() != nil {
+		res.Outcome = OutcomeCanceled
+		addCanceledDiagnostic(&res)
+		return res
+	}
+	res.Data = payload
+
+	if verifier, ok := feature.(Verifier); ok {
+		verifyErr := RunStage(rec, "verify", msgStageVerify, func() error {
+			return verifier.Verify(ctx, inv, payload)
+		})
+		if verifyErr != nil {
+			if isCanceled(ctx, verifyErr) {
+				res.Outcome = OutcomeCanceled
+				addCanceledDiagnostic(&res)
+				return res
+			}
+			res.Outcome = OutcomeFailure
+			var ce *Error
+			if errors.As(verifyErr, &ce) && len(ce.Diagnostics) > 0 {
+				res.Diagnostics = append(res.Diagnostics, ce.Diagnostics...)
+			} else {
+				res.Diagnostics = append(res.Diagnostics, Diagnostic{
+					Category:    CategoryVerificationFailed,
+					Severity:    SeverityError,
+					Message:     msgVerificationFailed,
+					Detail:      errDetail(verifyErr),
+					NextActions: []string{msgVerificationFailedActionOne, msgVerificationFailedActionTwo},
+				})
+			}
+			return res
+		}
+	}
+
+	if ctx.Err() != nil {
+		res.Outcome = OutcomeCanceled
+		addCanceledDiagnostic(&res)
+		return res
+	}
+
+	if desc.RecordsHistory {
+		historyErr := RunStage(rec, "history", msgStageHistory, func() error {
+			if e.State == nil {
+				return errors.New("state store is not configured")
+			}
+			return e.State.AppendOperation(target, OperationRecord{
+				OperationID: res.OperationID,
+				Action:      res.Action,
+				Outcome:     OutcomeSuccess,
+				StartedAt:   res.StartedAt,
+				FinishedAt:  clock.Now(),
+				Stages:      append([]Stage{}, res.Stages...),
+				Diagnostics: append([]Diagnostic{}, res.Diagnostics...),
+			})
+		})
+		if historyErr != nil {
+			res.Diagnostics = append(res.Diagnostics, Diagnostic{
+				Category:    CategoryHistoryFailed,
+				Severity:    SeverityWarning,
+				Message:     msgHistoryFailed,
+				Detail:      errDetail(historyErr),
+				NextActions: []string{msgHistoryFailedAction},
+			})
+		}
+	}
+
+	res.Outcome = OutcomeSuccess
+	return res
+}
+
+func (e *Engine) runFeature(ctx context.Context, f Feature, in Invocation) (payload any, err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("feature panic: %v", recovered)
+		}
+	}()
+	return f.Run(ctx, in)
+}
+
+func (e *Engine) lookup(name string) (Feature, bool) {
+	if e.Registry == nil {
+		return nil, false
+	}
+	return e.Registry.Get(name)
+}
+
+func (e *Engine) cwd() (string, error) {
+	if e.CWD == nil {
+		return os.Getwd()
+	}
+	return e.CWD()
+}
+
+func (e *Engine) operationID() string {
+	if e.NewOperationID == nil {
+		return generateOperationID()
+	}
+	return e.NewOperationID()
+}
+
+func (e *Engine) applyFailure(ctx context.Context, res *Result, err error) {
+	if isCanceled(ctx, err) {
+		res.Outcome = OutcomeCanceled
+		addCanceledDiagnostic(res)
+		return
+	}
+	res.Outcome = OutcomeFailure
+	var ce *Error
+	if errors.As(err, &ce) && len(ce.Diagnostics) > 0 {
+		res.Diagnostics = append(res.Diagnostics, ce.Diagnostics...)
+		return
+	}
+	res.Diagnostics = append(res.Diagnostics, Diagnostic{
+		Category:    CategoryInternal,
+		Severity:    SeverityError,
+		Message:     msgInternalError,
+		Detail:      errDetail(err),
+		NextActions: []string{msgInternalErrorAction},
+	})
+}
+
+type recorder struct {
+	stages *[]Stage
+	clock  Clock
+	sink   Sink
+}
+
+func (r *recorder) Begin(name, title string) {
+	st := Stage{Name: name, Title: title, Status: StageStarted, StartedAt: r.clock.Now()}
+	*r.stages = append(*r.stages, st)
+	r.emit(st)
+}
+
+func (r *recorder) End(name string, status StageStatus, detail string) {
+	stages := *r.stages
+	for i := len(stages) - 1; i >= 0; i-- {
+		if stages[i].Name != name || stages[i].Status != StageStarted {
+			continue
+		}
+		finished := r.clock.Now()
+		stages[i].Status = status
+		stages[i].FinishedAt = &finished
+		stages[i].Detail = detail
+		r.emit(stages[i])
+		return
+	}
+}
+
+func (r *recorder) emit(st Stage) {
+	if r.sink != nil {
+		r.sink.StageChanged(st)
+	}
+}
+
+func isCanceled(ctx context.Context, err error) bool {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	return ctx.Err() != nil
+}
+
+func addCanceledDiagnostic(res *Result) {
+	for _, d := range res.Diagnostics {
+		if d.Category == CategoryCanceled {
+			return
+		}
+	}
+	res.Diagnostics = append(res.Diagnostics, Diagnostic{
+		Category:    CategoryCanceled,
+		Severity:    SeverityWarning,
+		Message:     msgCanceled,
+		NextActions: []string{msgCanceledActionOne, msgCanceledActionTwo},
+	})
+}
+
+func errDetail(err error) string {
+	if err == nil {
+		return ""
+	}
+	text := err.Error()
+	const max = 500
+	if len(text) > max {
+		text = text[:max] + "…"
+	}
+	return text
+}
+
+func generateOperationID() string {
+	var b [8]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return fmt.Sprintf("op_%d", time.Now().UnixNano())
+	}
+	return "op_" + hex.EncodeToString(b[:])
+}
