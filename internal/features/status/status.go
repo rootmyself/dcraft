@@ -69,6 +69,13 @@ func (f *Feature) Present(res core.Result, width int) string {
 	if len(snap.Services) == 0 {
 		b.WriteString(msgNoServices)
 		b.WriteString("\n\n")
+	} else if width > 0 {
+		// The TUI has a bounded screen: keep one line per service so every
+		// service stays visible. Detail remains available via `dcraft status`.
+		for _, svc := range snap.Services {
+			writeCompactService(&b, svc, width)
+		}
+		b.WriteString("\n")
 	} else {
 		for i, svc := range snap.Services {
 			if i > 0 {
@@ -213,6 +220,71 @@ func writeService(b *strings.Builder, svc stack.Service) {
 			fmt.Fprintf(b, "    - %s\n", connectionLabel(c))
 		}
 	}
+}
+
+// writeCompactService renders one service on a single line for the bounded TUI
+// screen. It keeps the identifying facts (service, instance, state, health,
+// image, connections) without the verbose multi-line block.
+func writeCompactService(b *strings.Builder, svc stack.Service, width int) {
+	head := svc.Name
+	rest := make([]string, 0, 4)
+	if len(svc.Instances) == 1 {
+		head += " (" + svc.Instances[0].Name + ")"
+	} else if len(svc.Instances) > 1 {
+		names := make([]string, 0, len(svc.Instances))
+		for _, in := range svc.Instances {
+			names = append(names, in.Name)
+		}
+		rest = append(rest, fmt.Sprintf("인스턴스 %d개: %s", len(names), strings.Join(names, ", ")))
+	}
+	rest = append(rest, stateLabel(svc.State))
+	if health := healthLabel(svc); health != "" {
+		rest = append(rest, health)
+	}
+	if !svc.Configured {
+		rest = append(rest, msgUnconfigured)
+	}
+	switch {
+	case svc.Build && svc.Image != "":
+		rest = append(rest, svc.Image+" "+msgLocalBuild)
+	case svc.Build:
+		rest = append(rest, msgLocalBuild)
+	case svc.Image != "":
+		rest = append(rest, svc.Image)
+	}
+	if len(svc.Connections) == 0 {
+		rest = append(rest, "연결: "+msgNone)
+	} else {
+		for _, c := range svc.Connections {
+			rest = append(rest, connectionLabel(c))
+		}
+	}
+	writeCompactLine(b, head+" · "+strings.Join(rest, " · "), width)
+}
+
+func writeCompactLine(b *strings.Builder, text string, width int) {
+	if width <= 0 {
+		fmt.Fprintf(b, "%s\n", text)
+		return
+	}
+	const continuation = "  "
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return
+	}
+	line := words[0]
+	flush := func() {
+		fmt.Fprintf(b, "%s\n", line)
+	}
+	for _, w := range words[1:] {
+		if len([]rune(line))+1+len([]rune(w)) > width {
+			flush()
+			line = continuation + w
+			continue
+		}
+		line += " " + w
+	}
+	flush()
 }
 
 func instanceDetail(in stack.Instance) string {
