@@ -210,7 +210,11 @@ S3 generator (ticket #14 / issue #15):
   S3): generate → register → untrusted `up` blocked (exit 2, no destination and
   no containers) → trusted `up` runs the pre-hook, builds the Compose image
   from the synced folder, keeps a stale local file and reports success.
-- Not verified in this ticket: real AWS S3/credentials, AWS CLI other than the
-  local shim, GNU tar/BusyBox tar on Linux hosts (the script avoids their
-  differing flags and uses a fresh extraction folder; macOS bsdtar is the
-  executed tar in the tests).
+- Linux GNU tar (`DCRAFT_INTEGRATION=1`, Debian bookworm, bash + GNU tar 1.34):
+  the generated tar script is executed in a container with the `aws` shim; a
+  valid archive with an internal symlink is copied, while escaping symlink and
+  hardlink archives are rejected with the destination unchanged and temporary
+  folders removed.
+- Not verified in this ticket: real AWS S3/credentials or an AWS CLI other than
+  the local shim; BusyBox tar (the script requires bash, which is not present
+  in the Alpine/BusyBox images used for the earlier tool probes); WSL2.
