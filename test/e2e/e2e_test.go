@@ -671,7 +671,7 @@ func TestTUIHasNoUnimplementedActions(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("TUI exit = %d\n%s", code, output)
 	}
-	for _, forbidden := range []string{"dcraft update", "dcraft logs", "dcraft backup"} {
+	for _, forbidden := range []string{"dcraft backup", "dcraft restore", "dcraft rollback"} {
 		if strings.Contains(output, forbidden) {
 			t.Fatalf("TUI exposes unimplemented action %q:\n%s", forbidden, output)
 		}

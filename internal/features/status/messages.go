@@ -30,6 +30,6 @@ const (
 	msgHealthUnhealthy       = "unhealthy · 앱 확인 안 됨"
 
 	msgGuideRefreshInteractive = "상태를 새로 고치려면: dcraft status · 대화형 화면을 열려면: dcraft"
-	msgGuidePending            = "관리 작업 중 갱신·로그·백업은 아직 제공되지 않습니다. 실행·중지·제거·재시작은 dcraft up/stop/down/restart를 사용하세요."
+	msgGuidePending            = "관리 작업: 갱신은 dcraft update, 로그는 dcraft logs, 실행·중지·제거·재시작은 dcraft up/stop/down/restart를 사용하세요. 데이터 백업·복원은 아직 제공되지 않습니다."
 	msgGuideSecrets            = "기존 Compose/.env의 민감값은 자동 제거되지 않습니다. dcraft secrets로 참조를 등록하세요."
 )

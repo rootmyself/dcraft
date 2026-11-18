@@ -52,20 +52,29 @@ const (
 	CategoryServiceUnknown            Category = "service_unknown"
 	CategoryStackBusy                 Category = "stack_busy"
 	CategoryLifecycleFailed           Category = "lifecycle_failed"
-	CategoryUpdateFailed              Category = "update_failed"
-	CategoryReadinessFailed           Category = "readiness_failed"
-	CategoryImageMissing              Category = "image_missing"
-	CategoryInvalidOption             Category = "invalid_option"
-	CategoryStateFailed               Category = "state_failed"
-	CategoryVerificationFailed        Category = "verification_failed"
-	CategoryCanceled                  Category = "canceled"
-	CategoryHistoryFailed             Category = "history_failed"
-	CategorySecretInvalid             Category = "secret_invalid"
-	CategorySecretInputInvalid        Category = "secret_input_invalid"
-	CategorySecretUnsupported         Category = "secret_unsupported"
-	CategorySecretSource              Category = "secret_source_unavailable"
-	CategorySecretApplyFailed         Category = "secret_apply_failed"
-	CategoryInternal                  Category = "internal_error"
+	// Service/instance selection and live terminal operations (ticket #5).
+	// selection_required and instance_unknown mean the caller must supply a
+	// different explicit selection; instance_stopped, logs_failed and
+	// exec_failed are operation failures.
+	CategorySelectionRequired  Category = "selection_required"
+	CategoryInstanceUnknown    Category = "instance_unknown"
+	CategoryInstanceStopped    Category = "instance_stopped"
+	CategoryLogsFailed         Category = "logs_failed"
+	CategoryExecFailed         Category = "exec_failed"
+	CategoryUpdateFailed       Category = "update_failed"
+	CategoryReadinessFailed    Category = "readiness_failed"
+	CategoryImageMissing       Category = "image_missing"
+	CategoryInvalidOption      Category = "invalid_option"
+	CategoryStateFailed        Category = "state_failed"
+	CategoryVerificationFailed Category = "verification_failed"
+	CategoryCanceled           Category = "canceled"
+	CategoryHistoryFailed      Category = "history_failed"
+	CategorySecretInvalid      Category = "secret_invalid"
+	CategorySecretInputInvalid Category = "secret_input_invalid"
+	CategorySecretUnsupported  Category = "secret_unsupported"
+	CategorySecretSource       Category = "secret_source_unavailable"
+	CategorySecretApplyFailed  Category = "secret_apply_failed"
+	CategoryInternal           Category = "internal_error"
 )
 
 // Severity separates blocking problems from information that still allows the
@@ -87,6 +96,11 @@ type Diagnostic struct {
 	Message     string   `json:"message"`
 	Detail      string   `json:"detail,omitempty"`
 	NextActions []string `json:"next_actions,omitempty"`
+	// ExitCode is the external process status when this diagnostic describes
+	// one (for example a failed `exec` command). It is additive: dcraft's own
+	// process exit code stays the common 0/1/2/130 contract, so a tool's exit
+	// 2 or 130 can never be confused with a dcraft usage or cancellation.
+	ExitCode *int `json:"exit_code,omitempty"`
 }
 
 // Error carries one or more diagnostics through Go's error interface.

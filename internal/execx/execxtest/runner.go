@@ -17,6 +17,9 @@ type Runner struct {
 	// Handler returns the result for a command. A nil Handler fails every
 	// command with exit code 127.
 	Handler func(execx.Command) (execx.Result, error)
+	// StreamHandler handles RunStream. It receives the stream so a test can
+	// write live output. Nil falls back to Handler (or exit 127).
+	StreamHandler func(execx.Command, execx.Stream) (execx.Result, error)
 
 	mu    sync.Mutex
 	calls []execx.Command
@@ -38,6 +41,23 @@ func (f *Runner) Run(ctx context.Context, cmd execx.Command) (execx.Result, erro
 	f.mu.Unlock()
 	if err := ctx.Err(); err != nil {
 		return execx.Result{}, err
+	}
+	if f.Handler == nil {
+		return execx.Result{Stderr: []byte("no fake handler for " + cmd.Name), ExitCode: 127}, nil
+	}
+	return f.Handler(cmd)
+}
+
+// RunStream executes with live I/O. See execx.Streamer.
+func (f *Runner) RunStream(ctx context.Context, cmd execx.Command, stream execx.Stream) (execx.Result, error) {
+	f.mu.Lock()
+	f.calls = append(f.calls, cloneCommand(cmd))
+	f.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return execx.Result{}, err
+	}
+	if f.StreamHandler != nil {
+		return f.StreamHandler(cmd, stream)
 	}
 	if f.Handler == nil {
 		return execx.Result{Stderr: []byte("no fake handler for " + cmd.Name), ExitCode: 127}, nil

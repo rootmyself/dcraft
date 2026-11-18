@@ -21,9 +21,12 @@ const (
 
 	msgNonInteractive = "dcraft: 대화형 터미널이 아니어서 화면을 열지 않았습니다.\n" +
 		"다음처럼 명령을 지정해 실행하세요:\n"
-	msgNonInteractiveJSON = "기계 판독 결과가 필요하면 --json을 추가하세요.\n"
-	msgHelpHint           = "도움말: dcraft --help\n"
-	msgJSONNeedsCommand   = "오류: --json을 사용할 때는 명령을 지정해야 합니다. 예: dcraft status --json\n도움말: dcraft --help\n"
+	msgNonInteractiveJSON  = "기계 판독 결과가 필요하면 --json을 추가하세요.\n"
+	msgHelpHint            = "도움말: dcraft --help\n"
+	msgJSONNeedsCommand    = "오류: --json을 사용할 때는 명령을 지정해야 합니다. 예: dcraft status --json\n도움말: dcraft --help\n"
+	msgJSONLiveUnsupported = "오류: 실시간 로그는 하나의 JSON 결과로 표현할 수 없어 --json과 함께 실행할 수 없습니다.\n" +
+		" --json 없이 실행하고, 로그를 멈추려면 ctrl+c를 누르세요. 서비스는 중지되지 않습니다.\n" +
+		" 도움말: dcraft logs --help\n"
 )
 
 const helpTemplate = `{{with (or .Long .Short)}}{{. | trimTrailingWhitespaces}}
