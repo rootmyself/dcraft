@@ -54,6 +54,7 @@ type fakeDocker struct {
 	logPath   string
 	config    string
 	ps        string
+	consumers string
 	configOut string
 }
 
@@ -65,6 +66,7 @@ func newFakeDocker(t *testing.T) *fakeDocker {
 		logPath:   filepath.Join(dir, "calls.log"),
 		config:    filepath.Join(dir, "config.json"),
 		ps:        filepath.Join(dir, "ps.ndjson"),
+		consumers: filepath.Join(dir, "consumers.tsv"),
 		configOut: `{"name":"fake-project","services":{"web":{"image":"nginx:alpine","healthcheck":{"test":["CMD","true"]},"ports":[{"mode":"ingress","target":80,"published":"8080","protocol":"tcp"}]},"api":{"image":"api:local","build":{"context":"."}}}}`,
 	}
 	if err := os.WriteFile(f.config, []byte(f.configOut), 0o644); err != nil {
@@ -75,6 +77,9 @@ func newFakeDocker(t *testing.T) *fakeDocker {
 		`{"Name":"fake-project-api-1","Service":"api","State":"running","Health":"","Image":"api:local","ExitCode":0}`,
 	}, "\n")
 	if err := os.WriteFile(f.ps, []byte(ps), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(f.consumers, nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	script := `#!/bin/sh
@@ -105,11 +110,75 @@ case "$*" in
     exit 0 ;;
   *" config --format json") cat "$DOCKER_FAKE_CONFIG"; exit 0 ;;
   *" ps --all --format json") cat "$DOCKER_FAKE_PS"; exit 0 ;;
+  *"ps -a --filter volume="*)
+    if [ -n "$DOCKER_FAKE_CONSUMERS" ] && [ -f "$DOCKER_FAKE_CONSUMERS" ]; then
+      cat "$DOCKER_FAKE_CONSUMERS"
+    fi
+    exit 0 ;;
+  "create "*)
+    name=""
+    hostdir=""
+    prev=""
+    for a in "$@"; do
+      if [ "$prev" = "--name" ]; then name="$a"; fi
+      case "$a" in
+        *:/backup) hostdir="${a%:/backup}" ;;
+      esac
+      prev="$a"
+    done
+    if [ -z "$name" ] || [ -z "$hostdir" ]; then
+      echo "fake docker create: missing name or /backup mount" >&2
+      exit 9
+    fi
+    state="${DOCKER_FAKE_STATE:-$(dirname "$LOG")/state}"
+    mkdir -p "$state"
+    printf '%s' "$hostdir" > "$state/$name.backupdir"
+    echo "fake-cid-$name"
+    exit 0 ;;
+  "start -a "*)
+    name=""
+    for a in "$@"; do name="$a"; done
+    state="${DOCKER_FAKE_STATE:-$(dirname "$LOG")/state}"
+    if [ ! -f "$state/$name.backupdir" ]; then
+      echo "fake docker start: unknown container $name" >&2
+      exit 9
+    fi
+    hostdir=$(cat "$state/$name.backupdir")
+    if [ -n "$DOCKER_FAKE_ARCHIVE_FAIL" ]; then
+      printf 'partial' > "$hostdir/data.tar.gz"
+      echo "tar: can't open './secret': $DOCKER_FAKE_ARCHIVE_FAIL" >&2
+      exit 1
+    fi
+    tmp=$(mktemp -d)
+    echo "hello from volume" > "$tmp/file.txt"
+    mkdir -p "$tmp/nested"
+    echo "nested" > "$tmp/nested/dotless.txt"
+    echo "dot" > "$tmp/.hidden"
+    ln -s file.txt "$tmp/link"
+    ( cd "$tmp" && tar -czf "$hostdir/data.tar.gz" . )
+    rm -rf "$tmp"
+    exit 0 ;;
+  "rm -f "*)
+    name=""
+    for a in "$@"; do name="$a"; done
+    state="${DOCKER_FAKE_STATE:-$(dirname "$LOG")/state}"
+    rm -f "$state/$name.backupdir"
+    exit 0 ;;
+  "inspect --format "*)
+    name=""
+    for a in "$@"; do name="$a"; done
+    state="${DOCKER_FAKE_STATE:-$(dirname "$LOG")/state}"
+    if [ -f "$state/$name.backupdir" ]; then
+      echo "fake-cid-$name"
+      exit 0
+    fi
+    echo "No such object: $name" >&2
+    exit 1 ;;
 esac
 sub=""
 for a in "$@"; do
   case "$a" in
-    up|stop|down|restart) sub="$a"; break ;;
+    up|stop|down|restart|start) sub="$a"; break ;;
   esac
 done
 case "$sub" in
@@ -119,6 +188,7 @@ case "$sub" in
   stop) echo "Container fake-web-1 Stopped"; exit 0 ;;
   down) echo "Container fake-web-1 Removed"; exit 0 ;;
   restart) echo "Container fake-web-1 Restarted"; exit 0 ;;
+  start) echo "Container fake-web-1 Started"; exit 0 ;;
 esac
 echo "fake docker: unexpected invocation: $*" >&2
 exit 9
@@ -139,11 +209,12 @@ func (f *fakeDocker) env(t *testing.T, stateDir string) []string {
 func (f *fakeDocker) envExtra(t *testing.T, stateDir string, extra map[string]string) []string {
 	t.Helper()
 	values := map[string]string{
-		"PATH":               f.dir + ":" + os.Getenv("PATH"),
-		"DOCKER_FAKE_LOG":    f.logPath,
-		"DOCKER_FAKE_CONFIG": f.config,
-		"DOCKER_FAKE_PS":     f.ps,
-		"DCRAFT_STATE_DIR":   stateDir,
+		"PATH":                  f.dir + ":" + os.Getenv("PATH"),
+		"DOCKER_FAKE_LOG":       f.logPath,
+		"DOCKER_FAKE_CONFIG":    f.config,
+		"DOCKER_FAKE_PS":        f.ps,
+		"DOCKER_FAKE_CONSUMERS": f.consumers,
+		"DCRAFT_STATE_DIR":      stateDir,
 	}
 	for k, v := range extra {
 		values[k] = v
@@ -161,6 +232,13 @@ func (f *fakeDocker) writeConfig(t *testing.T, text string) {
 func (f *fakeDocker) writePS(t *testing.T, text string) {
 	t.Helper()
 	if err := os.WriteFile(f.ps, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func (f *fakeDocker) writeConsumers(t *testing.T, text string) {
+	t.Helper()
+	if err := os.WriteFile(f.consumers, []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }

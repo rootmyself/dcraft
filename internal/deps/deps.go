@@ -8,9 +8,12 @@ import (
 	"github.com/rootmyself/dcraft/internal/artifacts"
 	"github.com/rootmyself/dcraft/internal/compose"
 	"github.com/rootmyself/dcraft/internal/core"
+	"github.com/rootmyself/dcraft/internal/data"
 	"github.com/rootmyself/dcraft/internal/execx"
+	"github.com/rootmyself/dcraft/internal/identity"
 	"github.com/rootmyself/dcraft/internal/lifecycle"
 	"github.com/rootmyself/dcraft/internal/secretref"
+	"github.com/rootmyself/dcraft/internal/state"
 )
 
 // Deps is built once by the application and handed to every registration.
@@ -32,4 +35,12 @@ type Deps struct {
 	// used by the Compose install feature. Tests replace them with fakes.
 	Downloader artifacts.Downloader
 	Installer  artifacts.Installer
+	// Data is the narrow volume/bind data-plane boundary published by ticket
+	// #16. Identity is the read-only effective-name lookup. Locks is the
+	// narrow per-stack change lock capability shared by stack-changing
+	// features (backup/restore/rollback); no feature type-asserts the
+	// concrete store.
+	Data     data.Backend
+	Identity *identity.Reader
+	Locks    state.Locker
 }
