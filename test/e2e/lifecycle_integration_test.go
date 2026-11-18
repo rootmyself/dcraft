@@ -279,7 +279,7 @@ volumes:
 	}
 	otherUp := runProcess(t, otherDir, dcraftEnv, strings.NewReader(""), "up", "--json")
 	if otherUp.code != 0 {
-		t.Fatalf("other up exit=%d stderr=%q", otherUp.code, otherUp.stderr)
+		t.Fatalf("other up exit=%d stderr=%q stdout=%s", otherUp.code, otherUp.stderr, otherUp.stdout)
 	}
 	otherName := parseLifecycle(t, otherUp.stdout).Data.Lifecycle.ProjectName
 	registerCleanup(otherDir, otherName, otherCompose)
@@ -349,6 +349,44 @@ volumes:
 	if ids := composeInspect(t, env, "hello-world", composePath, "web"); ids == "" || !containerRunning(t, ids) {
 		t.Fatal("first stack changed when the second folder started")
 	}
+
+	// Status must identify the suffixed stack through the recorded name, use
+	// the same containers, and write no state.
+	statusStateBefore := stateTree(t, stateDir)
+	statusB := runProcess(t, secondDir, dcraftEnv, strings.NewReader(""), "status", "--path", secondDir, "--json")
+	if statusB.code != 0 || statusB.stderr != "" {
+		t.Fatalf("suffixed status exit=%d stderr=%q", statusB.code, statusB.stderr)
+	}
+	statusBParsed := parseStatus(t, statusB.stdout)
+	if statusBParsed.Target.ProjectName != "hello-world-1" {
+		t.Fatalf("status target project = %q, want hello-world-1", statusBParsed.Target.ProjectName)
+	}
+	if statusBParsed.Data.Stack.ProjectName != "hello-world-1" {
+		t.Fatalf("status payload project = %q, want hello-world-1", statusBParsed.Data.Stack.ProjectName)
+	}
+	webB := findService(t, statusBParsed.Data.Stack, "web")
+	if webB.State != stack.StateRunning || len(webB.Instances) != 1 {
+		t.Fatalf("status web = %+v", webB)
+	}
+	bContainerID := composeInspect(t, env, "hello-world-1", secondCompose, "web")
+	if bContainerID == "" {
+		t.Fatal("second stack has no web container")
+	}
+	nameOut, err := exec.Command("docker", "inspect", "-f", "{{.Name}}", bContainerID).Output()
+	if err != nil {
+		t.Fatalf("inspect container name: %v", err)
+	}
+	wantInstance := strings.TrimPrefix(strings.TrimSpace(string(nameOut)), "/")
+	if webB.Instances[0].Name != wantInstance {
+		t.Fatalf("status instance = %q, want the second stack's %q", webB.Instances[0].Name, wantInstance)
+	}
+	if statusBParsed.Data.Stack.ProjectDir != secondDir {
+		t.Fatalf("status folder = %q, want %q", statusBParsed.Data.Stack.ProjectDir, secondDir)
+	}
+	if !equalStateTrees(statusStateBefore, stateTree(t, stateDir)) {
+		t.Fatal("status changed per-computer state")
+	}
+
 	projects := listComposeProjects(t, env)
 	if _, ok := projects["hello-world-1"]; !ok {
 		t.Fatalf("compose has no hello-world-1 project: %+v", projects)

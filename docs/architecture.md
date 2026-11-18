@@ -31,6 +31,7 @@ cmd/dcraft                 process entry, signal context, TTY check, exit codes
         +-- internal/target          Compose target discovery + environment expansion
         +-- internal/environments    .dcraft.yaml aliases + static host-resource scan
         +-- internal/lifecycle       shared up/stop/down/restart controller
+        +-- internal/identity        read-only name/identity readout
         +-- internal/features/status reference read-only feature
         +-- internal/features/up     \
         +-- internal/features/stop    > thin lifecycle registration units
@@ -59,6 +60,9 @@ Dependency rules:
 - `internal/lifecycle` knows `core`, `stack` and `state`; it never imports
   Cobra, Bubble Tea or `internal/compose` (the Compose adapter is passed as the
   published interfaces).
+- `internal/identity` implements the read-only `core.IdentityReader` from the
+  same `stack.Identity` and `state.Store` boundaries. It never writes, locks or
+  creates state.
 
 ---
 
@@ -98,11 +102,17 @@ Engine sequence (stage names are stable machine values; titles are Korean):
    decides this; a UI may only collect and pass the approval.**
 3. `preflight` — `core.Preflight.Check`; error diagnostics stop the feature.
    Warnings/info are kept.
-4. Feature `Run` — feature stages appear between preflight and verification. If
+4. Read-only identity read — for `ReadOnly` features with no explicit `-p` and
+   a configured `Engine.Identity`, the engine resolves the effective project
+   name before `Invocation` (see §3.2). It adds no stage, never writes or locks,
+   and on failure emits an `identity_unreadable` **warning** and falls back to
+   Compose's default. Stack-changing features resolve and record their own
+   allocation (they may write).
+5. Feature `Run` — feature stages appear between preflight and verification. If
    a feature reports no stage, the engine adds a fallback `execute` stage.
-5. `verify` — only if the feature also implements `core.Verifier`. Raw errors
+6. `verify` — only if the feature also implements `core.Verifier`. Raw errors
    become `verification_failed`; no history is written.
-6. `history` — only if `Descriptor.RecordsHistory`. Written after success. A
+7. `history` — only if `Descriptor.RecordsHistory`. Written after success. A
    history write failure is a `history_failed` **warning**; the operation stays
    successful because the stack change already happened. Never report a
    completed change as failed solely because history failed, and never record a
@@ -192,8 +202,8 @@ Rules (`internal/target.Resolver`):
 - `ProjectName` is only the explicit `-p` value. Empty means the lifecycle
   controller allocates or reuses an automatic name (see §5) and pins it with
   `-p` on every Compose call. Ticket #4 fills `Environment`, which is part of the
-  name and state key. The read-only status feature keeps letting Compose resolve
-  the folder default and writes no state.
+  name and state key. Read-only features resolve the same identity through
+  `core.IdentityReader` (see §3.2) without writing or locking state.
 - `Target.ComposeArgs()` is the single source of Compose global inputs:
   `compose -f <file>... --env-file <file>... --profile <profile>... [-p <name>]`.
   It deliberately does **not** pass `--project-directory`: Compose keeps its own
@@ -204,8 +214,11 @@ Rules (`internal/target.Resolver`):
 
 State identity is `ProjectDir + Environment`, not the Compose project name (the
 name itself is stored state). This keeps the same folder/environment tied to
-one helper-managed stack. The environment id is the alias from `.dcraft.yaml`
-exactly as written.
+one helper-managed stack. The folder key is canonicalized with symlink
+resolution when it exists, so the same target invoked as the working directory
+or through a symlinked spelling (`/var` vs `/private/var` on macOS) shares one
+stack identity. The environment id is the alias from `.dcraft.yaml` exactly as
+written.
 
 ### 3.1 Named environments (ticket #4)
 
@@ -278,6 +291,34 @@ Rules:
   no TUI alias editor and no generated config file; adding one is a later
   ticket, not a hidden write from this one.
 
+### 3.2 Read-only project identity (ticket #3 follow-up)
+
+The same effective project name is used by query and change:
+
+- Stack-changing features (`up`, `stop`, `down`, `restart`) resolve the name
+  through `internal/lifecycle` (explicit `-p`, then a declared Compose name,
+  then a recorded allocation, then the smallest free suffix) and record it.
+- Read-only features (`status`, later `logs`/`exec`) get the name from
+  `core.Engine.Identity` (`core.IdentityReader`, implemented by
+  `internal/identity`) **after preflight and before the feature runs**. The
+  priority is identical: explicit `-p`, declared Compose name, recorded
+  allocation. With no claim and no declaration the name is left empty and
+  Compose resolves its folder default exactly as before.
+- The read is strictly read-only: `state.LookupName` reads
+  `<state>/names.json` only. It never creates the state root or stack
+  directories, never takes `names.lock` or the per-stack `.lock`, and never
+  writes. Any failure becomes an `identity_unreadable` warning and the feature
+  continues with the Compose default; it is never recorded as a successful
+  identity.
+- The engine sets `Target.ProjectName` and `Result.Target.ProjectName` to the
+  resolved name before the feature runs, so `status --json`, the TUI status and
+  future read-only features identify the same stack as `up` without a
+  feature-specific branch. No result-schema field was added.
+- Rule: read-only features may read identity state but must never write or lock
+  it. Every feature that addresses a stack — `status`, `up`, `stop`, `down`,
+  `restart` and later `logs`/`exec`/`backup` — uses this one identity and must
+  not derive a separate project name.
+
 ---
 
 ## 4. Feature registration unit
@@ -332,7 +373,8 @@ func init() {
 
 3. Run `go test ./...`. No existing file is edited. A lifecycle-like feature
    calls `deps.Deps.Lifecycle` with its `lifecycle.Action`; it does not add a
-   second write path.
+   second write path. A read-only feature gets the effective project identity
+   from the engine automatically; it never reads or writes the name map itself.
 
 The CLI command, Korean help entry, JSON wrapper, exit codes, TUI menu entry and
 stage display are derived automatically. Registration files execute in filename
@@ -427,10 +469,11 @@ is in the payload and in every Compose call.
   uses an empty env file and drops an exported `COMPOSE_PROJECT_NAME`, so a
   name in `.env`, an exported `COMPOSE_PROJECT_NAME` and a project `name:` are
   all recognized as declarations instead of defaults.
-- `status` stays read-only and writes no state; it still lets Compose resolve
-  the folder default. For a suffixed folder (`hello-world-1`) status shows the
-  default project until integration wires the published name lookup into
-  status. No lifecycle operation relies on status for identity.
+- `status` and later read-only features use the read-only identity read from
+  §3.2. They identify the recorded name (for example `hello-world-1`), never
+  write or lock state, and fall back to the Compose default when no claim or
+  declaration exists. Explicit `-p` and declared Compose names still win over
+  the recorded allocation for every interface.
 
 ### Same-stack coordination
 
@@ -655,9 +698,10 @@ Layout:
     state.json        # reserved for #7 last-good state
 ```
 
-- The key is derived from the absolute project folder **and** the environment
-  id: same folder names in different places and different environments never
-  share state; the readable folder name stays in the key.
+- The key is derived from the canonical absolute project folder **and** the
+  environment id: same folder names in different places and different
+  environments never share state; the readable folder name stays in the key.
+  Symlinked spellings of an existing folder canonicalize to one identity.
 - Directories are created lazily with `0700`; files with `0600`.
 - History records contain operation id, action, outcome, timestamps, stages and
   diagnostics. Never resolved secret values.
@@ -668,6 +712,10 @@ Layout:
 - Name claims are keyed by the same folder + environment identity. They hold the
   effective Compose project name, its source and the owning folder; the
   automatic-name mapping is reused on rerun, after stop and after down.
+- `state.LookupName` is the read-only claim read used by read-only features. It
+  opens `names.json` only: no directory creation, no lock, no write. A missing
+  file means "no claim"; a corrupt file is reported to the caller, which turns
+  it into an `identity_unreadable` warning and a Compose-default fallback.
 - `names.json` updates take `names.lock` with a short bounded wait, verify the
   claim, write a temp file and rename it atomically. The per-stack change lock
   never waits: a conflicting operation returns `*state.BusyError` immediately.
@@ -737,6 +785,7 @@ Desktop's VM-backed unix socket is **local**, not remote.
 | `verification_failed` | post-operation verification failed | error |
 | `canceled` | operation interrupted | warning (exit 130 outcome) |
 | `history_failed` | operation history could not be written | warning |
+| `identity_unreadable` | stored/declared project identity could not be read; Compose default used | warning |
 | `internal_error` | unexpected error/parse failure/panic | error |
 
 Each diagnostic carries Korean `message`, optional raw `detail`, and Korean
@@ -770,8 +819,14 @@ Tested seams:
   cancellation, panic recovery, warnings);
 - registry validation and CLI/TUI assembly from registries;
 - state layout and permissions, automatic-name allocation (first/suffix/reuse/
-  declared/conflict/external ownership/environment/concurrency) and the per-stack
-  lock (busy holder, different stacks, goroutine exclusivity, cancellation);
+  declared/conflict/external ownership/environment/concurrency), the read-only
+  `LookupName` (no creation, no lock, no rewrite, symlink-canonical identity,
+  corrupt registry) and the per-stack lock (busy holder, different stacks,
+  goroutine exclusivity, cancellation);
+- read-only identity resolution (explicit/declared/allocated priority, no
+  Compose calls for `-p`, no state creation, no rewrite) and the engine seam
+  (read-only features get the name without a new stage; mutating features do
+  not; read failure is a warning with Compose fallback);
 - lifecycle command construction (global flags before the subcommand, `up
   --detach` + services, `stop` + services, project-wide `down` without `-v`,
   `restart --no-deps` for explicit services), config/project parsing and
@@ -783,7 +838,8 @@ Tested seams:
   Compose argument order, no prompt when non-interactive, repeated up/name
   reuse, same-name folders, explicit and configured name conflicts, unknown
   service, no secret values in output/history, TUI menu + confirmation +
-  quit-without-run;
+  quit-without-run, status in a fresh state dir creates no files, status uses
+  the recorded/declared/explicit name and rewrites nothing;
 - pty process tests: TUI enter+quit, environment selection screen and keyboard
   choice, quit-from-selection runs nothing, no mutating Docker command,
   mutating confirmation before running, up through the same engine;
@@ -797,9 +853,10 @@ Tested seams:
   folders (`hello-world`, `hello-world-1`), explicit-name collision refused
   with exit 2, an existing externally created project reused, concurrent up
   (one winner, one `stack_busy`), concurrent name allocation, declared names
-  from `-p`/`name:`/`.env`/exported `COMPOSE_PROJECT_NAME`, another stack's
-  container IDs/data unchanged, TUI quit leaving services running, cleanup with
-  its own projects only.
+  from `-p`/`name:`/`.env`/exported `COMPOSE_PROJECT_NAME`, suffixed-folder
+  status reporting `hello-world-1` and the same container IDs with unchanged
+  state files, another stack's container IDs/data unchanged, TUI quit leaving
+  services running, cleanup with its own projects only.
 - real Docker environments: two aliases with different files/profiles/env files
   run as separate stacks with separate declared project names and host ports,
   env-file values reach the containers, status reports each environment and
@@ -845,10 +902,10 @@ undetected sharing is possible and complete isolation is never claimed.
 Environment aliases and lifecycle names are separate: aliases partition state,
 files and profiles; the lifecycle controller allocates or honors the Compose
 project name per folder+environment.
-Lifecycle residual risks: status does not read the allocated name (see §5), so a
-suffixed folder's status shows the folder-default project until integration
-wires the lookup; a declared name equal to Compose's derived default is treated
-as automatic; a declared rename of a recorded target leaves the old project
+Lifecycle residual risks: an unreadable `names.json` makes read-only features
+fall back to the Compose default with an `identity_unreadable` warning instead of
+failing; a declared name equal to Compose's derived default is treated as
+automatic; a declared rename of a recorded target leaves the old project
 unmanaged by design; per-stack coordination fails fast instead of queuing, so an
 automation caller must retry; `flock` coordination is verified on macOS
 (Linux/WSL2 use the same syscall but were not run on this machine); a declared
@@ -874,8 +931,10 @@ Published by ticket #3 (consume, do not fork): `stack.Lifecycle`,
 `deps.Deps.Lifecycle`, `lifecycle.Controller`/`Action`/`Payload`/`Report`/
 `Present`, `state.AcquireStackLock`/`StackLock`/`LockHolder`/`BusyError`,
 `state.AllocateName`/`NameRequest`/`NameAllocation`/`NameSource`/
-`NameConflictError`, the `names.json`/`.lock` state layout, the lifecycle stage
-names and the new diagnostic categories/exit-code mapping.
+`NameConflictError`/`LookupName`, `core.IdentityReader`/`Engine.Identity`,
+`internal/identity.New`/`Reader.ReadProjectName`, the `names.json`/`.lock` state
+layout, the lifecycle stage names and the new diagnostic categories/exit-code
+mapping.
 
 Allowed without a request: new feature package, new registration file, feature
 payload type under `data`, feature-local Korean strings and tests. A lifecycle-like

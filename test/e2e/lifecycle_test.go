@@ -3,6 +3,8 @@ package e2e
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -673,4 +675,162 @@ func TestLifecycleHelpExplainsEffectsInKorean(t *testing.T) {
 			}
 		}
 	}
+}
+
+// stateTree records every file and its content hash under root. It is used to
+// prove that read-only commands do not create or change per-computer state.
+func stateTree(t *testing.T, root string) map[string]string {
+	t.Helper()
+	tree := map[string]string{}
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return err
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			tree[rel+"/"] = "dir"
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		sum := sha256.Sum256(data)
+		tree[rel] = hex.EncodeToString(sum[:])
+		return nil
+	})
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatalf("walk state dir %q: %v", root, err)
+	}
+	return tree
+}
+
+func equalStateTrees(before, after map[string]string) bool {
+	if len(before) != len(after) {
+		return false
+	}
+	for key, value := range before {
+		if after[key] != value {
+			return false
+		}
+	}
+	return true
+}
+
+func TestStatusDoesNotCreateStateInAFreshDirectory(t *testing.T) {
+	fake := lifecycleFake(t)
+	project := projectNamed(t, "hello-world")
+	stateDir := filepath.Join(t.TempDir(), "fresh-state")
+	env := fake.env(t, stateDir)
+
+	for i := 0; i < 2; i++ {
+		res := runProcess(t, project, env, strings.NewReader(""), "status", "--path", project, "--json")
+		if res.code != 0 || res.stderr != "" {
+			t.Fatalf("status %d exit=%d stderr=%q", i, res.code, res.stderr)
+		}
+		parsed := parseStatus(t, res.stdout)
+		if parsed.Target.ProjectName != "" {
+			t.Fatalf("status invented a project name without state: %q", parsed.Target.ProjectName)
+		}
+		if parsed.Data.Stack.ProjectName != "hello-world" {
+			t.Fatalf("payload project name = %q", parsed.Data.Stack.ProjectName)
+		}
+		if got := len(parsed.Stages); got != 3 {
+			t.Fatalf("stages = %+v", parsed.Stages)
+		}
+	}
+	if _, err := os.Stat(stateDir); !os.IsNotExist(err) {
+		t.Fatalf("status created state in a fresh DCRAFT_STATE_DIR: %v", err)
+	}
+}
+
+func TestStatusUsesTheAllocatedNameAndWritesNothing(t *testing.T) {
+	fake := lifecycleFake(t)
+	dirA := projectNamed(t, "hello-world")
+	dirB := projectNamed(t, "hello-world")
+	stateDir := t.TempDir()
+	env := fake.env(t, stateDir)
+
+	upA := runProcess(t, dirA, env, strings.NewReader(""), "up", "--path", dirA, "--json")
+	if upA.code != 0 {
+		t.Fatalf("up A exit=%d stderr=%q", upA.code, upA.stderr)
+	}
+	if got := parseLifecycle(t, upA.stdout).Data.Lifecycle.ProjectName; got != "hello-world" {
+		t.Fatalf("A name = %q", got)
+	}
+	upB := runProcess(t, dirB, env, strings.NewReader(""), "up", "--path", dirB, "--json")
+	if upB.code != 0 {
+		t.Fatalf("up B exit=%d stderr=%q", upB.code, upB.stderr)
+	}
+	if got := parseLifecycle(t, upB.stdout).Data.Lifecycle.ProjectName; got != "hello-world-1" {
+		t.Fatalf("B name = %q", got)
+	}
+
+	before := stateTree(t, stateDir)
+	statusB := runProcess(t, dirB, env, strings.NewReader(""), "status", "--path", dirB, "--json")
+	if statusB.code != 0 || statusB.stderr != "" {
+		t.Fatalf("status B exit=%d stderr=%q", statusB.code, statusB.stderr)
+	}
+	parsedB := parseStatus(t, statusB.stdout)
+	if parsedB.Target.ProjectName != "hello-world-1" {
+		t.Fatalf("target project name = %q, want hello-world-1", parsedB.Target.ProjectName)
+	}
+	if parsedB.Data.Stack.ProjectName != "hello-world-1" {
+		t.Fatalf("payload project name = %q, want hello-world-1", parsedB.Data.Stack.ProjectName)
+	}
+	if parsedB.Data.Stack.Summary.Running != 1 {
+		t.Fatalf("stack summary = %+v", parsedB.Data.Stack.Summary)
+	}
+	if len(parsedB.Stages) != 3 {
+		t.Fatalf("stages = %+v", parsedB.Stages)
+	}
+	if !equalStateTrees(before, stateTree(t, stateDir)) {
+		t.Fatal("status changed per-computer state")
+	}
+
+	// A declared name wins over the recorded allocation.
+	fake.writeConfig(t, `{"name":"declared-name","services":{"web":{}}}`)
+	before = stateTree(t, stateDir)
+	declared := runProcess(t, dirB, env, strings.NewReader(""), "status", "--path", dirB, "--json")
+	if declared.code != 0 || declared.stderr != "" {
+		t.Fatalf("declared status exit=%d stderr=%q", declared.code, declared.stderr)
+	}
+	declaredParsed := parseStatus(t, declared.stdout)
+	if declaredParsed.Target.ProjectName != "declared-name" || declaredParsed.Data.Stack.ProjectName != "declared-name" {
+		t.Fatalf("declared status = %+v / %q", declaredParsed.Target, declaredParsed.Data.Stack.ProjectName)
+	}
+	if !equalStateTrees(before, stateTree(t, stateDir)) {
+		t.Fatal("declared status changed per-computer state")
+	}
+
+	// An explicit -p wins over both the allocation and Compose's default.
+	fake.writeConfig(t, lifecycleConfig)
+	if got := parseLifecycleStatus(t, dirB, env, "explicit-name"); got.Target.ProjectName != "explicit-name" || got.Data.Stack.ProjectName != "explicit-name" {
+		t.Fatalf("explicit status = %+v / %q", got.Target, got.Data.Stack.ProjectName)
+	}
+
+	// The first folder still identifies its own allocated name.
+	statusA := runProcess(t, dirA, env, strings.NewReader(""), "status", "--path", dirA, "--json")
+	if statusA.code != 0 {
+		t.Fatalf("status A exit=%d stderr=%q", statusA.code, statusA.stderr)
+	}
+	parsedA := parseStatus(t, statusA.stdout)
+	if parsedA.Target.ProjectName != "hello-world" || parsedA.Data.Stack.ProjectName != "hello-world" {
+		t.Fatalf("A status = %+v / %q", parsedA.Target, parsedA.Data.Stack.ProjectName)
+	}
+}
+
+func parseLifecycleStatus(t *testing.T, dir string, env []string, explicit string) statusJSON {
+	t.Helper()
+	res := runProcess(t, dir, env, strings.NewReader(""), "status", "--path", dir, "-p", explicit, "--json")
+	if res.code != 0 || res.stderr != "" {
+		t.Fatalf("explicit status exit=%d stderr=%q", res.code, res.stderr)
+	}
+	return parseStatus(t, res.stdout)
 }

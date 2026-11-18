@@ -273,3 +273,120 @@ func TestAllocateNameStopsOnCanceledContext(t *testing.T) {
 		t.Fatalf("err = %v, want context.Canceled", err)
 	}
 }
+
+func TestLookupNameIsReadOnlyAndReportsRecordedClaim(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "fresh-state")
+	store := state.New(root)
+	tgt := target("/work/hello-world")
+
+	if _, ok, err := store.LookupName(tgt); err != nil || ok {
+		t.Fatalf("lookup on missing state = %v, %v", ok, err)
+	}
+	if _, err := os.Stat(root); !os.IsNotExist(err) {
+		t.Fatalf("read-only lookup created the state root: %v", err)
+	}
+
+	allocate(t, store, state.NameRequest{Target: tgt, BaseName: "hello-world"})
+	got, ok, err := store.LookupName(tgt)
+	if err != nil || !ok {
+		t.Fatalf("lookup = %v, %v", ok, err)
+	}
+	if got.Name != "hello-world" || got.Source != state.NameSourceAllocated {
+		t.Fatalf("allocation = %+v", got)
+	}
+
+	namesPath := filepath.Join(root, "names.json")
+	before, err := os.ReadFile(namesPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stackDir, err := store.StackDir(tgt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 3; i++ {
+		if _, _, err := store.LookupName(tgt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	after, err := os.ReadFile(namesPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(before) != string(after) {
+		t.Fatal("read-only lookup rewrote names.json")
+	}
+	if _, err := os.Stat(filepath.Join(stackDir, ".lock")); !os.IsNotExist(err) {
+		t.Fatalf("read-only lookup created or locked the stack lock: %v", err)
+	}
+	if _, err := os.Stat(stackDir); !os.IsNotExist(err) {
+		t.Fatalf("read-only lookup created the stack directory: %v", err)
+	}
+}
+
+func TestLookupNameSeparatesTargetsAndEnvironments(t *testing.T) {
+	s := state.New(t.TempDir())
+	dev := target("/work/hello-world")
+	staging := target("/work/hello-world")
+	staging.Environment = "staging"
+	other := target("/work/other")
+
+	allocate(t, s, state.NameRequest{Target: dev, BaseName: "hello-world"})
+	if got, ok, err := s.LookupName(dev); err != nil || !ok || got.Name != "hello-world" {
+		t.Fatalf("dev lookup = %+v, %v, %v", got, ok, err)
+	}
+	if got, ok, err := s.LookupName(staging); err != nil || ok {
+		t.Fatalf("staging lookup = %+v, %v, %v", got, ok, err)
+	}
+	if got, ok, err := s.LookupName(other); err != nil || ok {
+		t.Fatalf("other lookup = %+v, %v, %v", got, ok, err)
+	}
+}
+
+func TestLookupNameRejectsCorruptRegistry(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "names.json"), []byte("{broken"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := state.New(root).LookupName(target("/work/app")); err == nil {
+		t.Fatal("corrupt registry was ignored")
+	}
+}
+
+func TestLookupNameRequiresAProjectFolder(t *testing.T) {
+	if _, _, err := state.New(t.TempDir()).LookupName(core.Target{}); err == nil {
+		t.Fatal("empty target was accepted")
+	}
+}
+
+func TestStateIdentityCanonicalizesSymlinkedFolders(t *testing.T) {
+	realDir := t.TempDir()
+	link := filepath.Join(t.TempDir(), "linked")
+	if err := os.Symlink(realDir, link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	s := state.New(t.TempDir())
+	realTarget := target(realDir)
+	linkTarget := target(link)
+	realDirState, err := s.StackDir(realTarget)
+	if err != nil {
+		t.Fatal(err)
+	}
+	linkDirState, err := s.StackDir(linkTarget)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if realDirState != linkDirState {
+		t.Fatalf("symlinked folder has separate state: %q vs %q", realDirState, linkDirState)
+	}
+	if _, err := s.AllocateName(context.Background(), state.NameRequest{
+		Target: realTarget, BaseName: "hello-world",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got, ok, err := s.LookupName(linkTarget)
+	if err != nil || !ok || got.Name != "hello-world" {
+		t.Fatalf("lookup through symlink = %+v, %v, %v", got, ok, err)
+	}
+}

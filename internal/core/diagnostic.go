@@ -34,6 +34,7 @@ const (
 	CategoryEnvironmentOverlap    Category = "environment_overlap"
 	CategoryProjectNameShared     Category = "project_name_shared"
 	CategoryProjectNameConflict   Category = "project_name_conflict"
+	CategoryIdentityUnreadable    Category = "identity_unreadable"
 	CategoryServiceUnknown        Category = "service_unknown"
 	CategoryStackBusy             Category = "stack_busy"
 	CategoryLifecycleFailed       Category = "lifecycle_failed"

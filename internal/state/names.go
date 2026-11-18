@@ -232,6 +232,24 @@ func (s *Store) AllocateName(ctx context.Context, req NameRequest) (NameAllocati
 	return NameAllocation{}, fmt.Errorf("state: no free automatic project name for %s", base)
 }
 
+// LookupName returns the recorded project name for a target without creating,
+// locking or modifying any state. Read-only features use it to identify the
+// same stack as lifecycle operations. ok is false when no claim exists.
+func (s *Store) LookupName(target core.Target) (NameAllocation, bool, error) {
+	if strings.TrimSpace(target.ProjectDir) == "" {
+		return NameAllocation{}, false, errors.New("state: name lookup has no project folder")
+	}
+	registry, err := loadNames(filepath.Join(s.root, "names.json"))
+	if err != nil {
+		return NameAllocation{}, false, err
+	}
+	claim, ok := registry.Claims[key(target.ProjectDir, target.Environment)]
+	if !ok || claim.ProjectName == "" {
+		return NameAllocation{}, false, nil
+	}
+	return NameAllocation{Name: claim.ProjectName, Source: claim.Source}, true, nil
+}
+
 func loadNames(path string) (nameRegistry, error) {
 	registry := nameRegistry{Version: nameRegistryVersion, Claims: map[string]nameClaim{}}
 	data, err := os.ReadFile(path)
