@@ -44,10 +44,12 @@ type inputFeature struct {
 	inputErr    error
 	withInputs  func(req core.Request, values map[string]string) (core.Request, error)
 	inputsCalls int
+	gotTarget   core.Target
 }
 
 func (f *inputFeature) Inputs(ctx context.Context, in core.Invocation) ([]core.InputField, error) {
 	f.inputsCalls++
+	f.gotTarget = in.Target
 	return f.fields, f.inputErr
 }
 
@@ -94,6 +96,43 @@ func TestEngineInputsResolvesWithoutRunningOrWritingHistory(t *testing.T) {
 	}
 	if len(h.state.records) != 0 {
 		t.Fatalf("Inputs wrote history: %+v", h.state.records)
+	}
+}
+
+type fakeIdentity struct {
+	name string
+	err  error
+	got  core.Target
+}
+
+func (f *fakeIdentity) ReadProjectName(ctx context.Context, target core.Target) (string, error) {
+	f.got = target
+	return f.name, f.err
+}
+
+func TestEngineInputsUsesTheReadOnlyProjectIdentity(t *testing.T) {
+	feature := &inputFeature{testFeature: &testFeature{desc: core.Descriptor{
+		Name:     "attach",
+		Title:    "접속",
+		Summary:  "서비스에 접속합니다.",
+		Usage:    "dcraft attach",
+		ReadOnly: true,
+	}}}
+	h := newHarness(t, feature)
+	identity := &fakeIdentity{name: "hello-world-1"}
+	h.engine.Identity = identity
+	report := h.engine.Inputs(context.Background(), core.Request{Feature: "attach"}, nil)
+	if report.Failed() {
+		t.Fatalf("report failed: %+v", report.Diagnostics)
+	}
+	if identity.got.ProjectDir != "/project" {
+		t.Fatalf("identity target = %+v", identity.got)
+	}
+	if report.Target.ProjectName != "hello-world-1" {
+		t.Fatalf("report project = %q", report.Target.ProjectName)
+	}
+	if feature.gotTarget.ProjectName != "hello-world-1" {
+		t.Fatalf("feature target project = %q", feature.gotTarget.ProjectName)
 	}
 }
 

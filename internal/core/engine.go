@@ -597,6 +597,30 @@ func (e *Engine) Inputs(ctx context.Context, req Request, sink Sink) (report Inp
 	}
 	report.Diagnostics = append(report.Diagnostics, pf.Diagnostics...)
 
+	// The form must see the same stack as Run. Read-only features resolve the
+	// recorded/declared project identity here exactly as Run does, before the
+	// feature lists services and instances.
+	if desc.ReadOnly && e.Identity != nil && strings.TrimSpace(target.ProjectName) == "" {
+		name, identErr := e.Identity.ReadProjectName(ctx, target)
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			report.Outcome = OutcomeCanceled
+			addCanceledDiagnosticTo(&report.Diagnostics)
+			return report
+		}
+		if identErr != nil {
+			report.Diagnostics = append(report.Diagnostics, Diagnostic{
+				Category:    CategoryIdentityUnreadable,
+				Severity:    SeverityWarning,
+				Message:     msgIdentityUnreadable,
+				Detail:      errDetail(identErr),
+				NextActions: []string{msgIdentityUnreadableActionOne, msgIdentityUnreadableActionTwo},
+			})
+		} else if name != "" {
+			target.ProjectName = name
+			report.Target.ProjectName = name
+		}
+	}
+
 	inv := Invocation{
 		Target:      target,
 		Services:    append([]string{}, req.Services...),
