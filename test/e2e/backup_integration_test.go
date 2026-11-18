@@ -366,10 +366,10 @@ func TestIntegrationVolumeBackupInterruptionAndConcurrentUp(t *testing.T) {
 		"DCRAFT_STATE_DIR":    stateDir,
 		"DCRAFT_BACKUP_IMAGE": slowImage,
 	})
-	outDir := filepath.Join(t.TempDir(), "backups")
 
-	// Interrupt mid-copy: wait for the partial artifact, then SIGINT.
-	cmd := exec.Command(binaryPath, "backup", "--path", dir, "--json", "--volume", "data", "--output", outDir)
+	// Interrupt mid-copy: wait for the fresh partial artifact, then SIGINT.
+	interruptOut := filepath.Join(t.TempDir(), "interrupt")
+	cmd := exec.Command(binaryPath, "backup", "--path", dir, "--json", "--volume", "data", "--output", interruptOut)
 	cmd.Dir = dir
 	cmd.Env = dcraftEnv
 	var stdout, stderr bytes.Buffer
@@ -380,12 +380,12 @@ func TestIntegrationVolumeBackupInterruptionAndConcurrentUp(t *testing.T) {
 	}
 	waitForPartial := time.Now().Add(30 * time.Second)
 	for {
-		if hasPartial(t, outDir) || time.Now().After(waitForPartial) {
+		if hasPartial(t, interruptOut) || time.Now().After(waitForPartial) {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	if !hasPartial(t, outDir) {
+	if !hasPartial(t, interruptOut) {
 		_ = cmd.Process.Kill()
 		t.Fatalf("backup never created a partial artifact; stdout=%s stderr=%s", stdout.String(), stderr.String())
 	}
@@ -400,16 +400,37 @@ func TestIntegrationVolumeBackupInterruptionAndConcurrentUp(t *testing.T) {
 	if ok := errorAs(err, &exitErr); !ok || exitErr.ExitCode() != 130 {
 		t.Fatalf("interrupted backup exit = %v, want 130; stdout=%s stderr=%s", err, stdout.String(), stderr.String())
 	}
-	if artifacts, _ := backup.List(outDir); len(artifacts) != 0 {
+	if artifacts, _ := backup.List(interruptOut); len(artifacts) != 0 {
 		t.Fatalf("interrupted backup was listed as valid: %+v", artifacts)
 	}
 	if got := serviceState(t, app); got != "running" {
 		t.Fatalf("app was not restored after interruption: %s", got)
 	}
+	assertNoBackupHelpers(t)
 
-	// Concurrent up while the slow helper holds the lock: the second
-	// operation must fail with stack_busy and must not disturb the backup.
-	cmd = exec.Command(binaryPath, "backup", "--path", dir, "--json", "--volume", "data", "--output", outDir)
+	// The immediately following backup of the same volume must succeed: a
+	// helper left behind would be seen as an outside consumer and refuse.
+	afterOut := filepath.Join(t.TempDir(), "after")
+	res := runProcess(t, dir, buildEnv(map[string]string{"DCRAFT_STATE_DIR": stateDir}), strings.NewReader(""),
+		"backup", "--path", dir, "--json", "--volume", "data", "--output", afterOut)
+	if res.code != 0 {
+		t.Fatalf("backup after cancellation exit=%d stdout=%s stderr=%s", res.code, res.stdout, res.stderr)
+	}
+	afterArtifacts, err := backup.List(afterOut)
+	if err != nil || len(afterArtifacts) != 1 {
+		t.Fatalf("backup after cancellation artifacts = %v, err=%v", afterArtifacts, err)
+	}
+	if _, err := backup.Verify(afterArtifacts[0].Path); err != nil {
+		t.Fatalf("backup after cancellation did not verify: %v", err)
+	}
+	assertNoBackupHelpers(t)
+
+	// Concurrent up while the slow helper holds the lock. Wait until a
+	// service is actually stopped: that proves the backup acquired the lock
+	// and passed discovery, so stack_busy is deterministic. A stale .partial
+	// from the interrupted run must not be used as the synchronization point.
+	concurrentOut := filepath.Join(t.TempDir(), "concurrent")
+	cmd = exec.Command(binaryPath, "backup", "--path", dir, "--json", "--volume", "data", "--output", concurrentOut)
 	cmd.Dir = dir
 	cmd.Env = dcraftEnv
 	stdout.Reset()
@@ -419,10 +440,18 @@ func TestIntegrationVolumeBackupInterruptionAndConcurrentUp(t *testing.T) {
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
-	waitForPartial = time.Now().Add(30 * time.Second)
-	for {
-		if hasPartial(t, outDir) || time.Now().After(waitForPartial) {
-			break
+	slowDone := make(chan error, 1)
+	go func() { slowDone <- cmd.Wait() }()
+	stopDeadline := time.Now().Add(30 * time.Second)
+	for serviceState(t, app) != "exited" {
+		select {
+		case err := <-slowDone:
+			t.Fatalf("slow backup ended before stopping the service: %v stdout=%s stderr=%s", err, stdout.String(), stderr.String())
+		default:
+		}
+		if time.Now().After(stopDeadline) {
+			_ = cmd.Process.Kill()
+			t.Fatalf("slow backup did not stop the service; stdout=%s stderr=%s", stdout.String(), stderr.String())
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
@@ -436,22 +465,23 @@ func TestIntegrationVolumeBackupInterruptionAndConcurrentUp(t *testing.T) {
 		_ = cmd.Process.Kill()
 		t.Fatalf("concurrent up diagnostics = %+v", upParsed.Diagnostics)
 	}
-	if err := cmd.Wait(); err != nil {
+	if err := <-slowDone; err != nil {
 		t.Fatalf("slow backup failed: %v stdout=%s stderr=%s", err, stdout.String(), stderr.String())
 	}
-	if artifacts, _ := backup.List(outDir); len(artifacts) == 0 {
-		t.Fatal("slow backup did not publish after the concurrent up was refused")
+	if artifacts, _ := backup.List(concurrentOut); len(artifacts) != 1 {
+		t.Fatalf("slow backup did not publish after the concurrent up was refused: %v", artifacts)
 	}
+	assertNoBackupHelpers(t)
 
-	// Helper failure after stop: no valid artifact, services restored, and the
-	// failure names the partial output.
+	// Helper failure after stop: no valid artifact, services restored, and no
+	// helper container left behind.
 	failEnv := buildEnv(map[string]string{
 		"DCRAFT_STATE_DIR":    stateDir,
 		"DCRAFT_BACKUP_IMAGE": failImage,
 	})
-	before, _ := os.ReadDir(outDir)
-	res := runProcess(t, dir, failEnv, strings.NewReader(""), "backup", "--path", dir, "--json",
-		"--volume", "data", "--output", outDir)
+	failOut := filepath.Join(t.TempDir(), "fail")
+	res = runProcess(t, dir, failEnv, strings.NewReader(""), "backup", "--path", dir, "--json",
+		"--volume", "data", "--output", failOut)
 	if res.code != 1 {
 		t.Fatalf("failing helper exit = %d; stdout=%s", res.code, res.stdout)
 	}
@@ -462,12 +492,41 @@ func TestIntegrationVolumeBackupInterruptionAndConcurrentUp(t *testing.T) {
 	if !strings.Contains(res.stdout, "Permission denied") {
 		t.Fatalf("helper failure output missing: %s", res.stdout)
 	}
-	after, _ := os.ReadDir(outDir)
-	if len(after) != len(before) {
-		t.Fatalf("failed helper published an artifact: before=%d after=%d", len(before), len(after))
+	if artifacts, _ := backup.List(failOut); len(artifacts) != 0 {
+		t.Fatalf("failed helper published an artifact: %v", artifacts)
 	}
+	assertNoBackupHelpers(t)
 	if got := serviceState(t, app); got != "running" {
 		t.Fatalf("app not restored after helper failure: %s", got)
+	}
+}
+
+func backupHelperNames(t *testing.T) []string {
+	t.Helper()
+	out, err := exec.Command("docker", "ps", "-a", "--filter", "label=dcraft.backup=1", "--format", "{{.Names}}").Output()
+	if err != nil {
+		t.Fatalf("list backup helpers: %v", err)
+	}
+	var names []string
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			names = append(names, line)
+		}
+	}
+	return names
+}
+
+func assertNoBackupHelpers(t *testing.T) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if names := backupHelperNames(t); len(names) == 0 {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("backup helper containers survived the operation: %v", backupHelperNames(t))
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 

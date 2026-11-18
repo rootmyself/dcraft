@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/rootmyself/dcraft/internal/core"
 	"github.com/rootmyself/dcraft/internal/execx"
@@ -21,6 +22,12 @@ type Compose struct {
 	runner  execx.Runner
 	getenv  func(string) string
 	secrets SecretPreparer
+
+	// Helper cleanup bounds. Zero means the production defaults; tests set
+	// these to exercise retry and failure paths quickly.
+	cleanupTimeout time.Duration
+	cleanupPoll    time.Duration
+	cleanupGrace   time.Duration
 }
 
 // SecretPreparer is the runtime secret boundary published by ticket #9. The

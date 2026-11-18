@@ -42,7 +42,7 @@ func TestBackupTUIWizardSelectsVolumeAndShowsTheEffectBeforeRunning(t *testing.T
 		t.Fatalf("TUI backup did not verify: %v", err)
 	}
 	log := strings.Join(fake.calls(t), "\n")
-	for _, want := range []string{" stop app", " start app", "run --rm --name dcraft-backup-"} {
+	for _, want := range []string{" stop app", "create --name dcraft-backup-", "start -a dcraft-backup-", "rm -f dcraft-backup-", " start app"} {
 		if !strings.Contains(log, want) {
 			t.Fatalf("TUI did not use the shared backup path (%q missing):\n%s", want, log)
 		}

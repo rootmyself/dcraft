@@ -115,20 +115,35 @@ case "$*" in
       cat "$DOCKER_FAKE_CONSUMERS"
     fi
     exit 0 ;;
-  "run "*)
+  "create "*)
+    name=""
     hostdir=""
     prev=""
     for a in "$@"; do
+      if [ "$prev" = "--name" ]; then name="$a"; fi
       case "$a" in
         *:/backup) hostdir="${a%:/backup}" ;;
       esac
       prev="$a"
     done
-    if [ -z "$hostdir" ]; then
-      echo "fake docker run: no /backup mount" >&2
+    if [ -z "$name" ] || [ -z "$hostdir" ]; then
+      echo "fake docker create: missing name or /backup mount" >&2
       exit 9
     fi
-    if [ -n "$DOCKER_FAKE_SLEEP_RUN" ]; then exec sleep "$DOCKER_FAKE_SLEEP_RUN"; fi
+    state="${DOCKER_FAKE_STATE:-$(dirname "$LOG")/state}"
+    mkdir -p "$state"
+    printf '%s' "$hostdir" > "$state/$name.backupdir"
+    echo "fake-cid-$name"
+    exit 0 ;;
+  "start -a "*)
+    name=""
+    for a in "$@"; do name="$a"; done
+    state="${DOCKER_FAKE_STATE:-$(dirname "$LOG")/state}"
+    if [ ! -f "$state/$name.backupdir" ]; then
+      echo "fake docker start: unknown container $name" >&2
+      exit 9
+    fi
+    hostdir=$(cat "$state/$name.backupdir")
     if [ -n "$DOCKER_FAKE_ARCHIVE_FAIL" ]; then
       printf 'partial' > "$hostdir/data.tar.gz"
       echo "tar: can't open './secret': $DOCKER_FAKE_ARCHIVE_FAIL" >&2
@@ -143,6 +158,22 @@ case "$*" in
     ( cd "$tmp" && tar -czf "$hostdir/data.tar.gz" . )
     rm -rf "$tmp"
     exit 0 ;;
+  "rm -f "*)
+    name=""
+    for a in "$@"; do name="$a"; done
+    state="${DOCKER_FAKE_STATE:-$(dirname "$LOG")/state}"
+    rm -f "$state/$name.backupdir"
+    exit 0 ;;
+  "inspect --format "*)
+    name=""
+    for a in "$@"; do name="$a"; done
+    state="${DOCKER_FAKE_STATE:-$(dirname "$LOG")/state}"
+    if [ -f "$state/$name.backupdir" ]; then
+      echo "fake-cid-$name"
+      exit 0
+    fi
+    echo "No such object: $name" >&2
+    exit 1 ;;
 esac
 sub=""
 for a in "$@"; do

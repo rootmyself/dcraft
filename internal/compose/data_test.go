@@ -3,8 +3,11 @@ package compose
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/rootmyself/dcraft/internal/core"
 	"github.com/rootmyself/dcraft/internal/data"
@@ -171,35 +174,164 @@ func TestStopAndStartUseComposeWithOnlyTheNamedServices(t *testing.T) {
 	}
 }
 
-func TestArchiveVolumeUsesARootHelperOnAReadOnlySource(t *testing.T) {
-	runner := &execxtest.Runner{Handler: func(cmd execx.Command) (execx.Result, error) {
-		return execx.Result{}, nil
-	}}
-	c := New(runner, nil)
+type helperLifecycle struct {
+	mu    sync.Mutex
+	calls []string
+	// inspectResults is consumed by successive docker inspect calls.
+	inspectResults []execx.Result
+	rmResults      []execx.Result
+	startErr       error
+	startResult    execx.Result
+	createResult   execx.Result
+	createErr      error
+	cancelOnStart  context.CancelFunc
+	alwaysExists   bool
+}
+
+func (h *helperLifecycle) handler(cmd execx.Command) (execx.Result, error) {
+	line := cmd.Name + " " + strings.Join(cmd.Args, " ")
+	h.mu.Lock()
+	h.calls = append(h.calls, line)
+	h.mu.Unlock()
+	switch {
+	case strings.HasPrefix(line, "docker create "):
+		return h.createResult, h.createErr
+	case strings.HasPrefix(line, "docker start -a "):
+		if h.cancelOnStart != nil {
+			h.cancelOnStart()
+		}
+		return h.startResult, h.startErr
+	case strings.HasPrefix(line, "docker rm -f "):
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		if len(h.rmResults) == 0 {
+			return execx.Result{}, nil
+		}
+		res := h.rmResults[0]
+		h.rmResults = h.rmResults[1:]
+		return res, nil
+	case strings.HasPrefix(line, "docker inspect "):
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		if h.alwaysExists {
+			return execx.Result{Stdout: []byte("cid")}, nil
+		}
+		if len(h.inspectResults) == 0 {
+			return execx.Result{Stderr: []byte("No such object"), ExitCode: 1}, nil
+		}
+		res := h.inspectResults[0]
+		h.inspectResults = h.inspectResults[1:]
+		return res, nil
+	default:
+		return execx.Result{Stderr: []byte("unexpected: " + line), ExitCode: 1}, nil
+	}
+}
+
+func (h *helperLifecycle) lines() []string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return append([]string{}, h.calls...)
+}
+
+func newHelperCompose(t *testing.T, h *helperLifecycle) *Compose {
+	t.Helper()
+	c := New(&execxtest.Runner{Handler: h.handler}, nil)
+	c.cleanupTimeout = 2 * time.Second
+	c.cleanupPoll = 5 * time.Millisecond
+	c.cleanupGrace = 20 * time.Millisecond
+	return c
+}
+
+func TestArchiveVolumeCreatesStartsAndRemovesTheHelper(t *testing.T) {
+	h := &helperLifecycle{}
+	c := newHelperCompose(t, h)
 	if _, err := c.ArchiveVolume(context.Background(), "proj_data", "/backups/work"); err != nil {
 		t.Fatalf("ArchiveVolume: %v", err)
 	}
-	line := runner.CallLines()[0]
+	lines := h.lines()
+	if len(lines) < 3 {
+		t.Fatalf("calls = %v", lines)
+	}
+	create := lines[0]
 	for _, want := range []string{
-		"docker run --rm --name dcraft-backup-",
+		"docker create --name dcraft-backup-",
+		"--label dcraft.backup=1",
 		"-v proj_data:/data:ro",
 		"-v /backups/work:/backup",
 		"--entrypoint tar alpine:3.20 -C /data -czf /backup/data.tar.gz .",
 	} {
-		if !strings.Contains(line, want) {
-			t.Fatalf("archive call missing %q: %s", want, line)
+		if !strings.Contains(create, want) {
+			t.Fatalf("create call missing %q: %s", want, create)
 		}
 	}
-	if strings.Contains(line, "/data:rw") {
-		t.Fatalf("source volume is not read-only: %s", line)
+	if strings.Contains(create, "/data:rw") {
+		t.Fatalf("source volume is not read-only: %s", create)
+	}
+	if !strings.HasPrefix(lines[1], "docker start -a dcraft-backup-") {
+		t.Fatalf("start call = %q", lines[1])
+	}
+	if !strings.HasPrefix(lines[2], "docker rm -f dcraft-backup-") {
+		t.Fatalf("cleanup call = %q", lines[2])
+	}
+	if !strings.HasPrefix(lines[3], "docker inspect --format ") {
+		t.Fatalf("cleanup confirmation = %q", lines[3])
+	}
+}
+
+func TestArchiveVolumeRemovesTheHelperOnCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	h := &helperLifecycle{cancelOnStart: cancel, startErr: context.Canceled}
+	c := newHelperCompose(t, h)
+	_, err := c.ArchiveVolume(ctx, "proj_data", "/backups/work")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %v", err)
+	}
+	lines := h.lines()
+	var removed bool
+	for _, line := range lines {
+		if strings.HasPrefix(line, "docker rm -f dcraft-backup-") {
+			removed = true
+		}
+	}
+	if !removed {
+		t.Fatalf("helper was not removed on cancellation: %v", lines)
+	}
+}
+
+func TestArchiveVolumeRetriesCleanupUntilTheContainerIsGone(t *testing.T) {
+	h := &helperLifecycle{
+		// The first inspect still finds the container; rm then succeeds and
+		// the next inspect reports it gone.
+		inspectResults: []execx.Result{{Stdout: []byte("cid")}, {Stderr: []byte("No such object"), ExitCode: 1}},
+	}
+	c := newHelperCompose(t, h)
+	if _, err := c.ArchiveVolume(context.Background(), "proj_data", "/backups/work"); err != nil {
+		t.Fatalf("ArchiveVolume: %v", err)
+	}
+	var removes int
+	for _, line := range h.lines() {
+		if strings.HasPrefix(line, "docker rm -f dcraft-backup-") {
+			removes++
+		}
+	}
+	if removes < 2 {
+		t.Fatalf("cleanup did not retry: %v", h.lines())
+	}
+}
+
+func TestArchiveVolumeReportsACleanupFailure(t *testing.T) {
+	h := &helperLifecycle{alwaysExists: true}
+	c := newHelperCompose(t, h)
+	c.cleanupTimeout = 50 * time.Millisecond
+	_, err := c.ArchiveVolume(context.Background(), "proj_data", "/backups/work")
+	if err == nil || !strings.Contains(err.Error(), "remove backup helper") {
+		t.Fatalf("error = %v", err)
 	}
 }
 
 func TestArchiveVolumeReportsTheHelperFailureOutput(t *testing.T) {
-	runner := &execxtest.Runner{Handler: func(cmd execx.Command) (execx.Result, error) {
-		return execx.Result{Stderr: []byte("tar: can't open './secret': Permission denied"), ExitCode: 1}, nil
-	}}
-	c := New(runner, nil)
+	h := &helperLifecycle{startResult: execx.Result{Stderr: []byte("tar: can't open './secret': Permission denied"), ExitCode: 1}}
+	c := newHelperCompose(t, h)
 	out, err := c.ArchiveVolume(context.Background(), "proj_data", "/backups/work")
 	if err == nil {
 		t.Fatal("archive failure was swallowed")
@@ -209,24 +341,22 @@ func TestArchiveVolumeReportsTheHelperFailureOutput(t *testing.T) {
 	}
 }
 
-func TestArchiveVolumeKillsTheHelperWhenInterrupted(t *testing.T) {
+func TestArchiveVolumeRemovesTheHelperWhenTheContextIsAlreadyCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	runner := &execxtest.Runner{Handler: func(cmd execx.Command) (execx.Result, error) {
-		return execx.Result{}, ctx.Err()
-	}}
-	c := New(runner, nil)
+	h := &helperLifecycle{createErr: context.Canceled}
+	c := newHelperCompose(t, h)
 	if _, err := c.ArchiveVolume(ctx, "proj_data", "/backups/work"); err == nil {
 		t.Fatal("canceled archive did not fail")
 	}
-	var killed bool
-	for _, line := range runner.CallLines() {
-		if strings.HasPrefix(line, "docker kill dcraft-backup-") {
-			killed = true
+	var removed bool
+	for _, line := range h.lines() {
+		if strings.HasPrefix(line, "docker rm -f dcraft-backup-") {
+			removed = true
 		}
 	}
-	if !killed {
-		t.Fatalf("helper was not killed after interruption: %v", runner.CallLines())
+	if !removed {
+		t.Fatalf("helper was not removed after cancellation: %v", h.lines())
 	}
 }
 
@@ -241,4 +371,46 @@ func TestExternalVolumeFlagAcceptsBooleanAndObjectForms(t *testing.T) {
 			t.Fatalf("external %s was not detected", raw)
 		}
 	}
+}
+
+func TestArchiveVolumeRemovesAContainerCreatedAfterACanceledCreate(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	h := &helperLifecycle{
+		createErr: context.Canceled,
+		// First inspection sees nothing; the daemon completes the create
+		// late, so the next inspection finds it. Cleanup must still remove it.
+		inspectResults: []execx.Result{
+			{Stderr: []byte("No such object"), ExitCode: 1},
+			{Stdout: []byte("late-cid")},
+			{Stderr: []byte("No such object"), ExitCode: 1},
+		},
+	}
+	c := newHelperCompose(t, h)
+	c.cleanupGrace = 500 * time.Millisecond
+	if _, err := c.ArchiveVolume(ctx, "proj_data", "/backups/work"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %v", err)
+	}
+	if names := backupHelperNamesFromCalls(h.lines()); len(names) == 0 {
+		t.Fatalf("late-created helper was not removed: %v", h.lines())
+	}
+	var removes int
+	for _, line := range h.lines() {
+		if strings.HasPrefix(line, "docker rm -f dcraft-backup-") {
+			removes++
+		}
+	}
+	if removes < 2 {
+		t.Fatalf("cleanup did not wait for a late create: %v", h.lines())
+	}
+}
+
+func backupHelperNamesFromCalls(lines []string) []string {
+	var names []string
+	for _, line := range lines {
+		if strings.HasPrefix(line, "docker rm -f ") {
+			names = append(names, strings.TrimPrefix(line, "docker rm -f "))
+		}
+	}
+	return names
 }

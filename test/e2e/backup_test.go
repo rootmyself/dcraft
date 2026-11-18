@@ -80,7 +80,7 @@ func TestBackupWithoutExplicitInputFailsBeforeStoppingAnything(t *testing.T) {
 		t.Fatalf("Korean guidance missing: %+v", parsed.Diagnostics[0])
 	}
 	calls := strings.Join(fake.calls(t), "\n")
-	if strings.Contains(calls, " stop ") || strings.Contains(calls, "run --rm") {
+	if strings.Contains(calls, " stop ") || strings.Contains(calls, "create --name dcraft-backup-") {
 		t.Fatalf("missing output still stopped/copied:\n%s", calls)
 	}
 }
@@ -167,7 +167,7 @@ func TestBackupCLIStopsOnlyRunningConsumersPublishesAndRestarts(t *testing.T) {
 		if strings.Contains(line, " stop app") {
 			stopAt = i
 		}
-		if strings.Contains(line, "run --rm --name dcraft-backup-") {
+		if strings.Contains(line, "create --name dcraft-backup-") || strings.Contains(line, "start -a dcraft-backup-") {
 			archiveAt = i
 		}
 		if strings.Contains(line, " start app") {
@@ -182,6 +182,9 @@ func TestBackupCLIStopsOnlyRunningConsumersPublishesAndRestarts(t *testing.T) {
 	}
 	if !strings.Contains(log, "-v backup-test_data:/data:ro") {
 		t.Fatalf("archive did not mount the volume read-only:\n%s", log)
+	}
+	if !strings.Contains(log, "start -a dcraft-backup-") || !strings.Contains(log, "rm -f dcraft-backup-") {
+		t.Fatalf("helper lifecycle was not explicit:\n%s", log)
 	}
 	if strings.Contains(log, " down ") || strings.Contains(log, " -v backup-test_data -v") {
 		t.Fatalf("backup removed resources:\n%s", log)
@@ -206,7 +209,7 @@ func TestBackupRefusesAnotherStacksConsumerWithoutStoppingIt(t *testing.T) {
 		t.Fatalf("diagnostics = %+v", parsed.Diagnostics)
 	}
 	calls := strings.Join(fake.calls(t), "\n")
-	if strings.Contains(calls, " stop ") || strings.Contains(calls, "start ") || strings.Contains(calls, "run --rm") {
+	if strings.Contains(calls, " stop ") || strings.Contains(calls, " create ") || strings.Contains(calls, "start -a") {
 		t.Fatalf("another stack's consumer caused a change:\n%s", calls)
 	}
 	if entries, _ := os.ReadDir(outDir); len(entries) != 0 {
@@ -243,7 +246,7 @@ func TestBackupFailsClearlyWhenTheStackIsBusy(t *testing.T) {
 	if !hasBackupCategory(parsed.Diagnostics, core.CategoryStackBusy) {
 		t.Fatalf("diagnostics = %+v", parsed.Diagnostics)
 	}
-	if calls := strings.Join(fake.calls(t), "\n"); strings.Contains(calls, " stop ") || strings.Contains(calls, "run --rm") {
+	if calls := strings.Join(fake.calls(t), "\n"); strings.Contains(calls, " stop ") || strings.Contains(calls, "create --name dcraft-backup-") {
 		t.Fatalf("busy stack was changed:\n%s", calls)
 	}
 }

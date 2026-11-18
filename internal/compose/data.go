@@ -345,35 +345,124 @@ func (c *Compose) HelperImage() string {
 // read-only and writes the archive into a host directory. It runs as root so
 // uid/gid and modes are stored faithfully. A live writer is not frozen by the
 // read-only mount; the caller must stop consumers first.
+//
+// The helper lifetime is explicit: a unique name is chosen before anything
+// starts, `docker create` makes the container, `docker start -a` runs it, and
+// every exit path (success, error, cancellation, deadline) removes it by name
+// with a bounded retry loop. The container is never left to the fate of the
+// killed CLI child; the caller holds the stack lock until this method returns.
 func (c *Compose) ArchiveVolume(ctx context.Context, volumeName, hostDir string) (data.OpResult, error) {
 	name := "dcraft-backup-" + randomSuffix()
-	args := []string{
-		"run", "--rm", "--name", name,
+	createArgs := []string{
+		"create", "--name", name,
+		"--label", "dcraft.backup=1",
+		"--label", "dcraft.backup.volume=" + volumeName,
 		"-v", volumeName + ":/data:ro",
 		"-v", hostDir + ":/backup",
 		"--entrypoint", "tar",
 		c.HelperImage(),
 		"-C", "/data", "-czf", "/backup/" + data.ArchiveDataFile, ".",
 	}
-	res, err := c.run(ctx, execx.Command{Name: "docker", Args: args})
+	createRes, createErr := c.run(ctx, execx.Command{Name: "docker", Args: createArgs})
+	output := strings.TrimSpace(createRes.Combined())
 	if ctxErr := ctx.Err(); ctxErr != nil {
-		c.killHelper(name)
-		return data.OpResult{Output: summarize(res.Combined())}, ctxErr
+		return data.OpResult{Output: output}, c.finishHelper(name, ctxErr, output, true)
 	}
-	out := data.OpResult{Output: summarize(res.Combined())}
-	if err != nil {
-		return out, err
+	if createErr != nil {
+		return data.OpResult{Output: output}, c.finishHelper(name, createErr, output, true)
 	}
-	if !res.Succeeded() {
-		return out, fmt.Errorf("volume archive helper exited with status %d", res.ExitCode)
+	if !createRes.Succeeded() {
+		return data.OpResult{Output: output}, c.finishHelper(name,
+			fmt.Errorf("volume archive helper could not be created: status %d", createRes.ExitCode), output, true)
 	}
-	return out, nil
+
+	startRes, startErr := c.run(ctx, execx.Command{Name: "docker", Args: []string{"start", "-a", name}})
+	startOutput := strings.TrimSpace(startRes.Combined())
+	if output != "" && startOutput != "" {
+		output += "\n"
+	}
+	output += startOutput
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return data.OpResult{Output: output}, c.finishHelper(name, ctxErr, output, false)
+	}
+	if startErr != nil {
+		return data.OpResult{Output: output}, c.finishHelper(name, startErr, output, false)
+	}
+	if !startRes.Succeeded() {
+		return data.OpResult{Output: output}, c.finishHelper(name,
+			fmt.Errorf("volume archive helper exited with status %d", startRes.ExitCode), output, false)
+	}
+	return data.OpResult{Output: output}, c.finishHelper(name, nil, output, false)
 }
 
-func (c *Compose) killHelper(name string) {
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(context.Background()), 15*time.Second)
-	defer cancel()
-	_, _ = c.run(ctx, execx.Command{Name: "docker", Args: []string{"kill", name}})
+// finishHelper removes the helper by name and confirms it is gone. It never
+// uses the operation context, so cancellation cannot skip cleanup. The lock
+// holder calls this before returning, so no later operation can see the
+// helper as a volume consumer.
+func (c *Compose) finishHelper(name string, cause error, output string, lateCreation bool) error {
+	cleanupErr := c.removeHelper(name, lateCreation)
+	if cleanupErr != nil {
+		if cause != nil {
+			return fmt.Errorf("%w; %v", cause, cleanupErr)
+		}
+		return cleanupErr
+	}
+	return cause
+}
+
+func (c *Compose) removeHelper(name string, lateCreation bool) error {
+	timeout := c.cleanupTimeout
+	if timeout <= 0 {
+		timeout = 20 * time.Second
+	}
+	poll := c.cleanupPoll
+	if poll <= 0 {
+		poll = 100 * time.Millisecond
+	}
+	grace := c.cleanupGrace
+	if grace <= 0 {
+		grace = 3 * time.Second
+	}
+	now := time.Now()
+	deadline := now.Add(timeout)
+	graceUntil := now
+	if lateCreation {
+		// A create request whose client was killed can complete in the daemon
+		// after our first inspection. Keep removing and watching for a short
+		// grace window instead of trusting the first "not found".
+		graceUntil = now.Add(grace)
+	}
+	found := false
+	var lastErr error
+	for {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		_, rmErr := c.run(cleanupCtx, execx.Command{Name: "docker", Args: []string{"rm", "-f", name}})
+		inspectRes, inspectErr := c.run(cleanupCtx, execx.Command{
+			Name: "docker", Args: []string{"inspect", "--format", "{{.Id}}", name},
+		})
+		cancel()
+		switch {
+		case inspectErr == nil && !inspectRes.Succeeded():
+			// The daemon answered and the container no longer exists. After an
+			// interrupted create, wait out the grace window in case the daemon
+			// creates it late.
+			if !lateCreation || found || time.Now().After(graceUntil) {
+				return nil
+			}
+			lastErr = fmt.Errorf("helper container %s not created yet; watching for a late create", name)
+		case inspectErr == nil:
+			found = true
+			lastErr = fmt.Errorf("helper container %s still exists", name)
+		case rmErr == nil:
+			lastErr = inspectErr
+		default:
+			lastErr = fmt.Errorf("rm helper: %v; inspect helper: %v", rmErr, inspectErr)
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("remove backup helper %s: %w", name, lastErr)
+		}
+		time.Sleep(poll)
+	}
 }
 
 func randomSuffix() string {
