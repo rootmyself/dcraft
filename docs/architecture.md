@@ -9,13 +9,13 @@ Scope of this version: one working binary, thirteen registered features
 (`status`, `install-compose`, `up`, `stop`, `down`, `restart`, `update`,
 `secrets`, `hooks`, `logs`, `exec`, `backup`, `rollback`), the common operation
 seam, target resolution, named environments, automatic project-name allocation,
-same-stack coordination, runtime secret references, explicit host scripts with
-independent script trust, service/instance selection, live terminal attach,
-versioned volume backup, diagnostics, CLI/TUI assembly, state layout,
-machine-readable results, the approval/plan preview flow, explicit update with
-bounded readiness, the previous-good record, previous-good rollback, and tests.
-Generation, build-time/AWS secrets, bind-folder backup and restore are later
-tickets.
+same-stack coordination, runtime and build-time secret references, explicit
+host scripts with independent script trust, service/instance selection, live
+terminal attach, versioned volume backup, diagnostics, CLI/TUI assembly, state
+layout, machine-readable results, the approval/plan preview flow, explicit
+update with bounded readiness, the previous-good record, previous-good
+rollback, and tests. Generation, AWS Secrets Manager sources, bind-folder
+backup and restore are later tickets.
 
 ---
 
@@ -1523,7 +1523,7 @@ Desktop's VM-backed unix socket is **local**, not remote.
 | `identity_unreadable` | stored/declared project identity could not be read; Compose default used | warning |
 | `secret_invalid` | `.dcraft.yaml` secrets syntax, fields, duplicates or unsupported values are invalid | error |
 | `secret_input_invalid` | explicit secret reference input is missing or invalid | error (exit 2) |
-| `secret_unsupported` | build-phase or AWS-source reference is not implemented | error (exit 2) |
+| `secret_unsupported` | an AWS-source reference (or another unsupported secret shape) is not implemented | error (exit 2) |
 | `secret_source_unavailable` | referenced environment/file source is missing, unreadable or empty | error |
 | `secret_apply_failed` | delivery preparation/materialization/override failed; a partial rotation may remain | error |
 | `backup_output_required` | no explicit backup output directory was given | error (exit 2) |
@@ -2008,12 +2008,13 @@ Docker or external network. Unrun platforms/paths are not claimed as verified.
   and bind restore (#19) are not implemented.
 - TUI alias creation/editing: aliases are created by editing `.dcraft.yaml` in
   this version (selection is provided by both interfaces).
-- Build-time secrets (BuildKit mounts), AWS Secrets Manager sources, generated
-  Compose/Dockerfile files and generator flows, Kubernetes, remote engines,
-  resident daemon/web UI. Runtime environment/file references are implemented
-  by ticket #9 below; Compose installation by ticket #6; update readiness and
-  the previous-good record by ticket #7; host hooks and script trust by ticket
-  #12; named-volume backup by ticket #15.
+- AWS Secrets Manager sources, generated Compose/Dockerfile files and generator
+  flows, Kubernetes, remote engines, resident daemon/web UI. Runtime
+  environment/file references are implemented by ticket #9 below; Compose
+  installation by ticket #6; update readiness and the previous-good record by
+  ticket #7; host hooks and script trust by ticket #12; named-volume backup by
+  ticket #15; build-time delivery by ticket #10 and previous-good rollback by
+  ticket #11.
 - Good-version history beyond the single record (rollback has no multi-version
   picker). The TUI plan/confirm component is generic; `install-compose`,
   `update`, `backup` and `rollback` are planners in this build, and
@@ -2250,8 +2251,8 @@ code.
 ## 14. Runtime secret references and delivery (ticket #9)
 
 Runtime secrets are references, not a secret store. Only environment-variable
-and local-file sources and runtime delivery are implemented here; build-time
-delivery (#10) and AWS Secrets Manager (#11) extend the same contract.
+and local-file sources are implemented here; build-time delivery extends the
+same contract in 14.6, and AWS Secrets Manager sources remain later work.
 
 ### 14.1 Project config
 
@@ -2260,7 +2261,7 @@ delivery (#10) and AWS Secrets Manager (#11) extend the same contract.
 ```yaml
 secrets:
   - service: web               # Compose service
-    phase: runtime             # runtime (build is recognized, not implemented)
+    phase: runtime             # runtime (build has its own delivery; see 14.6)
     delivery: environment      # environment | file
     source: env                # env | file (aws is recognized, not implemented)
     ref: DB_PASSWORD           # env var name or project-relative/absolute file path
