@@ -224,6 +224,7 @@ func TestPTYTUILogsScreenReturnsToTheMenuAndKeepsServices(t *testing.T) {
 	s := startPTY(t, project, env)
 	s.waitFor("스택 상태 (status)", 15*time.Second)
 	s.pressMenuDown(menuDownPresses(t, "logs"))
+	s.waitFor("로그 보기 (logs)", 15*time.Second)
 	s.waitFor("followed line", 15*time.Second)
 	s.send("q")
 	s.waitFor("마지막 실시간 출력", 15*time.Second)

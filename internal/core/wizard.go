@@ -42,6 +42,11 @@ type WizardStep struct {
 	Options []WizardOption `json:"options,omitempty"`
 	// AllowCustom enables typed input in addition to Options.
 	AllowCustom bool `json:"allow_custom,omitempty"`
+	// Multi renders Options as a checkbox list. Space toggles the highlighted
+	// value; Enter confirms and joins the selected values with "\n". Enter with
+	// nothing checked selects the highlighted option, preserving the simple
+	// one-choice flow.
+	Multi bool `json:"multi,omitempty"`
 	// CustomHint describes the expected free-form value.
 	CustomHint string `json:"custom_hint,omitempty"`
 	// Default is preselected for a choice step or prefilled for an input step.

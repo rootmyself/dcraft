@@ -46,6 +46,9 @@ const (
 // bind sources through the same data.DataSource values.
 type DataSource = data.DataSource
 
+// Kind is the published source kind (volume or bind).
+type Kind = data.Kind
+
 // Kind constants re-exported for feature code and tests.
 const (
 	KindVolume = data.KindVolume

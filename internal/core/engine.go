@@ -148,6 +148,11 @@ func (e *Engine) Run(ctx context.Context, req Request, sink Sink) (res Result) {
 		return res
 	}
 
+	// A wizard "steps" run only collects answers for a later, explicitly
+	// approved "apply" run. It returns a WizardSpec and performs no stack
+	// change, so both the descriptor and conditional approvals belong to
+	// apply, not to the menu preview. The TUI routes an approval-gated apply
+	// through the generic plan + confirmation screen.
 	required, approvalErr := e.requiredApproval(ctx, req, desc, feature, target)
 	if approvalErr != nil {
 		e.applyFailure(ctx, &res, approvalErr, feature)
@@ -360,11 +365,12 @@ func (e *Engine) resolveTarget(ctx context.Context, rec *recorder, req Request, 
 // one. A wizard "steps" run is the read-only preview that collects those
 // answers, so it is exempt from the conditional check; the "apply" run is not.
 func (e *Engine) requiredApproval(ctx context.Context, req Request, desc Descriptor, feature Feature, target Target) (ApprovalKind, error) {
-	if required := desc.Approval; required != ApprovalNone && !HasApproval(req.Approvals, required) {
+	wizardSteps := desc.Wizard && req.Options["wizard"] == "steps"
+	if required := desc.Approval; required != ApprovalNone && !wizardSteps && !HasApproval(req.Approvals, required) {
 		return required, nil
 	}
 	conditional, ok := feature.(ConditionalApproval)
-	if !ok || req.Options["wizard"] == "steps" {
+	if !ok || wizardSteps {
 		return ApprovalNone, nil
 	}
 	kind, err := e.conditionalApproval(ctx, conditional, req, target)
@@ -494,7 +500,7 @@ func (e *Engine) Plan(ctx context.Context, req Request, sink Sink) (report PlanR
 	// A plan lists every independent approval the run will need, including a
 	// feature's conditionally required one. It never consumes an approval.
 	required := uniqueApprovals(desc.Approval)
-	if conditional, ok := feature.(ConditionalApproval); ok && req.Options["wizard"] != "steps" {
+	if conditional, ok := feature.(ConditionalApproval); ok && !(desc.Wizard && req.Options["wizard"] == "steps") {
 		kind, condErr := e.conditionalApproval(ctx, conditional, req, target)
 		if condErr != nil {
 			if isCanceled(ctx, condErr) {

@@ -110,6 +110,12 @@ case "$*" in
     exit 0 ;;
   *" config --format json") cat "$DOCKER_FAKE_CONFIG"; exit 0 ;;
   *" ps --all --format json") cat "$DOCKER_FAKE_PS"; exit 0 ;;
+  "volume inspect "*)
+    if [ -n "$DOCKER_FAKE_VOLUME_MISSING" ]; then
+      echo "Error: No such volume: $DOCKER_FAKE_VOLUME_MISSING" >&2
+      exit 1
+    fi
+    echo "fake-volume"; exit 0 ;;
   *"ps -a --filter volume="*)
     if [ -n "$DOCKER_FAKE_CONSUMERS" ] && [ -f "$DOCKER_FAKE_CONSUMERS" ]; then
       cat "$DOCKER_FAKE_CONSUMERS"
@@ -126,24 +132,42 @@ case "$*" in
       esac
       prev="$a"
     done
-    if [ -z "$name" ] || [ -z "$hostdir" ]; then
-      echo "fake docker create: missing name or /backup mount" >&2
+    if [ -z "$name" ]; then
+      echo "fake docker create: missing name" >&2
       exit 9
     fi
     state="${DOCKER_FAKE_STATE:-$(dirname "$LOG")/state}"
     mkdir -p "$state"
     printf '%s' "$hostdir" > "$state/$name.backupdir"
+    printf '%s' "$*" > "$state/$name.args"
     echo "fake-cid-$name"
     exit 0 ;;
   "start -a "*)
     name=""
     for a in "$@"; do name="$a"; done
     state="${DOCKER_FAKE_STATE:-$(dirname "$LOG")/state}"
-    if [ ! -f "$state/$name.backupdir" ]; then
+    if [ ! -f "$state/$name.args" ]; then
       echo "fake docker start: unknown container $name" >&2
       exit 9
     fi
-    hostdir=$(cat "$state/$name.backupdir")
+    hostdir=""
+    if [ -f "$state/$name.backupdir" ]; then hostdir=$(cat "$state/$name.backupdir"); fi
+    args=$(cat "$state/$name.args")
+    case "$args" in
+      *"find /data -mindepth 1 -delete"*) exit 0 ;;
+      *"/verify/check.sh"*)
+        if [ -n "$DOCKER_FAKE_VERIFY_FAIL" ]; then
+          echo "$DOCKER_FAKE_VERIFY_FAIL" >&2
+          exit 1
+        fi
+        echo "ok"; exit 0 ;;
+      *"du -sk /data"*) printf '4 3\n'; exit 0 ;;
+      *"-xpzf"*) exit 0 ;;
+    esac
+    if [ -z "$hostdir" ]; then
+      echo "fake docker start: no backup dir for $name" >&2
+      exit 9
+    fi
     if [ -n "$DOCKER_FAKE_ARCHIVE_FAIL" ]; then
       printf 'partial' > "$hostdir/data.tar.gz"
       echo "tar: can't open './secret': $DOCKER_FAKE_ARCHIVE_FAIL" >&2
@@ -162,13 +186,13 @@ case "$*" in
     name=""
     for a in "$@"; do name="$a"; done
     state="${DOCKER_FAKE_STATE:-$(dirname "$LOG")/state}"
-    rm -f "$state/$name.backupdir"
+    rm -f "$state/$name.backupdir" "$state/$name.args"
     exit 0 ;;
   "inspect --format "*)
     name=""
     for a in "$@"; do name="$a"; done
     state="${DOCKER_FAKE_STATE:-$(dirname "$LOG")/state}"
-    if [ -f "$state/$name.backupdir" ]; then
+    if [ -f "$state/$name.backupdir" ] || [ -f "$state/$name.args" ]; then
       echo "fake-cid-$name"
       exit 0
     fi

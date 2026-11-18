@@ -62,6 +62,9 @@ const (
 	msgProjectListFailed           = "기존 Compose 프로젝트 목록을 확인하지 못했습니다."
 	msgProjectListFailedActionOne  = "docker compose ls -a --format json을 직접 실행해 원인을 확인하세요."
 	msgProjectListFailedActionTwo  = "이름 충돌을 확인할 수 없으므로 dcraft는 스택을 변경하지 않았습니다."
+
+	msgDataVolumeInspectFailed = "대상 볼륨 상태를 확인하지 못했습니다."
+	msgDataVolumeInspectAction = "docker volume inspect <볼륨 이름>을 직접 실행해 원인을 확인하세요. 확인할 수 없으면 dcraft는 데이터를 교체하지 않습니다."
 )
 
 const (

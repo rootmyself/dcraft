@@ -3,12 +3,12 @@ package backup
 // Korean user-facing text owned by the backup feature and its shared contract.
 const (
 	msgTitle   = "데이터 백업"
-	msgSummary = "선택한 데이터 볼륨을 서비스를 잠시 멈춘 뒤 로컬 폴더에 백업합니다."
-	msgUsage   = `dcraft backup --volume <볼륨 키> --output <폴더> [--path <스택 폴더>]
+	msgSummary = "선택한 데이터 볼륨과 호스트 연결 폴더를 서비스를 잠시 멈춘 뒤 로컬 폴더에 백업합니다."
+	msgUsage   = `dcraft backup --volume <볼륨 키> --bind <호스트 폴더> --output <폴더> [--path <스택 폴더>]
 
-선택한 스택의 이름 있는 데이터 볼륨만 백업합니다. 이미지·로그·환경 변수·비밀 파일을
-무차별로 모으지 않습니다. 소비 서비스를 확인해 도구가 중지한 서비스만 백업 후 다시
-시작하며, 다른 스택의 컨테이너는 중지하지 않습니다.`
+선택한 스택의 이름 있는 데이터 볼륨과 Compose가 선언한 호스트 연결 폴더만 백업합니다.
+이미지·로그·환경 변수·비밀 파일을 무차별로 모으지 않습니다. 소비 서비스를 확인해
+도구가 중지한 서비스만 백업 후 다시 시작하며, 다른 스택의 컨테이너는 중지하지 않습니다.`
 
 	msgNoBackend       = "백업 기능이 데이터 경계와 연결되지 않았습니다."
 	msgNoBackendAction = "dcraft를 다시 빌드하거나 설치한 뒤 실행하세요."
@@ -18,9 +18,11 @@ const (
 	msgStageResolve       = "프로젝트 확인"
 	msgStageDiscover      = "데이터 선택"
 	msgStageRecheck       = "선택 재확인"
+	msgStageCheckPaths    = "경로 안전 확인"
 	msgStageConsumers     = "소비자 확인"
 	msgStageStop          = "서비스 중지"
 	msgStageArchive       = "볼륨 복사"
+	msgStageArchiveBind   = "폴더 복사"
 	msgStageVerifyArchive = "무결성 확인"
 	msgStagePublish       = "백업 공개"
 	msgStageRestoreState  = "서비스 상태 복구"
@@ -33,15 +35,31 @@ const (
 	msgOutputInvalid       = "백업 저장 위치를 사용할 수 없습니다."
 	msgOutputInvalidAction = "폴더 경로와 쓰기 권한, 남은 공간을 확인한 뒤 다시 실행하세요."
 
-	msgVolumeRequired       = "백업할 데이터 볼륨을 지정하지 않았습니다."
-	msgVolumeRequiredAction = "--volume으로 백업할 볼륨 키를 하나 이상 지정하세요."
-	msgVolumeListAction     = "대화형 화면에서는 사용 가능한 볼륨을 직접 선택할 수 있습니다."
+	msgSourceRequired       = "백업할 데이터를 지정하지 않았습니다."
+	msgSourceRequiredAction = "--volume으로 이름 있는 볼륨을, --bind로 호스트 연결 폴더를 하나 이상 지정하세요."
+	msgSourceListAction     = "대화형 화면에서는 사용 가능한 볼륨과 연결 폴더를 함께 선택할 수 있습니다."
 
 	msgVolumeUnknown       = "선택한 데이터 볼륨을 찾지 못했습니다."
 	msgVolumeUnknownAction = "볼륨 키는 docker compose config의 volumes 키입니다. 컨테이너 경로가 아니라 키를 지정하세요."
 
 	msgVolumeUnsupported       = "이 데이터 원본은 이 명령으로 백업할 수 없습니다."
-	msgVolumeUnsupportedAction = "이름 있는 볼륨만 백업할 수 있습니다. 연결 폴더(bind mount)와 익명 볼륨은 별도 안내를 따르세요."
+	msgVolumeUnsupportedAction = "익명 볼륨은 안정적인 이름이 없어 이 명령으로 백업할 수 없습니다. 이름 있는 볼륨을 선택하세요."
+
+	msgBindUnknown               = "선택한 호스트 연결 폴더를 찾지 못했습니다."
+	msgBindUnknownAction         = "--bind에는 현재 스택의 Compose 파일이 선언한 호스트 폴더만 지정할 수 있습니다. dcraft는 임의 호스트 경로를 추가하지 않습니다."
+	msgBindAmbiguous             = "연결 폴더 참조가 여러 폴더와 일치합니다."
+	msgBindAmbiguousAction       = "컨테이너 마운트 경로 대신 백업 계획에 표시된 호스트 폴더 절대 경로를 지정하세요."
+	msgBindInsteadOfVolumeAction = "컨테이너에 연결된 호스트 폴더는 --volume이 아니라 --bind로 지정하세요."
+
+	msgBindInvalid            = "호스트 연결 폴더를 읽을 수 없어 백업하지 않았습니다."
+	msgBindArchiveFailed      = "호스트 연결 폴더 복사를 완료하지 못했습니다."
+	msgBindInvalidAction      = "폴더가 존재하고 디렉터리인지, dcraft를 실행하는 사용자에게 읽기 권한이 있는지 확인하세요."
+	msgBindInvalidPermissions = "권한이 없는 하위 항목이 하나라도 있으면 일관된 백업을 만들 수 없습니다. dcraft는 서비스를 중지하지 않았거나 원래 상태로 되돌렸습니다."
+	msgBindOutputInside       = "백업 저장 폴더가 선택한 연결 폴더 안에 있어 백업을 만들지 않았습니다."
+	msgBindOutputInsideAction = "연결 폴더 밖의 다른 폴더를 --output으로 지정하세요. 폴더 안에 저장하면 백업 파일이 자기 자신을 다시 포함하게 됩니다."
+	msgBindOutputInsideNoStop = "dcraft는 서비스를 중지하지 않았고 연결 폴더에 아무것도 쓰지 않았습니다."
+	msgBindRootUnsafe         = "파일 시스템 루트를 연결 폴더로 백업할 수 없습니다."
+	msgBindRootUnsafeAction   = "Compose가 선언한 실제 데이터 폴더를 선택하세요. dcraft는 관련 없는 호스트 전체 폴더를 수집하지 않습니다."
 
 	msgSelectionChanged       = "선택한 데이터 원본이 확인 후 바뀌어 백업하지 않았습니다."
 	msgSelectionChangedBefore = "확인한 선택: "
@@ -89,12 +107,14 @@ const (
 	msgPartialKept      = "부분 출력이 남아 있습니다. 정상 백업이 아니므로 사용하지 마세요."
 	msgPartialLocation  = "부분 출력 위치: %s"
 
-	msgSensitiveNotice   = "선택한 볼륨에는 비밀번호·토큰·개인정보가 포함될 수 있습니다. dcraft는 내용을 검사하거나 암호화하지 않습니다. 백업 파일을 안전하게 보관하고 공유하지 마세요."
-	msgOwnershipNote     = "볼륨 백업은 컨테이너 파일의 uid/gid와 모드를 tar에 기록합니다. 호스트에서 직접 풀면 컨테이너 소유권을 완전히 복원할 수 없으므로 복원은 dcraft restore를 사용하세요."
-	msgHelperImageNotice = "볼륨 복사는 Docker 컨테이너(tar)로 수행하며 이미지는 %s입니다."
-	msgNoAutoDeleteNote  = "dcraft는 기존 백업을 자동으로 삭제하거나 예약·원격 업로드하지 않습니다."
-	msgExcludedNotice    = "이미지, 로그, 환경 변수, 비밀 파일 전체는 백업하지 않습니다."
-	msgStoppedOnlyOurs   = "이미 중지된 서비스는 시작하지 않았습니다."
+	msgSensitiveNotice       = "선택한 데이터에는 비밀번호·토큰·개인정보가 포함될 수 있습니다. dcraft는 내용을 검사하거나 암호화하지 않습니다. 백업 파일을 안전하게 보관하고 공유하지 마세요."
+	msgOwnershipNote         = "볼륨 백업은 컨테이너 파일의 uid/gid와 모드를 tar에 기록합니다. 호스트에서 직접 풀면 컨테이너 소유권을 완전히 복원할 수 없으므로 복원은 dcraft restore를 사용하세요."
+	msgBindOwnershipNote     = "연결 폴더 백업은 호스트 사용자 권한으로 직접 tar를 만들며 파일 모드·uid/gid·심볼릭 링크·하드 링크를 기록합니다. 확장 속성(xattr)·ACL은 보존하지 않고, 일부 플랫폼에서는 소유권을 복원할 수 없습니다."
+	msgHelperImageNotice     = "볼륨 복사는 Docker 컨테이너(tar)로 수행하며 이미지는 %s입니다."
+	msgBindHostArchiveNotice = "연결 폴더는 Docker 컨테이너를 사용하지 않고 호스트에서 직접 tar로 복사합니다."
+	msgNoAutoDeleteNote      = "dcraft는 기존 백업을 자동으로 삭제하거나 예약·원격 업로드하지 않습니다."
+	msgExcludedNotice        = "이미지, 로그, 환경 변수, 비밀 파일 전체는 백업하지 않습니다."
+	msgStoppedOnlyOurs       = "이미 중지된 서비스는 시작하지 않았습니다."
 
 	msgDoneHeader = "백업 완료"
 	msgSizeLabel  = "크기"
@@ -108,15 +128,19 @@ const (
 	msgPlanServices      = "영향 서비스: %s"
 	msgPlanRunning       = "실행 중(중지 예정): %s"
 	msgPlanStopped       = "이미 중지됨(시작하지 않음): %s"
-	msgPlanStopStep      = "서비스 중지 → 볼륨 복사 → 추출·무결성 확인 → 원자적 공개 → 중지한 서비스만 다시 시작"
+	msgPlanStopStep      = "서비스 중지 → 데이터 복사(볼륨은 tar 컨테이너, 연결 폴더는 호스트 tar) → 추출·무결성 확인 → 원자적 공개 → 중지한 서비스만 다시 시작"
 	msgPlanHelper        = "복사 도구: 읽기 전용 볼륨 마운트 + tar 컨테이너 이미지 %s"
-	msgPlanSensitive     = "민감정보: 선택한 볼륨 데이터에는 비밀이 포함될 수 있으며 dcraft는 검사·암호화하지 않습니다."
+	msgPlanHostTar       = "연결 폴더 복사 도구: 호스트 tar (Docker 컨테이너 사용 안 함)"
+	msgPlanSensitive     = "민감정보: 선택한 데이터에는 비밀이 포함될 수 있으며 dcraft는 검사·암호화하지 않습니다."
 	msgPlanNoAutoDelete  = "기존 백업 자동 삭제·예약·원격 업로드·백업 훅은 없습니다."
 	msgPlanNoneRunning   = "없음"
 	msgPlanCreateDir     = "저장 폴더가 없으면 실행 시 새로 만듭니다."
 	msgPlanOutputExists  = "저장 폴더가 이미 있으며 쓰기 가능 여부는 실행 직전에 다시 확인합니다."
 	msgPlanLock          = "실행 중에는 같은 스택의 다른 작업을 막는 잠금을 잡고, 다른 스택은 건드리지 않습니다."
 	msgPlanConsumerOther = "다른 스택의 소비자가 감지되어 백업 계획을 제공할 수 없습니다."
+	msgPlanSharedNone    = "다른 스택 공유: 없음"
+	msgPlanSharedSome    = "다른 스택 공유: %s (백업을 진행하지 않음)"
+	msgPlanBindOwnership = "연결 폴더의 xattr·ACL은 보존하지 않으며 일부 플랫폼에서는 소유권 복원이 제한됩니다."
 )
 
 // Exported user-facing text for the registration unit.
@@ -130,11 +154,11 @@ const (
 
 const (
 	msgWizardTitle         = "데이터 백업 설정"
-	msgWizardVolumeTitle   = "백업할 볼륨 선택"
-	msgWizardVolumePrompt  = "현재 스택의 이름 있는 데이터 볼륨입니다. 이 명령은 연결 폴더와 익명 볼륨을 백업하지 않습니다."
+	msgWizardSourceTitle   = "백업할 데이터 선택"
+	msgWizardSourcePrompt  = "현재 스택의 이름 있는 볼륨과 Compose가 선언한 호스트 연결 폴더입니다. Space로 여러 항목을 함께 선택하고 Enter로 확정하세요."
 	msgWizardOutputTitle   = "백업 저장 폴더"
 	msgWizardOutputPrompt  = "백업 파일을 저장할 호스트 폴더를 입력하세요. dcraft는 숨은 기본 위치를 선택하지 않습니다."
-	msgWizardOutputHint    = "예: ./dcraft-backups (상대 경로는 현재 작업 폴더 기준)"
+	msgWizardOutputHint    = "예: ./dcraft-backups (상대 경로는 현재 작업 폴더 기준, 연결 폴더 안은 사용할 수 없음)"
 	msgWizardOutputDefault = "./dcraft-backups"
-	msgWizardRecheck       = "실행 직전에 볼륨·소비자·서비스 상태를 다시 확인합니다. 선택이 바뀌면 백업하지 않습니다."
+	msgWizardRecheck       = "실행 직전에 볼륨·연결 폴더·소비자·서비스 상태를 다시 확인합니다. 선택이 바뀌면 백업하지 않습니다."
 )

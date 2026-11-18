@@ -28,6 +28,7 @@ func (m *Model) beginWizard(f core.Feature) tea.Cmd {
 	m.wizardChoice = 0
 	m.wizardInput = ""
 	m.wizardAnswers = map[string]string{}
+	m.wizardChecked = map[string]bool{}
 	m.wizardPreview = ""
 	m.wizardPreviewErr = nil
 	m.wizardAwaiting = true
@@ -157,6 +158,14 @@ func (m *Model) initWizardStep() {
 				break
 			}
 		}
+		m.wizardChecked = map[string]bool{}
+		if step.Multi {
+			for _, value := range strings.Split(m.wizardAnswers[step.Name], "\n") {
+				if value = strings.TrimSpace(value); value != "" {
+					m.wizardChecked[value] = true
+				}
+			}
+		}
 		return
 	}
 	m.wizardInput = m.wizardAnswers[step.Name]
@@ -178,8 +187,28 @@ func (m *Model) updateWizard(msg tea.KeyMsg) tea.Cmd {
 				m.wizardChoice = (m.wizardChoice - 1 + len(step.Options)) % len(step.Options)
 			case "down", "j":
 				m.wizardChoice = (m.wizardChoice + 1) % len(step.Options)
+			case " ":
+				if step.Multi {
+					value := step.Options[m.wizardChoice].Value
+					m.wizardChecked[value] = !m.wizardChecked[value]
+				}
 			case "enter":
-				m.wizardAnswers[step.Name] = step.Options[m.wizardChoice].Value
+				value := step.Options[m.wizardChoice].Value
+				if step.Multi {
+					var chosen []string
+					for _, option := range step.Options {
+						if m.wizardChecked[option.Value] {
+							chosen = append(chosen, option.Value)
+						}
+					}
+					if len(chosen) == 0 {
+						// Enter on an untouched list selects the highlighted
+						// option, preserving the simple one-choice flow.
+						chosen = append(chosen, value)
+					}
+					value = strings.Join(chosen, "\n")
+				}
+				m.wizardAnswers[step.Name] = value
 				m.pruneWizardAnswers()
 				m.advanceWizard()
 			case "left":
@@ -273,9 +302,34 @@ func (m *Model) applyWizard() tea.Cmd {
 	for key, value := range m.wizardAnswers {
 		options[key] = value
 	}
+	if m.req.Options == nil {
+		m.req.Options = map[string]string{}
+	}
+	for key, value := range options {
+		m.req.Options[key] = value
+	}
+	feature := m.wizardFeature
+	m.req.Feature = feature.Descriptor().Name
+	m.req.Target = m.target
+	// The wizard preview is not an approval. An approval-gated feature goes
+	// through the same generic plan + confirmation screen as any other
+	// approval operation; the collected answers stay in the request.
+	if feature.Descriptor().Approval != core.ApprovalNone || len(m.wizardSpec.RequiredApprovals) > 0 {
+		m.wizardApplying = false
+		m.wizardAwaiting = false
+		m.wizardFeature = nil
+		m.wizardSpec = core.WizardSpec{}
+		m.wizardAnswers = nil
+		m.wizardPreview = ""
+		m.wizardPreviewErr = nil
+		m.wizardReturnRes = nil
+		m.wizardReturnFeat = nil
+		m.resetRunState()
+		m.phase = phasePlanning
+		return tea.Batch(m.planCmd(feature, m.events), waitStageCmd(m.events))
+	}
 	m.wizardApplying = true
-	approvals := append([]core.ApprovalKind{}, m.wizardSpec.RequiredApprovals...)
-	cmd := m.beginWithOptionsAndApprovals(m.wizardFeature, options, approvals)
+	cmd := m.beginWithOptions(feature, options)
 	m.phase = phaseLoading
 	return cmd
 }
@@ -339,6 +393,14 @@ func (m *Model) wizardView() string {
 				if i == m.wizardChoice {
 					marker = "> "
 				}
+				if step.Multi {
+					box := "[ ]"
+					if m.wizardChecked[option.Value] {
+						box = "[x]"
+					}
+					fmt.Fprintf(&b, "%s%s %s\n", marker, box, option.Label)
+					continue
+				}
 				fmt.Fprintf(&b, "%s%s\n", marker, option.Label)
 			}
 		} else if step.AllowCustom {
@@ -384,6 +446,9 @@ func (m *Model) wizardHints() string {
 	case phaseWizardStep:
 		if m.wizardTextInput() {
 			return msgHintWizardInput
+		}
+		if m.wizardStep >= 0 && m.wizardStep < len(m.wizardSpec.Steps) && m.wizardSpec.Steps[m.wizardStep].Multi {
+			return msgHintWizardMulti
 		}
 		return msgHintWizardChoice
 	case phaseWizardPreview:
