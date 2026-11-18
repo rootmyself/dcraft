@@ -79,8 +79,8 @@ var (
 
 var reservedFlagNames = map[string]bool{
 	"path": true, "file": true, "env-file": true, "profile": true,
-	"project-name": true, "json": true, "approve": true, "help": true,
-	"service": true,
+	"project-name": true, "env": true, "json": true, "approve": true,
+	"help": true, "service": true,
 }
 
 // Reserved shorthands belong to the shared CLI assembly. Features must not

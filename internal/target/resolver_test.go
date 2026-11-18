@@ -180,7 +180,6 @@ func TestResolveExplicitInputsPreserveOrderAndRelativeBase(t *testing.T) {
 		EnvFiles:    []string{"custom.env"},
 		Profiles:    []string{"dev", "tools"},
 		ProjectName: "hello-world",
-		Environment: "staging",
 	}
 	// Relative explicit paths follow the process working directory, like Compose.
 	got, warnings, err := target.New().Resolve(context.Background(), req, project)
@@ -202,8 +201,8 @@ func TestResolveExplicitInputsPreserveOrderAndRelativeBase(t *testing.T) {
 	if got.ProjectName != "hello-world" {
 		t.Fatalf("ProjectName = %q, want hello-world", got.ProjectName)
 	}
-	if got.Environment != "staging" {
-		t.Fatalf("Environment = %q, want staging", got.Environment)
+	if got.Environment != "" {
+		t.Fatalf("Environment = %q, want empty (no aliases registered)", got.Environment)
 	}
 }
 

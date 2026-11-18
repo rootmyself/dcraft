@@ -116,6 +116,7 @@ func TestRegistryValidatesFlags(t *testing.T) {
 		{"reserved shorthand", core.Flag{Name: "follow", Shorthand: "f", Kind: core.FlagBool}},
 		{"invalid name", core.Flag{Name: "Follow", Kind: core.FlagBool}},
 		{"reserved name", core.Flag{Name: "json", Kind: core.FlagBool}},
+		{"reserved environment name", core.Flag{Name: "env", Kind: core.FlagString}},
 		{"unknown kind", core.Flag{Name: "odd", Kind: core.FlagKind("odd")}},
 		{"bad bool default", core.Flag{Name: "follow", Kind: core.FlagBool, Default: "maybe"}},
 	}

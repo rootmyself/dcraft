@@ -42,6 +42,37 @@ func NewEngine(registry *Registry, resolver Resolver, preflight Preflight, state
 	}
 }
 
+// SupportsEnvironments reports whether the configured resolver can list named
+// environment aliases. The TUI uses it to decide whether a selection screen is
+// possible; the resolver remains the single source of the catalog.
+func (e *Engine) SupportsEnvironments() bool {
+	if e == nil {
+		return false
+	}
+	_, ok := e.Resolver.(EnvironmentSource)
+	return ok
+}
+
+// Environments lists the aliases registered for the target folder. It performs
+// no preflight and no stack change. A resolver without environment support
+// yields an empty list, which keeps the no-alias Compose defaults intact.
+func (e *Engine) Environments(ctx context.Context, req TargetRequest) ([]Environment, []Diagnostic, error) {
+	source, ok := e.Resolver.(EnvironmentSource)
+	if !ok {
+		return nil, nil, nil
+	}
+	cwd, err := e.cwd()
+	if err != nil {
+		return nil, nil, FailCause(err, Diagnostic{
+			Category:    CategoryTargetInvalid,
+			Severity:    SeverityError,
+			Message:     msgWorkingDirUnknown,
+			NextActions: []string{msgWorkingDirAction},
+		})
+	}
+	return source.Environments(ctx, req, cwd)
+}
+
 // Run executes one operation. It never returns a Go error: every outcome is
 // expressed in the Result so both interfaces render the same truth.
 func (e *Engine) Run(ctx context.Context, req Request, sink Sink) (res Result) {
