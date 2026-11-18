@@ -1864,10 +1864,12 @@ Path rules:
 - The archive is host-side tar (`backup.ArchiveHostDir`), not a container
   helper. It stores `./`-relative names, dotfiles, modes (including
   setuid/setgid/sticky), uid/gid, symlinks and hardlinks; FIFOs/devices are
-  recorded as `other` and not materialized by host verification. Sockets,
-  backslash names and files that change mid-copy fail explicitly. The
-  destination is opened with `O_EXCL` inside a fresh `.partial` directory, so a
-  pre-existing destination symlink is never followed. Verification still uses
+  recorded as `other` and not materialized by host verification. Sockets and
+  backslash names are refused; a file whose size changes while it is read fails
+  explicitly. Host tar is a live read, not a filesystem snapshot: an in-place
+  write that keeps the same size cannot be detected. The destination is opened
+  with `O_EXCL` inside a fresh `.partial` directory, so a pre-existing
+  destination symlink is never followed. Verification still uses
   `backup.Verify` and a fresh temporary extraction directory.
 - `manifest.source.kind` is `bind` with `host_path`; `volume_key` and
   `volume_name` are empty. `ownership_note` states that xattrs/ACLs are not
