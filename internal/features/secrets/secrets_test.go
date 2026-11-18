@@ -132,7 +132,7 @@ func TestAddRejectsMissingInputAndUnsupportedValues(t *testing.T) {
 	}{
 		{"missing delivery", map[string]string{"add": "true", "source": "env", "ref": "X"}, core.CategorySecretInputInvalid},
 		{"missing ref", map[string]string{"add": "true", "delivery": "environment", "source": "env"}, core.CategorySecretInputInvalid},
-		{"build phase", map[string]string{"add": "true", "phase": "build", "delivery": "environment", "source": "env", "ref": "X"}, core.CategorySecretUnsupported},
+		{"build phase environment delivery", map[string]string{"add": "true", "phase": "build", "delivery": "environment", "source": "env", "ref": "X"}, core.CategorySecretInputInvalid},
 		{"aws source", map[string]string{"add": "true", "delivery": "environment", "source": "aws", "ref": "X"}, core.CategorySecretUnsupported},
 		{"conflicting action", map[string]string{"add": "true", "remove": "true"}, core.CategorySecretInputInvalid},
 	}

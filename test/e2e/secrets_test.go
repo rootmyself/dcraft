@@ -183,8 +183,18 @@ func TestSecretsCLIRejectsUnknownServiceAndUnsupportedInputs(t *testing.T) {
 	if build.code != 2 {
 		t.Fatalf("build phase exit = %d, want 2", build.code)
 	}
-	if !hasCategory(secretsStatus(parseSecrets(t, build.stdout)), core.CategorySecretUnsupported) {
-		t.Fatalf("build phase diagnostics = %+v", parseSecrets(t, build.stdout).Diagnostics)
+	buildDiag := parseSecrets(t, build.stdout).Diagnostics
+	if len(buildDiag) == 0 || buildDiag[0].Category != core.CategorySecretInputInvalid || !strings.Contains(buildDiag[0].Message, "BuildKit") {
+		t.Fatalf("build phase diagnostics = %+v", buildDiag)
+	}
+
+	nonBuild := runProcess(t, project, env, strings.NewReader(""), "secrets", "--add",
+		"-s", "web", "--phase", "build", "--source", "env", "--ref", "X", "--json")
+	if nonBuild.code != 2 {
+		t.Fatalf("non-build service exit = %d, want 2", nonBuild.code)
+	}
+	if !hasCategory(secretsStatus(parseSecrets(t, nonBuild.stdout)), core.CategoryBuildServiceInvalid) {
+		t.Fatalf("non-build service diagnostics = %+v", parseSecrets(t, nonBuild.stdout).Diagnostics)
 	}
 
 	aws := runProcess(t, project, env, strings.NewReader(""), "secrets", "--add",
@@ -194,6 +204,73 @@ func TestSecretsCLIRejectsUnknownServiceAndUnsupportedInputs(t *testing.T) {
 	}
 	if !hasCategory(secretsStatus(parseSecrets(t, aws.stdout)), core.CategorySecretUnsupported) {
 		t.Fatalf("aws diagnostics = %+v", parseSecrets(t, aws.stdout).Diagnostics)
+	}
+}
+
+func TestSecretsCLIBuildPhaseUsesBuildKitAndReportsManagedFile(t *testing.T) {
+	fake := newFakeDocker(t)
+	project := t.TempDir()
+	writeProject(t, project)
+	env := fake.env(t, t.TempDir())
+
+	add := runProcess(t, project, env, strings.NewReader(""), "secrets", "--add",
+		"-s", "api", "--phase", "build", "--source", "env", "--ref", "API_BUILD_TOKEN", "--json")
+	if add.code != 0 {
+		t.Fatalf("add exit = %d stdout=%q stderr=%q", add.code, add.stdout, add.stderr)
+	}
+	parsed := parseSecrets(t, add.stdout)
+	report := parsed.Data.Secrets
+	if len(report.References) != 1 {
+		t.Fatalf("references = %+v", report.References)
+	}
+	ref := report.References[0]
+	if ref.Phase != "build" || ref.Delivery != "file" || ref.Target != "API_BUILD_TOKEN" {
+		t.Fatalf("reference = %+v", ref)
+	}
+	if !strings.Contains(ref.Effect, "BuildKit") {
+		t.Fatalf("effect = %q", ref.Effect)
+	}
+	if report.BuildOverrideFile == "" {
+		t.Fatalf("build override path missing: %+v", report)
+	}
+	data, err := os.ReadFile(report.BuildOverrideFile)
+	if err != nil {
+		t.Fatalf("read build override: %v", err)
+	}
+	for _, want := range []string{"build:", "secrets:", "API_BUILD_TOKEN"} {
+		if !strings.Contains(string(data), want) {
+			t.Fatalf("build override missing %q:\n%s", want, data)
+		}
+	}
+	if info, err := os.Stat(report.BuildOverrideFile); err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("build override mode = %v, %v", info, err)
+	}
+	if strings.Contains(string(data), "value") {
+		t.Fatalf("build override contains a value field:\n%s", data)
+	}
+	for _, want := range []string{"캐시", "--no-cache", "Dockerfile", "자동으로 수정하지 않습니다"} {
+		if !strings.Contains(strings.Join(report.Notices, "\n"), want) {
+			t.Fatalf("notices missing %q: %v", want, report.Notices)
+		}
+	}
+
+	human := runProcess(t, project, env, strings.NewReader(""), "secrets")
+	if human.code != 0 {
+		t.Fatalf("list exit = %d stderr=%q", human.code, human.stderr)
+	}
+	for _, want := range []string{"빌드 시점 (build)", "BuildKit secret mount", report.BuildOverrideFile, "캐시"} {
+		if !strings.Contains(human.stdout, want) {
+			t.Fatalf("human output missing %q:\n%s", want, human.stdout)
+		}
+	}
+
+	remove := runProcess(t, project, env, strings.NewReader(""), "secrets", "--remove",
+		"-s", "api", "--delivery", "file", "--target", "API_BUILD_TOKEN", "--json")
+	if remove.code != 0 {
+		t.Fatalf("remove exit = %d stderr=%q", remove.code, remove.stderr)
+	}
+	if _, err := os.Stat(report.BuildOverrideFile); !os.IsNotExist(err) {
+		t.Fatalf("removing the last build reference left the managed override: %v", err)
 	}
 }
 

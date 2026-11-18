@@ -97,7 +97,11 @@ const (
 	CategorySecretUnsupported  Category = "secret_unsupported"
 	CategorySecretSource       Category = "secret_source_unavailable"
 	CategorySecretApplyFailed  Category = "secret_apply_failed"
-	CategoryInternal           Category = "internal_error"
+	// CategoryBuildServiceInvalid means a build-phase secret reference names a
+	// service without a Compose build section. The build would silently do
+	// nothing, so it is a usage error (exit 2), never a silent skip.
+	CategoryBuildServiceInvalid Category = "build_service_invalid"
+	CategoryInternal            Category = "internal_error"
 )
 
 // Severity separates blocking problems from information that still allows the

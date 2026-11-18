@@ -25,6 +25,103 @@ func targetFor(project string) core.Target {
 	return core.Target{ProjectDir: project, Files: []string{filepath.Join(project, "compose.yaml")}}
 }
 
+func TestPrepareIgnoresBuildPhaseReferences(t *testing.T) {
+	project := t.TempDir()
+	state := t.TempDir()
+	sentinel := "sentinel-build-only-91ab"
+	if err := os.MkdirAll(filepath.Join(project, "secrets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "secrets", "build.txt"), []byte(sentinel+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	writeConfig(t, project, `secrets:
+  - service: web
+    phase: build
+    delivery: file
+    source: file
+    ref: secrets/build.txt
+    target: build_token
+`)
+	rt := newTestRuntime(t, project, state, nil)
+	session, err := rt.Prepare(context.Background(), targetFor(project), nil, ModeCreate)
+	if err != nil {
+		t.Fatalf("Prepare: %v", err)
+	}
+	if len(session.Files) != 0 || len(session.Env) != 0 || session.HasValues() {
+		t.Fatalf("runtime prepared build references: files=%v env=%v values=%v", session.Files, session.Env, session.HasValues())
+	}
+	if _, err := os.Stat(filepath.Join(state, "stacks", "demo", "compose.secrets.yaml")); !os.IsNotExist(err) {
+		t.Fatalf("runtime override was created for a build-only catalog: %v", err)
+	}
+	session.Commit()
+}
+
+func TestRegenerateOverrideKeepsRuntimeAndBuildSeparate(t *testing.T) {
+	project := t.TempDir()
+	state := t.TempDir()
+	sentinel := "sentinel-split-3f2c"
+	if err := os.MkdirAll(filepath.Join(project, "secrets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "secrets", "runtime.txt"), []byte(sentinel+"-runtime\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "secrets", "build.txt"), []byte(sentinel+"-build\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	writeConfig(t, project, `secrets:
+  - service: web
+    phase: runtime
+    delivery: file
+    source: file
+    ref: secrets/runtime.txt
+    target: app_token
+  - service: web
+    phase: build
+    delivery: file
+    source: file
+    ref: secrets/build.txt
+    target: build_token
+`)
+	rt := newTestRuntime(t, project, state, nil)
+	if err := rt.RegenerateOverride(targetFor(project)); err != nil {
+		t.Fatalf("RegenerateOverride: %v", err)
+	}
+	stackDir := filepath.Join(state, "stacks", "demo")
+	runtimeOverride, err := os.ReadFile(filepath.Join(stackDir, "compose.secrets.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(runtimeOverride)
+	if !strings.Contains(text, "app_token") || strings.Contains(text, "build_token") || strings.Contains(text, "build:") {
+		t.Fatalf("runtime override contains build delivery:\n%s", text)
+	}
+	if strings.Contains(text, sentinel) {
+		t.Fatalf("runtime override leaked a value:\n%s", text)
+	}
+	buildOverride, err := os.ReadFile(filepath.Join(stackDir, "compose.build-secrets.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	buildText := string(buildOverride)
+	if !strings.Contains(buildText, "build:") || !strings.Contains(buildText, "build_token") {
+		t.Fatalf("build override missing the BuildKit mount:\n%s", buildText)
+	}
+	if strings.Contains(buildText, "app_token") || strings.Contains(buildText, sentinel) {
+		t.Fatalf("build override leaked runtime delivery or a value:\n%s", buildText)
+	}
+	for _, path := range []string{"compose.secrets.yaml", "compose.build-secrets.yaml"} {
+		info, err := os.Stat(filepath.Join(stackDir, path))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode().Perm() != 0o600 {
+			t.Fatalf("%s mode = %o, want 600", path, info.Mode().Perm())
+		}
+	}
+}
+
 func TestPrepareEnvironmentDeliveryBuildsOverrideWithoutValues(t *testing.T) {
 	project := t.TempDir()
 	state := t.TempDir()

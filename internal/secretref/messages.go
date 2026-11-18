@@ -62,3 +62,19 @@ const (
 	msgPartialOverwrite       = "비밀값 전달 준비가 실패했지만 이미 존재하던 파일 일부가 새 값으로 갱신되었을 수 있습니다. dcraft는 이전 값을 저장하지 않아 되돌리지 않습니다."
 	msgPartialOverwriteAction = "dcraft status로 현재 상태를 확인하고, 필요한 경우 dcraft up을 다시 실행하세요."
 )
+
+// Build-time delivery (ticket #10). The values reach BuildKit only through a
+// secret mount; dcraft never falls back to ARG/ENV or a command line.
+const (
+	msgBuildServiceInvalid       = "서비스 '%s'에는 Compose build 설정이 없어 빌드 시점 비밀값을 전달할 수 없습니다."
+	msgBuildServiceInvalidAction = "build: 항목이 있는 서비스에만 phase: build 참조를 추가하세요."
+	msgBuildApplied              = "빌드 시점 비밀값을 BuildKit secret mount로 준비했습니다: %s (dcraft 관리 Compose override: %s)"
+	msgBuildCacheNotice          = "Docker 빌드 캐시는 비밀값 내용을 캐시 키에 포함하지 않습니다. 원본 값을 바꾼 뒤에는 dcraft update --no-cache로 다시 빌드해야 새 값이 반영됩니다. dcraft는 이전 값을 저장하거나 비교하지 않습니다."
+	msgBuildNoFallback           = "빌드 시점 비밀값은 BuildKit secret mount로만 전달합니다. ARG·ENV로 조용히 대체하지 않습니다."
+	msgBuildImageDisclosure      = "dcraft는 값을 이미지 설정이나 history에 넣지 않지만, Dockerfile이 값을 출력하거나 이미지에 복사하는 동작은 막을 수 없습니다."
+	msgBuildMountMissing         = "서비스 '%s'의 Dockerfile(%s)에 BuildKit secret mount id=%s 참조가 없습니다. Dockerfile의 해당 RUN에 다음을 추가해야 값이 전달됩니다: RUN --mount=type=secret,id=%s ... . dcraft는 Dockerfile을 자동으로 수정하지 않습니다."
+	msgBuildDockerfileUnreadable = "서비스 '%s'의 Dockerfile(%s)을 읽지 못해 BuildKit secret mount 참조를 확인하지 못했습니다: %v. Dockerfile에 RUN --mount=type=secret,id=%s 가 있는지 직접 확인하세요."
+	msgBuildDockerfileUnknown    = "서비스 '%s'의 Dockerfile 경로를 확인하지 못해 BuildKit secret mount 참조를 확인하지 못했습니다. Dockerfile에 RUN --mount=type=secret,id=%s 가 있는지 직접 확인하세요."
+	msgBuildFinishFailed         = "빌드 후 환경변수 원본 임시 파일을 정리하지 못했습니다. 상태 폴더의 build-secrets 파일 권한과 여유 공간을 확인하세요."
+	msgBuildEnvLifetime          = "환경변수 원본 빌드 비밀값은 빌드 명령이 실행되는 동안에만 상태 폴더의 0600 파일로 존재하고, 빌드가 끝나면 삭제됩니다. 파일 원본은 다음 빌드를 위해 남으며 down 또는 성공적인 빌드 후 정리됩니다."
+)

@@ -105,7 +105,7 @@ func (r *Runtime) Prepare(ctx context.Context, target core.Target, services []st
 	if err != nil {
 		return Session{}, err
 	}
-	refs := cat.ForServices(services)
+	refs := cat.ForPhaseServices(PhaseRuntime, services)
 	stackDir, err := r.dirs.StackDir(target)
 	if err != nil {
 		return Session{}, applyError("비밀값 전달 상태 폴더를 확인할 수 없습니다.", err.Error())
@@ -122,11 +122,12 @@ func (r *Runtime) Prepare(ctx context.Context, target core.Target, services []st
 		materialized: map[string]string{},
 	}
 	if len(refs) == 0 {
-		// Nothing to deliver for this selection. If the project has no
+		// Nothing to deliver for this selection. If the project has no runtime
 		// references at all, remove any override left by an older
-		// configuration. If other services still have references, keep the
-		// on-disk override for the stack; it is regenerated below on success.
-		if mode == ModeCreate && !cat.Has() {
+		// configuration. If other services still have runtime references,
+		// keep the on-disk override for the stack; it is regenerated below on
+		// success. Build-phase references are never runtime delivery.
+		if mode == ModeCreate && !cat.HasPhase(PhaseRuntime) {
 			if err := os.Remove(session.overridePath); err != nil && !errors.Is(err, fs.ErrNotExist) {
 				return Session{}, applyError("dcraft 관리 Compose override를 정리하지 못했습니다.", err.Error())
 			}
@@ -301,6 +302,9 @@ func (s Session) Redact(text string) string {
 	return redactValues(text, s.values)
 }
 
+// HasValues reports whether this session fetched at least one value.
+func (s Session) HasValues() bool { return len(s.values) > 0 }
+
 // RedactText removes values referenced by the project's saved secret
 // references from tool output. It is the shared redaction entry point for
 // diagnostics that are not part of a prepared session (for example backup
@@ -337,7 +341,7 @@ func (r *Runtime) RedactText(target core.Target, text string) string {
 			}
 			value := string(raw)
 			if value != "" {
-				values = append(values, value, strings.TrimRight(value, "\r\n"))
+				values = append(values, value)
 			}
 		}
 	}
@@ -348,19 +352,24 @@ func redactValues(text string, values []string) string {
 	if text == "" || len(values) == 0 {
 		return text
 	}
-	sorted := append([]string{}, values...)
-	sort.Slice(sorted, func(i, j int) bool { return len(sorted[i]) > len(sorted[j]) })
-	for _, value := range sorted {
+	variants := make([]string, 0, len(values)*2)
+	for _, value := range values {
 		if value == "" {
 			continue
 		}
+		variants = append(variants, value)
+		// A Dockerfile can print a file value through a command substitution,
+		// which strips the trailing newline. Redact that form too.
+		if trimmed := strings.TrimRight(value, "\r\n"); trimmed != "" && trimmed != value {
+			variants = append(variants, trimmed)
+		}
+	}
+	sort.Slice(variants, func(i, j int) bool { return len(variants[i]) > len(variants[j]) })
+	for _, value := range variants {
 		text = strings.ReplaceAll(text, value, msgRedacted)
 	}
 	return text
 }
-
-// HasValues reports whether this session fetched at least one value.
-func (s Session) HasValues() bool { return len(s.values) > 0 }
 
 func (r *Runtime) readEnv(ref Reference) ([]byte, error) {
 	name := strings.TrimSpace(ref.Ref)
@@ -602,9 +611,10 @@ func (r *Runtime) RemoveMaterialized(target core.Target, ref Reference) error {
 	return nil
 }
 
-// CleanupStack removes every materialized file and the managed override for
-// one stack. It is called only after a successful "down"; a failed teardown
-// keeps the files a restart may still need.
+// CleanupStack removes every materialized file and the managed overrides for
+// one stack, both runtime and build delivery. It is called only after a
+// successful "down"; a failed teardown keeps the files a restart may still
+// need.
 func (r *Runtime) CleanupStack(target core.Target) error {
 	if r == nil || r.dirs == nil {
 		return nil
@@ -613,18 +623,24 @@ func (r *Runtime) CleanupStack(target core.Target) error {
 	if err != nil {
 		return applyError("비밀값 전달 상태 폴더를 확인할 수 없습니다.", err.Error())
 	}
-	if err := os.Remove(filepath.Join(stackDir, "compose.secrets.yaml")); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return applyError("dcraft 관리 Compose override를 정리하지 못했습니다.", err.Error())
+	for _, name := range []string{"compose.secrets.yaml", buildOverrideName} {
+		if err := os.Remove(filepath.Join(stackDir, name)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return applyError("dcraft 관리 Compose override를 정리하지 못했습니다.", err.Error())
+		}
 	}
-	if err := os.RemoveAll(filepath.Join(stackDir, "secrets")); err != nil {
-		return applyError("비밀값 전달 파일을 정리하지 못했습니다.", err.Error())
+	for _, dir := range []string{"secrets", buildSecretsDir} {
+		if err := os.RemoveAll(filepath.Join(stackDir, dir)); err != nil {
+			return applyError("비밀값 전달 파일을 정리하지 못했습니다.", err.Error())
+		}
 	}
 	return nil
 }
 
-// RegenerateOverride rewrites the managed override from the current
-// references, without resolving any values. It is used after add/remove so
-// the visible effective inputs match the saved configuration.
+// RegenerateOverride rewrites the managed overrides from the current
+// references, without resolving any values. Runtime and build delivery are
+// written to separate files so one phase can never be delivered by the other.
+// It is used after add/remove and after a completed operation so the visible
+// effective inputs match the saved configuration.
 func (r *Runtime) RegenerateOverride(target core.Target) error {
 	if r == nil || r.dirs == nil {
 		return nil
@@ -633,50 +649,56 @@ func (r *Runtime) RegenerateOverride(target core.Target) error {
 	if err != nil {
 		return applyError("비밀값 전달 상태 폴더를 확인할 수 없습니다.", err.Error())
 	}
-	overridePath := filepath.Join(stackDir, "compose.secrets.yaml")
 	cat, err := Load(target.ProjectDir)
 	if err != nil {
 		return err
 	}
-	if !cat.Has() {
-		if err := os.Remove(overridePath); err != nil && !errors.Is(err, fs.ErrNotExist) {
+
+	runtimePath := filepath.Join(stackDir, "compose.secrets.yaml")
+	runtimeRefs := cat.ForPhase(PhaseRuntime)
+	if len(runtimeRefs) == 0 {
+		if err := os.Remove(runtimePath); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return applyError("dcraft 관리 Compose override를 정리하지 못했습니다.", err.Error())
 		}
-		return nil
-	}
-	if err := os.MkdirAll(stackDir, 0o700); err != nil {
-		return applyError("비밀값 전달 상태 폴더를 만들지 못했습니다.", err.Error())
-	}
-	doc := overrideDoc{Services: map[string]overrideService{}}
-	fileSecrets := map[string]overrideSecret{}
-	for i, ref := range cat.References {
-		svc := doc.Services[ref.Service]
-		switch ref.Delivery {
-		case DeliveryEnvironment:
-			if svc.Environment == nil {
-				svc.Environment = map[string]string{}
-			}
-			svc.Environment[ref.EffectiveTarget()] = fmt.Sprintf("${DCRAFT_SECRET_%d}", i+1)
-		case DeliveryFile:
-			name := fmt.Sprintf("dcraft_secret_%d", i+1)
-			path, err := r.MaterializedPath(target, ref)
-			if err != nil {
-				return err
-			}
-			fileSecrets[name] = overrideSecret{File: path}
-			svc.Secrets = append(svc.Secrets, overrideServiceSecret{Source: name, Target: ref.EffectiveTarget()})
+	} else {
+		if err := os.MkdirAll(stackDir, 0o700); err != nil {
+			return applyError("비밀값 전달 상태 폴더를 만들지 못했습니다.", err.Error())
 		}
-		doc.Services[ref.Service] = svc
+		doc := overrideDoc{Services: map[string]overrideService{}}
+		fileSecrets := map[string]overrideSecret{}
+		for i, ref := range runtimeRefs {
+			svc := doc.Services[ref.Service]
+			switch ref.Delivery {
+			case DeliveryEnvironment:
+				if svc.Environment == nil {
+					svc.Environment = map[string]string{}
+				}
+				svc.Environment[ref.EffectiveTarget()] = fmt.Sprintf("${DCRAFT_SECRET_%d}", i+1)
+			case DeliveryFile:
+				name := fmt.Sprintf("dcraft_secret_%d", i+1)
+				path, err := r.MaterializedPath(target, ref)
+				if err != nil {
+					return err
+				}
+				fileSecrets[name] = overrideSecret{File: path}
+				svc.Secrets = append(svc.Secrets, overrideServiceSecret{Source: name, Target: ref.EffectiveTarget()})
+			}
+			doc.Services[ref.Service] = svc
+		}
+		if len(fileSecrets) > 0 {
+			doc.Secrets = fileSecrets
+		}
+		data, err := yaml.Marshal(doc)
+		if err != nil {
+			return applyError("dcraft 관리 Compose override를 만들지 못했습니다.", err.Error())
+		}
+		header := "# dcraft-managed runtime secret override. Do not edit; dcraft regenerates it.\n"
+		if err := writePrivateFile(runtimePath, append([]byte(header), data...)); err != nil {
+			return err
+		}
 	}
-	if len(fileSecrets) > 0 {
-		doc.Secrets = fileSecrets
-	}
-	data, err := yaml.Marshal(doc)
-	if err != nil {
-		return applyError("dcraft 관리 Compose override를 만들지 못했습니다.", err.Error())
-	}
-	header := "# dcraft-managed runtime secret override. Do not edit; dcraft regenerates it.\n"
-	return replaceFile(overridePath, append([]byte(header), data...))
+
+	return r.writeBuildOverride(target, cat.ForPhase(PhaseBuild))
 }
 
 type overrideDoc struct {

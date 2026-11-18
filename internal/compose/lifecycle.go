@@ -19,9 +19,16 @@ import (
 // current Compose configuration. Runtime secret references are resolved only
 // for the services this call will start (including depends_on), and the
 // dcraft-managed override is appended to the effective Compose inputs. The
-// user's Compose files are never edited. Readiness and health are later-ticket
-// work; dcraft does not claim the application is healthy here.
+// user's Compose files are never edited. When build-phase references exist,
+// the implicit Compose build is suppressed (--no-build) because only an
+// explicit dcraft build can deliver the BuildKit secrets; dcraft never runs a
+// build without them. Readiness and health are later-ticket work; dcraft does
+// not claim the application is healthy here.
 func (c *Compose) Up(ctx context.Context, t core.Target, services []string) (stack.OpResult, error) {
+	noBuild, guardNotice, err := c.noBuildGuard(ctx, t, services)
+	if err != nil {
+		return stack.OpResult{}, err
+	}
 	prep, err := c.prepareSecrets(ctx, t, services, secretref.ModeCreate)
 	if err != nil {
 		return stack.OpResult{}, err
@@ -32,10 +39,20 @@ func (c *Compose) Up(ctx context.Context, t core.Target, services []string) (sta
 		prep.Abort()
 		return stack.OpResult{}, ctxErr
 	}
-	args := composeArgsWith(t, prep.Files, append([]string{"up", "--detach"}, services...)...)
+	sub := []string{"up", "--detach"}
+	if noBuild {
+		// A build-phase secret can only be delivered by an explicit dcraft
+		// build. Never let Compose run an implicit build without it.
+		sub = append(sub, "--no-build")
+	}
+	args := composeArgsWith(t, prep.Files, append(sub, services...)...)
 	res, err := c.run(ctx, execx.Command{Name: "docker", Args: args, Dir: t.ProjectDir, Env: composeEnv(prep.Env)})
+	notices := append([]string{}, prep.Notices...)
+	if guardNotice != "" {
+		notices = append(notices, guardNotice)
+	}
 	if ctxErr := ctx.Err(); ctxErr != nil {
-		return stack.OpResult{Output: prep.Redact(summarize(res.Combined())), Notices: prep.Notices}, ctxErr
+		return stack.OpResult{Output: prep.Redact(summarize(res.Combined())), Notices: notices}, ctxErr
 	}
 	if err != nil {
 		// The Compose process never started, so no container can reference
@@ -43,7 +60,7 @@ func (c *Compose) Up(ctx context.Context, t core.Target, services []string) (sta
 		prep.Abort()
 		return stack.OpResult{}, err
 	}
-	out := stack.OpResult{Output: prep.Redact(summarize(res.Combined())), Notices: prep.Notices}
+	out := stack.OpResult{Output: prep.Redact(summarize(res.Combined())), Notices: notices}
 	if !res.Succeeded() {
 		// Compose ran and may have created containers; keep the files a
 		// restart may need. The next up/down cleans stale files.
@@ -51,6 +68,33 @@ func (c *Compose) Up(ctx context.Context, t core.Target, services []string) (sta
 	}
 	prep.Commit()
 	return out, nil
+}
+
+// noBuildGuard reports whether an implicit Compose build must be suppressed
+// because the selected services have build-phase secret references. It never
+// resolves a value: the explicit build owns that work.
+func (c *Compose) noBuildGuard(ctx context.Context, t core.Target, services []string) (bool, string, error) {
+	cat, err := secretref.Load(t.ProjectDir)
+	if err != nil {
+		return false, "", err
+	}
+	refs := cat.ForPhaseServices(secretref.PhaseBuild, services)
+	if len(refs) == 0 {
+		return false, "", nil
+	}
+	if c.secrets == nil {
+		return false, "", secretref.Unavailable()
+	}
+	hints, err := c.buildHints(ctx, t)
+	if err != nil {
+		return false, "", err
+	}
+	for _, ref := range refs {
+		if hints[ref.Service].HasBuild {
+			return true, msgUpNoBuildSecrets, nil
+		}
+	}
+	return false, "", nil
 }
 
 // Stop implements stack.Lifecycle. Containers and data are kept.

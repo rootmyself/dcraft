@@ -2234,7 +2234,79 @@ config format or a secret store. Build delivery adds BuildKit mount declarations
 to the managed inputs; AWS adds a source resolver with the same non-empty and
 redaction rules. Rollback re-resolves references; it never keeps old values.
 
-### 14.6 Wizard runs and history
+### 14.6 Build-time delivery (ticket #10)
+
+Build-phase references extend the same config with a fixed delivery:
+
+```yaml
+secrets:
+  - service: web
+    phase: build            # build
+    delivery: file          # the BuildKit secret mount; environment is rejected
+    source: env             # env | file (aws stays recognized/unsupported here)
+    ref: BUILD_TOKEN        # env var name or project-relative/absolute file path
+    target: BUILD_TOKEN     # optional; the BuildKit secret id (defaults as 14.1)
+```
+
+- `phase: build` with `delivery: environment` is an input error (exit 2): build
+  values never become environment variables or ARG/ENV values. `service` must
+  have a Compose `build:` section; a non-build service is `build_service_invalid`
+  (exit 2) before anything is saved or built.
+- Existing Compose files and Dockerfiles are never modified. dcraft writes
+  `<state>/stacks/<stack>/compose.build-secrets.yaml` (0600) and appends it with
+  `-f` only for build operations. It declares `build.secrets` for the selected
+  services and the top-level file secret that points at the private
+  materialization:
+
+  ```yaml
+  services:
+    web:
+      build:
+        secrets:
+          - source: dcraft_build_secret_1
+            target: BUILD_TOKEN
+  secrets:
+    dcraft_build_secret_1:
+      file: /abs/state/stacks/<stack>/build-secrets/web__build_token__<hash>.secret
+  ```
+
+  The user's first Compose file still determines the project directory. The
+  generated file is reported as `build_override_file` by `dcraft secrets`.
+- Both environment and file sources are materialized as 0600 regular files under
+  `<state>/stacks/<stack>/build-secrets/`. File-source copies live for a rebuild
+  and are pruned at a safe point (a successful build of that selection or
+  `dcraft down`). Environment-source copies are written only for the Compose
+  build command and removed as soon as it exits, successful or not. A source is
+  resolved before any file or override is written, so a missing/empty source
+  fails before the build and leaves no partial preparation. The state directory
+  inside the project folder is refused.
+- Verified BuildKit behavior is surfaced, not hidden: changing a build secret
+  **does not invalidate the build cache**. The ordinary build keeps the cache;
+  `dcraft update --no-cache` is the explicit fresh-build choice. dcraft never
+  stores or compares previous values, so it cannot warn by detecting a value
+  change. `dcraft update`'s plan and report, and `dcraft secrets`, state this
+  limitation in Korean.
+- Compose can build implicitly during `dcraft up` when an image is missing.
+  When the selected services have build-phase references, `dcraft up` passes
+  `--no-build` and points to `dcraft update`, so Compose can never run a build
+  without the BuildKit secrets.
+- Before a build, dcraft checks the builder: `DOCKER_BUILDKIT=0` or a missing
+  `docker buildx` fails with an explanation. It never falls back to an ARG,
+  environment value, or command-line value.
+- The Dockerfile must consume the mount. dcraft reads the resolved build context
+  and Dockerfile(s) (including `dockerfile_inline`) and, when
+  `RUN --mount=type=secret,id=<target>` is absent, reports a Korean warning with
+  the file path and a concrete example. It never edits the Dockerfile. If the
+  Dockerfile cannot be read or its path is unknown, the warning says so.
+- Captured tool output, diagnostics and JSON are redacted against fetched build
+  values. dcraft cannot prevent a Dockerfile from printing the value or copying
+  it into the image; that is disclosed. The value is not placed in image
+  config/history by dcraft, and no value is written to state/history.
+- The previous-good record stores the build (and runtime) references in
+  `target.secret_refs` (`service`, `phase`, `delivery`, `source`, `name`) so a
+  rollback can precheck source availability. It stores no value.
+
+### 14.7 Wizard runs and history
 
 `Options["wizard"]="steps"` is a read-only preview. The engine does not write a
 history record for a `RecordsHistory` feature's steps run; only the
