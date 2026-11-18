@@ -4,7 +4,7 @@ package cli
 // English.
 const (
 	msgRootShort = "현재 폴더의 Docker Compose 스택을 돕는 도구"
-	msgRootLong  = "dcraft는 현재 폴더의 Docker Compose 스택 상태를 조회합니다.\n" +
+	msgRootLong  = "dcraft는 현재 폴더의 Docker Compose 스택을 조회하고 실행·중지·제거·재시작합니다.\n" +
 		"명령 없이 실행하면 대화형 화면을 열고, 명령을 지정하면 결과만 출력합니다."
 
 	msgFlagHelp        = "도움말을 표시합니다."

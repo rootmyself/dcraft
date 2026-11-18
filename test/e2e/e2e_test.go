@@ -87,8 +87,38 @@ case "$*" in
   "info --format {{.ServerVersion}}") if [ -n "$DOCKER_FAKE_SLEEP" ]; then exec sleep "$DOCKER_FAKE_SLEEP"; fi; echo "29.9.3"; exit 0 ;;
 esac
 case "$*" in
+  *" -f - --project-directory "*)
+    dir=""; prev=""
+    for a in "$@"; do
+      if [ "$prev" = "--project-directory" ]; then dir="$a"; fi
+      prev="$a"
+    done
+    name=$(basename "$dir" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_-')
+    echo "{\"name\":\"$name\"}"
+    exit 0 ;;
+  "compose ls -a --format json")
+    if [ -n "$DOCKER_FAKE_PROJECTS" ] && [ -f "$DOCKER_FAKE_PROJECTS" ]; then
+      cat "$DOCKER_FAKE_PROJECTS"
+    else
+      echo "[]"
+    fi
+    exit 0 ;;
   *" config --format json") cat "$DOCKER_FAKE_CONFIG"; exit 0 ;;
   *" ps --all --format json") cat "$DOCKER_FAKE_PS"; exit 0 ;;
+esac
+sub=""
+for a in "$@"; do
+  case "$a" in
+    up|stop|down|restart) sub="$a"; break ;;
+  esac
+done
+case "$sub" in
+  up)
+    if [ -n "$DOCKER_FAKE_SLEEP_UP" ]; then exec sleep "$DOCKER_FAKE_SLEEP_UP"; fi
+    echo "Container fake-web-1 Started"; exit 0 ;;
+  stop) echo "Container fake-web-1 Stopped"; exit 0 ;;
+  down) echo "Container fake-web-1 Removed"; exit 0 ;;
+  restart) echo "Container fake-web-1 Restarted"; exit 0 ;;
 esac
 echo "fake docker: unexpected invocation: $*" >&2
 exit 9
@@ -101,13 +131,38 @@ exit 9
 
 func (f *fakeDocker) env(t *testing.T, stateDir string) []string {
 	t.Helper()
-	return buildEnv(map[string]string{
+	return f.envExtra(t, stateDir, nil)
+}
+
+// envExtra adds test-specific environment values (for example a project list
+// file for `docker compose ls`).
+func (f *fakeDocker) envExtra(t *testing.T, stateDir string, extra map[string]string) []string {
+	t.Helper()
+	values := map[string]string{
 		"PATH":               f.dir + ":" + os.Getenv("PATH"),
 		"DOCKER_FAKE_LOG":    f.logPath,
 		"DOCKER_FAKE_CONFIG": f.config,
 		"DOCKER_FAKE_PS":     f.ps,
 		"DCRAFT_STATE_DIR":   stateDir,
-	})
+	}
+	for k, v := range extra {
+		values[k] = v
+	}
+	return buildEnv(values)
+}
+
+func (f *fakeDocker) writeConfig(t *testing.T, text string) {
+	t.Helper()
+	if err := os.WriteFile(f.config, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func (f *fakeDocker) writePS(t *testing.T, text string) {
+	t.Helper()
+	if err := os.WriteFile(f.ps, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func (f *fakeDocker) calls(t *testing.T) []string {
@@ -616,7 +671,7 @@ func TestTUIHasNoUnimplementedActions(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("TUI exit = %d\n%s", code, output)
 	}
-	for _, forbidden := range []string{"dcraft up", "dcraft update", "dcraft down", "enter 실행"} {
+	for _, forbidden := range []string{"dcraft update", "dcraft logs", "dcraft backup"} {
 		if strings.Contains(output, forbidden) {
 			t.Fatalf("TUI exposes unimplemented action %q:\n%s", forbidden, output)
 		}

@@ -5,9 +5,10 @@ fork these types or recreate these rules in a feature or UI package. Shared
 interface changes go to the integration owner as a change request (see the end
 of this file).
 
-Scope of this version: one working binary, one registered feature (`status`),
-the common operation seam, target resolution, diagnostics, CLI/TUI assembly,
-state layout, machine-readable results and tests. Lifecycle, logs/exec,
+Scope of this version: one working binary, five registered features (`status`,
+`up`, `stop`, `down`, `restart`), the common operation seam, target resolution,
+automatic project-name allocation, same-stack coordination, diagnostics,
+CLI/TUI assembly, state layout, machine-readable results and tests. Logs/exec,
 environments, generation, install, update, secrets, hooks, backup/restore and
 rollback are later tickets.
 
@@ -28,11 +29,16 @@ cmd/dcraft                 process entry, signal context, TTY check, exit codes
                            Diagnostic, Presenter/Verifier, StateStore, Clock
         |
         +-- internal/target          Compose target discovery (filesystem only)
-        +-- internal/features/status reference feature
+        +-- internal/lifecycle       shared up/stop/down/restart controller
+        +-- internal/features/status reference read-only feature
+        +-- internal/features/up     \
+        +-- internal/features/stop    > thin lifecycle registration units
+        +-- internal/features/down   /
+        +-- internal/features/restart
         +-- internal/features/all    feature registration files (one per feature)
-        +-- internal/stack           Backend interface + Snapshot types
-        +-- internal/compose         Preflight + Inspect adapter (Docker CLI)
-        +-- internal/state           filesystem StateStore
+        +-- internal/stack           Backend/read types + Lifecycle/Identity seams
+        +-- internal/compose         Preflight + Inspect + Lifecycle adapter (Docker CLI)
+        +-- internal/state           filesystem StateStore, name registry, stack lock
         +-- internal/execx           external command boundary
             internal/execx/execxtest fake Runner for tests
 ```
@@ -45,9 +51,13 @@ Dependency rules:
   stages and an optional human presenter.
 - `internal/core` knows neither Docker nor Compose. It defines the boundaries.
 - `internal/compose` knows `internal/stack` and `internal/execx`, not the UI.
-- `internal/stack.Backend` is the only stack-reading boundary the status feature
-  consumes. A future backend can implement it without changing CLI/TUI code; do
-  not build that backend now.
+- `internal/stack.Backend` is the read-only stack boundary the status feature
+  consumes. `stack.Lifecycle` and `stack.Identity` are the narrow write and
+  identity boundaries consumed by `internal/lifecycle`. A future backend can
+  implement them without changing CLI/TUI code; do not build that backend now.
+- `internal/lifecycle` knows `core`, `stack` and `state`; it never imports
+  Cobra, Bubble Tea or `internal/compose` (the Compose adapter is passed as the
+  published interfaces).
 
 ---
 
@@ -178,9 +188,10 @@ Rules (`internal/target.Resolver`):
   Without explicit env files, if `.env` exists next to the first Compose file it
   is reported as `DefaultEnvFile` (informational only; it is not passed through).
 - Profiles are passed as repeated global `--profile` flags.
-- `ProjectName` is only the explicit `-p` value. Empty means Compose resolves the
-  name from its project directory. Ticket #3 allocates reusable automatic names
-  and sets `ProjectName` before the operation; ticket #4 fills `Environment`.
+- `ProjectName` is only the explicit `-p` value. Empty means the lifecycle
+  controller allocates/reuses an automatic name (see §5). Ticket #4 fills
+  `Environment`, which is part of the name/state key. The read-only status
+  feature keeps letting Compose resolve the folder default and writes no state.
 - `Target.ComposeArgs()` is the single source of Compose global inputs:
   `compose -f <file>... --env-file <file>... --profile <profile>... [-p <name>]`.
   It deliberately does **not** pass `--project-directory`: Compose keeps its own
@@ -190,8 +201,8 @@ Rules (`internal/target.Resolver`):
   resolution are read-only.
 
 State identity is `ProjectDir + Environment`, not the Compose project name (the
-name itself will be stored state). This keeps the same folder/environment tied
-to one helper-managed stack.
+name itself is stored state). This keeps the same folder/environment tied to
+one helper-managed stack.
 
 ---
 
@@ -245,7 +256,9 @@ func init() {
 }
 ```
 
-3. Run `go test ./...`. No existing file is edited.
+3. Run `go test ./...`. No existing file is edited. A lifecycle-like feature
+   calls `deps.Deps.Lifecycle` with its `lifecycle.Action`; it does not add a
+   second write path.
 
 The CLI command, Korean help entry, JSON wrapper, exit codes, TUI menu entry and
 stage display are derived automatically. Registration files execute in filename
@@ -268,7 +281,116 @@ affected tickets. Do not copy the interface into a feature.
 
 ---
 
-## 5. CLI and TUI assembly
+## 5. Stack lifecycle: up, stop, down, restart (ticket 03)
+
+Four flat, stack-changing commands run through `core.Engine.Run`; CLI and TUI
+share `lifecycle.Controller`. Nothing here builds, pulls, checks health, runs
+hooks, backs up data or rolls back.
+
+| command | scope | Compose call | effect |
+|---|---|---|---|
+| `up` | whole stack; `-s/--service` optional | `... up --detach [services...]` | starts/resumes; applies the current Compose configuration; short interruption possible |
+| `stop` | whole stack; `-s/--service` optional | `... stop [services...]` | stops containers; containers and data remain; `up` resumes |
+| `down` | project-wide only | `... down` | removes containers and the default network; never `-v` or prune; named volumes survive |
+| `restart` | whole stack; `-s/--service` optional | `... restart [--no-deps] [services...]` | restarts containers; never re-reads configuration or images; `up` applies configuration |
+
+Compose global inputs always precede the subcommand (`-f`, `--env-file`,
+`--profile`, `-p`), so profiles work on every lifecycle command. Explicit
+service names are Compose services, never container instances. No atomicity,
+zero-downtime or automatic-rollback guarantee is implied.
+
+Published services:
+
+- `stack.Lifecycle` (`Up`/`Stop`/`Down`/`Restart`) implemented by
+  `internal/compose`; `deps.Deps.Lifecycle` exposes the shared
+  `*lifecycle.Controller`. Update/pull/build/health remain ticket #8.
+- `stack.Identity` (`ConfigInfo`/`DerivedProjectName`/`Projects`) is the narrow
+  read boundary used only for name allocation; it returns names and service
+  keys, never environment values.
+- `lifecycle.Controller.Run(ctx, in, action)` returns `lifecycle.Payload`, which
+  JSON consumers read as `data.lifecycle`.
+- `state.Store.AllocateName` and `state.AcquireStackLock` are reusable by later
+  tickets (see §8).
+
+Stages (stable snake_case; Korean titles): `resolve_project`, `allocate_name`,
+`coordinate`, `<action>` (`up`/`stop`/`down`/`restart`), `observe`. On failure
+the result lists the completed stages, the failed stage, the observable current
+state in the diagnostic message and Korean recovery actions. Cancellation stays
+`canceled` (exit 130) and states that partial effects may remain.
+
+Payload (`data.lifecycle`): `action`, `project_name`,
+`project_name_source` (`explicit|configured|allocated|existing`), `scope`
+(`stack|services`), `services`, `volumes_removed` (always false),
+`config_applied` (true only for `up`), `state` (observed snapshot, omitted when
+observation failed) and `notices` (Korean notices such as a rename).
+`Result.Target.ProjectName` remains the explicit `-p` input; the effective name
+is in the payload and in every Compose call.
+
+### Automatic names and local ownership
+
+- The effective name comes from Compose's resolved config name. If it differs
+  from Compose's own folder-derived default (a project `name:` or
+  `COMPOSE_PROJECT_NAME`), it is honored as declared. A declared name owned by
+  another folder or an unmanaged existing project stops with
+  `project_name_conflict` before any change; dcraft never renames or adopts the
+  other stack.
+- Otherwise the base is Compose's derived name for the project folder (the first
+  file's directory) plus the environment id (currently empty). The smallest free
+  suffix is used: `hello-world`, `hello-world-1`, … No path hash is displayed.
+- Claims live in `<state>/names.json`, keyed by absolute project folder +
+  environment. A recorded name is reused on rerun, after stop and after down,
+  even when containers are gone. An existing Compose project whose config file
+  belongs to the same folder is reused (`existing`) instead of duplicated, so a
+  stack created by plain Compose or after state loss is identified.
+- Changing a recorded automatic name to a declared name updates the claim and
+  emits a Korean notice; the old project is left untouched and is no longer
+  managed. Dropping `-p` later reuses the recorded name instead of silently
+  creating a second stack; declaring a different name is the explicit way to
+  change it. A declared name that equals Compose's derived default is
+  indistinguishable from an automatic name (Compose exposes no provenance flag)
+  and is treated as automatic.
+- Declared names are detected against Compose's true folder default. The probe
+  uses an empty env file and drops an exported `COMPOSE_PROJECT_NAME`, so a
+  name in `.env`, an exported `COMPOSE_PROJECT_NAME` and a project `name:` are
+  all recognized as declarations instead of defaults.
+- `status` stays read-only and writes no state; it still lets Compose resolve
+  the folder default. For a suffixed folder (`hello-world-1`) status shows the
+  default project until integration wires the published name lookup into
+  status. No lifecycle operation relies on status for identity.
+
+### Same-stack coordination
+
+- One per-stack exclusive lock (`<state>/stacks/<key>/.lock`, `flock`, holder
+  JSON with action/PID/start time) is held across the Compose call and the
+  observation. A conflicting operation fails immediately with `stack_busy`
+  (exit 1) and a Korean message naming the holder; it does not wait forever.
+  Different folders and environments use different locks.
+- `state.AcquireStackLock(ctx, target, state.LockHolder)` and
+  `(*state.StackLock).Release()` are published for update (#8), backup/restore
+  (#16–#19) and rollback (#12). `state.AllocateName` serializes claims with a
+  short bounded file lock and an atomic file replace.
+- No host-wide prune; another project's containers, networks, volumes and
+  images are never removed.
+
+### TUI
+
+- The menu lists every registered feature in Korean. Selecting a mutating
+  feature first shows a confirmation screen with the requested target
+  (path/files/profiles/project name), the whole-stack scope and the effect.
+  `enter` runs the same engine path, `esc` cancels, `q` quits without running.
+  The TUI provides whole-stack operations only; service selection is the CLI
+  `-s/--service`.
+- During an in-flight mutating operation, `q` explains that the operation is
+  running and that quitting can leave partial effects (it does not orphan the
+  Compose process). `ctrl+c` requests safe cancellation: the per-run context is
+  canceled, the external Compose process is stopped, and the screen stays open
+  to show the canceled result with partial-effect guidance; a later `q` quits.
+  Read-only loading keeps the ticket-01 quit behavior. Normal quit after
+  completion touches no service.
+
+---
+
+## 6. CLI and TUI assembly
 
 ### CLI (`internal/ui/cli`)
 
@@ -312,17 +434,20 @@ It derives everything from the registry:
 - the stage sink shows the current stage while loading;
 - if more than one feature is registered, a Korean menu lists all features;
   `↑/↓` select, `enter` runs the selected feature through the same engine;
-- `r` re-runs the active feature; `q` and `ctrl+c` quit;
-- normal quit is not an operation and does not touch services. Only read-only
-  features exist in this ticket; later mutating features keep the same quit
-  contract and must report in-flight stage/partial effects.
+- selecting a mutating feature shows the small confirmation screen from §5
+  (requested target, whole-stack scope, effect); `esc` returns to the menu;
+- `r` re-runs read-only features directly and asks for confirmation again for
+  mutating features; `q` and `ctrl+c` quit;
+- normal quit is not an operation and does not touch services. During an
+  in-flight mutating operation `q` explains the risk; `ctrl+c` requests
+  cancellation and keeps the screen for the canceled result (see §5).
 
 No feature action is selectable unless it is registered. This ticket registers
-only `status`.
+`status`, `up`, `stop`, `down` and `restart`.
 
 ---
 
-## 6. Result, progress and cancellation contract
+## 7. Result, progress and cancellation contract
 
 `core.Result` is the only operation outcome. JSON schema version is `1`
 (`core.SchemaVersion`); changes within v1 are additive, breaking changes bump it.
@@ -417,7 +542,7 @@ feature may add fetched secret values to it.
 
 ---
 
-## 7. Per-computer state
+## 8. Per-computer state
 
 `internal/state.Root(getenv)`:
 
@@ -436,9 +561,12 @@ type StateStore interface {
 Layout:
 
 ```
+<state>/names.json                  # project-name claims, 0600, atomic replace
+<state>/names.lock                 # short-lived allocation lock, 0600
 <state>/stacks/<folder>-<hash12>/
     history.jsonl     # append-only operation records, 0600
-    state.json        # reserved for #3 name allocation / #7 last-good state
+    .lock             # per-stack change lock + holder JSON, 0600
+    state.json        # reserved for #7 last-good state
 ```
 
 - The key is derived from the absolute project folder **and** the environment
@@ -448,15 +576,22 @@ Layout:
 - History records contain operation id, action, outcome, timestamps, stages and
   diagnostics. Never resolved secret values.
 - Status reads and writes no state.
-- History is written only for successful `RecordsHistory` features in this
-  ticket; failed verifications are never recorded as good. Ticket #7 extends
-  good-version records; ticket #3 owns name allocation and cross-process
-  coordination. In-process appends are serialized; cross-process locking is not
-  implemented here and must be published by #3.
+- History is written only for successful `RecordsHistory` features; failed
+  verifications are never recorded as good. Ticket #7 extends good-version
+  records.
+- Name claims are keyed by the same folder + environment identity. They hold the
+  effective Compose project name, its source and the owning folder; the
+  automatic-name mapping is reused on rerun, after stop and after down.
+- `names.json` updates take `names.lock` with a short bounded wait, verify the
+  claim, write a temp file and rename it atomically. The per-stack change lock
+  never waits: a conflicting operation returns `*state.BusyError` immediately.
+- Cross-process locking uses `flock` on macOS/Linux (WSL2). Other platforms keep
+  building but return an explicit "unsupported" error instead of pretending to
+  coordinate.
 
 ---
 
-## 8. External boundaries
+## 9. External boundaries
 
 ```go
 type execx.Runner interface {
@@ -472,7 +607,8 @@ type execx.Runner interface {
 - Tests: `internal/execx/execxtest.Runner` records every call and returns
   scripted results without Docker or a shell.
 - `internal/compose.Compose` is the only Compose adapter. It implements
-  `core.Preflight` and `stack.Backend` (`Name`, `Inspect`).
+  `core.Preflight`, `stack.Backend` (`Name`, `Inspect`), `stack.Lifecycle` and
+  `stack.Identity`.
 - `internal/stack.Backend` keeps the read-only stack boundary separate from the
   UI. No Kubernetes backend or multi-backend registry exists now.
 - Compose semantics (validation, merge, path resolution, profiles, ps JSON) are
@@ -480,7 +616,7 @@ type execx.Runner interface {
 
 ---
 
-## 9. Diagnostics catalog
+## 10. Diagnostics catalog
 
 Order: target resolution, then preflight. A fatal category stops later work.
 A remote endpoint is refused before any `docker info`/Compose contact. Docker
@@ -500,6 +636,11 @@ Desktop's VM-backed unix socket is **local**, not remote.
 | `target_invalid` | path/file/env input is missing or not a file/folder | error |
 | `multiple_configuration_files` | several base files; first used | warning |
 | `approval_required` | missing independent approval | error (exit 2) |
+| `project_name_conflict` | declared/recorded project name belongs to another stack | error (exit 2) |
+| `service_unknown` | explicit `-s/--service` is not in the Compose configuration | error (exit 2) |
+| `stack_busy` | another operation holds the same stack lock | error |
+| `lifecycle_failed` | a Compose lifecycle call failed | error |
+| `state_failed` | name/lock state could not be read or written | error |
 | `verification_failed` | post-operation verification failed | error |
 | `canceled` | operation interrupted | warning (exit 130 outcome) |
 | `history_failed` | operation history could not be written | warning |
@@ -509,9 +650,15 @@ Each diagnostic carries Korean `message`, optional raw `detail`, and Korean
 `next_actions`. Machine consumers switch on `category`, never on message text.
 Warnings do not block success and are rendered on both interfaces.
 
+`Result.ExitCode` returns 2 for `approval_required`, `project_name_conflict` and
+`service_unknown`: those mean the caller must supply a different decision (an
+approval, a free name, an existing service). dcraft never prompts to resolve
+them; non-interactive runs fail with the explanation instead. `approval_required`
+keeps its existing behavior; the two new categories are additive v1 values.
+
 ---
 
-## 10. Verification
+## 11. Verification
 
 Tested seams:
 
@@ -524,14 +671,29 @@ Tested seams:
 - engine seam with fake features (approval, stages, verification, history,
   cancellation, panic recovery, warnings);
 - registry validation and CLI/TUI assembly from registries;
-- state layout and permissions;
+- state layout and permissions, automatic-name allocation (first/suffix/reuse/
+  declared/conflict/external ownership/environment/concurrency) and the per-stack
+  lock (busy holder, different stacks, goroutine exclusivity, cancellation);
+- lifecycle command construction (global flags before the subcommand, `up
+  --detach` + services, `stop` + services, project-wide `down` without `-v`,
+  `restart --no-deps` for explicit services), config/project parsing and
+  `lifecycle_failed`/`stack_busy`/`project_name_conflict`/`service_unknown`
+  diagnostics with the fake runner;
 - process e2e with a fake `docker` shim: exit codes, JSON purity, non-interactive
-  no-args, help, parent isolation, SIGINT→130;
-- pty process tests: TUI enter+quit, no mutating Docker command;
-- real Docker integration behind `DCRAFT_INTEGRATION=1`: isolated
-  `dcraft-test-*` project, real healthchecks, connection info, compose file
-  unchanged, containers unchanged after TUI quit, nested-folder block, cleanup
-  with its own project only. No host-wide prune or other project changes.
+  no-args, help, parent isolation, SIGINT→130, repeated up/name reuse, same-name
+  folders, explicit and configured name conflicts, unknown service, no secret
+  values in output/history, TUI menu + confirmation + quit-without-run;
+- pty process tests: TUI enter+quit, no mutating Docker command, mutating
+  confirmation before running, up through the same engine;
+- real Docker integration behind `DCRAFT_INTEGRATION=1`: isolated projects,
+  up→status running, stop→exited, resume with the same container, restart not
+  applying changed configuration, down keeping named-volume data, repeated up
+  without duplicate project, two same-name folders (`hello-world`,
+  `hello-world-1`), explicit-name collision refused with exit 2, an existing
+  externally created project reused, concurrent up (one winner, one `stack_busy`),
+  another stack's container IDs/data unchanged, TUI quit leaving services
+  running, cleanup with its own projects only. No host-wide prune or other
+  project changes.
 
 Commands:
 
@@ -548,28 +710,36 @@ Docker. Unrun platforms/paths are not claimed as verified.
 
 ---
 
-## 11. Not implemented here (owned by later tickets)
+## 12. Not implemented here (owned by later tickets)
 
-- `up`, `update`, `stop`, `down`, `restart`, `logs`, `exec`, `backup`, `restore`,
-  `rollback`; no registration exists for them and no menu action is shown.
+- `update`, `logs`, `exec`, `backup`, `restore`, `rollback`; no registration
+  exists for them and no menu action is shown.
 - Named environments/aliases (`Target.Environment` is reserved; no flag yet;
   ticket #4 fills it and owns the required selection rule).
 - Secrets, host scripts/hooks, generated Compose/Dockerfile files, Compose
   installation, previous-good records, Kubernetes, remote engines, resident
   daemon/web UI.
-- Cross-process state locking/name allocation (ticket #3), good-version history
-  (ticket #7/#11), TUI flag/approval collection for future features.
+- Good-version history (ticket #7/#11), TUI flag/approval collection for future
+  features, service selection in the TUI (CLI `-s` only), environment selection
+  (ticket #4).
 
-Residual risks in this ticket: Compose capability detection is based on running
-the installed CLI (version/JSON probes), so a heavily patched Compose may pass
-probes and fail later; diagnostic details are tool output and could contain
+Residual risks published by ticket #3: Compose capability detection is based on
+running the installed CLI (version/JSON probes), so a heavily patched Compose may
+pass probes and fail later; diagnostic details are tool output and could contain
 user-provided file content, though dcraft never fetches or prints secret values;
 status parses a subset of Compose/ps output, so unknown future fields are ignored
-by design; the TUI renders long status text without a scroll viewport.
+by design; the TUI renders long status text without a scroll viewport; status
+does not read the allocated name (see §5), so a suffixed folder's status shows
+the folder-default project until integration wires the lookup; a declared name
+equal to Compose's derived default is treated as automatic; a declared rename
+of a recorded target leaves the old project unmanaged by design; per-stack
+coordination fails fast instead of queuing, so an automation caller must retry;
+`flock` coordination is verified on macOS (Linux/WSL2 use the same syscall but
+were not run on this machine).
 
 ---
 
-## 12. Change request checklist
+## 13. Change request checklist
 
 Before changing a shared type/interface, send the integration owner:
 
@@ -579,8 +749,18 @@ Before changing a shared type/interface, send the integration owner:
    a UI;
 4. documentation updates to this file.
 
+Published by ticket #3 (consume, do not fork): `stack.Lifecycle`,
+`stack.Identity`, `stack.ConfigInfo`, `stack.ProjectInfo`, `stack.OpResult`,
+`deps.Deps.Lifecycle`, `lifecycle.Controller`/`Action`/`Payload`/`Report`/
+`Present`, `state.AcquireStackLock`/`StackLock`/`LockHolder`/`BusyError`,
+`state.AllocateName`/`NameRequest`/`NameAllocation`/`NameSource`/
+`NameConflictError`, the `names.json`/`.lock` state layout, the lifecycle stage
+names and the new diagnostic categories/exit-code mapping.
+
 Allowed without a request: new feature package, new registration file, feature
-payload type under `data`, feature-local Korean strings and tests. Not allowed:
-editing another feature, adding a feature branch in CLI/TUI, bypassing the engine
-for Docker access, printing secrets, or silently changing an existing machine
-value/exit code.
+payload type under `data`, feature-local Korean strings and tests. A lifecycle-like
+feature consumes `deps.Deps.Lifecycle` (or requests a new narrow service); it does
+not call Compose directly or copy the controller. Not allowed: editing another
+feature, adding a feature branch in CLI/TUI, bypassing the engine for Docker
+access, printing secrets, or silently changing an existing machine value/exit
+code.

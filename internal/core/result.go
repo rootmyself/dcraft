@@ -132,8 +132,12 @@ type Result struct {
 // ExitCode maps an outcome to the stable process exit status:
 //   - 0 success
 //   - 1 operation/environment failure
-//   - 2 missing required input or approval
+//   - 2 missing required input or approval, or an invalid explicit selection
 //   - 130 canceled by the caller
+//
+// project_name_conflict and service_unknown mean the caller must supply a
+// different decision (a free name, an existing service); they are usage errors,
+// not environment failures. dcraft never prompts its way out of them.
 func (r Result) ExitCode() int {
 	switch r.Outcome {
 	case OutcomeSuccess:
@@ -142,7 +146,8 @@ func (r Result) ExitCode() int {
 		return 130
 	default:
 		for _, d := range r.Diagnostics {
-			if d.Category == CategoryApprovalRequired {
+			switch d.Category {
+			case CategoryApprovalRequired, CategoryProjectNameConflict, CategoryServiceUnknown:
 				return 2
 			}
 		}

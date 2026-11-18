@@ -243,7 +243,7 @@ func TestViewDoesNotAdvertiseUnimplementedCommands(t *testing.T) {
 	m := newTestModel(t, status)
 	initModel(t, m)
 	view := m.View()
-	for _, forbidden := range []string{"dcraft up", "dcraft update", "dcraft down", "dcraft logs", "dcraft backup"} {
+	for _, forbidden := range []string{"dcraft update", "dcraft logs", "dcraft backup"} {
 		if strings.Contains(view, forbidden) {
 			t.Fatalf("view advertises unimplemented %q:\n%s", forbidden, view)
 		}
@@ -273,5 +273,230 @@ func TestEnterWhileLoadingDoesNotStartSecondOperation(t *testing.T) {
 	}
 	if logs.runs != 0 {
 		t.Fatalf("logs ran while loading")
+	}
+}
+
+func mutatingDescriptor(name string) core.Descriptor {
+	d := descriptor(name, false)
+	d.ReadOnly = false
+	d.RecordsHistory = true
+	return d
+}
+
+func TestMutatingFeatureConfirmsTargetAndEffectBeforeRunning(t *testing.T) {
+	status := &stubFeature{desc: descriptor("status", true), body: "상태 본문"}
+	up := &stubFeature{desc: mutatingDescriptor("up"), body: "시작 본문"}
+	m := newTestModel(t, status, up)
+	initModel(t, m)
+
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("down")})
+	m = nm.(*Model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(*Model)
+	view := m.View()
+	for _, want := range []string{"다음 작업", "제목 up", "대상", "범위", "스택 전체", "효과", "요약 up", "변경", "enter 실행", "esc 취소"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("confirmation missing %q:\n%s", want, view)
+		}
+	}
+	if up.runs != 0 {
+		t.Fatalf("mutating feature ran before confirmation: %d", up.runs)
+	}
+
+	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(*Model)
+	feed(t, m, execute(t, cmd))
+	if up.runs != 1 {
+		t.Fatalf("confirmed feature runs = %d, want 1", up.runs)
+	}
+	if !strings.Contains(m.View(), "시작 본문") {
+		t.Fatalf("result not shown:\n%s", m.View())
+	}
+}
+
+func TestConfirmationShowsRequestedTargetAndProjectName(t *testing.T) {
+	status := &stubFeature{desc: descriptor("status", true), body: "body"}
+	up := &stubFeature{desc: mutatingDescriptor("up"), body: "up"}
+	reg := core.NewRegistry()
+	for _, f := range []core.Feature{status, up} {
+		if err := reg.Register(f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	engine := core.NewEngine(reg, stubResolver{}, stubPreflight{}, stubState{}, stubClock{})
+	engine.CWD = func() (string, error) { return "/cwd", nil }
+	engine.NewOperationID = func() string { return "op_tui" }
+	m := NewModel(context.Background(), Options{
+		Engine: engine, Registry: reg,
+		Target: core.TargetRequest{Path: "/work/app", ProjectName: "chosen"},
+	})
+	initModel(t, m)
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("down")})
+	m = nm.(*Model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(*Model)
+	view := m.View()
+	for _, want := range []string{"/work/app", "chosen"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("confirmation missing %q:\n%s", want, view)
+		}
+	}
+}
+
+func TestEscapeCancelsConfirmationWithoutRunning(t *testing.T) {
+	status := &stubFeature{desc: descriptor("status", true), body: "body"}
+	up := &stubFeature{desc: mutatingDescriptor("up"), body: "up"}
+	m := newTestModel(t, status, up)
+	initModel(t, m)
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("down")})
+	m = nm.(*Model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(*Model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = nm.(*Model)
+	if up.runs != 0 {
+		t.Fatalf("escaped confirmation ran the feature: %d", up.runs)
+	}
+	if strings.Contains(m.View(), "다음 작업") {
+		t.Fatalf("confirmation still visible:\n%s", m.View())
+	}
+	if !strings.Contains(m.View(), "body") {
+		t.Fatalf("previous result lost:\n%s", m.View())
+	}
+}
+
+func TestQuitFromConfirmationDoesNotRunFeature(t *testing.T) {
+	status := &stubFeature{desc: descriptor("status", true), body: "body"}
+	up := &stubFeature{desc: mutatingDescriptor("up"), body: "up"}
+	for _, key := range []string{"q", "ctrl+c"} {
+		m := newTestModel(t, status, up)
+		initModel(t, m)
+		nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("down")})
+		m = nm.(*Model)
+		nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+		m = nm.(*Model)
+		var cmd tea.Cmd
+		if key == "q" {
+			nm, cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)})
+		} else {
+			nm, cmd = m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+		}
+		m = nm.(*Model)
+		if !isQuit(t, cmd) {
+			t.Fatalf("key %q did not quit from confirmation", key)
+		}
+		if up.runs != 0 {
+			t.Fatalf("key %q ran the feature", key)
+		}
+	}
+}
+
+func TestQuitIsRefusedWhileAMutatingOperationIsRunning(t *testing.T) {
+	status := &stubFeature{desc: descriptor("status", true), body: "body"}
+	up := &stubFeature{desc: mutatingDescriptor("up"), body: "up"}
+	m := newTestModel(t, status, up)
+	initModel(t, m)
+	// Start an operation without executing its command, so the model stays in
+	// the loading state while the quit key is handled.
+	if cmd := m.begin(up); cmd == nil {
+		t.Fatal("begin returned no command")
+	}
+	for _, key := range []string{"q", "ctrl+c"} {
+		var cmd tea.Cmd
+		if key == "q" {
+			nm, c := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)})
+			m = nm.(*Model)
+			cmd = c
+		} else {
+			nm, c := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+			m = nm.(*Model)
+			cmd = c
+		}
+		if isQuit(t, cmd) {
+			t.Fatalf("key %q quit during a mutating operation", key)
+		}
+		if !strings.Contains(m.View(), "진행 중") {
+			t.Fatalf("key %q gave no in-progress explanation:\n%s", key, m.View())
+		}
+	}
+}
+
+func TestReadOnlyStatusStillQuitsWhileLoading(t *testing.T) {
+	status := &stubFeature{desc: descriptor("status", true), body: "body"}
+	m := newTestModel(t, status)
+	if cmd := m.begin(status); cmd == nil {
+		t.Fatal("begin returned no command")
+	}
+	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	m = nm.(*Model)
+	if !isQuit(t, cmd) {
+		t.Fatalf("read-only loading screen refused to quit:\n%s", m.View())
+	}
+}
+
+func TestRefreshOfAMutatingFeatureAlsoConfirms(t *testing.T) {
+	status := &stubFeature{desc: descriptor("status", true), body: "body"}
+	up := &stubFeature{desc: mutatingDescriptor("up"), body: "up"}
+	m := newTestModel(t, status, up)
+	initModel(t, m)
+	// Confirm and run up once.
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("down")})
+	m = nm.(*Model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(*Model)
+	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(*Model)
+	feed(t, m, execute(t, cmd))
+	if up.runs != 1 {
+		t.Fatalf("first run = %d", up.runs)
+	}
+	// r must ask again instead of silently changing the stack.
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")})
+	m = nm.(*Model)
+	if up.runs != 1 {
+		t.Fatalf("r reran a mutating feature without confirmation: %d", up.runs)
+	}
+	if !strings.Contains(m.View(), "다음 작업") {
+		t.Fatalf("refresh did not ask for confirmation:\n%s", m.View())
+	}
+}
+
+func TestCtrlCDuringMutatingOperationRequestsSafeCancellation(t *testing.T) {
+	status := &stubFeature{desc: descriptor("status", true), body: "body"}
+	up := &stubFeature{desc: mutatingDescriptor("up"), body: "up"}
+	m := newTestModel(t, status, up)
+	initModel(t, m)
+	if cmd := m.begin(up); cmd == nil {
+		t.Fatal("begin returned no command")
+	}
+	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	m = nm.(*Model)
+	if isQuit(t, cmd) {
+		t.Fatal("ctrl+c quit instead of requesting cancellation")
+	}
+	if m.runCtx == nil || m.runCtx.Err() != context.Canceled {
+		t.Fatalf("run context was not canceled: %v", m.runCtx)
+	}
+	if !strings.Contains(m.View(), "중단을 요청했습니다") {
+		t.Fatalf("no cancellation notice:\n%s", m.View())
+	}
+	// The engine reports the canceled result; the screen must show it.
+	nm, _ = m.Update(resultMsg{res: core.Result{
+		SchemaVersion: core.SchemaVersion,
+		Action:        "up",
+		Outcome:       core.OutcomeCanceled,
+		Diagnostics: []core.Diagnostic{{
+			Category: core.CategoryCanceled, Severity: core.SeverityWarning,
+			Message: "작업이 중단되었습니다. 이미 완료된 단계의 효과는 남아 있을 수 있습니다.",
+		}},
+	}})
+	m = nm.(*Model)
+	if !strings.Contains(m.View(), "작업 중단") || !strings.Contains(m.View(), "남아 있을 수") {
+		t.Fatalf("canceled result not shown:\n%s", m.View())
+	}
+	nm, cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	m = nm.(*Model)
+	if !isQuit(t, cmd) {
+		t.Fatal("q did not quit after the canceled result")
 	}
 }
