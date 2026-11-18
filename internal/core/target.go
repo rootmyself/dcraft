@@ -18,8 +18,11 @@ type TargetRequest struct {
 	// resolves it from the project folder (ticket #3 later allocates reusable
 	// automatic names and populates this field before an operation runs).
 	ProjectName string
-	// Environment is an optional named-environment identifier. Ticket #4
-	// fills it from an explicit alias selection.
+	// Environment is the explicitly selected named-environment alias. When the
+	// project registers aliases in .dcraft.yaml, every operation must select
+	// one with --env (CLI) or the TUI selection screen; empty is an error and
+	// is never replaced with an implicit choice. With no aliases it stays
+	// empty and standard Compose defaults apply.
 	Environment string
 	// AllowMissingConfiguration lets a feature that does not operate on a
 	// Compose project (Descriptor.TargetOptional) resolve a folder that has no

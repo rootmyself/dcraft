@@ -142,7 +142,8 @@ func (r Result) ExitCode() int {
 		return 130
 	default:
 		for _, d := range r.Diagnostics {
-			if d.Category == CategoryApprovalRequired {
+			switch d.Category {
+			case CategoryApprovalRequired, CategoryEnvironmentRequired, CategoryEnvironmentUnknown, CategoryEnvironmentConflict:
 				return 2
 			}
 		}

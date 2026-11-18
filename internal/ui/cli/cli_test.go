@@ -214,7 +214,8 @@ func TestTargetFlagsReachResolver(t *testing.T) {
 	status := &stubFeature{desc: descriptor("status")}
 	h := newHarness(t, status)
 	err := h.run("status", "--path", "/work/app", "-f", "compose.yaml", "-f", "extra.yml",
-		"--env-file", "local.env", "--profile", "dev", "--profile", "tools", "-p", "hello-world")
+		"--env-file", "local.env", "--profile", "dev", "--profile", "tools", "-p", "hello-world",
+		"--env", "staging")
 	if err != nil {
 		t.Fatalf("status: %v", err)
 	}
@@ -234,8 +235,23 @@ func TestTargetFlagsReachResolver(t *testing.T) {
 	if got.ProjectName != "hello-world" {
 		t.Fatalf("project name = %q", got.ProjectName)
 	}
+	if got.Environment != "staging" {
+		t.Fatalf("environment = %q", got.Environment)
+	}
 	if h.resolver.cwd != "/cwd" {
 		t.Fatalf("cwd = %q", h.resolver.cwd)
+	}
+}
+
+func TestEnvironmentFlagIsDocumentedInKorean(t *testing.T) {
+	status := &stubFeature{desc: descriptor("status")}
+	h := newHarness(t, status)
+	if err := h.run("status", "--help"); err != nil {
+		t.Fatalf("help: %v", err)
+	}
+	out := h.stdout.String()
+	if !strings.Contains(out, "--env") || !strings.Contains(out, "실행환경") {
+		t.Fatalf("help missing --env guidance:\n%s", out)
 	}
 }
 

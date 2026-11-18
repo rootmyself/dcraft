@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/rootmyself/dcraft/internal/core"
+	"github.com/rootmyself/dcraft/internal/environments"
 )
 
 // Resolver implements core.Resolver.
@@ -27,6 +28,36 @@ var defaultBaseFiles = []string{
 	"compose.yml",
 	"docker-compose.yml",
 	"docker-compose.yaml",
+}
+
+// Environments implements core.EnvironmentSource. It lists aliases only; it
+// does not validate every referenced file, so one unfinished alias does not
+// hide the others in the TUI selection screen.
+func (r *Resolver) Environments(ctx context.Context, req core.TargetRequest, cwd string) ([]core.Environment, []core.Diagnostic, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+	if cwd == "" {
+		var err error
+		cwd, err = os.Getwd()
+		if err != nil {
+			return nil, nil, core.FailCause(err, core.Diagnostic{
+				Category:    core.CategoryTargetInvalid,
+				Severity:    core.SeverityError,
+				Message:     msgWorkingDirUnknown,
+				NextActions: []string{msgWorkingDirAction},
+			})
+		}
+	}
+	projectDir, err := resolveProjectDir(req.Path, cwd)
+	if err != nil {
+		return nil, nil, err
+	}
+	catalog, err := environments.Load(projectDir)
+	if err != nil {
+		return nil, nil, err
+	}
+	return catalog.Environments, nil, nil
 }
 
 // Resolve implements core.Resolver.
@@ -61,7 +92,50 @@ func (r *Resolver) Resolve(ctx context.Context, req core.TargetRequest, cwd stri
 		Environment: req.Environment,
 	}
 
+	catalog, err := environments.Load(projectDir)
+	if err != nil {
+		return tgt, nil, err
+	}
+
 	var warnings []core.Diagnostic
+	if len(catalog.Environments) > 0 {
+		if req.Environment == "" {
+			return tgt, nil, environmentRequired(catalog.Names())
+		}
+		if len(req.Files) > 0 || len(req.EnvFiles) > 0 || len(req.Profiles) > 0 {
+			return tgt, nil, environmentInputConflict()
+		}
+		env, err := catalog.Expand(req.Environment)
+		if err != nil {
+			return tgt, nil, err
+		}
+		tgt.Environment = env.Name
+		tgt.Files = env.Files
+		tgt.EnvFiles = env.EnvFiles
+		tgt.Profiles = env.Profiles
+		if len(tgt.Files) == 0 {
+			files, discoveredWarnings, err := discoverIn(projectDir, req.AllowMissingConfiguration)
+			if err != nil {
+				return tgt, nil, err
+			}
+			tgt.Files = files
+			warnings = append(warnings, discoveredWarnings...)
+		}
+		if len(tgt.EnvFiles) == 0 && len(tgt.Files) > 0 {
+			candidate := filepath.Join(filepath.Dir(tgt.Files[0]), ".env")
+			if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+				tgt.DefaultEnvFile = candidate
+			}
+		}
+		warnings = append(warnings, environmentWarnings(catalog, env, tgt, req.ProjectName)...)
+		warnings = append(warnings, environmentLimitsDiagnostic())
+		return tgt, warnings, nil
+	}
+
+	if req.Environment != "" {
+		return tgt, nil, environmentUnknownWithoutAliases(req.Environment)
+	}
+
 	if len(req.Files) > 0 {
 		files, err := resolveExplicitFiles(req.Files, cwd, core.CategoryTargetInvalid, msgComposeFileMissing, msgComposeFileActions)
 		if err != nil {
