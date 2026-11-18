@@ -364,11 +364,26 @@ func TestRollbackCancellationIsNotSuccess(t *testing.T) {
 	if parsed.Outcome != core.OutcomeCanceled || !hasRollbackCategory(parsed, core.CategoryCanceled) {
 		t.Fatalf("result = %+v", parsed)
 	}
+	canceledApply := false
+	for _, st := range parsed.Stages {
+		if st.Name == "apply" && st.Status == core.StageCanceled {
+			canceledApply = true
+			if strings.TrimSpace(st.Detail) == "" {
+				t.Fatalf("canceled apply stage has no current-state detail: %+v", st)
+			}
+		}
+	}
+	if !canceledApply {
+		t.Fatalf("apply stage was not reported as canceled: %+v", parsed.Stages)
+	}
 	after, err := os.ReadFile(recordPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if string(after) != string(before) {
 		t.Fatalf("canceled rollback changed the good record:\nbefore=%s\nafter=%s", before, after)
+	}
+	if strings.Contains(historyFor(t, stateDir), `"action":"rollback"`) {
+		t.Fatal("canceled rollback was written to history as a completed operation")
 	}
 }

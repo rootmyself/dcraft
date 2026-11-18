@@ -154,21 +154,29 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation, opts Options) 
 		return Payload{}, ctxErr
 	}
 
-	err = core.RunStage(in.Reporter, StageApply, msgStageApply, func() error {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		result, applyErr := c.applier.ApplyRollback(ctx, p.target, p.services, p.pins)
-		if applyErr != nil {
-			if ctx.Err() != nil || errors.Is(applyErr, context.Canceled) || errors.Is(applyErr, context.DeadlineExceeded) {
-				return ctxError(ctx, applyErr)
+	// The apply stage is managed manually so the observed state is attached to
+	// the stage even when the Compose process is interrupted; RunStage cannot
+	// carry a detail for a canceled stage.
+	if in.Reporter != nil {
+		in.Reporter.Begin(StageApply, msgStageApply)
+	}
+	applyResult, applyErr := c.applier.ApplyRollback(ctx, p.target, p.services, p.pins)
+	if applyErr != nil {
+		if ctx.Err() != nil || errors.Is(applyErr, context.Canceled) || errors.Is(applyErr, context.DeadlineExceeded) {
+			detail := c.observedStateAfterCancel(p.target)
+			if in.Reporter != nil {
+				in.Reporter.End(StageApply, core.StageCanceled, detail)
 			}
-			return c.applyFailure(ctx, p.target, applyErr, result.Output)
+			return Payload{}, ctxError(ctx, applyErr)
 		}
-		return nil
-	})
-	if err != nil {
-		return Payload{}, err
+		detail := c.observedState(ctx, p.target)
+		if in.Reporter != nil {
+			in.Reporter.End(StageApply, core.StageFailed, detail)
+		}
+		return Payload{}, c.applyFailureWithState(applyErr, applyResult.Output, detail)
+	}
+	if in.Reporter != nil {
+		in.Reporter.End(StageApply, core.StageSucceeded, "")
 	}
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return Payload{}, ctxErr
@@ -242,11 +250,10 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation, opts Options) 
 	return payload, nil
 }
 
-// applyFailure reports the failed apply with the observable state and recovery
-// actions. Tool output may contain resolved values echoed by Compose, so it is
+// applyFailureWithState reports a failed apply with the state already observed
+// for the stage. Tool output may contain values echoed by Compose, so it is
 // truncated before it becomes a diagnostic, exactly like update.
-func (c *Controller) applyFailure(ctx context.Context, target core.Target, cause error, toolOutput string) error {
-	observed := c.observedState(ctx, target)
+func (c *Controller) applyFailureWithState(cause error, toolOutput, observed string) error {
 	var output []string
 	if strings.TrimSpace(toolOutput) != "" {
 		output = append(output, strings.TrimSpace(toolOutput))
@@ -262,6 +269,14 @@ func (c *Controller) applyFailure(ctx context.Context, target core.Target, cause
 		Detail:      truncate(detail, 900),
 		NextActions: []string{msgApplyAct1, msgApplyAct2, msgApplyAct3},
 	})
+}
+
+// observedStateAfterCancel reads the current state with a short independent
+// context so a canceled operation can still report what it left behind.
+func (c *Controller) observedStateAfterCancel(target core.Target) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	return c.observedState(ctx, target)
 }
 
 func (c *Controller) observedState(ctx context.Context, target core.Target) string {

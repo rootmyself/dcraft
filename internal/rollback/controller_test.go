@@ -755,3 +755,37 @@ func TestPreviewDescribesRecordedRollback(t *testing.T) {
 		t.Fatalf("preview applied changes: %d calls", applier.calls)
 	}
 }
+
+// Records are separated per environment: a rollback in another environment
+// does not see this environment's record.
+func TestRunKeepsRecordsSeparatedByEnvironment(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "compose.yaml"), []byte("services: {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dev := core.Target{ProjectDir: dir, Files: []string{filepath.Join(dir, "compose.yaml")}, ProjectName: "project", Environment: "dev"}
+	prod := dev
+	prod.Environment = "prod"
+	store := state.New(t.TempDir())
+	rec := testRecord(dev)
+	rec.Target.Environment = "dev"
+	saveRecord(t, store, dev, rec)
+
+	applier := &fakeApplier{}
+	u := &fakeUpdater{model: testModel(), images: map[string]string{testImage: testImage, testTag: testImage}}
+	c := newController(u, applier, store)
+
+	_, err := c.Run(context.Background(), invocationFor(prod), Options{Timeout: time.Second})
+	requireCategory(t, err, core.CategoryRollbackUnavailable)
+	if applier.calls != 0 {
+		t.Fatal("rollback in another environment reached the stack")
+	}
+
+	u.containers = []stack.Container{healthyContainer("web", testImage, true, "healthy")}
+	if _, err := c.Run(context.Background(), invocationFor(dev), Options{Timeout: 30 * time.Second}); err != nil {
+		t.Fatalf("rollback in the recorded environment: %v", err)
+	}
+	if applier.calls != 1 {
+		t.Fatalf("apply calls = %d, want 1", applier.calls)
+	}
+}

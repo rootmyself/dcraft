@@ -1096,6 +1096,9 @@ Precheck (all before any stack change, all reported with distinct categories):
   `.dcraft.yaml` reference for the recorded service closure cannot be resolved
   (missing/empty env or file source, AWS source not implemented, unknown
   source). Values are read for availability only and never stored or printed.
+  In a recorded `SecretReference`, `name` is the source reference (env var name,
+  local path or AWS secret id), `field` the optional AWS field, and
+  `service`/`phase`/`delivery`/`source` the saved connection metadata.
 
 `apply` uses `internal/compose.ApplyRollback` (published as `stack.Rollbacker`):
 it writes a temporary dcraft-managed override that pins every recorded service
