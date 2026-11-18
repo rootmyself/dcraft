@@ -2,6 +2,7 @@ package backup
 
 import (
 	"context"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -33,6 +34,16 @@ func Discover(ctx context.Context, backend data.Backend, target core.Target, pro
 	if err != nil {
 		return Discovery{}, err
 	}
+	baseDir := target.ProjectDir
+	if len(target.Files) > 0 {
+		baseDir = filepath.Dir(target.Files[0])
+	}
+	for i := range sources {
+		if sources[i].Kind == data.KindBind {
+			sources[i] = NormalizeBindSource(sources[i], baseDir)
+		}
+	}
+	sources = mergeBindSources(sources)
 	runtime, err := backend.ServiceRuntime(ctx, target)
 	if err != nil {
 		return Discovery{}, err
@@ -47,9 +58,49 @@ func Discover(ctx context.Context, backend data.Backend, target core.Target, pro
 	return d, nil
 }
 
-// Select resolves the user's volume selection against the discovery result.
-func (d Discovery) Select(requested []string) ([]DataSource, error) {
-	return SelectVolumeSources(d.Sources, requested)
+// mergeBindSources unifies bind spellings that resolve to the same host
+// folder: one selectable folder, one archive, and consumer queries for every
+// declared spelling. Volume sources keep their order and identity.
+func mergeBindSources(sources []DataSource) []DataSource {
+	byPath := map[string]int{}
+	out := make([]DataSource, 0, len(sources))
+	for _, src := range sources {
+		if src.Kind != data.KindBind {
+			out = append(out, src)
+			continue
+		}
+		key := "bind\x00" + src.Name
+		if index, ok := byPath[key]; ok {
+			merged := &out[index]
+			merged.Services = mergeUnique(merged.Services, src.Services...)
+			merged.MountTargets = mergeUnique(merged.MountTargets, src.MountTargets...)
+			merged.DeclaredPaths = mergeUnique(merged.DeclaredPaths, src.DeclaredPaths...)
+			merged.ReadOnly = merged.ReadOnly && src.ReadOnly
+			continue
+		}
+		byPath[key] = len(out)
+		out = append(out, src)
+	}
+	return out
+}
+
+func mergeUnique(values []string, extra ...string) []string {
+	for _, value := range extra {
+		if value != "" && !contains(values, value) {
+			values = append(values, value)
+		}
+	}
+	return values
+}
+
+// Select resolves the user's volume and bind selection against the discovery
+// result. Bind references are resolved relative to the first Compose file.
+func (d Discovery) Select(volumes, binds []string) ([]DataSource, error) {
+	baseDir := d.Target.ProjectDir
+	if len(d.Target.Files) > 0 {
+		baseDir = filepath.Dir(d.Target.Files[0])
+	}
+	return SelectSources(d.Sources, volumes, binds, baseDir)
 }
 
 // AffectedServices is the union of the Compose services configured to mount
@@ -110,9 +161,27 @@ func (d Discovery) CheckConsumers(ctx context.Context, backend data.Backend, sou
 	seenService := map[string]bool{}
 	seenOutside := map[string]bool{}
 	for _, src := range sources {
-		consumers, err := backend.VolumeConsumers(ctx, d.Target, src.Name)
-		if err != nil {
-			return ConsumerReport{}, err
+		var consumers []data.ContainerConsumer
+		if src.Kind == data.KindBind {
+			seenMount := map[string]bool{}
+			spellings := append([]string{src.Name, src.Declared}, src.DeclaredPaths...)
+			for _, hostPath := range spellings {
+				if hostPath == "" || seenMount[hostPath] {
+					continue
+				}
+				seenMount[hostPath] = true
+				got, err := backend.BindConsumers(ctx, d.Target, hostPath)
+				if err != nil {
+					return ConsumerReport{}, err
+				}
+				consumers = append(consumers, got...)
+			}
+		} else {
+			got, err := backend.VolumeConsumers(ctx, d.Target, src.Name)
+			if err != nil {
+				return ConsumerReport{}, err
+			}
+			consumers = got
 		}
 		allowed := map[string]bool{}
 		for _, svc := range src.Services {
@@ -145,9 +214,29 @@ func (d Discovery) CheckConsumers(ctx context.Context, backend data.Backend, sou
 	return report, nil
 }
 
+// OutsideConsumers is the read-only shared-use probe used by selection
+// previews. It returns only containers that do not belong to this stack's
+// configured consumers; Run refuses them before stopping anything.
+func (d Discovery) OutsideConsumers(ctx context.Context, backend data.Backend, src DataSource) ([]data.ContainerConsumer, error) {
+	report, err := d.CheckConsumers(ctx, backend, []DataSource{src})
+	if err != nil {
+		return nil, err
+	}
+	return report.Outside, nil
+}
+
 // DescribeSource is the shared Korean label for selection screens and plans.
 func DescribeSource(src DataSource) string {
-	parts := []string{src.Key + " → " + src.Name}
+	var parts []string
+	if src.Kind == data.KindBind {
+		label := "폴더 " + src.Name
+		if src.Declared != "" && src.Declared != src.Name {
+			label += " (선언 " + src.Declared + ")"
+		}
+		parts = append(parts, label)
+	} else {
+		parts = append(parts, src.Key+" → "+src.Name)
+	}
 	if len(src.MountTargets) > 0 {
 		parts = append(parts, "마운트 "+strings.Join(src.MountTargets, ", "))
 	}

@@ -106,6 +106,7 @@ type Model struct {
 	wizardChoice     int
 	wizardInput      string
 	wizardAnswers    map[string]string
+	wizardChecked    map[string]bool
 	wizardPreview    string
 	wizardPreviewErr error
 	wizardAwaiting   bool

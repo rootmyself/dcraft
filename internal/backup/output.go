@@ -22,34 +22,31 @@ var ErrOutputInvalid = errors.New("backup output directory is not usable")
 
 var safeComponentRe = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
 
+// ResolveOutputPath expands ~, makes the output absolute and cleans it without
+// creating or probing anything. Callers that need a writable directory use
+// ValidateOutputDir after the bind-containment checks.
+func ResolveOutputPath(raw, cwd string) (string, error) {
+	abs, err := absOutputPath(raw, cwd)
+	if err != nil {
+		return "", err
+	}
+	if info, statErr := os.Stat(abs); statErr == nil && !info.IsDir() {
+		return "", fmt.Errorf("%w: %s is not a directory", ErrOutputInvalid, abs)
+	} else if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
+		return "", fmt.Errorf("%w: %v", ErrOutputInvalid, statErr)
+	}
+	return abs, nil
+}
+
 // ValidateOutputDir resolves and proves a user-chosen output directory before
 // any service is stopped. Relative paths resolve against cwd. The directory is
 // created when missing and checked with a temporary write probe that is
 // removed again. The returned path is absolute and symlink-resolved.
 func ValidateOutputDir(raw, cwd string) (string, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return "", ErrOutputRequired
+	abs, err := absOutputPath(raw, cwd)
+	if err != nil {
+		return "", err
 	}
-	if strings.HasPrefix(raw, "~") {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("%w: expand %q: %v", ErrOutputInvalid, raw, err)
-		}
-		if raw == "~" {
-			raw = home
-		} else if strings.HasPrefix(raw, "~/") || strings.HasPrefix(raw, `~\`) {
-			raw = filepath.Join(home, raw[2:])
-		}
-	}
-	abs := raw
-	if !filepath.IsAbs(abs) {
-		if strings.TrimSpace(cwd) == "" {
-			return "", fmt.Errorf("%w: working directory is unknown", ErrOutputInvalid)
-		}
-		abs = filepath.Join(cwd, abs)
-	}
-	abs = filepath.Clean(abs)
 	if err := os.MkdirAll(abs, 0o755); err != nil {
 		return "", fmt.Errorf("%w: %v", ErrOutputInvalid, err)
 	}
@@ -77,6 +74,32 @@ func ValidateOutputDir(raw, cwd string) (string, error) {
 		return "", fmt.Errorf("%w: %v", ErrOutputInvalid, err)
 	}
 	return resolved, nil
+}
+
+func absOutputPath(raw, cwd string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", ErrOutputRequired
+	}
+	if strings.HasPrefix(raw, "~") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("%w: expand %q: %v", ErrOutputInvalid, raw, err)
+		}
+		if raw == "~" {
+			raw = home
+		} else if strings.HasPrefix(raw, "~/") || strings.HasPrefix(raw, `~\`) {
+			raw = filepath.Join(home, raw[2:])
+		}
+	}
+	abs := raw
+	if !filepath.IsAbs(abs) {
+		if strings.TrimSpace(cwd) == "" {
+			return "", fmt.Errorf("%w: working directory is unknown", ErrOutputInvalid)
+		}
+		abs = filepath.Join(cwd, abs)
+	}
+	return filepath.Clean(abs), nil
 }
 
 // artifactName builds a readable, filesystem-safe directory name for one
