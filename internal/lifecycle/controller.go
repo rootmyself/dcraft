@@ -269,11 +269,12 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation, action Action)
 		if ctx.Err() != nil || errors.Is(callErr, context.Canceled) || errors.Is(callErr, context.DeadlineExceeded) {
 			return callErr
 		}
-		return core.FailCause(callErr, c.failureDiagnostic(ctx, opTarget, action, opResult.Output, callErr))
+		return core.FailCause(callErr, c.failureDiagnostic(ctx, opTarget, action, opResult, callErr))
 	})
 	if err != nil {
 		return Payload{}, err
 	}
+	notices = append(notices, opResult.Notices...)
 
 	var snapshot *stack.Snapshot
 	observeErr := core.RunStage(in.Reporter, StageObserve, msgStageObserve, func() error {
@@ -426,7 +427,9 @@ func stateFailedDiagnostic(err error) core.Diagnostic {
 	}
 }
 
-func (c *Controller) failureDiagnostic(ctx context.Context, target core.Target, action Action, output string, cause error) core.Diagnostic {
+func (c *Controller) failureDiagnostic(ctx context.Context, target core.Target, action Action, result stack.OpResult, cause error) core.Diagnostic {
+	output := result.Output
+	notices := result.Notices
 	stateLine := msgStateUnreadable
 	if snap, err := c.backend.Inspect(ctx, target); err == nil && ctx.Err() == nil {
 		stateLine = msgStateLed + summarizeState(snap)
@@ -434,6 +437,9 @@ func (c *Controller) failureDiagnostic(ctx context.Context, target core.Target, 
 	detail := strings.TrimSpace(output)
 	if detail == "" {
 		detail = cause.Error()
+	}
+	if len(notices) > 0 {
+		detail = strings.Join(notices, "\n") + "\n" + detail
 	}
 	return core.Diagnostic{
 		Category:    core.CategoryLifecycleFailed,

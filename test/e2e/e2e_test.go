@@ -364,7 +364,7 @@ func TestStatusHumanOutputAndNoServiceChanges(t *testing.T) {
 	if res.code != 0 {
 		t.Fatalf("exit = %d, stderr=%q", res.code, res.stderr)
 	}
-	for _, want := range []string{"fake-project", "web", "api", "8080", "앱 확인 안 됨", "healthy", "dcraft status"} {
+	for _, want := range []string{"fake-project", "web", "api", "8080", "앱 확인 안 됨", "healthy", "dcraft status", "dcraft secrets", "자동 제거되지 않습니다"} {
 		if !strings.Contains(res.stdout, want) {
 			t.Fatalf("stdout missing %q:\n%s", want, res.stdout)
 		}

@@ -59,3 +59,7 @@ const (
 	msgProjectListFailedActionOne  = "docker compose ls -a --format json을 직접 실행해 원인을 확인하세요."
 	msgProjectListFailedActionTwo  = "이름 충돌을 확인할 수 없으므로 dcraft는 스택을 변경하지 않았습니다."
 )
+
+const (
+	msgSecretCleanupFailed = "스택은 제거했지만 dcraft 관리 비밀값 전달 파일을 모두 정리하지 못했습니다. 상태 폴더(DCRAFT_STATE_DIR)의 권한을 확인하세요."
+)

@@ -5,6 +5,7 @@
 package core
 
 import (
+	"errors"
 	"strings"
 )
 
@@ -59,6 +60,11 @@ const (
 	CategoryVerificationFailed        Category = "verification_failed"
 	CategoryCanceled                  Category = "canceled"
 	CategoryHistoryFailed             Category = "history_failed"
+	CategorySecretInvalid             Category = "secret_invalid"
+	CategorySecretInputInvalid        Category = "secret_input_invalid"
+	CategorySecretUnsupported         Category = "secret_unsupported"
+	CategorySecretSource              Category = "secret_source_unavailable"
+	CategorySecretApplyFailed         Category = "secret_apply_failed"
 	CategoryInternal                  Category = "internal_error"
 )
 
@@ -108,6 +114,22 @@ func (e *Error) Error() string {
 }
 
 func (e *Error) Unwrap() error { return e.Cause }
+
+// AllDiagnostics returns this error's diagnostics plus diagnostics of nested
+// *Error causes. A caller that wraps a classified error (for example the
+// lifecycle controller wrapping a secret preparation error) keeps both the
+// outer user-facing diagnostic and the specific machine category.
+func (e *Error) AllDiagnostics() []Diagnostic {
+	if e == nil {
+		return nil
+	}
+	out := append([]Diagnostic{}, e.Diagnostics...)
+	var nested *Error
+	if errors.As(e.Cause, &nested) && nested != e {
+		out = append(out, nested.AllDiagnostics()...)
+	}
+	return out
+}
 
 // Fail builds an error from diagnostics without an underlying cause.
 func Fail(diags ...Diagnostic) *Error { return &Error{Diagnostics: diags} }

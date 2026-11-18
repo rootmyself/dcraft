@@ -11,16 +11,46 @@ import (
 
 	"github.com/rootmyself/dcraft/internal/core"
 	"github.com/rootmyself/dcraft/internal/execx"
+	"github.com/rootmyself/dcraft/internal/secretref"
 	"github.com/rootmyself/dcraft/internal/stack"
 )
 
 // Up implements stack.Lifecycle. It starts the stack detached, applying the
-// current Compose configuration. Readiness and health are later-ticket work;
-// dcraft does not claim the application is healthy here.
+// current Compose configuration. Runtime secret references are resolved only
+// for the services this call will start (including depends_on), and the
+// dcraft-managed override is appended to the effective Compose inputs. The
+// user's Compose files are never edited. Readiness and health are later-ticket
+// work; dcraft does not claim the application is healthy here.
 func (c *Compose) Up(ctx context.Context, t core.Target, services []string) (stack.OpResult, error) {
-	args := append(t.ComposeArgs(), "up", "--detach")
-	args = append(args, services...)
-	return c.lifecycleRun(ctx, t, "up", args)
+	prep, err := c.prepareSecrets(ctx, t, services, secretref.ModeCreate)
+	if err != nil {
+		return stack.OpResult{}, err
+	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		// The operation was canceled before any Compose process started, so
+		// no container can reference the new materialization.
+		prep.Abort()
+		return stack.OpResult{}, ctxErr
+	}
+	args := composeArgsWith(t, prep.Files, append([]string{"up", "--detach"}, services...)...)
+	res, err := c.run(ctx, execx.Command{Name: "docker", Args: args, Dir: t.ProjectDir, Env: composeEnv(prep.Env)})
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return stack.OpResult{Output: prep.Redact(summarize(res.Combined())), Notices: prep.Notices}, ctxErr
+	}
+	if err != nil {
+		// The Compose process never started, so no container can reference
+		// the new materialization.
+		prep.Abort()
+		return stack.OpResult{}, err
+	}
+	out := stack.OpResult{Output: prep.Redact(summarize(res.Combined())), Notices: prep.Notices}
+	if !res.Succeeded() {
+		// Compose ran and may have created containers; keep the files a
+		// restart may need. The next up/down cleans stale files.
+		return out, fmt.Errorf("docker compose up exited with status %d", res.ExitCode)
+	}
+	prep.Commit()
+	return out, nil
 }
 
 // Stop implements stack.Lifecycle. Containers and data are kept.
@@ -31,22 +61,55 @@ func (c *Compose) Stop(ctx context.Context, t core.Target, services []string) (s
 }
 
 // Down implements stack.Lifecycle. It is project-wide and never passes -v, so
-// data volumes survive ordinary teardown.
+// data volumes survive ordinary teardown. After a successful teardown the
+// per-stack materialized secret files and managed override are removed; after
+// a failed teardown they are kept because a restart may still need them.
 func (c *Compose) Down(ctx context.Context, t core.Target) (stack.OpResult, error) {
 	args := append(t.ComposeArgs(), "down")
-	return c.lifecycleRun(ctx, t, "down", args)
+	res, err := c.lifecycleRun(ctx, t, "down", args)
+	if err != nil {
+		return res, err
+	}
+	if c.secrets != nil {
+		if cleanupErr := c.secrets.CleanupStack(t); cleanupErr != nil {
+			res.Notices = append(res.Notices, msgSecretCleanupFailed)
+		}
+	}
+	return res, nil
 }
 
 // Restart implements stack.Lifecycle. Compose restart does not recreate
 // containers, so it never applies new configuration or images. An explicit
-// service selection is isolated with --no-deps.
+// service selection is isolated with --no-deps. File-delivery secrets are
+// live bind mounts, so their materialized files are rewritten from the
+// current source before restarting; environment values are not read.
 func (c *Compose) Restart(ctx context.Context, t core.Target, services []string) (stack.OpResult, error) {
+	prep, err := c.prepareSecrets(ctx, t, services, secretref.ModeFiles)
+	if err != nil {
+		return stack.OpResult{}, err
+	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		prep.Abort()
+		return stack.OpResult{}, ctxErr
+	}
 	args := append(t.ComposeArgs(), "restart")
 	if len(services) > 0 {
 		args = append(args, "--no-deps")
 	}
 	args = append(args, services...)
-	return c.lifecycleRun(ctx, t, "restart", args)
+	res, err := c.run(ctx, execx.Command{Name: "docker", Args: args, Dir: t.ProjectDir, Env: composeEnv(prep.Env)})
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return stack.OpResult{Output: prep.Redact(summarize(res.Combined())), Notices: prep.Notices}, ctxErr
+	}
+	if err != nil {
+		prep.Abort()
+		return stack.OpResult{}, err
+	}
+	out := stack.OpResult{Output: prep.Redact(summarize(res.Combined())), Notices: prep.Notices}
+	if !res.Succeeded() {
+		return out, fmt.Errorf("docker compose restart exited with status %d", res.ExitCode)
+	}
+	return out, nil
 }
 
 func (c *Compose) lifecycleRun(ctx context.Context, t core.Target, action string, args []string) (stack.OpResult, error) {
@@ -90,11 +153,45 @@ func (c *Compose) ConfigInfo(ctx context.Context, t core.Target) (stack.ConfigIn
 		})
 	}
 	services := make([]string, 0, len(doc.Services))
-	for name := range doc.Services {
+	dependencies := map[string][]string{}
+	for name, raw := range doc.Services {
 		services = append(services, name)
+		var svc configService
+		if err := json.Unmarshal(raw, &svc); err == nil {
+			if deps := parseDependencies(svc.DependsOn); len(deps) > 0 {
+				dependencies[name] = deps
+			}
+		}
 	}
 	sort.Strings(services)
-	return stack.ConfigInfo{EffectiveName: strings.TrimSpace(doc.Name), Services: services}, nil
+	return stack.ConfigInfo{
+		EffectiveName: strings.TrimSpace(doc.Name),
+		Services:      services,
+		Dependencies:  dependencies,
+	}, nil
+}
+
+// parseDependencies reads only the depends_on service names from one resolved
+// service. Compose accepts both the mapping form and the legacy list form.
+func parseDependencies(raw json.RawMessage) []string {
+	if strings.TrimSpace(string(raw)) == "" || strings.TrimSpace(string(raw)) == "null" {
+		return nil
+	}
+	var mapping map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &mapping); err == nil {
+		out := make([]string, 0, len(mapping))
+		for name := range mapping {
+			out = append(out, name)
+		}
+		sort.Strings(out)
+		return out
+	}
+	var list []string
+	if err := json.Unmarshal(raw, &list); err == nil {
+		sort.Strings(list)
+		return list
+	}
+	return nil
 }
 
 // DerivedProjectName implements stack.Identity. Compose itself computes its

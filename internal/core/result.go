@@ -149,7 +149,8 @@ func (r Result) ExitCode() int {
 			switch d.Category {
 			case CategoryApprovalRequired,
 				CategoryEnvironmentRequired, CategoryEnvironmentUnknown, CategoryEnvironmentConflict,
-				CategoryProjectNameConflict, CategoryServiceUnknown, CategoryInvalidOption:
+				CategoryProjectNameConflict, CategoryServiceUnknown, CategoryInvalidOption,
+				CategorySecretInputInvalid, CategorySecretUnsupported:
 				return 2
 			}
 		}
