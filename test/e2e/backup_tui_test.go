@@ -20,6 +20,7 @@ func TestBackupTUIWizardSelectsVolumeAndShowsTheEffectBeforeRunning(t *testing.T
 		{wait: "> 스택 재시작 (restart)", send: "up"},
 		{wait: "> 로그 보기 (logs)", send: "up"},
 		{wait: "> Compose 설치 (install-compose)", send: "up"},
+		{wait: "> 호스트 스크립트 (hooks)", send: "up"},
 		{wait: "> 서비스 접속 (exec)", send: "up"},
 		{wait: "> 스택 제거 (down)", send: "up"},
 		{wait: "> 데이터 백업 (backup)", send: "\r"},

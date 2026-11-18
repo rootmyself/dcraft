@@ -217,11 +217,13 @@ func newFeatureCommand(opts Options, tf *targetFlags, feature core.Feature) *cob
 		}
 		previewAllowed := d.Approval == core.ApprovalNone || core.HasApproval(approvals, d.Approval)
 		if !tf.json && previewAllowed {
-			if _, ok := feature.(core.Planner); ok {
+			_, isPlanner := feature.(core.Planner)
+			if isPlanner || d.Hooks != core.HookNone {
 				// This read-only preview uses the same plan path as the TUI so
-				// the human sees the target and planned work before anything is
-				// built, pulled or changed. The engine still enforces any
-				// independent approval; an ordinary update needs none.
+				// the human sees the target, planned work and registered host
+				// scripts before anything is built, pulled or changed. The
+				// engine still enforces any independent approval; an ordinary
+				// update needs none.
 				plan := opts.Engine.Plan(cmd.Context(), req, nil)
 				if plan.Failed() {
 					res := plan.Result()
@@ -233,6 +235,11 @@ func newFeatureCommand(opts Options, tf *targetFlags, feature core.Feature) *cob
 				if text := strings.TrimSpace(plan.Text); text != "" {
 					fmt.Fprintln(opts.Stderr, text)
 					fmt.Fprintln(opts.Stderr)
+				}
+				if core.HasApproval(approvals, core.ApprovalScriptTrust) {
+					// Bind the explicit trust to the identities the user just
+					// saw. A content change before Run invalidates it.
+					req.ApprovedHooks = append([]core.HookEntry{}, plan.Hooks...)
 				}
 			}
 		}

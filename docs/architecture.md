@@ -5,15 +5,18 @@ fork these types or recreate these rules in a feature or UI package. Shared
 interface changes go to the integration owner as a change request (see the end
 of this file).
 
-Scope of this version: one working binary, ten registered features (`status`,
+Scope of this version: one working binary, twelve registered features (`status`,
 `install-compose`, `up`, `stop`, `down`, `restart`, `update`, `secrets`,
-`logs`, `exec`), the common operation seam, target resolution, named
+`hooks`, `logs`, `exec`, `backup`), the common operation seam, target
+resolution, named
 environments, automatic project-name allocation, same-stack coordination,
-runtime secret references, service/instance selection, live terminal attach,
+runtime secret references, explicit host scripts with independent script
+trust, service/instance selection, live terminal attach, versioned volume
+backup,
 diagnostics, CLI/TUI assembly, state layout, machine-readable results, the
 approval/plan preview flow, explicit update with bounded readiness and the
-previous-good record, and tests. Generation, build-time/AWS secrets, hooks,
-backup/restore and rollback are later tickets.
+previous-good record, and tests. Generation, build-time/AWS secrets,
+bind-folder backup, restore and rollback are later tickets.
 
 ---
 
@@ -127,17 +130,43 @@ Engine sequence (stage names are stable machine values; titles are Korean):
    keeps today's behavior. A feature that needs only a subset (Compose install
    needs `docker_cli`) declares it; a feature cannot bypass preflight by
    declaring an unknown value (registry validation rejects it).
-4. Read-only identity read — for `ReadOnly` features with no explicit `-p` and
+4. Host hooks (only `Descriptor.Hooks == HookUpUpdate`, so only `up`/`update`):
+   - The engine asks `core.HookService.Plan` for the registered scripts and
+     their current sha256. A malformed registration, missing/unreadable file or
+     non-executable file fails `hooks_pre` before the operation starts.
+   - New or changed scripts need the independent `script_trust` approval. When
+     the caller supplies `Request.ApprovedHooks` (the plan it showed the user),
+     the current identities must match exactly; a change since that screen is
+     `hook_content_changed` (exit 2) and nothing runs. Without a plan, explicit
+     `--approve script_trust` covers the current identities; non-interactive
+     without it fails `approval_required` (exit 2).
+   - `hooks_pre` runs pre scripts sequentially with the project folder as cwd,
+     inherited environment and documented `DCRAFT_*` variables. Each script is
+     re-hashed immediately before execution; a mismatch is
+     `hook_content_changed`. A failure blocks the feature; the main outcome did
+     not start.
+   - `revalidate_inputs` re-resolves the target after the pre scripts (a pre
+     script may have changed Compose files, env files or `.dcraft.yaml`) and
+     re-checks that the post-hook plan still matches the approved identities.
+     A changed post script fails before the main operation starts.
+5. Read-only identity read — for `ReadOnly` features with no explicit `-p` and
    a configured `Engine.Identity`, the engine resolves the effective project
    name before `Invocation` (see §3.2). It adds no stage, never writes or locks,
    and on failure emits an `identity_unreadable` **warning** and falls back to
    Compose's default. Stack-changing features resolve and record their own
    allocation (they may write).
-5. Feature `Run` — feature stages appear between preflight and verification. If
-   a feature reports no stage, the engine adds a fallback `execute` stage.
-6. `verify` — only if the feature also implements `core.Verifier`. Raw errors
+6. Feature `Run` — feature stages appear between preflight/hooks and
+   verification. If a feature reports no stage, the engine adds a fallback
+   `execute` stage.
+7. `verify` — only if the feature also implements `core.Verifier`. Raw errors
    become `verification_failed`; no history is written.
-7. `history` — only if `Descriptor.RecordsHistory`. Written after success. A
+8. `hooks_post` — only for `HookUpUpdate`, after the feature's work and engine
+   `verify` succeeded. Post scripts run in registration order. A failure is a
+   `hook_post_failed` **warning** (or `hook_content_changed` for a changed
+   derivative) and keeps the completed operation successful; remaining post
+   scripts do not run. A canceled post hook is reported as canceled while
+   stating the deployment already completed.
+9. `history` — only if `Descriptor.RecordsHistory`. Written after success. A
    history write failure is a `history_failed` **warning**; the operation stays
    successful because the stack change already happened. Never report a
    completed change as failed solely because history failed, and never record a
@@ -437,12 +466,14 @@ type core.Feature interface {
 | `AcceptsArgs` | allows positional args; flags then stop at the first arg |
 | `Wizard` | TUI entry uses the generic guided flow (`core.Wizard`) instead of the generic confirmation screen; the CLI path is unchanged |
 | `Flags []core.Flag` | feature-owned flags parsed by the shared CLI |
+| `Hooks` | registered host-script scope; `HookUpUpdate` only on `up`/`update`, rejected on read-only features |
 
 Registry validation rejects duplicate names, invalid names, missing Korean text,
-read-only+approval combinations, a second primary, unknown preflight
-requirements, reserved flag names (`path`, `file`, `env-file`, `profile`,
-`project-name`, `env`, `json`, `approve`, `help`, `service`), reserved
-shorthands (`f`, `p`, `s`, `h`, `v`), duplicate flags and invalid bool defaults.
+read-only+approval combinations, read-only+hooks combinations, a second primary,
+unknown preflight requirements, reserved flag names (`path`, `file`, `env-file`,
+`profile`, `project-name`, `env`, `json`, `approve`, `help`, `service`),
+reserved shorthands (`f`, `p`, `s`, `h`, `v`), duplicate flags and invalid bool
+defaults.
 
 ### Adding a feature (the only steps)
 
@@ -500,8 +531,9 @@ affected tickets. Do not copy the interface into a feature.
 ## 5. Stack lifecycle: up, stop, down, restart (ticket 03)
 
 Four flat, stack-changing commands run through `core.Engine.Run`; CLI and TUI
-share `lifecycle.Controller`. Nothing here builds, pulls, checks health, runs
-hooks, backs up data or rolls back.
+share `lifecycle.Controller`. Nothing here builds, pulls, checks health, backs
+up data or rolls back; `up` participates in the engine-owned hook seam (§7.2),
+but the lifecycle controller itself runs no scripts.
 
 | command | scope | Compose call | effect |
 |---|---|---|---|
@@ -1054,31 +1086,96 @@ environment is unaffected. There is no queue/wait policy in this version.
 read-record/change/write sequences**; a record replacement outside it can
 interleave with a failed update and destroy the escape route.
 
-### Hook seam for ticket #13 (documented; not implemented)
+### Host hooks and script trust (ticket #12 / issue #13)
 
-`update` and `up` contain no hook code. The application point #13 should own is
-in the engine, not in a feature:
+Hooks are an engine-owned capability, not feature code. `up` and `update`
+declare `Descriptor.Hooks = core.HookUpUpdate`; no other feature declares a
+scope, so status/logs/exec/stop/restart/down/backup/restore/rollback never run
+scripts. There is no filename convention and no automatic discovery.
 
-- Add one shared capability — `Descriptor.Hooks core.HookScope` with `HookNone`
-  (zero value, default) and `HookUpUpdate`, or an optional
-  `core.HookCapable` interface returning the same scope. This is a new `core`
-  field/capability and therefore a change request for #13; no unused code is
-  added here.
-- When set, the engine runs registered pre-hooks after target resolution,
-  approval/preflight and **before** `feature.Run`; post-hooks run after the
-  feature's stages and verification succeed (for update: after `verify`, before
-  `record`). `deps.Deps` gains the hook registry/trust service; `update` does
-  not.
-- `script_trust` is an independent approval and never replaces the feature's own
-  `Approval` (update has none). The hook layer re-checks trust and content
-  identity immediately before each execution; first run and any content change
-  need the approval. Non-interactive without explicit trust runs nothing and
-  fails.
-- Pre-hook failure blocks build/apply (no update stage runs) and may change
-  inputs, so the feature must re-read the target/model after it. Post-hook
-  failure is reported separately from the completed update and never claims the
-  deployment failed or was rolled back. Hooks never attach to rollback, status,
-  logs, stop or backup/restore.
+Published `core` contract (consume, do not fork):
+
+```go
+type HookScope string // HookNone (""), HookUpUpdate ("up_update")
+type HookStage string // HookStagePre ("pre"), HookStagePost ("post")
+type HookEntry struct { Path string; Stage HookStage; SHA256 string; Trusted bool; Changed bool }
+type HookPlan struct { Entries []HookEntry; RequiresApproval bool }
+type HookRequest struct { Action, OperationID string; Target Target; Entry HookEntry }
+type HookExecution struct { ExitCode int; Output string }
+type HookService interface {
+    Plan(ctx context.Context, target Target) (HookPlan, error)
+    Approve(ctx context.Context, target Target, plan HookPlan, at time.Time) error
+    Execute(ctx context.Context, req HookRequest) (HookExecution, error)
+}
+```
+
+`Engine.Hooks` is wired by `internal/app`; `deps.Deps.Hooks` exposes the same
+`*hooks.Service` to features. `Request.ApprovedHooks` carries the plan a UI
+showed the user; it binds `script_trust` to those exact path/stage/sha256
+identities. `PlanReport.RequiredApprovals` and `PlanReport.Hooks` let both
+interfaces collect the independent approval generically.
+
+Project registration lives in `.dcraft.yaml` (other sections and comments are
+preserved; writes are atomic; no values or secrets):
+
+```yaml
+hooks:
+  - path: scripts/pre-deploy.sh   # project-relative or absolute local path
+    stage: pre                    # pre | post
+  - path: scripts/post-deploy.sh
+    stage: post
+```
+
+Both stages apply to `up` and `update`; `pre` runs before the feature, `post`
+after its verification. Manual scripts and generated scripts (#14/#15) use this
+one record through `hooks.Add`/`hooks.Remove`/`hooks.Load`. Registration does
+not grant trust. `Add`/`Remove` serialize the read-modify-write with a bounded
+(`5s`) `flock` on `.dcraft.lock` in the project folder, so concurrent
+registrations cannot lose an update; the lock file is never deleted (removing a
+flock inode would let two writers lock different inodes). A busy lock is
+`hook_invalid` with retry guidance. Operator surfaces:
+
+- `dcraft hooks` / `dcraft hooks --list` — show registrations, effective path,
+  sha256, trust state and problems.
+- `dcraft hooks --add --stage pre --script scripts/pre-deploy.sh`
+- `dcraft hooks --remove --stage pre --script scripts/pre-deploy.sh`
+- TUI wizard (`core.Wizard`): action → stage → script, with a pure preview.
+
+Machine-local trust is stored per stack and environment at
+`<state>/stacks/<folder>-<hash12>/script-trust.json` (0600, atomic replace,
+format version 1). It is never written into the project. Each entry records the
+canonical absolute script path, stage, full lowercase content sha256 and
+approval time. The key is the canonical target identity (state directory) plus
+path and stage; a content change or stage change needs a new approval. A
+corrupt/unreadable/newer record is `state_failed` rather than a silent reuse.
+
+Execution rules:
+
+- cwd = project folder; the user's inherited environment plus
+  `DCRAFT_HOOK_STAGE`, `DCRAFT_HOOK_PATH`, `DCRAFT_HOOK_SHA256`,
+  `DCRAFT_ACTION`, `DCRAFT_OPERATION_ID`, `DCRAFT_PROJECT_DIR`,
+  `DCRAFT_PROJECT_NAME` (may be empty before name allocation) and
+  `DCRAFT_ENVIRONMENT`.
+- Direct execution only, with the user's privileges. A missing executable bit,
+  a directory or a start/format error is `hook_invalid` with guidance; dcraft
+  never guesses an interpreter. No sudo, no sandbox claim, no automatic undo.
+- Immediately before every execution the file is re-hashed. A mismatch is
+  `hook_content_changed` (exit 2) and nothing is executed. This narrows but
+  cannot eliminate TOCTOU (an in-place edit or symlink retarget after the final
+  hash can still affect what the interpreter reads).
+- Cancellation kills the hook's process group and reports the stage; partial
+  external effects may remain. There is no hidden background execution.
+- Output is captured, known environment-sourced secret values from
+  `.dcraft.yaml` are replaced with `[REDACTED]`, and output is carried as
+  `hook_output` info diagnostics (stderr/progress for humans). It never goes
+  directly to JSON stdout.
+- Pre failure is `hook_failed` (exit 1) and the main operation did not start.
+  Post failure is a `hook_post_failed` warning and the completed operation
+  stays successful. Hooks never run on rollback and do not restore data or
+  external systems.
+
+Stable stage names: `hooks_pre` (사전 스크립트), `revalidate_inputs` (입력
+재확인), `hooks_post` (사후 스크립트). Exit codes remain 0/1/2/130.
 
 ---
 
@@ -1191,6 +1288,7 @@ Layout:
     history.jsonl     # append-only operation records, 0600
     .lock             # per-stack change lock + holder JSON, 0600
     state.json        # previous-good deployment record, 0600 (see §7.2)
+    script-trust.json # machine-local hook approval, 0600 (see §7.2)
 ```
 
 - The key is derived from the canonical absolute project folder **and** the
@@ -1200,6 +1298,10 @@ Layout:
 - Directories are created lazily with `0700`; files with `0600`.
 - History records contain operation id, action, outcome, timestamps, stages and
   diagnostics. Never resolved secret values.
+- `script-trust.json` is the machine-local script trust record. It is keyed by
+  the same canonical folder+environment state directory and stores only the
+  canonical script path, stage, sha256 and approval time. It is never a
+  project-shared file and never contains values.
 - Status reads and writes no state.
 - History is written only for successful `RecordsHistory` features; failed
   verifications are never recorded as good.
@@ -1344,6 +1446,12 @@ Desktop's VM-backed unix socket is **local**, not remote.
 | `backup_failed` | stop, archive helper, filesystem write, publish or completion-marker failure | error |
 | `backup_integrity_failed` | archive truncation, unsafe entry or manifest mismatch | error |
 | `backup_state_restore_failed` | stopped services could not be started again after the copy | error |
+| `hook_invalid` | hook registration/config problem: unknown stage, unreadable `.dcraft.yaml`, busy write lock | error |
+| `hook_input_invalid` | explicit `dcraft hooks` input is missing or invalid | error (exit 2) |
+| `hook_failed` | a pre hook failed; the main operation did not start | error (exit 1) |
+| `hook_content_changed` | approved content identity no longer matches; nothing was executed | error (exit 2) |
+| `hook_post_failed` | a post hook failed after the main operation completed (result stays successful) | warning |
+| `hook_output` | redacted hook output carried to human surfaces | info |
 | `internal_error` | unexpected error/parse failure/panic | error |
 
 Each diagnostic carries Korean `message`, optional raw `detail`, and Korean
@@ -1361,8 +1469,9 @@ the full `compose version` command confirms the classification.
 `environment_unknown`, `environment_input_conflict`, `project_name_conflict`,
 `service_unknown`, `invalid_option`, `secret_input_invalid`,
 `secret_unsupported`, `selection_required`, `instance_unknown`,
-`backup_output_required`, `backup_volume_required` and
-`backup_volume_unknown`: those mean the caller must supply a different decision
+`backup_output_required`, `backup_volume_required`,
+`backup_volume_unknown`, `hook_input_invalid` and
+`hook_content_changed`: those mean the caller must supply a different decision
 (an approval, an environment, a free name, an existing service, a valid option,
 a valid secret reference, a service/instance selection, or a backup
 volume/output). dcraft never prompts to resolve them; non-interactive runs fail
@@ -1777,6 +1886,7 @@ go vet ./...
 go build ./...
 go test -count=1 ./...
 DCRAFT_INTEGRATION=1 go test ./test/e2e/... -run TestIntegration -v
+DCRAFT_INTEGRATION=1 go test ./test/e2e/... -run TestIntegrationHook -v
 DCRAFT_INTEGRATION=1 go test ./test/e2e/... -run TestIntegrationVolumeBackup -v
 DCRAFT_COMPOSE_REAL_INSTALL=1 go test ./test/e2e/... -run TestRealComposeInstall -v
 ```
@@ -1793,19 +1903,22 @@ Docker or external network. Unrun platforms/paths are not claimed as verified.
   are not implemented; `backup` supports named volumes only.
 - TUI alias creation/editing: aliases are created by editing `.dcraft.yaml` in
   this version (selection is provided by both interfaces).
-- Build-time secrets (BuildKit mounts), AWS Secrets Manager sources, host
-  scripts/hooks (the #13 seam is documented in §7.2 but no hook code exists),
-  generated Compose/Dockerfile files and generator flows, rollback itself (the
+- Build-time secrets (BuildKit mounts), AWS Secrets Manager sources, generated
+  Compose/Dockerfile files and generator flows, rollback itself (the
   previous-good record is published and written; #12 consumes it), Kubernetes,
   remote engines, resident daemon/web UI. Runtime environment/file references
   are implemented by ticket #9 below; Compose installation is implemented by
-  ticket #6; update readiness and the previous-good record by ticket #7.
+  ticket #6; update readiness and the previous-good record by ticket #7; host
+  hooks and script trust by ticket #12 (§7.2).
 - Good-version history beyond the single record. The TUI plan/confirm component
   is generic; `install-compose`, `update` and `backup` are planners in this
   build, and `secrets`/`backup` use the generic wizard. An ordinary update shows
-  its plan and requires one `enter`; backup uses its wizard preview. TUI
-  service/instance selection exists for the ticket-05 live screens through
-  `core.InputProvider`; lifecycle mutations still use the CLI `-s/--service`.
+  its plan and requires one `enter` to run, not an approval. `up` also goes
+  through the generic plan because it declares the hook scope; with no hooks the
+  plan text is empty and only the ordinary confirmation remains. Backup uses
+  its wizard preview. TUI service/instance selection exists for the ticket-05
+  live screens through `core.InputProvider`; lifecycle mutations still use the
+  CLI `-s/--service`.
 - Docker itself (installation, repair, replacement), administrator escalation,
   Docker Desktop/WSL integration changes.
 
@@ -1890,6 +2003,22 @@ cleanup retries for up to 20 seconds; only a daemon that refuses removal for
 that whole window can leave a `dcraft-backup-*` container, and that run fails
 with `backup_failed` naming the helper instead of silently continuing.
 
+Host-hook residual risks: scripts are arbitrary user code and may leave partial
+external effects; dcraft neither sandboxes nor undoes them. Content hashing
+narrows but cannot eliminate TOCTOU: an in-place edit or symlink retarget after
+the final hash can change what the interpreter reads, and a script may source or
+execute other files whose contents are not part of the digest. Only
+environment-sourced runtime secret values known from `.dcraft.yaml` are redacted
+from hook output; values fetched or printed from other sources are not covered.
+Hooks run before the feature takes the per-stack lock, so two concurrent
+same-stack invocations can both run pre hooks; trust-record writes are atomic
+but last-writer-wins, and losing an approval only forces re-approval. Project
+registration writes are serialized with a bounded `.dcraft.lock` flock on
+Unix; other platforms keep building but cannot serialize concurrent writers.
+The project-name variable is empty in a pre hook on a first `up` because name
+allocation happens inside the feature. Generated-script features must not treat
+registration or plan display as trust.
+
 ---
 
 ## 13. Change request checklist
@@ -1934,6 +2063,19 @@ Published by ticket #9 (consume, do not fork): `internal/secretref` types
 `stack.ConfigInfo.Dependencies` map, `stack.OpResult.Notices`, and the
 `secret_invalid`/`secret_input_invalid`/`secret_unsupported`/
 `secret_source_unavailable`/`secret_apply_failed` diagnostic categories.
+
+Published by ticket #12 (consume, do not fork): `Descriptor.Hooks`/
+`core.HookScope`/`core.HookStage`, `core.HookEntry`/`HookPlan`/`HookRequest`/
+`HookExecution`/`HookService`/`Request.ApprovedHooks`, `PlanReport.Hooks`/
+`RequiredApprovals`, `internal/hooks` (`Registration`, `Stage`, `Catalog`,
+`Load`/`Add`/`Remove`/`ResolvePath`/`ContentSHA256`/`Describe`, `New`,
+`TrustVersion`), `deps.Deps.Hooks`, the `.dcraft.yaml` `hooks:` list schema, the
+machine-local `script-trust.json` format, the `dcraft hooks` flags and the
+`hook_invalid`/`hook_input_invalid`/`hook_failed`/`hook_content_changed`/
+`hook_post_failed`/`hook_output` categories and stage names `hooks_pre`/
+`revalidate_inputs`/`hooks_post`. Generated-script features must register
+through `hooks.Add` and must still request script trust separately from their
+generation/save approval.
 
 Published by ticket #3 (consume, do not fork): `stack.Lifecycle`,
 `stack.Identity`, `stack.ConfigInfo`, `stack.ProjectInfo`, `stack.OpResult`,
