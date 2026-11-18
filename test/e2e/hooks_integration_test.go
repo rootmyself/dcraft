@@ -328,6 +328,47 @@ exit 6`)
 	}
 }
 
+func TestIntegrationHookChangedAfterApprovalIsRefused(t *testing.T) {
+	env := requireIntegration(t)
+	p := newHooksProject(t, env, "hooks-e")
+	dir := filepath.Join(p.dir, "scripts")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	first := filepath.Join(dir, "first.sh")
+	second := filepath.Join(dir, "second.sh")
+	if err := os.WriteFile(first, []byte(`#!/bin/sh
+cat > "$(dirname "$0")/second.sh" <<'SCRIPT'
+#!/bin/sh
+exit 0
+SCRIPT
+`), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(second, []byte("#!/bin/sh\nprintf 'second-ran\\n' >> "+p.marker+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	registration := "hooks:\n  - path: scripts/first.sh\n    stage: pre\n  - path: scripts/second.sh\n    stage: pre\n"
+	if err := os.WriteFile(filepath.Join(p.dir, ".dcraft.yaml"), []byte(registration), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	res := runProcess(t, p.dir, p.env, strings.NewReader(""), "up", "--json", "--approve", "script_trust")
+	if res.code != 2 {
+		t.Fatalf("changed-after-approval up exit = %d, stdout=%s stderr=%q", res.code, res.stdout, res.stderr)
+	}
+	parsed := parseAnyResult(t, res.stdout)
+	if !hasResultCategory(parsed, core.CategoryHookContentChanged) {
+		t.Fatalf("diagnostics = %+v", parsed.Diagnostics)
+	}
+	if lines := p.markerLines(t); len(lines) != 0 {
+		t.Fatalf("changed script ran: %v", lines)
+	}
+	if ids := strings.TrimSpace(p.containerIDs(t, env)); ids != "" {
+		t.Fatalf("refused operation changed the stack: %s", ids)
+	}
+}
+
 // runCommand is a small helper for the host-state assertions in these tests.
 func runCommand(t *testing.T, env []string, name string, args ...string) string {
 	t.Helper()

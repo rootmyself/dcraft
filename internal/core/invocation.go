@@ -49,6 +49,13 @@ type Request struct {
 	// Interactive reports whether prompts are possible. It never bypasses an
 	// approval requirement.
 	Interactive bool
+	// IO carries the caller's live terminal streams for a feature that
+	// attaches to a process. Nil fields mean the process standard streams.
+	IO IO
+	// JSON is a UI hint: the caller asked for a single machine-readable
+	// result. It never changes safety rules; a live feature uses it only to
+	// choose capture mode over streaming.
+	JSON bool
 }
 
 // Invocation is what a feature receives after the engine resolved the target,
@@ -60,6 +67,8 @@ type Invocation struct {
 	Options     map[string]string
 	Interactive bool
 	Preflight   PreflightReport
+	IO          IO
+	JSON        bool
 	Reporter    Reporter
 	Clock       Clock
 	State       StateStore

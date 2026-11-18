@@ -41,6 +41,8 @@ const (
 	phaseLoading
 	phasePlanning
 	phaseConfirm
+	phaseLoadingInputs
+	phaseForm
 	phaseWizardLoading
 	phaseWizardStep
 	phaseWizardPreview
@@ -83,6 +85,19 @@ type Model struct {
 	approvedHooks    []core.HookEntry
 	planText         string
 
+	// req carries the feature input collected from the interactive form. A
+	// feature that implements core.InputProvider fills it before running; the
+	// CLI never uses this path.
+	req core.Request
+	// live is non-nil while a feature attaches to a running process. The TUI
+	// renders its output and forwards keys for core.LiveAttach.
+	live   *liveState
+	liveCh chan string
+	// lastLive keeps the tail of the last live output so the management view
+	// still shows what the process printed after the screen closes.
+	lastLive []string
+	form     *formState
+
 	// Wizard state is generic: the feature supplies the steps and the effect
 	// preview, the TUI only collects answers with the keyboard.
 	wizardFeature    core.Feature
@@ -106,6 +121,7 @@ func NewModel(ctx context.Context, opts Options) *Model {
 		ctx = context.Background()
 	}
 	m := &Model{ctx: ctx, engine: opts.Engine, registry: opts.Registry, target: opts.Target, envSelected: -1}
+	m.req = core.Request{Target: opts.Target}
 	if opts.Registry != nil {
 		m.features = opts.Registry.All()
 		if primary, ok := opts.Registry.Primary(); ok {
@@ -137,6 +153,13 @@ type resultMsg struct{ res core.Result }
 type stageMsg struct{ stage core.Stage }
 
 type planMsg struct{ report core.PlanReport }
+
+type inputsMsg struct {
+	feature core.Feature
+	report  core.InputsReport
+}
+
+type liveLineMsg struct{ line string }
 
 type environmentListMsg struct {
 	envs []core.Environment
@@ -208,6 +231,28 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.envSelected = -1
 		m.phase = phaseSelectingEnvironment
 		return m, nil
+	case inputsMsg:
+		if m.phase != phaseLoadingInputs {
+			return m, nil
+		}
+		if msg.report.Failed() {
+			res := msg.report.Result()
+			m.result = &res
+			m.phase = phaseReady
+			return m, nil
+		}
+		if len(msg.report.Fields) == 0 {
+			return m, m.begin(msg.feature)
+		}
+		m.form = newFormState(msg.feature, msg.report.Fields, m.req)
+		m.phase = phaseForm
+		return m, nil
+	case liveLineMsg:
+		if m.live == nil {
+			return m, nil
+		}
+		m.live.append(msg.line)
+		return m, waitLiveCmd(m.liveCh)
 	case resultMsg:
 		if m.wizardCanceled {
 			// A canceled wizard step run may deliver its result after the
@@ -238,8 +283,25 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.result = &res
 		m.phase = phaseReady
 		m.notice = ""
+		if m.live != nil {
+			m.live.writer.flush()
+			m.drainLive()
+			if res.Outcome == core.OutcomeCanceled {
+				m.notice = msgLiveStopped
+			}
+			m.lastLive = tailOrKeep(lastLines(m.live.writer.tailLines(), 12), m.lastLive)
+			m.live.close()
+			m.live = nil
+			m.liveCh = nil
+		}
 		return m, nil
 	case tea.KeyMsg:
+		if m.form != nil {
+			return m.updateFormKey(msg)
+		}
+		if m.live != nil {
+			return m.updateLiveKey(msg)
+		}
 		if m.phase == phaseConfirm {
 			switch msg.String() {
 			case "q", "ctrl+c":
@@ -275,7 +337,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				f := m.pending
 				m.pending = nil
-				return m, m.startRun(f)
+				return m, m.startRun(f, nil)
 			}
 			return m, nil
 		}
@@ -346,7 +408,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.beginWizard(m.active)
 			}
 			if m.active.Descriptor().ReadOnly || plansBeforeRun(m.active) {
-				return m, m.begin(m.active)
+				return m, m.start(m.active)
 			}
 			m.pending = m.active
 			m.phase = phaseConfirm
@@ -369,7 +431,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, m.beginWizard(f)
 				}
 				if f.Descriptor().ReadOnly || plansBeforeRun(f) {
-					return m, m.begin(f)
+					return m, m.start(f)
 				}
 				m.pending = f
 				m.phase = phaseConfirm
@@ -422,89 +484,121 @@ func uniqueApprovalKinds(kinds []core.ApprovalKind) []core.ApprovalKind {
 	return out
 }
 
+// start begins a feature from the menu or refresh, collecting interactive
+// inputs first when the feature implements core.InputProvider.
+func (m *Model) start(f core.Feature) tea.Cmd {
+	if f == nil {
+		return nil
+	}
+	if _, ok := f.(core.InputProvider); ok && m.engine != nil {
+		m.active = f
+		m.result = nil
+		m.currentStage = nil
+		m.notice = ""
+		m.pending = nil
+		m.phase = phaseLoadingInputs
+		req := m.requestFor(f)
+		engine := m.engine
+		return func() tea.Msg {
+			return inputsMsg{feature: f, report: engine.Inputs(m.ctx, req, nil)}
+		}
+	}
+	return m.begin(f)
+}
+
 // begin starts a feature. Features that can describe their planned work go
 // through a read-only plan first; everything else runs directly, preserving the
 // ticket 01 behavior.
 func (m *Model) begin(f core.Feature) tea.Cmd {
+	if f == nil {
+		return m.startRun(f, nil)
+	}
 	m.active = f
+	if m.req.Feature != f.Descriptor().Name {
+		m.req = core.Request{Feature: f.Descriptor().Name, Target: m.target}
+	}
+	m.resetRunState()
+	m.setupLive(f)
+	if plansBeforeRun(f) {
+		m.phase = phasePlanning
+		return tea.Batch(m.planCmd(f, m.events), waitStageCmd(m.events))
+	}
+	return m.launchRun(f, nil, nil)
+}
+
+// beginRequest runs a feature with inputs collected by the TUI form.
+func (m *Model) beginRequest(f core.Feature, req core.Request) tea.Cmd {
+	req.Feature = f.Descriptor().Name
+	req.Target = m.target
+	m.req = req
+	m.resetRunState()
+	m.setupLive(f)
+	return m.launchRun(f, nil, nil)
+}
+
+// startRun runs a feature without another plan pass. The plan (when shown) is
+// already the confirmation; ordinary updates need no second approval.
+func (m *Model) startRun(f core.Feature, options map[string]string) tea.Cmd {
+	m.ensureRequest(f)
+	m.resetRunState()
+	m.setupLive(f)
+	return m.launchRun(f, nil, options)
+}
+
+func (m *Model) runApproved(f core.Feature, approvals []core.ApprovalKind) tea.Cmd {
+	m.ensureRequest(f)
+	m.resetRunState()
+	m.setupLive(f)
+	return m.launchRun(f, approvals, nil)
+}
+
+func (m *Model) beginWithOptions(f core.Feature, options map[string]string) tea.Cmd {
+	return m.startRun(f, options)
+}
+
+// ensureRequest resets collected inputs when the selected feature changes, so
+// one feature's service/argument choices never leak into another operation.
+func (m *Model) ensureRequest(f core.Feature) {
+	if f == nil {
+		return
+	}
+	if m.req.Feature != f.Descriptor().Name {
+		m.req = core.Request{Feature: f.Descriptor().Name, Target: m.target}
+	}
+	m.req.Target = m.target
+}
+
+// resetRunState clears the previous screen and starts a fresh stage channel.
+// Collected feature inputs in m.req are preserved unless the feature changes.
+func (m *Model) resetRunState() {
 	m.result = nil
 	m.currentStage = nil
+	m.pending = nil
 	m.pendingApproval = ""
 	m.pendingApprovals = nil
 	m.approvedHooks = nil
 	m.planText = ""
-	m.pending = nil
 	m.notice = ""
+	m.closeLive()
+	m.form = nil
+	m.lastLive = nil
 	if m.runCancel != nil {
 		m.runCancel()
 		m.runCancel = nil
 		m.runCtx = nil
 	}
 	m.events = make(chan core.Stage, 64)
-	if plansBeforeRun(f) {
-		m.phase = phasePlanning
-		return tea.Batch(m.planCmd(f, m.events), waitStageCmd(m.events))
-	}
-	m.phase = phaseLoading
-	m.runCtx, m.runCancel = context.WithCancel(m.ctx)
-	return tea.Batch(m.runCmd(f, nil, nil, m.events, m.runCtx), waitStageCmd(m.events))
 }
 
-// startRun runs a feature without another plan pass. The plan (when shown) is
-// already the confirmation; ordinary updates need no second approval.
-func (m *Model) startRun(f core.Feature) tea.Cmd {
+func (m *Model) launchRun(f core.Feature, approvals []core.ApprovalKind, options map[string]string) tea.Cmd {
 	m.active = f
-	m.result = nil
-	m.currentStage = nil
-	m.pending = nil
-	m.pendingApproval = ""
-	m.pendingApprovals = nil
-	m.approvedHooks = nil
-	m.planText = ""
-	m.notice = ""
-	if m.runCancel != nil {
-		m.runCancel()
-	}
 	m.phase = phaseLoading
 	m.runCtx, m.runCancel = context.WithCancel(m.ctx)
-	m.events = make(chan core.Stage, 64)
-	return tea.Batch(m.runCmd(f, nil, nil, m.events, m.runCtx), waitStageCmd(m.events))
-}
-
-func (m *Model) runApproved(f core.Feature, approvals []core.ApprovalKind) tea.Cmd {
-	m.phase = phaseLoading
-	m.result = nil
-	m.currentStage = nil
-	m.pending = nil
-	m.pendingApproval = ""
-	m.pendingApprovals = nil
-	m.planText = ""
-	m.notice = ""
-	if m.runCancel != nil {
-		m.runCancel()
+	cmds := []tea.Cmd{m.runCmd(f, approvals, options, m.events, m.runCtx), waitStageCmd(m.events)}
+	if m.live != nil {
+		cmds = append(cmds, waitLiveCmd(m.liveCh))
 	}
-	m.runCtx, m.runCancel = context.WithCancel(m.ctx)
-	m.events = make(chan core.Stage, 64)
-	return tea.Batch(m.runCmd(f, approvals, nil, m.events, m.runCtx), waitStageCmd(m.events))
-}
-
-func (m *Model) beginWithOptions(f core.Feature, options map[string]string) tea.Cmd {
-	m.active = f
-	m.result = nil
-	m.currentStage = nil
-	m.pending = nil
-	m.pendingApproval = ""
-	m.pendingApprovals = nil
-	m.approvedHooks = nil
-	m.planText = ""
-	m.notice = ""
-	if m.runCancel != nil {
-		m.runCancel()
-	}
-	m.runCtx, m.runCancel = context.WithCancel(m.ctx)
-	m.events = make(chan core.Stage, 64)
-	m.phase = phaseLoading
-	return tea.Batch(m.runCmd(f, nil, options, m.events, m.runCtx), waitStageCmd(m.events))
+	return tea.Batch(cmds...)
 }
 
 func (m *Model) declineApproval() {
@@ -536,13 +630,20 @@ func (m *Model) declineApproval() {
 
 func (m *Model) runCmd(f core.Feature, approvals []core.ApprovalKind, options map[string]string, events chan core.Stage, ctx context.Context) tea.Cmd {
 	engine := m.engine
-	req := core.Request{
-		Feature:       f.Descriptor().Name,
-		Target:        m.target,
-		Approvals:     approvals,
-		ApprovedHooks: append([]core.HookEntry{}, m.approvedHooks...),
-		Options:       options,
-		Interactive:   true,
+	req := m.req
+	req.Feature = f.Descriptor().Name
+	req.Target = m.target
+	req.Approvals = approvals
+	req.ApprovedHooks = append([]core.HookEntry{}, m.approvedHooks...)
+	req.Interactive = true
+	req.JSON = false
+	if options != nil {
+		if req.Options == nil {
+			req.Options = map[string]string{}
+		}
+		for key, value := range options {
+			req.Options[key] = value
+		}
 	}
 	m.approvedHooks = nil
 	return func() tea.Msg {
@@ -690,10 +791,20 @@ func (m *Model) View() string {
 		b.WriteString("\n")
 		b.WriteString(hintStyle.Render(msgEnvIsolationNote))
 		b.WriteString("\n")
+	case phaseLoadingInputs:
+		b.WriteString(msgLoadingInputs)
+		b.WriteString("\n")
+	case phaseForm:
+		b.WriteString(m.formView())
 	case phaseWizardLoading, phaseWizardStep, phaseWizardPreview:
 		b.WriteString(m.wizardView())
 		b.WriteString("\n")
 	case phaseLoading:
+		if m.live != nil {
+			b.WriteString(m.liveView())
+			b.WriteString("\n")
+			break
+		}
 		b.WriteString(msgWorking)
 		b.WriteString("\n")
 		if m.currentStage != nil {
@@ -701,6 +812,15 @@ func (m *Model) View() string {
 			b.WriteString("\n")
 		}
 	default:
+		if len(m.lastLive) > 0 {
+			b.WriteString(titleStyle.Render(msgLastOutput))
+			b.WriteString("\n")
+			for _, line := range m.lastLive {
+				b.WriteString(line)
+				b.WriteString("\n")
+			}
+			b.WriteString("\n")
+		}
 		if m.result != nil {
 			if m.result.Outcome == core.OutcomeSuccess {
 				if p, ok := m.active.(core.Presenter); ok {
@@ -857,6 +977,15 @@ func (m *Model) contentWidth() int {
 }
 
 func (m *Model) hints() string {
+	if m.form != nil {
+		return msgHintForm
+	}
+	if m.live != nil {
+		if m.live.mode == core.LiveAttach {
+			return msgHintAttach
+		}
+		return msgHintLive
+	}
 	if m.isWizardPhase() {
 		return m.wizardHints()
 	}

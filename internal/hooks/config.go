@@ -92,8 +92,14 @@ func Load(projectDir string) (Catalog, error) {
 
 // Add validates one registration and writes the hooks section. The referenced
 // file must already exist and be a regular file; Add never creates scripts and
-// never grants script trust.
+// never grants script trust. A bounded project-config lock serializes
+// concurrent registrations so no update is lost.
 func Add(projectDir string, reg Registration) (Catalog, error) {
+	release, err := acquireConfigLock(projectDir)
+	if err != nil {
+		return Catalog{}, err
+	}
+	defer release()
 	cat, err := Load(projectDir)
 	if err != nil {
 		return cat, err
@@ -118,8 +124,14 @@ func Add(projectDir string, reg Registration) (Catalog, error) {
 }
 
 // Remove deletes one registration identified by script path and stage. A
-// missing registration is a hook_invalid error.
+// missing registration is a hook_invalid error. It takes the same bounded
+// project-config lock as Add.
 func Remove(projectDir, scriptPath string, stage Stage) (Catalog, error) {
+	release, err := acquireConfigLock(projectDir)
+	if err != nil {
+		return Catalog{}, err
+	}
+	defer release()
 	cat, err := Load(projectDir)
 	if err != nil {
 		return cat, err
@@ -414,5 +426,28 @@ func invalid(message, detail string) *core.Error {
 		Message:     message,
 		Detail:      detail,
 		NextActions: []string{msgConfigActionOne, msgConfigActionTwo},
+	})
+}
+
+func configLockError(err error) *core.Error {
+	return core.FailCause(err, core.Diagnostic{
+		Category:    core.CategoryHookInvalid,
+		Severity:    core.SeverityError,
+		Message:     msgConfigLockFailed,
+		Detail:      err.Error(),
+		NextActions: []string{msgConfigLockActionOne, msgConfigLockActionTwo},
+	})
+}
+
+func configLockBusy(path string) *core.Error {
+	return core.Fail(core.Diagnostic{
+		Category: core.CategoryHookInvalid,
+		Severity: core.SeverityError,
+		Message:  msgConfigLocked,
+		Detail:   path,
+		NextActions: []string{
+			msgConfigLockActionOne,
+			"다른 dcraft 명령이 끝난 뒤 다시 실행하세요.",
+		},
 	})
 }

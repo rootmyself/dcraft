@@ -150,7 +150,8 @@ func (r Result) ExitCode() int {
 			case CategoryApprovalRequired, CategoryHookContentChanged, CategoryHookInputInvalid,
 				CategoryEnvironmentRequired, CategoryEnvironmentUnknown, CategoryEnvironmentConflict,
 				CategoryProjectNameConflict, CategoryServiceUnknown, CategoryInvalidOption,
-				CategorySecretInputInvalid, CategorySecretUnsupported:
+				CategorySecretInputInvalid, CategorySecretUnsupported,
+				CategorySelectionRequired, CategoryInstanceUnknown:
 				return 2
 			}
 		}

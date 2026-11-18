@@ -198,6 +198,30 @@ func TestCorruptTrustRecordFailsSafely(t *testing.T) {
 	hasCategory(t, err, core.CategoryStateFailed)
 }
 
+func TestTrustRecordFileIsPrivate(t *testing.T) {
+	dir, _ := projectWithHook(t, "scripts/pre.sh", "pre")
+	store := state.New(t.TempDir())
+	svc := hooks.New(store, os.Getenv)
+	plan, err := svc.Plan(context.Background(), target(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Approve(context.Background(), target(dir), plan, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	stackDir, err := store.StackDir(target(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(filepath.Join(stackDir, "script-trust.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Fatalf("trust file permissions = %04o, want 0600", perm)
+	}
+}
+
 func TestDescribeShowsRegistrationsWithoutRunningOrFailingOnMissingScripts(t *testing.T) {
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, ".dcraft.yaml"), "hooks:\n  - path: scripts/missing.sh\n    stage: pre\n")

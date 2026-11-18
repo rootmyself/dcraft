@@ -1,9 +1,11 @@
 package hooks_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/rootmyself/dcraft/internal/core"
@@ -97,6 +99,54 @@ secrets: []
 	}
 	if cat.Registrations[1].Path != "scripts/post-deploy.sh" || cat.Registrations[1].Stage != hooks.StagePost {
 		t.Fatalf("second = %+v", cat.Registrations[1])
+	}
+}
+
+func TestConcurrentAddsDoNotLoseRegistrations(t *testing.T) {
+	dir := t.TempDir()
+	const count = 8
+	names := make([]string, 0, count)
+	for i := 0; i < count; i++ {
+		name := fmt.Sprintf("scripts/hook-%d.sh", i)
+		script(t, dir, name)
+		names = append(names, name)
+	}
+	start := make(chan struct{})
+	errs := make(chan error, count)
+	var wg sync.WaitGroup
+	for _, name := range names {
+		name := name
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			_, err := hooks.Add(dir, hooks.Registration{Path: name, Stage: hooks.StagePre})
+			errs <- err
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("concurrent add: %v", err)
+		}
+	}
+	cat, err := hooks.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cat.Registrations) != count {
+		t.Fatalf("registrations = %d, want %d (lost update): %+v", len(cat.Registrations), count, cat.Registrations)
+	}
+	seen := map[string]bool{}
+	for _, reg := range cat.Registrations {
+		seen[reg.Path] = true
+	}
+	for _, name := range names {
+		if !seen[name] {
+			t.Fatalf("registration %q was lost: %+v", name, cat.Registrations)
+		}
 	}
 }
 

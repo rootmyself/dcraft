@@ -2,14 +2,18 @@ package hooks
 
 // Korean user-facing messages for host-script registration and execution.
 const (
-	msgConfigUnreadable = ".dcraft.yaml의 hooks 설정을 읽지 못했습니다."
-	msgConfigMalformed  = ".dcraft.yaml의 hooks 설정 형식이 올바르지 않습니다."
-	msgConfigRoot       = ".dcraft.yaml의 최상위 구조가 매핑이 아닙니다."
-	msgConfigHooksList  = "hooks 항목은 목록이어야 합니다."
-	msgConfigEncode     = "hooks 설정을 저장할 형식으로 만들지 못했습니다."
-	msgConfigWrite      = "hooks 설정을 저장하지 못했습니다."
-	msgConfigActionOne  = ".dcraft.yaml의 hooks 항목(path, stage)을 확인하세요."
-	msgConfigActionTwo  = "dcraft hooks --list로 등록된 스크립트를 확인할 수 있습니다."
+	msgConfigUnreadable    = ".dcraft.yaml의 hooks 설정을 읽지 못했습니다."
+	msgConfigMalformed     = ".dcraft.yaml의 hooks 설정 형식이 올바르지 않습니다."
+	msgConfigRoot          = ".dcraft.yaml의 최상위 구조가 매핑이 아닙니다."
+	msgConfigHooksList     = "hooks 항목은 목록이어야 합니다."
+	msgConfigEncode        = "hooks 설정을 저장할 형식으로 만들지 못했습니다."
+	msgConfigWrite         = "hooks 설정을 저장하지 못했습니다."
+	msgConfigActionOne     = ".dcraft.yaml의 hooks 항목(path, stage)을 확인하세요."
+	msgConfigActionTwo     = "dcraft hooks --list로 등록된 스크립트를 확인할 수 있습니다."
+	msgConfigLocked        = "다른 dcraft 작업이 .dcraft.yaml을 수정하고 있습니다. 잠시 기다린 뒤 다시 실행하세요."
+	msgConfigLockFailed    = ".dcraft.yaml 수정 잠금을 만들지 못했습니다."
+	msgConfigLockActionOne = "프로젝트 폴더의 .dcraft.lock 파일과 폴더 쓰기 권한을 확인하세요."
+	msgConfigLockActionTwo = "다른 dcraft 명령이 실행 중이지 않은지 확인하세요."
 
 	msgRegistrationMapping      = "hooks의 각 항목은 path와 stage를 가진 매핑이어야 합니다."
 	msgRegistrationFieldKey     = "hooks 항목의 필드 이름이 올바르지 않습니다."
