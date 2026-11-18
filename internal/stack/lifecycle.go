@@ -22,9 +22,12 @@ type Lifecycle interface {
 
 // OpResult is the observable tool output of one lifecycle invocation. Output
 // is already trimmed for diagnostics. A non-zero Compose exit is returned with
-// an error; cancellation is returned as a context error.
+// an error; cancellation is returned as a context error. Notices are Korean,
+// user-facing facts about the operation (for example applied runtime secret
+// deliveries) and never contain resolved secret values.
 type OpResult struct {
-	Output string
+	Output  string
+	Notices []string
 }
 
 // ConfigInfo is the narrow part of the resolved Compose model dcraft needs for
@@ -36,6 +39,10 @@ type ConfigInfo struct {
 	EffectiveName string
 	// Services are the configured Compose service names, sorted.
 	Services []string
+	// Dependencies maps a service to the services it declares in depends_on.
+	// Runtime secret preparation uses it to resolve only references for
+	// services that an explicit selection will actually start.
+	Dependencies map[string][]string
 }
 
 // ProjectInfo is one Compose project that already exists on the local engine.

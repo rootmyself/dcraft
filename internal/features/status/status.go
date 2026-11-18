@@ -293,9 +293,9 @@ func stateLabel(state stack.ServiceState) string {
 func writeGuidance(b *strings.Builder, width int) {
 	fmt.Fprintf(b, "다음 행동\n")
 	for _, line := range []string{
-		msgGuideRefresh,
-		msgGuideInteractive,
+		msgGuideRefreshInteractive,
 		msgGuidePending,
+		msgGuideSecrets,
 	} {
 		writeWrappedBullet(b, line, width)
 	}

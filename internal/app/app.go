@@ -12,6 +12,7 @@ import (
 	"github.com/rootmyself/dcraft/internal/features/all"
 	"github.com/rootmyself/dcraft/internal/identity"
 	"github.com/rootmyself/dcraft/internal/lifecycle"
+	"github.com/rootmyself/dcraft/internal/secretref"
 	"github.com/rootmyself/dcraft/internal/state"
 	"github.com/rootmyself/dcraft/internal/target"
 )
@@ -54,7 +55,9 @@ func New(opts Options) (*App, error) {
 		return nil, err
 	}
 	store := state.New(stateRoot)
+	secretRuntime := secretref.NewRuntime(store, opts.Getenv)
 	composeAdapter := compose.New(opts.Runner, opts.Getenv)
+	composeAdapter.SetSecretRuntime(secretRuntime)
 	controller := lifecycle.New(composeAdapter, composeAdapter, composeAdapter, store, opts.Clock)
 	d := &deps.Deps{
 		Runner:    opts.Runner,
@@ -62,6 +65,7 @@ func New(opts Options) (*App, error) {
 		State:     store,
 		Compose:   composeAdapter,
 		Lifecycle: controller,
+		Secrets:   secretRuntime,
 	}
 
 	registry := core.NewRegistry()

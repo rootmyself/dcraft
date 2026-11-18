@@ -42,3 +42,21 @@ const (
 	msgCanceling          = "중단을 요청했습니다. 진행 중인 작업이 안전하게 끝날 때까지 기다리세요. 일부 변경이 남을 수 있습니다."
 	msgHintBusy           = "ctrl+c 중단 요청 · 작업 완료 후 q 종료"
 )
+
+const (
+	msgWizardLoading       = "비밀값 연결 설정 단계를 준비하는 중…"
+	msgWizardProgress      = "단계"
+	msgWizardInputLabel    = "> "
+	msgWizardNeedValue     = "값을 입력한 뒤 enter를 누르세요."
+	msgWizardNeedChoice    = "↑/↓로 값을 선택한 뒤 enter를 누르세요."
+	msgWizardPreviewFailed = "입력을 저장할 수 없습니다. 이전 단계로 돌아가 수정하세요."
+	msgWizardPayload       = "대화형 설정 단계를 표시할 수 없습니다."
+	msgWizardPayloadAction = "dcraft secrets 명령으로 참조를 직접 추가하세요."
+	msgWizardUnavailable   = "이 기능은 대화형 설정을 지원하지 않습니다."
+	msgWizardCanceled      = "대화형 설정을 취소했습니다. 저장된 내용은 없습니다."
+	msgHintWizardChoice    = "↑/↓ 선택 · enter 다음 · ← 이전 · esc 취소 · q 종료"
+	msgHintWizardInput     = "입력 후 enter · backspace 수정 · ← 이전 · esc 취소 · q 종료"
+	msgHintWizardPreview   = "enter 저장 · ← 이전 · esc 취소 · q 종료"
+	msgHintWizardInvalid   = "← 이전 · esc 취소 · q 종료"
+	msgHintWizardLoading   = "esc 취소 · q 종료"
+)

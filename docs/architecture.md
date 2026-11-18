@@ -5,12 +5,13 @@ fork these types or recreate these rules in a feature or UI package. Shared
 interface changes go to the integration owner as a change request (see the end
 of this file).
 
-Scope of this version: one working binary, five registered features (`status`,
-`up`, `stop`, `down`, `restart`), the common operation seam, target resolution,
-named environments, automatic project-name allocation, same-stack coordination,
-diagnostics, CLI/TUI assembly, state layout, machine-readable results and tests.
-Logs/exec, generation, install, update, secrets, hooks, backup/restore and
-rollback are later tickets.
+Scope of this version: one working binary, six registered features (`status`,
+`up`, `stop`, `down`, `restart`, `secrets`), the common operation seam, target
+resolution, named environments, automatic project-name allocation, same-stack
+coordination, runtime secret references, diagnostics, CLI/TUI assembly, state
+layout, machine-readable results and tests. Logs/exec, generation, install,
+update, build-time/AWS secrets, hooks, backup/restore and rollback are later
+tickets.
 
 ---
 
@@ -227,9 +228,17 @@ bundles a Compose file list, explicit env files and profiles under an alias. It
 adds no merge rules, no deployment model and no project-name source.
 
 Config file: `<project folder>/.dcraft.yaml`. It is optional, lives next to the
-Compose files, is never passed to Compose and is never modified by dcraft.
-Unknown top-level keys are ignored so later tickets can add their own sections;
-fields inside an environment are strict.
+Compose files and is never passed to Compose. dcraft never modifies user
+Compose files or Dockerfiles. `.dcraft.yaml` is dcraft's own project config and
+may be written only after an explicit user action (for example
+`dcraft secrets --add` or the TUI save confirmation). It stores references
+only, never resolved values, and is designed to be shareable with the team:
+reading it reveals which services use which sources, but not the secrets
+themselves. That is a metadata/privacy consequence, not a secret store.
+Unknown top-level keys are preserved and comments are preserved where the YAML
+library can attach them; the file is replaced atomically so an interrupted
+write leaves the previous file intact. Fields inside an environment are
+strict.
 
 ```yaml
 environments:
@@ -857,6 +866,20 @@ Tested seams:
   status reporting `hello-world-1` and the same container IDs with unchanged
   state files, another stack's container IDs/data unchanged, TUI quit leaving
   services running, cleanup with its own projects only.
+- runtime secret references: config parse/validation/persistence (no values),
+  unknown service, duplicate target, unsupported build phase and AWS source,
+  idempotent re-add, add/remove/list CLI and JSON, non-interactive exit 2,
+  only needed services resolved (including depends_on), missing/empty/
+  unreadable sources failing before Compose, redaction of captured output,
+  per-stack materialized file mode 0600 and lifetime, crash-safe rewrite on
+  every apply (no value cache), removal and `down` cleanup, and the TUI
+  wizard preview/decline/save flow with keyboard navigation;
+- real Docker runtime secrets: environment-variable value visible inside the
+  container, file secret readable at `/run/secrets/<target>` with mode 0600,
+  `docker restart` and no-change `up` surviving, force-recreate, reference
+  removal/down cleanup, a missing source leaving no orphan file, a known
+  sentinel never appearing in JSON/human output/state/diagnostics, and the
+  pre-existing Compose file hash unchanged;
 - real Docker environments: two aliases with different files/profiles/env files
   run as separate stacks with separate declared project names and host ports,
   env-file values reach the containers, status reports each environment and
@@ -884,9 +907,10 @@ Docker. Unrun platforms/paths are not claimed as verified.
   exists for them and no menu action is shown.
 - TUI alias creation/editing: aliases are created by editing `.dcraft.yaml` in
   this version (selection is provided by both interfaces).
-- Secrets, host scripts/hooks, generated Compose/Dockerfile files, Compose
-  installation, previous-good records, Kubernetes, remote engines, resident
-  daemon/web UI.
+- Build-time secrets (BuildKit mounts), AWS Secrets Manager sources, host
+  scripts/hooks, generated Compose/Dockerfile files, Compose installation,
+  previous-good records, Kubernetes, remote engines, resident daemon/web UI.
+  Runtime environment/file references are implemented by ticket #9 below.
 - Good-version history (ticket #7/#11), TUI flag/approval collection for future
   features, service selection in the TUI (CLI `-s` only).
 
@@ -926,6 +950,14 @@ Before changing a shared type/interface, send the integration owner:
    a UI;
 4. documentation updates to this file.
 
+Published by ticket #9 (consume, do not fork): `internal/secretref` types
+(`Phase`, `Delivery`, `SourceType`, `Reference`, `Catalog`, `Runtime`,
+`Session`, `Mode`), the `.dcraft.yaml` `secrets:` list schema, the
+`core.WizardSpec`/`core.Wizard`/`Descriptor.Wizard` guided-flow contract, the
+`stack.ConfigInfo.Dependencies` map, `stack.OpResult.Notices`, and the
+`secret_invalid`/`secret_input_invalid`/`secret_unsupported`/
+`secret_source_unavailable`/`secret_apply_failed` diagnostic categories.
+
 Published by ticket #3 (consume, do not fork): `stack.Lifecycle`,
 `stack.Identity`, `stack.ConfigInfo`, `stack.ProjectInfo`, `stack.OpResult`,
 `deps.Deps.Lifecycle`, `lifecycle.Controller`/`Action`/`Payload`/`Report`/
@@ -943,3 +975,119 @@ not call Compose directly or copy the controller. Not allowed: editing another
 feature, adding a feature branch in CLI/TUI, bypassing the engine for Docker
 access, printing secrets, or silently changing an existing machine value/exit
 code.
+
+
+---
+
+## 14. Runtime secret references and delivery (ticket #9)
+
+Runtime secrets are references, not a secret store. Only environment-variable
+and local-file sources and runtime delivery are implemented here; build-time
+delivery (#10) and AWS Secrets Manager (#11) extend the same contract.
+
+### 14.1 Project config
+
+`<project folder>/.dcraft.yaml` gains an optional list:
+
+```yaml
+secrets:
+  - service: web               # Compose service
+    phase: runtime             # runtime (build is recognized, not implemented)
+    delivery: environment      # environment | file
+    source: env                # env | file (aws is recognized, not implemented)
+    ref: DB_PASSWORD           # env var name or project-relative/absolute file path
+    target: DB_PASSWORD        # optional; env var name or /run/secrets file name
+```
+
+- Required: `service`, `phase`, `delivery`, `source`, `ref`. `target` defaults
+  to the env var name (environment delivery) or the source file's base name
+  without the last extension (file delivery).
+- Validation rejects unknown services, duplicate target per service+delivery,
+  unsupported/unknown phase, delivery and source values, unsafe env names,
+  empty refs and unsafe target names. `build` and `aws` are recognized with a
+  Korean "not implemented in this RFC" error so later tickets can extend them.
+- Re-adding an identical reference is idempotent. Removing one regenerates the
+  managed override without it; a file-delivery materialization is kept until a
+  safe cleanup point (next successful `up` or `down`) so restart still works.
+- The file is written only after explicit confirmation, atomically. Existing
+  `environments:` and unknown top-level keys survive; comments survive where
+  the YAML library can attach them. Resolved values are never written.
+- The file is shareable project metadata: it reveals sources and targets, not
+  values. `--add` stores the reference without reading the source; existence
+  and emptiness are checked when applying. A service that already declares the
+  same `environment:` key or `/run/secrets` target can conflict with the
+  generated override; dcraft does not rewrite the user's Compose file to
+  resolve it.
+
+### 14.2 Effective Compose inputs
+
+Existing Compose files and Dockerfiles are never modified. When runtime
+references exist, dcraft writes a managed override at
+`<state>/stacks/<stack>/compose.secrets.yaml` (0600) and appends it with `-f`
+after the user's Compose files. The first user file still determines Compose's
+project directory. The override contains only references:
+
+```yaml
+services:
+  web:
+    environment:
+      DB_PASSWORD: "${DCRAFT_SECRET_1}"
+  worker:
+    secrets:
+      - source: dcraft_secret_1
+        target: worker_token
+secrets:
+  dcraft_secret_1:
+    file: /abs/state/stacks/<stack>/secrets/web__worker_token__<hash>.secret
+```
+
+Environment values are passed only in the Compose subprocess environment and
+are never written to disk. File values are materialized under the per-stack
+state directory with mode 0600. Basic use without references has no override
+and no changed Compose inputs. Rollback history must store the user file list
+and `.dcraft.yaml` references; the override is regenerated from them, never
+copied as a value-bearing artifact.
+
+### 14.3 Lifetime, cleanup and crash safety
+
+File secrets are live bind mounts. Materialized files live as long as the
+stack may restart. Explicit removal (`dcraft secrets --remove`) removes the
+reference from the override but keeps the file until a safe point: a successful
+`dcraft up` that can recreate the service without it, or a successful `dcraft
+down`. A failed teardown keeps them. This is deliberate: deleting the file
+immediately would break `docker restart` of a container that still binds it.
+The next operation rewrites every file-delivery materialization from its
+current source (in place, never atomic rename); dcraft stores no fetched value
+and cannot compare old values, so it never silently reuses a value it cannot
+verify. Environment delivery is fetched before every create/recreate; restart
+does not need it because Docker already holds the value. Empty, missing,
+unreadable or non-regular sources fail before Compose changes services. If a
+prepare fails after an existing materialized file was overwritten, dcraft says
+that a partial rotation may remain; it never stores the old value to restore.
+
+`DCRAFT_STATE_DIR` inside the project folder is refused for file delivery so
+materialized values are never left in the project folder.
+
+### 14.4 Disclosures, migration and redaction
+
+- Environment-variable delivery is visible to Docker-authorized users and
+  `docker compose config` prints service `environment:` values. dcraft never
+  prints resolved environments and never fetches build/AWS secrets here.
+- File delivery requires the application to read `/run/secrets/<target>`;
+  dcraft does not assume a universal `*_FILE` convention or guarantee app
+  support.
+- Existing inline sensitive values in Compose or `.env` are not detected or
+  removed. `status` and `secrets` output include Korean guidance to move them
+  to references; Docker's own storage/query boundary is not controlled.
+- Fetched values are redacted from all captured tool output, diagnostics,
+  errors and human/JSON results. dcraft does not control values the app,
+  Dockerfile or user scripts print themselves.
+
+### 14.5 Interfaces for tickets #10/#11
+
+New sources and build delivery must reuse `secretref.Reference`
+(`phase`, `source`, `ref`, `target`), `secretref.Validate`, `Catalog`,
+`Runtime.Prepare`, and the managed-override pattern instead of adding a second
+config format or a secret store. Build delivery adds BuildKit mount declarations
+to the managed inputs; AWS adds a source resolver with the same non-empty and
+redaction rules. Rollback re-resolves references; it never keeps old values.

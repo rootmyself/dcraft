@@ -51,6 +51,10 @@ type Descriptor struct {
 	AcceptsArgs bool
 	// Flags are feature-owned options parsed by the shared CLI assembly.
 	Flags []Flag
+	// Wizard marks a feature whose TUI entry uses a guided flow instead of
+	// the generic confirmation screen. The feature must implement Wizard and
+	// handle Options["wizard"]="steps"/"apply" in Run.
+	Wizard bool
 }
 
 // FlagKind is the supported shape of a feature flag. Supporting a new kind is

@@ -41,6 +41,9 @@ const (
 	phaseLoading
 	phaseReady
 	phaseConfirm
+	phaseWizardLoading
+	phaseWizardStep
+	phaseWizardPreview
 )
 
 // Model is the Bubble Tea model. It is exported for behavior tests.
@@ -68,6 +71,22 @@ type Model struct {
 	runCancel    context.CancelFunc
 	width        int
 	height       int
+
+	// Wizard state is generic: the feature supplies the steps and the effect
+	// preview, the TUI only collects answers with the keyboard.
+	wizardFeature    core.Feature
+	wizardSpec       core.WizardSpec
+	wizardStep       int
+	wizardChoice     int
+	wizardInput      string
+	wizardAnswers    map[string]string
+	wizardPreview    string
+	wizardPreviewErr error
+	wizardAwaiting   bool
+	wizardApplying   bool
+	wizardCanceled   bool
+	wizardReturnRes  *core.Result
+	wizardReturnFeat core.Feature
 }
 
 // NewModel builds the initial screen without running anything.
@@ -117,7 +136,7 @@ func (m *Model) Init() tea.Cmd {
 		return m.listEnvironmentsCmd()
 	case phaseLoading:
 		m.runCtx, m.runCancel = context.WithCancel(m.ctx)
-		return tea.Batch(m.runCmd(m.active, m.events, m.runCtx), waitStageCmd(m.events))
+		return tea.Batch(m.runCmd(m.active, m.events, m.runCtx, nil), waitStageCmd(m.events))
 	default:
 		return nil
 	}
@@ -151,20 +170,44 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.phase = phaseSelectingEnvironment
 		return m, nil
 	case resultMsg:
+		if m.wizardCanceled {
+			// A canceled wizard step run may deliver its result after the
+			// user already returned to the previous screen.
+			m.wizardCanceled = false
+			return m, nil
+		}
 		res := msg.res
-		m.result = &res
 		m.currentStage = nil
-		m.phase = phaseReady
-		m.notice = ""
 		if m.runCancel != nil {
 			m.runCancel()
 			m.runCancel = nil
 			m.runCtx = nil
 		}
+		if m.wizardAwaiting {
+			m.wizardAwaiting = false
+			m.beginWizardSteps(res)
+			return m, nil
+		}
+		if m.wizardApplying {
+			m.wizardApplying = false
+			m.wizardFeature = nil
+			m.wizardSpec = core.WizardSpec{}
+			m.wizardAnswers = nil
+			m.wizardPreview = ""
+			m.wizardPreviewErr = nil
+		}
+		m.result = &res
+		m.phase = phaseReady
+		m.notice = ""
 		return m, nil
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q":
+			if m.wizardTextInput() {
+				// A typed value may legitimately contain q; the wizard
+				// handler below receives it.
+				break
+			}
 			if m.phase == phaseLoading && m.active != nil && !m.active.Descriptor().ReadOnly {
 				// A mutating Compose process is still running. Quitting here
 				// would orphan a hidden change; say so instead of hiding it.
@@ -190,8 +233,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.phase = phaseReady
 				m.pending = nil
 				m.notice = ""
+				return m, nil
+			}
+			if m.isWizardPhase() {
+				m.cancelWizard()
 			}
 			return m, nil
+		}
+		if m.isWizardPhase() {
+			return m, m.updateWizard(msg)
 		}
 		if m.phase == phaseSelectingEnvironment {
 			switch msg.String() {
@@ -219,6 +269,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "r":
 			if m.active == nil || m.phase != phaseReady {
 				return m, nil
+			}
+			if m.active.Descriptor().Wizard {
+				return m, m.beginWizard(m.active)
 			}
 			if m.active.Descriptor().ReadOnly {
 				return m, m.begin(m.active)
@@ -249,6 +302,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if m.phase == phaseReady && len(m.features) > 0 {
 				f := m.features[m.selected]
+				if f.Descriptor().Wizard {
+					return m, m.beginWizard(f)
+				}
 				if f.Descriptor().ReadOnly {
 					return m, m.begin(f)
 				}
@@ -284,14 +340,29 @@ func (m *Model) begin(f core.Feature) tea.Cmd {
 	}
 	m.runCtx, m.runCancel = context.WithCancel(m.ctx)
 	m.events = make(chan core.Stage, 64)
-	return tea.Batch(m.runCmd(f, m.events, m.runCtx), waitStageCmd(m.events))
+	return tea.Batch(m.runCmd(f, m.events, m.runCtx, nil), waitStageCmd(m.events))
 }
 
-func (m *Model) runCmd(f core.Feature, events chan core.Stage, ctx context.Context) tea.Cmd {
+func (m *Model) beginWithOptions(f core.Feature, options map[string]string) tea.Cmd {
+	m.active = f
+	m.result = nil
+	m.currentStage = nil
+	m.pending = nil
+	m.notice = ""
+	if m.runCancel != nil {
+		m.runCancel()
+	}
+	m.runCtx, m.runCancel = context.WithCancel(m.ctx)
+	m.events = make(chan core.Stage, 64)
+	return tea.Batch(m.runCmd(f, m.events, m.runCtx, options), waitStageCmd(m.events))
+}
+
+func (m *Model) runCmd(f core.Feature, events chan core.Stage, ctx context.Context, options map[string]string) tea.Cmd {
 	engine := m.engine
 	req := core.Request{
 		Feature:     f.Descriptor().Name,
 		Target:      m.target,
+		Options:     options,
 		Interactive: true,
 	}
 	return func() tea.Msg {
@@ -374,6 +445,9 @@ func (m *Model) View() string {
 		b.WriteString("\n")
 	case phaseConfirm:
 		b.WriteString(m.confirmView())
+		b.WriteString("\n")
+	case phaseWizardLoading, phaseWizardStep, phaseWizardPreview:
+		b.WriteString(m.wizardView())
 		b.WriteString("\n")
 	case phaseLoading:
 		b.WriteString(msgWorking)
@@ -475,6 +549,9 @@ func (m *Model) contentWidth() int {
 }
 
 func (m *Model) hints() string {
+	if m.isWizardPhase() {
+		return m.wizardHints()
+	}
 	if m.phase == phaseConfirm {
 		return msgConfirmHints
 	}

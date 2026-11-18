@@ -13,12 +13,23 @@ import (
 
 	"github.com/rootmyself/dcraft/internal/core"
 	"github.com/rootmyself/dcraft/internal/execx"
+	"github.com/rootmyself/dcraft/internal/secretref"
 )
 
 // Compose is the Docker Compose adapter.
 type Compose struct {
-	runner execx.Runner
-	getenv func(string) string
+	runner  execx.Runner
+	getenv  func(string) string
+	secrets SecretPreparer
+}
+
+// SecretPreparer is the runtime secret boundary published by ticket #9. The
+// Compose adapter owns the effective Compose inputs; the secret runtime owns
+// source resolution and per-stack materialization. A nil preparer preserves
+// the no-secrets behavior.
+type SecretPreparer interface {
+	Prepare(ctx context.Context, target core.Target, services []string, mode secretref.Mode) (secretref.Session, error)
+	CleanupStack(target core.Target) error
 }
 
 func New(runner execx.Runner, getenv func(string) string) *Compose {
@@ -27,6 +38,10 @@ func New(runner execx.Runner, getenv func(string) string) *Compose {
 	}
 	return &Compose{runner: runner, getenv: getenv}
 }
+
+// SetSecretRuntime wires runtime secret delivery into the Compose boundary.
+// It is called once by the application; tests may leave it unset.
+func (c *Compose) SetSecretRuntime(rt SecretPreparer) { c.secrets = rt }
 
 // Name identifies the backend in machine-readable results.
 func (c *Compose) Name() string { return "compose" }
