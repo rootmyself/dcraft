@@ -298,12 +298,59 @@ func matchesSelected(filename string, services []string) bool {
 // Redact removes known fetched values from tool output, diagnostics and error
 // text. It is not a guarantee about values the application itself prints.
 func (s Session) Redact(text string) string {
-	if text == "" || len(s.values) == 0 {
+	return redactValues(text, s.values)
+}
+
+// RedactText removes values referenced by the project's saved secret
+// references from tool output. It is the shared redaction entry point for
+// diagnostics that are not part of a prepared session (for example backup
+// helper output). Reads are best-effort: an unavailable source is skipped, and
+// the value is never returned, persisted or printed.
+func (r *Runtime) RedactText(target core.Target, text string) string {
+	if text == "" || r == nil {
 		return text
 	}
-	values := append([]string{}, s.values...)
-	sort.Slice(values, func(i, j int) bool { return len(values[i]) > len(values[j]) })
-	for _, value := range values {
+	catalog, err := Load(target.ProjectDir)
+	if err != nil || !catalog.Has() {
+		return text
+	}
+	values := make([]string, 0, len(catalog.References))
+	for _, ref := range catalog.References {
+		switch ref.Source {
+		case SourceEnv:
+			if value := r.getenv(ref.Ref); value != "" {
+				values = append(values, value)
+			}
+		case SourceFile:
+			path := strings.TrimSpace(ref.Ref)
+			if !filepath.IsAbs(path) {
+				path = filepath.Join(target.ProjectDir, path)
+			}
+			info, statErr := os.Stat(filepath.Clean(path))
+			// Redaction never reads an unbounded file or a non-regular one.
+			if statErr != nil || info.IsDir() || !info.Mode().IsRegular() || info.Size() > 1<<20 {
+				continue
+			}
+			raw, readErr := os.ReadFile(filepath.Clean(path))
+			if readErr != nil {
+				continue
+			}
+			value := string(raw)
+			if value != "" {
+				values = append(values, value, strings.TrimRight(value, "\r\n"))
+			}
+		}
+	}
+	return redactValues(text, values)
+}
+
+func redactValues(text string, values []string) string {
+	if text == "" || len(values) == 0 {
+		return text
+	}
+	sorted := append([]string{}, values...)
+	sort.Slice(sorted, func(i, j int) bool { return len(sorted[i]) > len(sorted[j]) })
+	for _, value := range sorted {
 		if value == "" {
 			continue
 		}

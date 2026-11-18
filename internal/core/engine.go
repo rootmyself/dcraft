@@ -216,6 +216,7 @@ func (e *Engine) Run(ctx context.Context, req Request, sink Sink) (res Result) {
 		Services:    append([]string{}, req.Services...),
 		Args:        append([]string{}, req.Args...),
 		Options:     req.Options,
+		OptionLists: req.OptionLists,
 		Interactive: req.Interactive,
 		Preflight:   pf,
 		IO:          req.IO,
@@ -282,7 +283,10 @@ func (e *Engine) Run(ctx context.Context, req Request, sink Sink) (res Result) {
 		return res
 	}
 
-	if desc.RecordsHistory {
+	// A wizard "steps" run only collects answers; the "apply" run is the
+	// actual operation. Recording the preview would write a success history
+	// entry for work the user has not confirmed yet.
+	if desc.RecordsHistory && req.Options["wizard"] != "steps" {
 		historyErr := RunStage(rec, "history", msgStageHistory, func() error {
 			if e.State == nil {
 				return errors.New("state store is not configured")
@@ -455,6 +459,7 @@ func (e *Engine) Plan(ctx context.Context, req Request, sink Sink) (report PlanR
 		Services:    append([]string{}, req.Services...),
 		Args:        append([]string{}, req.Args...),
 		Options:     req.Options,
+		OptionLists: req.OptionLists,
 		Interactive: req.Interactive,
 		Preflight:   pf,
 		IO:          req.IO,

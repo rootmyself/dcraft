@@ -153,6 +153,8 @@ func newFeatureCommand(opts Options, tf *targetFlags, feature core.Feature) *cob
 		case core.FlagBool:
 			def, _ := strconv.ParseBool(fl.Default)
 			cmd.Flags().BoolP(fl.Name, fl.Shorthand, def, fl.Usage)
+		case core.FlagList:
+			cmd.Flags().StringArrayP(fl.Name, fl.Shorthand, nil, fl.Usage)
 		default:
 			cmd.Flags().StringP(fl.Name, fl.Shorthand, fl.Default, fl.Usage)
 		}
@@ -168,11 +170,15 @@ func newFeatureCommand(opts Options, tf *targetFlags, feature core.Feature) *cob
 			return &ExitError{Code: 2}
 		}
 		options := map[string]string{}
+		optionLists := map[string][]string{}
 		for _, fl := range d.Flags {
 			switch fl.Kind {
 			case core.FlagBool:
 				v, _ := cmd.Flags().GetBool(fl.Name)
 				options[fl.Name] = strconv.FormatBool(v)
+			case core.FlagList:
+				v, _ := cmd.Flags().GetStringArray(fl.Name)
+				optionLists[fl.Name] = v
 			default:
 				v, _ := cmd.Flags().GetString(fl.Name)
 				options[fl.Name] = v
@@ -194,6 +200,7 @@ func newFeatureCommand(opts Options, tf *targetFlags, feature core.Feature) *cob
 			Services:    services,
 			Args:        append([]string{}, args...),
 			Options:     options,
+			OptionLists: optionLists,
 			Approvals:   approvals,
 			Interactive: opts.Interactive && !tf.json,
 			IO: core.IO{

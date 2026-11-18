@@ -50,8 +50,20 @@ const (
 	CategoryProjectNameConflict       Category = "project_name_conflict"
 	CategoryIdentityUnreadable        Category = "identity_unreadable"
 	CategoryServiceUnknown            Category = "service_unknown"
-	CategoryStackBusy                 Category = "stack_busy"
-	CategoryLifecycleFailed           Category = "lifecycle_failed"
+	// Data backup (ticket #16). The three *_required/*_unknown values are
+	// missing or invalid caller input and map to exit code 2.
+	CategoryBackupOutputRequired     Category = "backup_output_required"
+	CategoryBackupVolumeRequired     Category = "backup_volume_required"
+	CategoryBackupVolumeUnknown      Category = "backup_volume_unknown"
+	CategoryBackupVolumeUnsupported  Category = "backup_volume_unsupported"
+	CategoryBackupOutputInvalid      Category = "backup_output_invalid"
+	CategoryBackupConsumerUnsafe     Category = "backup_consumer_unsafe"
+	CategoryBackupFailed             Category = "backup_failed"
+	CategoryBackupIntegrityFailed    Category = "backup_integrity_failed"
+	CategoryBackupStateRestoreFailed Category = "backup_state_restore_failed"
+	CategoryBackupSelectionChanged   Category = "backup_selection_changed"
+	CategoryStackBusy                Category = "stack_busy"
+	CategoryLifecycleFailed          Category = "lifecycle_failed"
 	// Service/instance selection and live terminal operations (ticket #5).
 	// selection_required and instance_unknown mean the caller must supply a
 	// different explicit selection; instance_stopped, logs_failed and
