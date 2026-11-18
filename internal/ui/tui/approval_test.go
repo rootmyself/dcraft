@@ -184,3 +184,47 @@ func TestOrdinaryPlannerShowsPlanAndRunsWithoutApproval(t *testing.T) {
 		t.Fatalf("result not shown:\n%s", m.View())
 	}
 }
+
+// The previous_version approval reuses the same generic plan -> confirm screen
+// and passes exactly its own kind; no rollback-specific TUI branch exists.
+func TestPreviousVersionApprovalUsesTheGenericScreen(t *testing.T) {
+	rb := &stubPlanner{
+		stubFeature: &stubFeature{
+			desc: core.Descriptor{
+				Name: "rollback", Title: "이전 버전 복원", Summary: "직전 정상 버전으로 돌아갑니다.",
+				Usage:    "dcraft rollback --approve previous_version",
+				Approval: core.ApprovalPreviousGood, RecordsHistory: true, Primary: true,
+				Requires: core.Requirements{core.RequirementDockerCLI},
+			},
+			body: "복원 결과 본문",
+		},
+		plan: func(context.Context, core.Invocation) (core.Plan, error) {
+			return core.Plan{Text: "이전 정상 버전 복원 계획\n  - web: sha256:1111 (태그: dcraft-good/app-web:1111)"}, nil
+		},
+	}
+	m := newTestModel(t, rb)
+	initModel(t, m)
+
+	view := m.View()
+	for _, want := range []string{"이전 정상 버전 복원 계획", "승인", "이전 버전 복원", "previous_version", "enter 승인", "esc 취소"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("confirmation view missing %q:\n%s", want, view)
+		}
+	}
+	if rb.runs != 0 {
+		t.Fatalf("rollback ran before approval: %d", rb.runs)
+	}
+
+	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(*Model)
+	feed(t, m, execute(t, cmd))
+	if rb.runs != 1 {
+		t.Fatalf("approved rollback runs = %d, want 1", rb.runs)
+	}
+	if m.result == nil || m.result.Outcome != core.OutcomeSuccess {
+		t.Fatalf("result = %+v (the previous_version approval was not passed to the engine)", m.result)
+	}
+	if !strings.Contains(m.View(), "복원 결과 본문") {
+		t.Fatalf("result not shown:\n%s", m.View())
+	}
+}

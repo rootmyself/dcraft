@@ -56,6 +56,15 @@ const (
 	CategoryReadinessFailed           Category = "readiness_failed"
 	CategoryImageMissing              Category = "image_missing"
 	CategoryInvalidOption             Category = "invalid_option"
+	// Previous-good rollback (ticket 11). Additive categories: the values
+	// and meanings are part of the machine contract.
+	CategoryRollbackUnavailable       Category = "rollback_unavailable"
+	CategoryRollbackRecordInvalid     Category = "rollback_record_invalid"
+	CategoryRollbackInputMissing      Category = "rollback_input_missing"
+	CategoryRollbackImageMissing      Category = "rollback_image_missing"
+	CategoryRollbackSecretUnavailable Category = "rollback_secret_unavailable"
+	CategoryRollbackFailed            Category = "rollback_failed"
+	CategoryRollbackVerifyFailed      Category = "rollback_verify_failed"
 	CategoryStateFailed               Category = "state_failed"
 	CategoryVerificationFailed        Category = "verification_failed"
 	CategoryCanceled                  Category = "canceled"
