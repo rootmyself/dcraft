@@ -1,0 +1,70 @@
+// Package app wires the object graph once for both interfaces: command runner,
+// state, Compose adapter, feature registry, engine and autocomplete.
+package app
+
+import (
+	"os"
+
+	"github.com/rootmyself/dcraft/internal/compose"
+	"github.com/rootmyself/dcraft/internal/core"
+	"github.com/rootmyself/dcraft/internal/deps"
+	"github.com/rootmyself/dcraft/internal/execx"
+	"github.com/rootmyself/dcraft/internal/features/all"
+	"github.com/rootmyself/dcraft/internal/state"
+	"github.com/rootmyself/dcraft/internal/target"
+)
+
+// Options are the process-level dependencies. Tests substitute runners,
+// environment lookups, clocks and directories.
+type Options struct {
+	Getenv func(string) string
+	Getwd  func() (string, error)
+	Runner execx.Runner
+	Clock  core.Clock
+}
+
+// App is the built object graph.
+type App struct {
+	Options  Options
+	Registry *core.Registry
+	Engine   *core.Engine
+	Deps     *deps.Deps
+}
+
+// New builds the application. State is created lazily on first history write;
+// no Docker command runs here.
+func New(opts Options) (*App, error) {
+	if opts.Getenv == nil {
+		opts.Getenv = os.Getenv
+	}
+	if opts.Getwd == nil {
+		opts.Getwd = os.Getwd
+	}
+	if opts.Runner == nil {
+		opts.Runner = execx.NewOSRunner()
+	}
+	if opts.Clock == nil {
+		opts.Clock = core.SystemClock{}
+	}
+
+	stateRoot, err := state.Root(opts.Getenv)
+	if err != nil {
+		return nil, err
+	}
+	store := state.New(stateRoot)
+	composeAdapter := compose.New(opts.Runner, opts.Getenv)
+	d := &deps.Deps{
+		Runner:  opts.Runner,
+		Clock:   opts.Clock,
+		State:   store,
+		Compose: composeAdapter,
+	}
+
+	registry := core.NewRegistry()
+	all.Register(registry, d)
+
+	engine := core.NewEngine(registry, target.New(), composeAdapter, store, opts.Clock)
+	engine.CWD = opts.Getwd
+
+	return &App{Options: opts, Registry: registry, Engine: engine, Deps: d}, nil
+}
