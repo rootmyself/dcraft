@@ -298,12 +298,57 @@ func matchesSelected(filename string, services []string) bool {
 
 // Redact removes known fetched values from tool output, diagnostics and error
 // text. It is not a guarantee about values the application itself prints.
-func (s Session) Redact(text string) string { return redactValues(s.values, text) }
+func (s Session) Redact(text string) string {
+	return redactValues(text, s.values)
+}
 
 // HasValues reports whether this session fetched at least one value.
 func (s Session) HasValues() bool { return len(s.values) > 0 }
 
-func redactValues(values []string, text string) string {
+// RedactText removes values referenced by the project's saved secret
+// references from tool output. It is the shared redaction entry point for
+// diagnostics that are not part of a prepared session (for example backup
+// helper output). Reads are best-effort: an unavailable source is skipped, and
+// the value is never returned, persisted or printed.
+func (r *Runtime) RedactText(target core.Target, text string) string {
+	if text == "" || r == nil {
+		return text
+	}
+	catalog, err := Load(target.ProjectDir)
+	if err != nil || !catalog.Has() {
+		return text
+	}
+	values := make([]string, 0, len(catalog.References))
+	for _, ref := range catalog.References {
+		switch ref.Source {
+		case SourceEnv:
+			if value := r.getenv(ref.Ref); value != "" {
+				values = append(values, value)
+			}
+		case SourceFile:
+			path := strings.TrimSpace(ref.Ref)
+			if !filepath.IsAbs(path) {
+				path = filepath.Join(target.ProjectDir, path)
+			}
+			info, statErr := os.Stat(filepath.Clean(path))
+			// Redaction never reads an unbounded file or a non-regular one.
+			if statErr != nil || info.IsDir() || !info.Mode().IsRegular() || info.Size() > 1<<20 {
+				continue
+			}
+			raw, readErr := os.ReadFile(filepath.Clean(path))
+			if readErr != nil {
+				continue
+			}
+			value := string(raw)
+			if value != "" {
+				values = append(values, value)
+			}
+		}
+	}
+	return redactValues(text, values)
+}
+
+func redactValues(text string, values []string) string {
 	if text == "" || len(values) == 0 {
 		return text
 	}

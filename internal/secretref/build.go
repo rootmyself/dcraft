@@ -190,7 +190,7 @@ type buildState struct {
 	wroteOverride bool
 }
 
-func (s BuildSession) Redact(text string) string { return redactValues(s.state.values, text) }
+func (s BuildSession) Redact(text string) string { return redactValues(text, s.state.values) }
 
 // HasValues reports whether this preparation fetched at least one value.
 func (s BuildSession) HasValues() bool { return len(s.state.values) > 0 }

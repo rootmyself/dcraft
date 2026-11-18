@@ -153,6 +153,8 @@ func newFeatureCommand(opts Options, tf *targetFlags, feature core.Feature) *cob
 		case core.FlagBool:
 			def, _ := strconv.ParseBool(fl.Default)
 			cmd.Flags().BoolP(fl.Name, fl.Shorthand, def, fl.Usage)
+		case core.FlagList:
+			cmd.Flags().StringArrayP(fl.Name, fl.Shorthand, nil, fl.Usage)
 		default:
 			cmd.Flags().StringP(fl.Name, fl.Shorthand, fl.Default, fl.Usage)
 		}
@@ -168,11 +170,15 @@ func newFeatureCommand(opts Options, tf *targetFlags, feature core.Feature) *cob
 			return &ExitError{Code: 2}
 		}
 		options := map[string]string{}
+		optionLists := map[string][]string{}
 		for _, fl := range d.Flags {
 			switch fl.Kind {
 			case core.FlagBool:
 				v, _ := cmd.Flags().GetBool(fl.Name)
 				options[fl.Name] = strconv.FormatBool(v)
+			case core.FlagList:
+				v, _ := cmd.Flags().GetStringArray(fl.Name)
+				optionLists[fl.Name] = v
 			default:
 				v, _ := cmd.Flags().GetString(fl.Name)
 				options[fl.Name] = v
@@ -194,6 +200,7 @@ func newFeatureCommand(opts Options, tf *targetFlags, feature core.Feature) *cob
 			Services:    services,
 			Args:        append([]string{}, args...),
 			Options:     options,
+			OptionLists: optionLists,
 			Approvals:   approvals,
 			Interactive: opts.Interactive && !tf.json,
 			IO: core.IO{
@@ -210,11 +217,13 @@ func newFeatureCommand(opts Options, tf *targetFlags, feature core.Feature) *cob
 		}
 		previewAllowed := d.Approval == core.ApprovalNone || core.HasApproval(approvals, d.Approval)
 		if !tf.json && previewAllowed {
-			if _, ok := feature.(core.Planner); ok {
+			_, isPlanner := feature.(core.Planner)
+			if isPlanner || d.Hooks != core.HookNone {
 				// This read-only preview uses the same plan path as the TUI so
-				// the human sees the target and planned work before anything is
-				// built, pulled or changed. The engine still enforces any
-				// independent approval; an ordinary update needs none.
+				// the human sees the target, planned work and registered host
+				// scripts before anything is built, pulled or changed. The
+				// engine still enforces any independent approval; an ordinary
+				// update needs none.
 				plan := opts.Engine.Plan(cmd.Context(), req, nil)
 				if plan.Failed() {
 					res := plan.Result()
@@ -226,6 +235,11 @@ func newFeatureCommand(opts Options, tf *targetFlags, feature core.Feature) *cob
 				if text := strings.TrimSpace(plan.Text); text != "" {
 					fmt.Fprintln(opts.Stderr, text)
 					fmt.Fprintln(opts.Stderr)
+				}
+				if core.HasApproval(approvals, core.ApprovalScriptTrust) {
+					// Bind the explicit trust to the identities the user just
+					// saw. A content change before Run invalidates it.
+					req.ApprovedHooks = append([]core.HookEntry{}, plan.Hooks...)
 				}
 			}
 		}

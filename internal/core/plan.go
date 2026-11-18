@@ -29,6 +29,14 @@ type PlanReport struct {
 	Stages      []Stage      `json:"stages"`
 	Diagnostics []Diagnostic `json:"diagnostics"`
 	Text        string       `json:"text,omitempty"`
+	// RequiredApprovals lists the independent approvals this operation needs
+	// before it can run. The TUI collects exactly these; a plan never grants
+	// them.
+	RequiredApprovals []ApprovalKind `json:"required_approvals,omitempty"`
+	// Hooks is the hook plan shown to the user. A caller that collects
+	// script_trust from this screen passes these entries back in
+	// Request.ApprovedHooks so a content change invalidates the approval.
+	Hooks []HookEntry `json:"hooks,omitempty"`
 }
 
 // Failed reports whether this plan cannot be offered to the user.

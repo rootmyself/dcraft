@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/rootmyself/dcraft/internal/core"
 	"github.com/rootmyself/dcraft/internal/execx"
@@ -21,6 +22,12 @@ type Compose struct {
 	runner  execx.Runner
 	getenv  func(string) string
 	secrets SecretPreparer
+
+	// Helper cleanup bounds. Zero means the production defaults; tests set
+	// these to exercise retry and failure paths quickly.
+	cleanupTimeout time.Duration
+	cleanupPoll    time.Duration
+	cleanupGrace   time.Duration
 }
 
 // SecretPreparer is the secret boundary published by ticket #9 and extended by
@@ -31,6 +38,9 @@ type SecretPreparer interface {
 	Prepare(ctx context.Context, target core.Target, services []string, mode secretref.Mode) (secretref.Session, error)
 	PrepareBuild(ctx context.Context, target core.Target, services []string, hints map[string]secretref.BuildServiceHint) (secretref.BuildSession, error)
 	CleanupStack(target core.Target) error
+	// RedactText removes referenced values from tool output. Ticket #16's
+	// data diagnostics use it even though backup fetches no values itself.
+	RedactText(target core.Target, text string) string
 }
 
 func New(runner execx.Runner, getenv func(string) string) *Compose {

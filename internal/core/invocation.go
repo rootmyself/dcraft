@@ -36,9 +36,19 @@ type Request struct {
 	Args []string
 	// Options are parsed feature-owned flag values.
 	Options map[string]string
+	// OptionLists are parsed repeatable-string flag values. They are kept
+	// separate so values are never split or joined by the UI layer.
+	OptionLists map[string][]string
 	// Approvals are explicit approvals supplied by the caller. The engine,
 	// not the UI, decides whether they are sufficient.
 	Approvals []ApprovalKind
+	// ApprovedHooks is the hook plan the caller showed the user and received
+	// approval for. When present, script_trust only covers those exact path,
+	// stage and content identities; a changed script needs a new approval.
+	// An empty slice means the caller supplied the approval kind without a
+	// specific plan (for example JSON automation after checking
+	// `dcraft hooks --list`).
+	ApprovedHooks []HookEntry
 	// Interactive reports whether prompts are possible. It never bypasses an
 	// approval requirement.
 	Interactive bool
@@ -58,6 +68,7 @@ type Invocation struct {
 	Services    []string
 	Args        []string
 	Options     map[string]string
+	OptionLists map[string][]string
 	Interactive bool
 	Preflight   PreflightReport
 	IO          IO
@@ -69,6 +80,9 @@ type Invocation struct {
 
 // Option returns a feature flag value, or "" when absent.
 func (in Invocation) Option(name string) string { return in.Options[name] }
+
+// OptionList returns the values of a repeatable feature flag.
+func (in Invocation) OptionList(name string) []string { return in.OptionLists[name] }
 
 // BoolOption reads a bool feature flag.
 func (in Invocation) BoolOption(name string) bool {
