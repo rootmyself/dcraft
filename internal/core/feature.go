@@ -66,6 +66,10 @@ type Descriptor struct {
 	// the generic confirmation screen. The feature must implement Wizard and
 	// handle Options["wizard"]="steps"/"apply" in Run.
 	Wizard bool
+	// Hooks declares the registered host-script attachment point. The zero
+	// value runs no scripts. HookUpUpdate is only valid on `up` and `update`;
+	// read-only features may never declare it.
+	Hooks HookScope
 }
 
 // FlagKind is the supported shape of a feature flag. Supporting a new kind is
@@ -75,6 +79,10 @@ type FlagKind string
 const (
 	FlagString FlagKind = "string"
 	FlagBool   FlagKind = "bool"
+	// FlagList is a repeatable string flag. Values are carried separately in
+	// Request.OptionLists/Invocation.OptionLists so a value containing a
+	// comma or space is never re-split by the feature.
+	FlagList FlagKind = "list"
 )
 
 // Flag declares a feature-owned CLI flag.
@@ -84,6 +92,11 @@ type Flag struct {
 	Usage     string
 	Kind      FlagKind
 	Default   string
+	// Required marks input a non-interactive run cannot invent. The CLI still
+	// passes whatever was given and the feature returns its own Korean usage
+	// diagnostic (exit 2) for a missing required value. Interactive
+	// collection uses the generic core.Wizard flow, not a per-feature screen.
+	Required bool
 }
 
 var (
@@ -119,6 +132,14 @@ func validateDescriptor(d Descriptor) error {
 	}
 	if d.ReadOnly && d.Approval != ApprovalNone {
 		return fmt.Errorf("feature %q: read-only features cannot require approval", d.Name)
+	}
+	switch d.Hooks {
+	case HookNone, HookUpUpdate:
+	default:
+		return fmt.Errorf("feature %q: unknown hook scope %q", d.Name, d.Hooks)
+	}
+	if d.ReadOnly && d.Hooks != HookNone {
+		return fmt.Errorf("feature %q: read-only features cannot run host hooks", d.Name)
 	}
 	for _, r := range d.Requires {
 		switch r {
@@ -157,7 +178,7 @@ func validateDescriptor(d Descriptor) error {
 			return fmt.Errorf("feature %q: flag --%s needs Korean usage text", d.Name, f.Name)
 		}
 		switch f.Kind {
-		case FlagString:
+		case FlagString, FlagList:
 		case FlagBool:
 			switch f.Default {
 			case "", "true", "false":

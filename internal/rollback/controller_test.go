@@ -789,3 +789,71 @@ func TestRunKeepsRecordsSeparatedByEnvironment(t *testing.T) {
 		t.Fatalf("apply calls = %d, want 1", applier.calls)
 	}
 }
+
+// Recorded build-phase references are availability-checked like runtime ones;
+// rollback never rebuilds, but a missing source still aborts before a change.
+func TestRunChecksBuildPhaseSecretSources(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		value   string
+		wantErr bool
+	}{
+		{"build source missing", "", true},
+		{"build source present", "build-secret", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			target := newTestTarget(t)
+			store := state.New(t.TempDir())
+			rec := testRecord(target)
+			rec.Target.SecretRefs = []state.SecretReference{{
+				Service: "web", Phase: "build", Delivery: "environment", Source: "env", Name: "BUILD_TOKEN",
+			}}
+			saveRecord(t, store, target, rec)
+			applier := &fakeApplier{}
+			u := &fakeUpdater{
+				model:      testModel(),
+				images:     map[string]string{testImage: testImage, testTag: testImage},
+				containers: []stack.Container{healthyContainer("web", testImage, true, "healthy")},
+			}
+			c := newControllerWithEnv(u, applier, store, func(name string) string {
+				if name == "BUILD_TOKEN" {
+					return tc.value
+				}
+				return ""
+			})
+			_, err := c.Run(context.Background(), invocationFor(target), Options{Timeout: 30 * time.Second})
+			if tc.wantErr {
+				requireCategory(t, err, core.CategoryRollbackSecretUnavailable)
+				if applier.calls != 0 {
+					t.Fatalf("rollback applied with a missing build secret source: %d calls", applier.calls)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("run: %v", err)
+			}
+			if applier.calls != 1 {
+				t.Fatalf("apply calls = %d, want 1", applier.calls)
+			}
+		})
+	}
+}
+
+// A recorded reference with an unknown phase is refused rather than ignored.
+func TestRunRejectsUnknownSecretPhase(t *testing.T) {
+	target := newTestTarget(t)
+	store := state.New(t.TempDir())
+	rec := testRecord(target)
+	rec.Target.SecretRefs = []state.SecretReference{{
+		Service: "web", Phase: "deploy", Delivery: "environment", Source: "env", Name: "TOKEN",
+	}}
+	saveRecord(t, store, target, rec)
+	applier := &fakeApplier{}
+	u := &fakeUpdater{model: testModel(), images: map[string]string{testImage: testImage, testTag: testImage}}
+	c := newControllerWithEnv(u, applier, store, func(string) string { return "value" })
+	_, err := c.Run(context.Background(), invocationFor(target), Options{Timeout: time.Second})
+	requireCategory(t, err, core.CategoryRollbackSecretUnavailable)
+	if applier.calls != 0 {
+		t.Fatal("rollback applied with an unknown secret phase")
+	}
+}

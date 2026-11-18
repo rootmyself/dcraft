@@ -283,6 +283,30 @@ func TestFeatureFlagsArgsAndServicesReachFeature(t *testing.T) {
 	}
 }
 
+func TestRepeatableStringFlagReachesFeatureAsList(t *testing.T) {
+	var got core.Invocation
+	backup := &stubFeature{desc: core.Descriptor{
+		Name: "backup", Title: "백업", Summary: "데이터를 백업합니다.", Usage: "dcraft backup",
+		Flags: []core.Flag{
+			{Name: "output", Shorthand: "o", Kind: core.FlagString, Usage: "출력 폴더"},
+			{Name: "volume", Kind: core.FlagList, Usage: "볼륨 키"},
+		},
+	}, run: func(ctx context.Context, in core.Invocation) (any, error) {
+		got = in
+		return nil, nil
+	}}
+	h := newHarness(t, backup)
+	if err := h.run("backup", "-o", "/tmp/out", "--volume", "data", "--volume", "logs"); err != nil {
+		t.Fatalf("backup: %v", err)
+	}
+	if got.Option("output") != "/tmp/out" {
+		t.Fatalf("output = %q", got.Option("output"))
+	}
+	if strings.Join(got.OptionList("volume"), ",") != "data,logs" {
+		t.Fatalf("volume list = %v", got.OptionList("volume"))
+	}
+}
+
 func TestApprovalIsEnforcedByEngineAndExitCode(t *testing.T) {
 	install := &stubFeature{desc: core.Descriptor{
 		Name: "install", Title: "설치", Summary: "설치합니다.", Usage: "dcraft install",

@@ -50,8 +50,31 @@ const (
 	CategoryProjectNameConflict       Category = "project_name_conflict"
 	CategoryIdentityUnreadable        Category = "identity_unreadable"
 	CategoryServiceUnknown            Category = "service_unknown"
-	CategoryStackBusy                 Category = "stack_busy"
-	CategoryLifecycleFailed           Category = "lifecycle_failed"
+	// Data backup (ticket #16). The three *_required/*_unknown values are
+	// missing or invalid caller input and map to exit code 2.
+	CategoryBackupOutputRequired     Category = "backup_output_required"
+	CategoryBackupVolumeRequired     Category = "backup_volume_required"
+	CategoryBackupVolumeUnknown      Category = "backup_volume_unknown"
+	CategoryBackupVolumeUnsupported  Category = "backup_volume_unsupported"
+	CategoryBackupOutputInvalid      Category = "backup_output_invalid"
+	CategoryBackupConsumerUnsafe     Category = "backup_consumer_unsafe"
+	CategoryBackupFailed             Category = "backup_failed"
+	CategoryBackupIntegrityFailed    Category = "backup_integrity_failed"
+	CategoryBackupStateRestoreFailed Category = "backup_state_restore_failed"
+	CategoryBackupSelectionChanged   Category = "backup_selection_changed"
+	CategoryStackBusy                Category = "stack_busy"
+	CategoryLifecycleFailed          Category = "lifecycle_failed"
+	// Host scripts (ticket #12). hook_invalid is a registration/file problem;
+	// hook_failed is a pre-hook process failure that blocked the operation;
+	// hook_content_changed means the approved content identity no longer
+	// matches and a new approval is required; hook_post_failed is a warning
+	// after completed work; hook_output carries redacted script output.
+	CategoryHookInvalid        Category = "hook_invalid"
+	CategoryHookInputInvalid   Category = "hook_input_invalid"
+	CategoryHookFailed         Category = "hook_failed"
+	CategoryHookContentChanged Category = "hook_content_changed"
+	CategoryHookPostFailed     Category = "hook_post_failed"
+	CategoryHookOutput         Category = "hook_output"
 	// Service/instance selection and live terminal operations (ticket #5).
 	// selection_required and instance_unknown mean the caller must supply a
 	// different explicit selection; instance_stopped, logs_failed and

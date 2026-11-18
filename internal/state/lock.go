@@ -40,6 +40,14 @@ func (e *BusyError) Error() string {
 	return msg
 }
 
+// Locker is the published narrow per-stack lock capability. *Store implements
+// it; features and deps consume this interface instead of type-asserting a
+// concrete store, so a differently wired StateStore cannot silently lose
+// coordination.
+type Locker interface {
+	AcquireStackLock(ctx context.Context, target core.Target, holder LockHolder) (*StackLock, error)
+}
+
 // StackLock is one held per-stack coordination lock. Release must be called
 // exactly once; a released lock is inert.
 type StackLock struct {

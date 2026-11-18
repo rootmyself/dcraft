@@ -225,6 +225,16 @@ func (c *Controller) checkSecrets(ctx context.Context, target core.Target, rec s
 			problems = append(problems, "기록된 비밀값 참조에 이름이 없습니다 (service="+ref.Service+")")
 			continue
 		}
+		// Runtime and build-phase references are both re-checked for source
+		// availability. Rollback never rebuilds, so a build reference is not
+		// delivered here; only its source is proven readable.
+		phase := strings.ToLower(strings.TrimSpace(ref.Phase))
+		switch phase {
+		case "", string(secretref.PhaseRuntime), string(secretref.PhaseBuild):
+		default:
+			problems = append(problems, fmt.Sprintf("기록된 비밀값 참조의 단계를 알 수 없습니다: %q (service=%s)", ref.Phase, ref.Service))
+			continue
+		}
 		source := strings.ToLower(strings.TrimSpace(ref.Source))
 		switch source {
 		case "env":

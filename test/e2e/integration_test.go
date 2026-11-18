@@ -198,7 +198,9 @@ services:
 		t.Fatal("compose.override.yaml was modified by status")
 	}
 
-	output, code := runPTY(t, projectDir, dcraftEnv, name)
+	// Wait until the read-only status screen is fully rendered before quitting;
+	// quitting as soon as the project name appears is a race with rendering.
+	output, code := runPTY(t, projectDir, dcraftEnv, "probe")
 	if code != 0 {
 		t.Fatalf("TUI exit = %d\n%s", code, output)
 	}

@@ -26,6 +26,10 @@ func (f *fakeSecretPreparer) Prepare(_ context.Context, _ core.Target, _ []strin
 
 func (f *fakeSecretPreparer) CleanupStack(core.Target) error { return nil }
 
+// RedactText matches the SecretPreparer boundary added by ticket #16. This
+// fake fetches no values, so redaction is the identity.
+func (f *fakeSecretPreparer) RedactText(_ core.Target, text string) string { return text }
+
 const (
 	rbImageA = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	rbImageB = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
