@@ -197,13 +197,13 @@ func TestSecretsCLIRejectsUnknownServiceAndUnsupportedInputs(t *testing.T) {
 		t.Fatalf("non-build service diagnostics = %+v", parseSecrets(t, nonBuild.stdout).Diagnostics)
 	}
 
-	aws := runProcess(t, project, env, strings.NewReader(""), "secrets", "--add",
-		"-s", "web", "--delivery", "environment", "--source", "aws", "--ref", "X", "--json")
-	if aws.code != 2 {
-		t.Fatalf("aws source exit = %d, want 2", aws.code)
+	badAWS := runProcess(t, project, env, strings.NewReader(""), "secrets", "--add",
+		"-s", "web", "--delivery", "environment", "--source", "aws", "--ref", "prod/db", "--field", "a..b", "--target", "DB", "--json")
+	if badAWS.code != 2 {
+		t.Fatalf("bad aws field exit = %d, want 2", badAWS.code)
 	}
-	if !hasCategory(secretsStatus(parseSecrets(t, aws.stdout)), core.CategorySecretUnsupported) {
-		t.Fatalf("aws diagnostics = %+v", parseSecrets(t, aws.stdout).Diagnostics)
+	if !hasCategory(secretsStatus(parseSecrets(t, badAWS.stdout)), core.CategorySecretInputInvalid) {
+		t.Fatalf("bad aws field diagnostics = %+v", parseSecrets(t, badAWS.stdout).Diagnostics)
 	}
 }
 

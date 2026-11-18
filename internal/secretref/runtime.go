@@ -15,6 +15,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/rootmyself/dcraft/internal/core"
+	"github.com/rootmyself/dcraft/internal/execx"
 )
 
 // StateDirs resolves the per-stack state directory. *state.Store implements
@@ -42,6 +43,7 @@ const (
 type Runtime struct {
 	dirs   StateDirs
 	getenv func(string) string
+	runner execx.Runner
 }
 
 // Unavailable is returned when a project saves runtime references but the
@@ -52,12 +54,22 @@ func Unavailable() *core.Error {
 }
 
 // NewRuntime builds the runtime. getenv should return the process environment
-// used for environment-variable sources.
+// used for environment-variable sources. AWS references use the installed AWS
+// CLI and therefore the operator's existing credential chain.
 func NewRuntime(dirs StateDirs, getenv func(string) string) *Runtime {
+	return NewRuntimeWithRunner(dirs, getenv, execx.NewOSRunner())
+}
+
+// NewRuntimeWithRunner is NewRuntime with an explicit external-command
+// boundary. Tests use it to run the full preparation path without AWS.
+func NewRuntimeWithRunner(dirs StateDirs, getenv func(string) string, runner execx.Runner) *Runtime {
 	if getenv == nil {
 		getenv = os.Getenv
 	}
-	return &Runtime{dirs: dirs, getenv: getenv}
+	if runner == nil {
+		runner = execx.NewOSRunner()
+	}
+	return &Runtime{dirs: dirs, getenv: getenv, runner: runner}
 }
 
 // Session is one prepared delivery. It carries the extra Compose file, the
@@ -136,6 +148,7 @@ func (r *Runtime) Prepare(ctx context.Context, target core.Target, services []st
 	}
 
 	// Resolve every source before writing anything.
+	fetcher := newAWSFetcher(r.runner)
 	items := make([]resolvedItem, 0, len(refs))
 	for _, ref := range refs {
 		if err := ctx.Err(); err != nil {
@@ -158,6 +171,12 @@ func (r *Runtime) Prepare(ctx context.Context, target core.Target, services []st
 			items = append(items, resolvedItem{ref: ref, value: value})
 		case SourceFile:
 			value, err := r.readSourceFile(target, ref)
+			if err != nil {
+				return Session{}, err
+			}
+			items = append(items, resolvedItem{ref: ref, value: value})
+		case SourceAWS:
+			value, err := fetcher.fetch(ctx, ref)
 			if err != nil {
 				return Session{}, err
 			}
@@ -185,6 +204,9 @@ func (r *Runtime) Prepare(ctx context.Context, target core.Target, services []st
 			}
 		}
 		session.Notices = append(session.Notices, msgFilesEnsured)
+		if count := awsSourceCount(items); count > 0 {
+			session.Notices = append(session.Notices, fmt.Sprintf(msgAWSFetchedRuntime, count), msgAWSCredentialDisclosure)
+		}
 		return session, nil
 	}
 
@@ -213,6 +235,9 @@ func (r *Runtime) Prepare(ctx context.Context, target core.Target, services []st
 	session.Files = []string{session.overridePath}
 	session.Notices = append(session.Notices, fmt.Sprintf(msgAppliedOverride, session.overridePath))
 	session.Notices = append(session.Notices, appliedNotices(items)...)
+	if count := awsSourceCount(items); count > 0 {
+		session.Notices = append(session.Notices, fmt.Sprintf(msgAWSFetchedRuntime, count), msgAWSCredentialDisclosure)
+	}
 	return session, nil
 }
 
@@ -795,4 +820,27 @@ func applyError(message, detail string) *core.Error {
 		Detail:      detail,
 		NextActions: []string{msgApplyActionOne, msgApplyActionTwo},
 	})
+}
+
+// CheckAWS resolves one recorded AWS reference far enough to prove the source
+// and selection are available. It returns the same classified errors as
+// delivery, never returns the value and stores nothing. Rollback uses it for
+// its availability precheck.
+func (r *Runtime) CheckAWS(ctx context.Context, ref Reference) error {
+	if err := validateAWSSelector(ref); err != nil {
+		return inputError(err)
+	}
+	fetcher := newAWSFetcher(r.runner)
+	_, err := fetcher.fetch(ctx, ref)
+	return err
+}
+
+func awsSourceCount(items []resolvedItem) int {
+	count := 0
+	for _, item := range items {
+		if item.ref.Source == SourceAWS {
+			count++
+		}
+	}
+	return count
 }
