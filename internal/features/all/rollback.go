@@ -12,6 +12,10 @@ import (
 // consumed through their published boundaries and never modified here.
 func init() {
 	register(func(reg *core.Registry, d *deps.Deps) {
-		reg.MustRegister(rollback.New(behavior.New(d.Compose, d.Compose, d.Compose, d.Getenv, d.State, d.Clock)))
+		controller := behavior.New(d.Compose, d.Compose, d.Compose, d.Getenv, d.State, d.Clock)
+		// AWS references are availability-checked through the same secret
+		// runtime that delivers them; rollback never fetches a value itself.
+		controller.SetAWSSecretChecker(d.Secrets)
+		reg.MustRegister(rollback.New(controller))
 	})
 }

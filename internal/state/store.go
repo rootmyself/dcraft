@@ -75,6 +75,9 @@ func (s *Store) StackDir(target core.Target) (string, error) {
 // marker, never an error, because the plan and Run both observe the same
 // marker.
 func (s *Store) PlanStateFingerprint(target core.Target) string {
+	if err := verifyRootIfExists(s.root); err != nil {
+		return "unavailable"
+	}
 	registry, err := loadNames(filepath.Join(s.root, "names.json"))
 	if err != nil {
 		return "unavailable"

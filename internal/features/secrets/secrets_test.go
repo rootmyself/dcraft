@@ -133,7 +133,8 @@ func TestAddRejectsMissingInputAndUnsupportedValues(t *testing.T) {
 		{"missing delivery", map[string]string{"add": "true", "source": "env", "ref": "X"}, core.CategorySecretInputInvalid},
 		{"missing ref", map[string]string{"add": "true", "delivery": "environment", "source": "env"}, core.CategorySecretInputInvalid},
 		{"build phase environment delivery", map[string]string{"add": "true", "phase": "build", "delivery": "environment", "source": "env", "ref": "X"}, core.CategorySecretInputInvalid},
-		{"aws source", map[string]string{"add": "true", "delivery": "environment", "source": "aws", "ref": "X"}, core.CategorySecretUnsupported},
+		{"aws source without target", map[string]string{"add": "true", "delivery": "environment", "source": "aws", "ref": "prod/db"}, core.CategorySecretInputInvalid},
+		{"aws field on env source", map[string]string{"add": "true", "delivery": "environment", "source": "env", "ref": "X", "field": "a.b"}, core.CategorySecretInputInvalid},
 		{"conflicting action", map[string]string{"add": "true", "remove": "true"}, core.CategorySecretInputInvalid},
 	}
 	for _, tc := range cases {
@@ -210,6 +211,141 @@ func TestWizardApplyUsesSameValidationAndStore(t *testing.T) {
 	}
 	if len(cat.References) != 1 {
 		t.Fatalf("saved = %+v", cat.References)
+	}
+}
+
+func TestAddAWSReferenceThroughFeature(t *testing.T) {
+	f, dir, _ := testFeature(t, "web")
+	payload, err := f.Run(context.Background(), invocation(dir, map[string]string{
+		"add": "true", "phase": "runtime", "delivery": "environment",
+		"source": "aws", "ref": "prod/db", "target": "DB_PASSWORD",
+		"field": "database.password", "region": "ap-northeast-2", "aws-profile": "ops-admin",
+	}, "web"))
+	if err != nil {
+		t.Fatalf("add: %v", err)
+	}
+	report := payload.(Payload).Secrets
+	if len(report.References) != 1 {
+		t.Fatalf("references = %+v", report.References)
+	}
+	ref := report.References[0]
+	if ref.Source != "aws" || ref.Ref != "prod/db" || ref.Field != "database.password" ||
+		ref.Region != "ap-northeast-2" || ref.Profile != "ops-admin" || ref.Target != "DB_PASSWORD" {
+		t.Fatalf("reference = %+v", ref)
+	}
+	notices := strings.Join(report.Notices, "\n")
+	for _, want := range []string{"자격 증명", "한 번만", "저장"} {
+		if !strings.Contains(notices, want) {
+			t.Fatalf("notices missing %q: %v", want, report.Notices)
+		}
+	}
+	config := mustReadFile(t, filepath.Join(dir, ".dcraft.yaml"))
+	for _, want := range []string{"source: aws", "field: database.password", "region: ap-northeast-2", "profile: ops-admin"} {
+		if !strings.Contains(string(config), want) {
+			t.Fatalf("config missing %q:\n%s", want, config)
+		}
+	}
+	for _, forbidden := range []string{"value:", "aws_access_key", "aws_secret_access_key", "session_token"} {
+		if strings.Contains(string(config), forbidden) {
+			t.Fatalf("config stored %q:\n%s", forbidden, config)
+		}
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded struct {
+		Secrets struct {
+			References []map[string]any `json:"references"`
+		} `json:"secrets"`
+	}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	for key := range decoded.Secrets.References[0] {
+		if key == "value" || strings.Contains(strings.ToLower(key), "credential") || strings.Contains(strings.ToLower(key), "secret_value") {
+			t.Fatalf("JSON contains a value/credential key %q: %s", key, data)
+		}
+	}
+}
+
+func TestWizardOffersAWSAndValidatesBeforeSave(t *testing.T) {
+	f, dir, _ := testFeature(t, "web")
+	payload, err := f.Run(context.Background(), invocation(dir, map[string]string{"wizard": "steps"}))
+	if err != nil {
+		t.Fatalf("steps: %v", err)
+	}
+	spec := payload.(core.WizardSpec)
+	byName := map[string]core.WizardStep{}
+	for _, step := range spec.Steps {
+		byName[step.Name] = step
+	}
+	source, ok := byName["source"]
+	if !ok {
+		t.Fatalf("source step missing: %+v", spec.Steps)
+	}
+	hasAWS := false
+	for _, option := range source.Options {
+		if option.Value == "aws" {
+			hasAWS = true
+		}
+	}
+	if !hasAWS {
+		t.Fatalf("source options = %+v, want aws", source.Options)
+	}
+	for _, name := range []string{"field", "region", "aws-profile"} {
+		step, ok := byName[name]
+		if !ok {
+			t.Fatalf("AWS step %q missing: %+v", name, spec.Steps)
+		}
+		if step.DependsOn != "source" || step.DependsValue != "aws" || !step.Optional || !step.AllowCustom {
+			t.Fatalf("step %q = %+v, want an optional AWS-only custom step", name, step)
+		}
+	}
+	target, ok := byName["target"]
+	if !ok || target.DependsOn != "source" || target.DependsValue != "aws" || target.Optional {
+		t.Fatalf("target step = %+v, want a required AWS-only step", target)
+	}
+
+	answers := map[string]string{
+		"service": "web", "phase": "runtime", "delivery": "environment",
+		"source": "aws", "ref": "prod/db", "field": "database.password",
+		"region": "ap-northeast-2", "aws-profile": "ops-admin", "target": "DB_PASSWORD",
+	}
+	preview, err := f.WizardPreview(answers)
+	if err != nil {
+		t.Fatalf("preview: %v", err)
+	}
+	for _, want := range []string{"AWS Secrets Manager", "database.password", "ap-northeast-2", "ops-admin", "자격 증명", "한 번"} {
+		if !strings.Contains(preview, want) {
+			t.Fatalf("preview missing %q:\n%s", want, preview)
+		}
+	}
+	if _, err := f.WizardPreview(map[string]string{
+		"service": "web", "phase": "runtime", "delivery": "environment",
+		"source": "aws", "ref": "prod db", "target": "DB_PASSWORD",
+	}); err == nil {
+		t.Fatal("preview accepted an invalid AWS reference")
+	}
+
+	applyOptions := map[string]string{"wizard": "apply", "target": "DB_PASSWORD"}
+	for key, value := range answers {
+		applyOptions[key] = value
+	}
+	if _, err := f.Run(context.Background(), invocation(dir, applyOptions)); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	cat, err := secretref.Load(dir)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(cat.References) != 1 {
+		t.Fatalf("saved = %+v", cat.References)
+	}
+	saved := cat.References[0]
+	if saved.Source != secretref.SourceAWS || saved.Field != "database.password" ||
+		saved.Region != "ap-northeast-2" || saved.Profile != "ops-admin" {
+		t.Fatalf("saved reference = %+v", saved)
 	}
 }
 

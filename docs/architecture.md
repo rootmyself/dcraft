@@ -5,17 +5,18 @@ fork these types or recreate these rules in a feature or UI package. Shared
 interface changes go to the integration owner as a change request (see the end
 of this file).
 
-Scope of this version: one working binary, fourteen registered features
+Scope of this version: one working binary, fifteen registered features
 (`status`, `install-compose`, `up`, `stop`, `down`, `restart`, `update`,
-`secrets`, `hooks`, `logs`, `exec`, `backup`, `restore`, `rollback`), the common
-operation seam, target resolution, named environments, automatic project-name
-allocation, same-stack coordination, runtime and build-time secret references,
-explicit host scripts with independent script trust, service/instance
-selection, live terminal attach, versioned volume and declared bind-folder
-backup, safe volume restore, diagnostics, CLI/TUI assembly, state layout,
-machine-readable results, the approval/plan preview flow, explicit update with
-bounded readiness, the previous-good record, previous-good rollback, and tests.
-Generation, AWS Secrets Manager sources, and bind-folder restore are later
+`secrets`, `hooks`, `logs`, `exec`, `backup`, `restore`, `rollback`,
+`generate-git-hook`), the common operation seam, target resolution, named
+environments, automatic project-name allocation, same-stack coordination,
+runtime and build-time secret references, explicit host scripts with
+independent script trust, the guided Git host-script generator,
+service/instance selection, live terminal attach, versioned volume and declared
+bind-folder backup, safe volume restore, diagnostics, CLI/TUI assembly, state
+layout, machine-readable results, the approval/plan preview flow, explicit
+update with bounded readiness, the previous-good record, previous-good
+rollback, and tests. The S3 generator and bind-folder restore are later
 tickets.
 
 ---
@@ -214,11 +215,13 @@ Approval kinds (`core.ApprovalKind`), independent and non-substitutable:
 | `script_trust` | first execution or changed host script |
 | `previous_version` | return to the previous good deployment |
 | `data_restore` | replace data from a backup |
-| `file_overwrite` | replace existing generated files |
+| `file_overwrite` | save a generated project file (new file or replacement); it is never script trust |
 
 CLI supplies them with repeated `--approve <kind>`; the TUI collects them in a
-generic plan → confirm screen (see §6). Read-only features may not require an
-approval (registry validation).
+generic plan → confirm screen (see §6). A wizard feature with a descriptor
+approval shows that approval on its preview screen; the same generic screen is
+the confirmation that supplies it to the apply run. Read-only features may not
+require an approval (registry validation).
 
 Optional feature capabilities:
 
@@ -792,7 +795,8 @@ Approval flow (generic, engine-enforced):
 
 No feature action is selectable unless it is registered. The current build
 registers `status` (primary), `install-compose`, `up`, `stop`, `down`,
-`restart`, `update`, `secrets`, `logs` and `exec`.
+`restart`, `update`, `secrets`, `hooks`, `logs`, `exec`, `backup`, `restore`,
+`rollback` and `generate-git-hook`.
 
 ---
 
@@ -1105,8 +1109,9 @@ type GoodService struct {
 - It stores references only: file list in order, explicit env files, profiles,
   effective project name, environment and secret references. It never stores
   resolved secret values or container environments. Every `GoodTarget.SecretRefs`
-  entry carries the service, phase, delivery, source kind, source name/ref and
-  delivery target; update populates it from the current `.dcraft.yaml` only
+  entry carries the service, phase, delivery, source kind, source name/ref,
+  delivery target and (for AWS) the optional field, region and profile; update
+  populates it from the current `.dcraft.yaml` only
   after `verify` succeeded and while holding the per-stack lock. Rollback (#12)
   re-resolves these references; it never reads a stored value.
 - `(*state.Store).LoadGoodVersion(target)` returns
@@ -1258,15 +1263,17 @@ Precheck (all before any stack change, all reported with distinct categories):
   substituted.
 - `rollback_secret_unavailable`: a recorded secret reference or a current
   `.dcraft.yaml` reference for the recorded service closure cannot be resolved
-  (missing/empty env or file source, AWS source not implemented, unknown
-  source). Values are read for availability only and never stored or printed.
-  In a recorded `SecretReference`, `name` is the source reference (env var name,
-  local path or AWS secret id), `field` the optional AWS field, and
-  `service`/`phase`/`delivery`/`source` the saved connection metadata. Both
-  `phase: runtime` and `phase: build` references are availability-checked;
-  rollback never rebuilds, so build values are not delivered by this operation.
-  Current runtime delivery comes from the project's saved references through
-  the published secret runtime.
+  (missing/empty env or file source, unavailable AWS source, unknown source).
+  Values are read for availability only and never stored or printed. In a
+  recorded `SecretReference`, `name` is the source reference (env var name,
+  local path or AWS secret id), `field` the optional AWS field, `region`/
+  `profile` the optional AWS CLI selectors, and `service`/`phase`/`delivery`/
+  `source` the saved connection metadata. AWS references, including
+  build-phase ones, are re-resolved through the same secret runtime, which
+  fetches and discards the value. Both `phase: runtime` and `phase: build`
+  references are availability-checked; rollback never rebuilds, so build
+  values are not delivered by this operation. Current runtime delivery comes
+  from the project's saved references through the published secret runtime.
 
 `apply` uses `internal/compose.ApplyRollback` (published as `stack.Rollbacker`):
 it writes a temporary dcraft-managed override that pins every recorded service
@@ -1592,9 +1599,18 @@ Desktop's VM-backed unix socket is **local**, not remote.
 | `identity_unreadable` | stored/declared project identity could not be read; Compose default used | warning |
 | `secret_invalid` | `.dcraft.yaml` secrets syntax, fields, duplicates or unsupported values are invalid | error |
 | `secret_input_invalid` | explicit secret reference input is missing or invalid | error (exit 2) |
-| `secret_unsupported` | an AWS-source reference (or another unsupported secret shape) is not implemented | error (exit 2) |
+| `secret_unsupported` | another published-but-unimplemented secret shape is requested | error (exit 2) |
 | `secret_source_unavailable` | referenced environment/file source is missing, unreadable or empty | error |
 | `secret_apply_failed` | delivery preparation/materialization/override failed; a partial rotation may remain | error |
+| `secret_aws_cli_missing` | the AWS CLI is not installed or not on PATH | error |
+| `secret_aws_credentials_missing` | the AWS CLI cannot locate credentials/profile material | error |
+| `secret_aws_region_missing` | no AWS region was supplied by the reference or AWS configuration | error |
+| `secret_aws_access_denied` | IAM/KMS denied `secretsmanager:GetSecretValue` | error |
+| `secret_aws_secret_not_found` | the secret name/ARN does not resolve in the selected region | error |
+| `secret_aws_field_invalid` | the requested dot path is not a scalar in the JSON SecretString | error |
+| `secret_aws_network` | the AWS endpoint was unreachable | error |
+| `secret_aws_value_invalid` | SecretString is absent/binary-only, empty, whitespace-only or malformed | error |
+| `secret_aws_failed` | another AWS service/runtime failure without a value echo | error |
 | `backup_output_required` | no explicit backup output directory was given | error (exit 2) |
 | `backup_volume_required` | no data source (named volume or declared bind folder) was selected | error (exit 2) |
 | `backup_volume_unknown` | selected volume key/name is not part of the stack, or a bind folder was passed through `--volume` | error (exit 2) |
@@ -1614,6 +1630,8 @@ Desktop's VM-backed unix socket is **local**, not remote.
 | `hook_content_changed` | approved content identity no longer matches; nothing was executed | error (exit 2) |
 | `hook_post_failed` | a post hook failed after the main operation completed (result stays successful) | warning |
 | `hook_output` | redacted hook output carried to human surfaces | info |
+| `generator_input_invalid` | generated-script input is missing or unsafe: empty value, traversal, project-root destination, script inside the destination, or embedded credentials | error (exit 2) |
+| `generator_failed` | the generated script file could not be published; nothing else changed | error |
 | `internal_error` | unexpected error/parse failure/panic | error |
 
 Each diagnostic carries Korean `message`, optional raw `detail`, and Korean
@@ -1632,7 +1650,8 @@ the full `compose version` command confirms the classification.
 `service_unknown`, `invalid_option`, `secret_input_invalid`,
 `secret_unsupported`, `selection_required`, `instance_unknown`,
 `backup_output_required`, `backup_volume_required`,
-`backup_volume_unknown`, `backup_bind_unknown`, `hook_input_invalid` and
+`backup_volume_unknown`, `backup_bind_unknown`, `hook_input_invalid`,
+`generator_input_invalid` and
 `hook_content_changed`: those mean the caller must supply a different decision
 (an approval, an environment, a free name, an existing service, a valid option,
 a valid secret reference, a service/instance selection, or a backup
@@ -2182,7 +2201,8 @@ Tested seams:
   state files, another stack's container IDs/data unchanged, TUI quit leaving
   services running, cleanup with its own projects only.
 - runtime secret references: config parse/validation/persistence (no values),
-  unknown service, duplicate target, unsupported build phase and AWS source,
+  unknown service, duplicate target, unsupported build phase, AWS shape
+  validation (name/ARN, field path, region, profile, credentials-like fields),
   idempotent re-add, add/remove/list CLI and JSON, non-interactive exit 2,
   only needed services resolved (including depends_on), missing/empty/
   unreadable sources failing before Compose, redaction of captured output,
@@ -2285,17 +2305,20 @@ as verified.
   ticket #18.
 - TUI alias creation/editing: aliases are created by editing `.dcraft.yaml` in
   this version (selection is provided by both interfaces).
-- AWS Secrets Manager sources, generated Compose/Dockerfile files and generator
-  flows, Kubernetes, remote engines, resident daemon/web UI. Runtime
-  environment/file references are implemented by ticket #9 below; Compose
-  installation by ticket #6; update readiness and the previous-good record by
-  ticket #7; host hooks and script trust by ticket #12; named-volume backup by
+- AWS Secrets Manager sources are implemented by ticket #10 below; generated
+  Compose/Dockerfile files and the S3 generator flow, Kubernetes, remote
+  engines, resident daemon/web UI are not implemented. Runtime environment/file
+  references are implemented by ticket #9 below; Compose installation by
+  ticket #6; update readiness and the previous-good record by ticket #7; host
+  hooks and script trust by ticket #12; the guided Git host-script generator by
+  ticket #13 (see `docs/host-script-generators.md`); named-volume backup by
   ticket #16 and bind-folder backup by ticket #17; build-time delivery by
   ticket #10 and previous-good rollback by ticket #11.
 - Good-version history beyond the single record (rollback has no multi-version
   picker). The TUI plan/confirm component is generic; `install-compose`,
-  `update`, `backup`, `restore` and `rollback` are planners in this build, and
-  `secrets`/`backup`/`restore` use the generic wizard. An ordinary update shows its plan
+  `update`, `backup`, `restore`, `rollback` and `generate-git-hook` are
+  planners in this build, and `secrets`/`backup`/`restore`/`generate-git-hook`
+  use the generic wizard. An ordinary update shows its plan
   and requires one `enter` to run, not an approval; rollback shows the same plan
   screen and collects only `previous_version`. `up` also goes through the
   generic plan because it declares the hook scope; with no hooks the plan text
@@ -2410,7 +2433,9 @@ editing a recorded Compose file changes the configuration a rollback applies;
 rollback cannot reproduce a version whose Compose files were changed or deleted.
 Secret values are re-resolved from their current external sources, so old values
 are not guaranteed and a source removed after the record aborts the rollback.
-AWS sources are recognized and refused (ticket #11). The readiness
+AWS references are re-resolved through the AWS CLI and the operator's existing
+credential chain; a missing CLI/credential/region/network or denied/removed
+secret aborts before any change. The readiness
 classification is currently a second implementation of update's rules against
 the same `stack.Readiness` values (§13 change request). Cancellation inside
 apply leaves Compose's partial stop/recreate effects; the apply stage detail
@@ -2540,11 +2565,12 @@ code.
 
 ---
 
-## 14. Runtime secret references and delivery (ticket #9)
+## 14. Runtime secret references and delivery (tickets #9/#10)
 
-Runtime secrets are references, not a secret store. Only environment-variable
-and local-file sources are implemented here; build-time delivery extends the
-same contract in 14.6, and AWS Secrets Manager sources remain later work.
+Runtime secrets are references, not a secret store. Environment-variable,
+local-file and AWS Secrets Manager sources share one reference contract;
+build-time delivery extends the same contract in 14.6 and the AWS resolver is
+specified in 14.7.
 
 ### 14.1 Project config
 
@@ -2555,18 +2581,26 @@ secrets:
   - service: web               # Compose service
     phase: runtime             # runtime (build has its own delivery; see 14.6)
     delivery: environment      # environment | file
-    source: env                # env | file (aws is recognized, not implemented)
-    ref: DB_PASSWORD           # env var name or project-relative/absolute file path
-    target: DB_PASSWORD        # optional; env var name or /run/secrets file name
+    source: env                # env | file | aws
+    ref: DB_PASSWORD           # env var name, file path, or AWS secret name/ARN
+    target: DB_PASSWORD        # optional for env/file; required for aws
+    field: database.password   # aws only: dot path into a JSON SecretString
+    region: ap-northeast-2     # aws only: optional CLI region
+    profile: ops-admin         # aws only: optional CLI profile
 ```
 
 - Required: `service`, `phase`, `delivery`, `source`, `ref`. `target` defaults
   to the env var name (environment delivery) or the source file's base name
-  without the last extension (file delivery).
+  without the last extension (file delivery). AWS references must set an
+  explicit `target`, because a secret name/ARN is not a valid delivery name.
 - Validation rejects unknown services, duplicate target per service+delivery,
   unsupported/unknown phase, delivery and source values, unsafe env names,
-  empty refs and unsafe target names. `build` and `aws` are recognized with a
-  Korean "not implemented in this RFC" error so later tickets can extend them.
+  empty refs and unsafe target names. AWS validation checks the name/ARN shape,
+  the dot path, region and profile syntax, and refuses `field`/`region`/
+  `profile` on non-AWS sources. Credential-like YAML fields
+  (`aws_access_key_id`, `aws_secret_access_key`, `session_token`, `value`, …)
+  are rejected; dcraft stores no credentials.
+- `delivery: environment` with `phase: build` is an input error (exit 2).
 - Re-adding an identical reference is idempotent. Removing one regenerates the
   managed override without it; a file-delivery materialization is kept until a
   safe cleanup point (next successful `up` or `down`) so restart still works.
@@ -2633,7 +2667,7 @@ materialized values are never left in the project folder.
 
 - Environment-variable delivery is visible to Docker-authorized users and
   `docker compose config` prints service `environment:` values. dcraft never
-  prints resolved environments and never fetches build/AWS secrets here.
+  prints resolved environments.
 - File delivery requires the application to read `/run/secrets/<target>`;
   dcraft does not assume a universal `*_FILE` convention or guarantee app
   support.
@@ -2641,20 +2675,25 @@ materialized values are never left in the project folder.
   removed. `status` and `secrets` output include Korean guidance to move them
   to references; Docker's own storage/query boundary is not controlled.
 - Fetched values are redacted from all captured tool output, diagnostics,
-  errors and human/JSON results. `Runtime.RedactText(target, text)` is the
-  shared best-effort helper for diagnostics outside a prepared session (backup
-  helper output); it reads only referenced sources and never returns or persists
-  a value. dcraft does not control values the app, Dockerfile or user scripts
-  print themselves.
+  errors and human/JSON results, including a trailing-newline variant. Values
+  are held only for the current operation. `Runtime.RedactText(target, text)`
+  is the shared best-effort helper for diagnostics outside a prepared session
+  (backup helper output); it reads referenced env/file sources and never
+  returns or persists a value. It deliberately does not call AWS outside a
+  delivery need: a diagnostic path must not trigger a secret fetch. dcraft
+  does not control values the app, Dockerfile or user scripts print
+  themselves.
 
 ### 14.5 Interfaces for tickets #10/#11
 
 New sources and build delivery must reuse `secretref.Reference`
-(`phase`, `source`, `ref`, `target`), `secretref.Validate`, `Catalog`,
-`Runtime.Prepare`, and the managed-override pattern instead of adding a second
-config format or a secret store. Build delivery adds BuildKit mount declarations
-to the managed inputs; AWS adds a source resolver with the same non-empty and
-redaction rules. Rollback re-resolves references; it never keeps old values.
+(`phase`, `source`, `ref`, `target`, `field`, `region`, `profile`),
+`secretref.Validate`, `Catalog`, `Runtime.Prepare`, and the managed-override
+pattern instead of adding a second config format or a secret store. Build
+delivery adds BuildKit mount declarations to the managed inputs; AWS adds a
+source resolver with the same non-empty and redaction rules. Rollback
+re-resolves references; it never keeps old values. The AWS checker is a narrow
+`CheckAWS(ctx, Reference)` capability on the same runtime.
 
 ### 14.6 Build-time delivery (ticket #10)
 
@@ -2665,9 +2704,9 @@ secrets:
   - service: web
     phase: build            # build
     delivery: file          # the BuildKit secret mount; environment is rejected
-    source: env             # env | file (aws stays recognized/unsupported here)
-    ref: BUILD_TOKEN        # env var name or project-relative/absolute file path
-    target: BUILD_TOKEN     # optional; the BuildKit secret id (defaults as 14.1)
+    source: env             # env | file | aws
+    ref: BUILD_TOKEN        # env var name, file path, or AWS secret name/ARN
+    target: BUILD_TOKEN     # BuildKit secret id; required for aws
 ```
 
 - `phase: build` with `delivery: environment` is an input error (exit 2): build
@@ -2694,14 +2733,18 @@ secrets:
 
   The user's first Compose file still determines the project directory. The
   generated file is reported as `build_override_file` by `dcraft secrets`.
-- Both environment and file sources are materialized as 0600 regular files under
-  `<state>/stacks/<stack>/build-secrets/`. File-source copies live for a rebuild
-  and are pruned at a safe point (a successful build of that selection or
-  `dcraft down`). Environment-source copies are written only for the Compose
-  build command and removed as soon as it exits, successful or not. A source is
-  resolved before any file or override is written, so a missing/empty source
-  fails before the build and leaves no partial preparation. The state directory
-  inside the project folder is refused.
+- Environment, file and AWS sources are materialized as 0600 regular files
+  under `<state>/stacks/<stack>/build-secrets/`. File-source copies live for a
+  rebuild and are pruned at a safe point (a successful build of that selection
+  or `dcraft down`). Environment-source and AWS copies are written only for the
+  Compose build command and removed as soon as it exits, successful or not,
+  because both can be re-resolved. A source is resolved before any file or
+  override is written, so a missing/empty/denied source fails before the build
+  and leaves no partial preparation. The state directory inside the project
+  folder is refused.
+- AWS build references use the same CLI lookup as runtime references and are
+  materialized only as file sources for the BuildKit mount. The generated
+  override remains file-only; no consumer receives an AWS-specific branch.
 - Verified BuildKit behavior is surfaced, not hidden: changing a build secret
   **does not invalidate the build cache**. The ordinary build keeps the cache;
   `dcraft update --no-cache` is the explicit fresh-build choice. dcraft never
@@ -2728,7 +2771,71 @@ secrets:
   `target.secret_refs` (`service`, `phase`, `delivery`, `source`, `name`) so a
   rollback can precheck source availability. It stores no value.
 
-### 14.7 Wizard runs and history
+### 14.7 AWS Secrets Manager sources (ticket #10)
+
+The AWS source reuses the operator's existing AWS authentication. dcraft runs
+the installed `aws` CLI through the same narrow `execx.Runner` boundary as
+Docker, so the credential chain (environment, shared config/credentials, SSO,
+instance role) stays entirely outside dcraft. dcraft never reads, stores,
+writes or prints credential material. External prerequisite: a working AWS CLI
+v2 and whatever authentication the operator already uses. dcraft does not
+install or configure the CLI.
+
+The lookup command is exact and has no shell interpolation or value argument:
+
+```sh
+aws secretsmanager get-secret-value \
+  --secret-id <name-or-ARN> \
+  --query SecretString \
+  --output json \
+  --no-cli-pager \
+  [--region <region>] [--profile <profile>]
+```
+
+- `--output json` is deliberate: text mode appends a newline and prints `None`
+  for an absent/binary-only value, which is ambiguous with the literal string
+  `None`. The JSON string is decoded exactly; a legitimate trailing newline in
+  the secret is preserved and the delivered value is not trimmed.
+- `--region` and `--profile` are optional non-secret selectors saved with the
+  reference for reproducibility. The CLI flag is `--aws-profile` because the
+  shared CLI already reserves `--profile` for Compose profiles; the YAML field
+  is `profile`.
+- `field` is a dot path into a JSON SecretString. Each segment is a map key or
+  an array index; the selected leaf must be a string, number or boolean.
+  Objects/arrays are refused instead of serialized implicitly. Keys containing
+  `.` are not addressable in this version.
+- A reference that has no usable `SecretString` (binary-only/absent), an empty
+  or whitespace-only value, a NUL byte, a malformed JSON document or a missing
+  path is a source error. dcraft never substitutes an empty value.
+- Only references actually needed for the operation are fetched: the phase and
+  service selection is applied before any lookup. Within one operation the
+  fetcher memoizes by secret id + region + profile, so two fields of the same
+  secret cost one CLI call. The cache dies with the operation; `dcraft secrets`
+  add/list never fetch, `up` fetches runtime references, `restart` re-fetches
+  only live file-delivery values, and `update` fetches build references.
+- Error categories separate a missing CLI, missing credentials/profile,
+  missing region, access denied (including KMS), unknown secret, invalid field,
+  network failure, an unusable value and a generic service failure. Each has a
+  Korean message and concrete next action; the diagnostic detail contains only
+  the CLI exit status and an AWS error code, never raw stderr, a value or an
+  account identity. Invalid reference syntax remains an input error (exit 2);
+  lookup failures are operation failures (exit 1).
+- A fetched value reaches the existing `Session`/`BuildSession` delivery path.
+  Runtime environment/file delivery and the BuildKit file mount are unchanged;
+  no consumer branches on `aws`. Build delivery remains file/BuildKit-only.
+- Fetched values are added to the session's redaction list. The previous-good
+  record stores `source: aws`, the secret id/ARN, `field`, `region` and
+  `profile` in `target.secret_refs`; rollback re-checks availability through
+  `Runtime.CheckAWS` (fetch and discard) and never stores the value.
+
+Verification used a controlled `aws` executable first on PATH to prove the
+success, access-denied, unknown-secret, network, missing-CLI, missing-region,
+absent/empty value, field selection, invocation-count and redaction paths,
+including real Docker runtime/build delivery. No real AWS credentials or AWS
+API calls were used; real-service behavior is documented from verified CLI
+conventions but not claimed as exercised here.
+
+### 14.8 Wizard runs and history
 
 `Options["wizard"]="steps"` is a read-only preview. The engine does not write a
 history record for a `RecordsHistory` feature's steps run; only the

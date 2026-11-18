@@ -802,6 +802,9 @@ func goodVersionSecretRefs(target core.Target) ([]state.SecretReference, error) 
 			Source:   string(ref.Source),
 			Name:     ref.Ref,
 			Target:   ref.EffectiveTarget(),
+			Field:    ref.Field,
+			Region:   ref.Region,
+			Profile:  ref.Profile,
 		})
 	}
 	sort.Slice(refs, func(i, j int) bool {

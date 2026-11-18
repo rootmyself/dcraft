@@ -89,6 +89,12 @@ const (
 	// usage input problem (exit 2) and no stack change was made.
 	CategoryPlanStale       Category = "plan_stale"
 	CategoryLifecycleFailed Category = "lifecycle_failed"
+	// Host-script generators (tickets #14/#15). generator_input_invalid is
+	// missing or unsafe caller input (exit 2); generator_failed is a refused
+	// or failed script-file write (exit 1). Neither category carries script
+	// content or credentials.
+	CategoryGeneratorInputInvalid Category = "generator_input_invalid"
+	CategoryGeneratorFailed       Category = "generator_failed"
 	// Host scripts (ticket #12). hook_invalid is a registration/file problem;
 	// hook_failed is a pre-hook process failure that blocked the operation;
 	// hook_content_changed means the approved content identity no longer
@@ -131,6 +137,20 @@ const (
 	CategorySecretUnsupported         Category = "secret_unsupported"
 	CategorySecretSource              Category = "secret_source_unavailable"
 	CategorySecretApplyFailed         Category = "secret_apply_failed"
+	// AWS Secrets Manager sources (ticket #10). The AWS CLI keeps the
+	// credential chain outside dcraft; these categories separate a missing
+	// tool, missing credentials/region, service authorization, an unknown
+	// secret or field, a network failure and an unusable value. All are
+	// operation failures (exit 1); only invalid reference syntax is input.
+	CategorySecretAWSCLIMissing         Category = "secret_aws_cli_missing"
+	CategorySecretAWSCredentialsMissing Category = "secret_aws_credentials_missing"
+	CategorySecretAWSRegionMissing      Category = "secret_aws_region_missing"
+	CategorySecretAWSAccessDenied       Category = "secret_aws_access_denied"
+	CategorySecretAWSSecretNotFound     Category = "secret_aws_secret_not_found"
+	CategorySecretAWSFieldInvalid       Category = "secret_aws_field_invalid"
+	CategorySecretAWSNetwork            Category = "secret_aws_network"
+	CategorySecretAWSValueInvalid       Category = "secret_aws_value_invalid"
+	CategorySecretAWSFailed             Category = "secret_aws_failed"
 	// CategoryBuildServiceInvalid means a build-phase secret reference names a
 	// service without a Compose build section. The build would silently do
 	// nothing, so it is a usage error (exit 2), never a silent skip.

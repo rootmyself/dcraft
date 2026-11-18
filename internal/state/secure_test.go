@@ -40,6 +40,23 @@ func TestStateRootMustBeARealDirectory(t *testing.T) {
 	}
 }
 
+func TestStateRootOwnedByAnotherUserIsRefused(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("changing directory ownership requires root")
+	}
+	root := t.TempDir()
+	if err := os.Chown(root, 1, 1); err != nil {
+		t.Skipf("chown unavailable: %v", err)
+	}
+	_, err := state.New(root).AllocateName(context.Background(), state.NameRequest{
+		Target:   core.Target{ProjectDir: "/work/app"},
+		BaseName: "app",
+	})
+	if err == nil || !strings.Contains(err.Error(), "owned by") {
+		t.Fatalf("err = %v, want an ownership refusal", err)
+	}
+}
+
 func TestNormalStateRootStillWorks(t *testing.T) {
 	root := t.TempDir()
 	if err := os.Chmod(root, 0o700); err != nil {

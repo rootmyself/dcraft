@@ -2,23 +2,24 @@ package secretref
 
 // Korean user-facing messages owned by secret reference configuration.
 const (
-	msgConfigUnreadable     = "비밀값 참조 설정을 읽을 수 없습니다."
-	msgConfigMalformed      = "비밀값 참조 설정의 형식이 올바르지 않습니다."
-	msgConfigRoot           = "비밀값 참조 설정의 최상위는 항목 묶음이어야 합니다."
-	msgSecretsNotList       = "secrets 항목은 참조 목록이어야 합니다."
-	msgSecretNotMapping     = "비밀값 참조 항목은 항목 묶음이어야 합니다."
-	msgSecretFieldKey       = "비밀값 참조의 항목 이름은 문자열이어야 합니다."
-	msgSecretUnknownField   = "비밀값 참조에 알 수 없는 항목이 있습니다: %s"
-	msgSecretDuplicateField = "비밀값 참조의 항목이 중복되었습니다: %s"
-	msgSecretFieldString    = "비밀값 참조의 %s 값은 문자열이어야 합니다."
-	msgSecretFieldMissing   = "비밀값 참조에 필요한 항목이 없습니다: %s"
-	msgDuplicateTarget      = "서비스 '%s'의 %s 전달 대상 '%s'가 중복되었습니다."
-	msgUnknownService       = "비밀값 참조의 서비스가 Compose 설정에 없습니다: %s"
-	msgAvailableServices    = "사용 가능한 서비스: "
-	msgRemoveNotFound       = "해당 비밀값 참조를 찾지 못했습니다: 서비스 %s, %s, 대상 %s"
-	msgInputInvalid         = "비밀값 참조 입력이 올바르지 않습니다."
-	msgConfigEncode         = "비밀값 참조 설정을 저장할 형식으로 만들지 못했습니다."
-	msgConfigWrite          = "비밀값 참조 설정을 저장하지 못했습니다."
+	msgConfigUnreadable      = "비밀값 참조 설정을 읽을 수 없습니다."
+	msgConfigMalformed       = "비밀값 참조 설정의 형식이 올바르지 않습니다."
+	msgConfigRoot            = "비밀값 참조 설정의 최상위는 항목 묶음이어야 합니다."
+	msgSecretsNotList        = "secrets 항목은 참조 목록이어야 합니다."
+	msgSecretNotMapping      = "비밀값 참조 항목은 항목 묶음이어야 합니다."
+	msgSecretFieldKey        = "비밀값 참조의 항목 이름은 문자열이어야 합니다."
+	msgSecretUnknownField    = "비밀값 참조에 알 수 없는 항목이 있습니다: %s"
+	msgSecretCredentialField = "자격 증명에 해당하는 항목은 저장하지 않습니다: %s"
+	msgSecretDuplicateField  = "비밀값 참조의 항목이 중복되었습니다: %s"
+	msgSecretFieldString     = "비밀값 참조의 %s 값은 문자열이어야 합니다."
+	msgSecretFieldMissing    = "비밀값 참조에 필요한 항목이 없습니다: %s"
+	msgDuplicateTarget       = "서비스 '%s'의 %s 전달 대상 '%s'가 중복되었습니다."
+	msgUnknownService        = "비밀값 참조의 서비스가 Compose 설정에 없습니다: %s"
+	msgAvailableServices     = "사용 가능한 서비스: "
+	msgRemoveNotFound        = "해당 비밀값 참조를 찾지 못했습니다: 서비스 %s, %s, 대상 %s"
+	msgInputInvalid          = "비밀값 참조 입력이 올바르지 않습니다."
+	msgConfigEncode          = "비밀값 참조 설정을 저장할 형식으로 만들지 못했습니다."
+	msgConfigWrite           = "비밀값 참조 설정을 저장하지 못했습니다."
 )
 
 var (
@@ -78,3 +79,45 @@ const (
 	msgBuildFinishFailed         = "빌드 후 환경변수 원본 임시 파일을 정리하지 못했습니다. 상태 폴더의 build-secrets 파일 권한과 여유 공간을 확인하세요."
 	msgBuildEnvLifetime          = "환경변수 원본 빌드 비밀값은 빌드 명령이 실행되는 동안에만 상태 폴더의 0600 파일로 존재하고, 빌드가 끝나면 삭제됩니다. 파일 원본은 다음 빌드를 위해 남으며 down 또는 성공적인 빌드 후 정리됩니다."
 )
+
+// AWS Secrets Manager source (ticket #10). The credential chain belongs to the
+// AWS CLI; dcraft never stores or prints credentials or fetched values.
+const (
+	msgAWSValueEmpty         = "AWS Secrets Manager 원본 값이 비어 있습니다."
+	msgAWSValueAbsent        = "AWS Secrets Manager 원본에 사용할 수 있는 SecretString이 없습니다."
+	msgAWSValueInvalid       = "AWS Secrets Manager 원본 값을 사용할 수 없습니다."
+	msgAWSCLIMissing         = "AWS CLI를 찾을 수 없습니다."
+	msgAWSCredentialsMissing = "AWS 자격 증명을 찾을 수 없습니다."
+	msgAWSRegionMissing      = "AWS 리전을 확인할 수 없습니다."
+	msgAWSAccessDenied       = "AWS Secrets Manager 원본에 접근할 권한이 없습니다."
+	msgAWSSecretNotFound     = "AWS Secrets Manager 원본을 찾을 수 없습니다."
+	msgAWSNetwork            = "AWS Secrets Manager에 연결하지 못했습니다."
+	msgAWSFieldInvalid       = "AWS Secrets Manager 원본에서 field 경로를 선택할 수 없습니다: %s"
+	msgAWSFailed             = "AWS Secrets Manager 조회에 실패했습니다."
+)
+
+const (
+	msgAWSCLIActionOne            = "AWS CLI v2를 설치하고 PATH에서 실행 가능한지 확인하세요."
+	msgAWSCLIActionTwo            = "dcraft는 AWS CLI를 자동으로 설치하지 않습니다."
+	msgAWSCredentialsActionOne    = "셸의 AWS_* 환경변수, ~/.aws 설정, SSO 로그인 또는 --aws-profile로 기존 자격 증명을 준비하세요."
+	msgAWSCredentialsActionTwo    = "dcraft는 자격 증명을 저장하지 않으며 설정 파일에 넣지 않습니다."
+	msgAWSRegionActionOne         = "AWS 설정에 기본 리전을 지정하거나 --region으로 참조의 리전을 저장하세요."
+	msgAWSRegionActionTwo         = "AWS CLI에서 aws configure로 리전을 설정할 수도 있습니다."
+	msgAWSAccessDeniedActionOne   = "IAM에서 secretsmanager:GetSecretValue 권한을 확인하세요."
+	msgAWSAccessDeniedActionTwo   = "KMS로 암호화된 원본이면 해당 키의 복호화 권한도 필요합니다."
+	msgAWSSecretNotFoundActionOne = "원본 이름 또는 ARN과 리전이 정확한지 확인하세요."
+	msgAWSSecretNotFoundActionTwo = "삭제 예정이거나 다른 계정의 원본이면 dcraft 설정을 갱신하세요."
+	msgAWSNetworkActionOne        = "네트워크, 프록시, AWS 엔드포인트 연결을 확인한 뒤 다시 실행하세요."
+	msgAWSNetworkActionTwo        = "일시적인 장애라면 잠시 후 다시 시도하세요."
+	msgAWSValueActionOne          = "원본에 비어 있지 않은 텍스트 SecretString을 저장하세요. 바이너리 전용 원본은 지원하지 않습니다."
+	msgAWSValueActionTwo          = "구조화된 값을 쓸 때는 비어 있지 않은 스칼라를 가리키는 --field 경로를 지정하세요."
+	msgAWSFieldActionOne          = "원본 SecretString이 JSON인지, --field 경로의 키·배열 위치가 정확한지 확인하세요."
+	msgAWSFieldActionTwo          = "field는 한 개의 스칼라 값(문자열·숫자·true/false)만 가리킬 수 있습니다."
+	msgAWSFailedActionOne         = "AWS CLI로 같은 원본을 직접 조회해 오류 내용을 확인하세요."
+	msgAWSFailedActionTwo         = "자격 증명·리전·권한을 확인한 뒤 dcraft up 또는 dcraft update를 다시 실행하세요."
+	msgAWSFetchedRuntime          = "AWS Secrets Manager에서 실행 시점 참조 %d개를 조회했습니다. 값은 전달에만 사용하고 저장하지 않습니다."
+	msgAWSFetchedBuild            = "AWS Secrets Manager에서 빌드 시점 참조 %d개를 조회했습니다. 값은 BuildKit secret 파일로만 사용하고 저장하지 않습니다."
+	msgAWSCredentialDisclosure    = "AWS 자격 증명은 기존 AWS CLI 인증 수단을 사용합니다. dcraft는 자격 증명을 저장하거나 출력하지 않습니다."
+)
+
+const msgBuildAWSLifetime = "AWS Secrets Manager 빌드 비밀값은 빌드 명령이 실행되는 동안에만 상태 폴더의 0600 파일로 존재하고, 빌드가 끝나면 삭제됩니다. 다음 빌드에서 기존 AWS 인증으로 다시 조회하며 이전 값을 저장하거나 비교하지 않습니다."
