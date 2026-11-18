@@ -1274,10 +1274,12 @@ Tested seams:
   env-file values reach the containers, status reports each environment and
   never mixes their services, fixed-port/bind overlap is reported from static
   declarations before applying, and an unrelated canary stack is unchanged.
-- real Docker update: repeat update keeps container IDs and `Created`; a source
-  change rebuilds/recreates only that service; a tag moved in a temporary local
-  registry (host-network `registry:2`, removed afterwards) recreates only the
-  image-only service and records the new exact image ID; a healthcheck pass is
+- real Docker update: repeat update keeps container IDs and `Created`; a normal
+  update keeps the build cache while `--no-cache` re-executes the build and
+  changes the image identity; a source change rebuilds/recreates only that
+  service; a tag moved in a temporary local registry (host-network `registry:2`,
+  removed afterwards) recreates only the image-only service and records the new
+  exact image ID; a healthcheck pass is
   success/healthy and a no-healthcheck service is `running_unverified` (never
   verified); unhealthy, crash-loop (`restart: always`), early exit and timeout
   all fail with the observed `service=status` and leave the previous record
@@ -1285,8 +1287,9 @@ Tested seams:
   record has image IDs/retention tags/file/env/profile/name/environment data and
   no resolved secret value; a retention tag still resolves to the recorded
   image after a forced recreation and after `down`; update holds the per-stack
-  lock and a concurrent `up` fails `stack_busy` while a canary stack is
-  unchanged; cleanup removes only this test's projects/images/registry.
+  lock and a concurrent `up` fails `stack_busy` while a canary stack's container
+  IDs and volume data are unchanged; cleanup removes only this test's
+  projects/images/registry.
 
 Commands:
 

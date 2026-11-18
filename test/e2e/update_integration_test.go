@@ -443,7 +443,16 @@ services:
 		t.Fatal(err)
 	}
 	canaryCompose := filepath.Join(canaryDir, "compose.yaml")
-	canaryDoc := fmt.Sprintf("name: %s\nservices:\n  hold:\n    image: busybox:1.36\n    command: [\"sleep\", \"600\"]\n", canaryName)
+	canaryDoc := fmt.Sprintf(`name: %s
+services:
+  hold:
+    image: busybox:1.36
+    command: ["sh", "-c", "echo canary > /data/marker; sleep 600"]
+    volumes:
+      - data:/data
+volumes:
+  data:
+`, canaryName)
 	if err := os.WriteFile(canaryCompose, []byte(canaryDoc), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -454,6 +463,7 @@ services:
 	t.Cleanup(func() { cleanupUpdateProject(t, env, canaryDir, canaryName, canaryCompose) })
 	canaryID := composeInspect(t, env, canaryName, canaryCompose, "hold")
 	canaryCreated := containerIDCreated(t, canaryID)
+	canaryVolume := canaryName + "_data"
 	last, res := updateJSONFor(t, dir, dcraftEnv)
 	requireSuccessUpdate(t, last, res)
 	imagesCleanup.track(last)
@@ -462,6 +472,18 @@ services:
 	}
 	if got := containerIDCreated(t, canaryID); got != canaryCreated {
 		t.Fatalf("update changed another stack's container Created: %s -> %s", canaryCreated, got)
+	}
+	canaryData := ""
+	for i := 0; i < 20; i++ {
+		out, err := dockerRun(t, nil, "", "run", "--rm", "-v", canaryVolume+":/data", "busybox:1.36", "cat", "/data/marker")
+		if err == nil && strings.TrimSpace(out) == "canary" {
+			canaryData = strings.TrimSpace(out)
+			break
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+	if canaryData != "canary" {
+		t.Fatalf("update changed another stack's volume data: %q", canaryData)
 	}
 
 	// After down, the retention tag still protects the recorded image.
@@ -783,5 +805,69 @@ services:
 	}
 	if got := composeInspect(t, env, canaryName, canaryCompose, "hold"); got != canaryID {
 		t.Fatalf("concurrent update changed another stack: %s -> %s", canaryID, got)
+	}
+}
+
+func TestIntegrationUpdateBuildCacheChoice(t *testing.T) {
+	env := requireIntegration(t)
+	project := "dcraft-test-upd-" + randomHex(t, 6)
+	dir := filepath.Join(t.TempDir(), project)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stateDir := t.TempDir()
+	dcraftEnv := buildEnv(map[string]string{"DCRAFT_STATE_DIR": stateDir})
+	composePath := filepath.Join(dir, "compose.yaml")
+	doc := fmt.Sprintf(`name: %s
+services:
+  app:
+    build:
+      context: .
+    command: ["sh", "-c", "sleep 600"]
+`, project)
+	if err := os.WriteFile(composePath, []byte(doc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dockerfile := "FROM busybox:1.36\nRUN date +%s%N > /buildstamp\nCMD [\"sh\", \"-c\", \"sleep 600\"]\n"
+	if err := os.WriteFile(filepath.Join(dir, "Dockerfile"), []byte(dockerfile), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	imagesCleanup := &updateImageCleanup{}
+	imagesCleanup.addRef(project + "-app")
+	imagesCleanup.register(t)
+	t.Cleanup(func() { cleanupUpdateProject(t, env, dir, project, composePath) })
+
+	first, res := updateJSONFor(t, dir, dcraftEnv)
+	requireSuccessUpdate(t, first, res)
+	imagesCleanup.track(first)
+	appID := composeInspect(t, env, project, composePath, "app")
+	firstImage := containerImageID(t, appID)
+
+	// A normal update keeps the build cache: the date layer is not re-executed,
+	// so the image identity and the container stay the same.
+	second, res := updateJSONFor(t, dir, dcraftEnv)
+	requireSuccessUpdate(t, second, res)
+	imagesCleanup.track(second)
+	if got := composeInspect(t, env, project, composePath, "app"); got != appID {
+		t.Fatalf("cached update recreated the container: %s -> %s", appID, got)
+	}
+	if got := containerImageID(t, appID); got != firstImage {
+		t.Fatalf("cached update changed the image: %s -> %s", firstImage, got)
+	}
+
+	// --no-cache re-executes the build and applies the new image.
+	third, res := updateJSONFor(t, dir, dcraftEnv, "--no-cache")
+	requireSuccessUpdate(t, third, res)
+	imagesCleanup.track(third)
+	newAppID := composeInspect(t, env, project, composePath, "app")
+	if newAppID == appID {
+		t.Fatal("--no-cache did not rebuild/recreate the service")
+	}
+	newImage := containerImageID(t, newAppID)
+	if newImage == firstImage {
+		t.Fatal("--no-cache kept the same image identity")
+	}
+	if third.Data.Update.Options["no_cache"] != true {
+		t.Fatalf("payload options = %+v", third.Data.Update.Options)
 	}
 }
