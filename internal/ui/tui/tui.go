@@ -171,8 +171,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.phase = phaseReady
 			return m, nil
 		}
-		m.pendingApproval = m.active.Descriptor().Approval
 		m.planText = msg.report.Text
+		if m.active != nil && m.active.Descriptor().Approval != core.ApprovalNone {
+			m.pendingApproval = m.active.Descriptor().Approval
+		} else {
+			// Ordinary update: the plan is the preview; one deliberate
+			// confirmation runs it without an extra approval kind.
+			m.pending = m.active
+		}
 		m.phase = phaseConfirm
 		return m, nil
 	case environmentListMsg:
@@ -232,6 +238,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.declineApproval()
 				} else {
 					m.pending = nil
+					m.planText = ""
 					m.phase = phaseReady
 					m.notice = ""
 				}
@@ -254,7 +261,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				f := m.pending
 				m.pending = nil
-				return m, m.begin(f)
+				return m, m.startRun(f)
 			}
 			return m, nil
 		}
@@ -324,7 +331,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.active.Descriptor().Wizard {
 				return m, m.beginWizard(m.active)
 			}
-			if m.active.Descriptor().ReadOnly || plannedApproval(m.active) {
+			if m.active.Descriptor().ReadOnly || plansBeforeRun(m.active) {
 				return m, m.begin(m.active)
 			}
 			m.pending = m.active
@@ -347,7 +354,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if f.Descriptor().Wizard {
 					return m, m.beginWizard(f)
 				}
-				if f.Descriptor().ReadOnly || plannedApproval(f) {
+				if f.Descriptor().ReadOnly || plansBeforeRun(f) {
 					return m, m.begin(f)
 				}
 				m.pending = f
@@ -370,24 +377,21 @@ func (m *Model) listEnvironmentsCmd() tea.Cmd {
 	}
 }
 
-// plannedApproval reports whether a feature's independent approval is
-// collected through the read-only plan screen. Such a feature needs no extra
-// generic confirmation: the plan itself is the confirmation.
-func plannedApproval(f core.Feature) bool {
+// plansBeforeRun reports whether a feature can describe its planned work
+// before it runs. Such a feature sees a read-only plan first: approval-gated
+// features collect their independent approval on that screen, and an ordinary
+// update simply confirms the same target and planned work once.
+func plansBeforeRun(f core.Feature) bool {
 	if f == nil {
-		return false
-	}
-	d := f.Descriptor()
-	if d.Approval == core.ApprovalNone {
 		return false
 	}
 	_, ok := f.(core.Planner)
 	return ok
 }
 
-// begin starts a feature. Approval-gated features that can describe their
-// exact effect go through a read-only plan first; everything else runs
-// directly, preserving the ticket 01 behavior.
+// begin starts a feature. Features that can describe their planned work go
+// through a read-only plan first; everything else runs directly, preserving the
+// ticket 01 behavior.
 func (m *Model) begin(f core.Feature) tea.Cmd {
 	m.active = f
 	m.result = nil
@@ -402,17 +406,31 @@ func (m *Model) begin(f core.Feature) tea.Cmd {
 		m.runCtx = nil
 	}
 	m.events = make(chan core.Stage, 64)
-	if f != nil {
-		desc := f.Descriptor()
-		if desc.Approval != core.ApprovalNone {
-			if _, ok := f.(core.Planner); ok {
-				m.phase = phasePlanning
-				return tea.Batch(m.planCmd(f, m.events), waitStageCmd(m.events))
-			}
-		}
+	if plansBeforeRun(f) {
+		m.phase = phasePlanning
+		return tea.Batch(m.planCmd(f, m.events), waitStageCmd(m.events))
 	}
 	m.phase = phaseLoading
 	m.runCtx, m.runCancel = context.WithCancel(m.ctx)
+	return tea.Batch(m.runCmd(f, nil, nil, m.events, m.runCtx), waitStageCmd(m.events))
+}
+
+// startRun runs a feature without another plan pass. The plan (when shown) is
+// already the confirmation; ordinary updates need no second approval.
+func (m *Model) startRun(f core.Feature) tea.Cmd {
+	m.active = f
+	m.result = nil
+	m.currentStage = nil
+	m.pending = nil
+	m.pendingApproval = ""
+	m.planText = ""
+	m.notice = ""
+	if m.runCancel != nil {
+		m.runCancel()
+	}
+	m.phase = phaseLoading
+	m.runCtx, m.runCancel = context.WithCancel(m.ctx)
+	m.events = make(chan core.Stage, 64)
 	return tea.Batch(m.runCmd(f, nil, nil, m.events, m.runCtx), waitStageCmd(m.events))
 }
 
@@ -709,6 +727,11 @@ func (m *Model) confirmView() string {
 	}
 	fmt.Fprintf(&b, "%s: %s\n", msgConfirmScopeLabel, msgConfirmScope)
 	fmt.Fprintf(&b, "%s: %s\n", msgConfirmEffectLabel, d.Summary)
+	if strings.TrimSpace(m.planText) != "" {
+		b.WriteString("\n")
+		b.WriteString(m.planText)
+		b.WriteString("\n")
+	}
 	b.WriteString(msgConfirmRisk)
 	return strings.TrimRight(b.String(), "\n")
 }
