@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/rootmyself/dcraft/internal/core"
+	"github.com/rootmyself/dcraft/internal/data"
 )
 
 // Present renders a successful restore for humans. Failure and cancellation
@@ -20,7 +21,11 @@ func Present(res core.Result, width int) string {
 	b.WriteString("\n\n")
 	fmt.Fprintf(&b, "프로젝트: %s\n", report.ProjectName)
 	fmt.Fprintf(&b, "백업: %s\n", report.ArtifactPath)
-	fmt.Fprintf(&b, "대상: %s → %s\n", report.VolumeKey, report.VolumeName)
+	if report.TargetKind == data.KindBind {
+		fmt.Fprintf(&b, msgPreviewBindTarget+"\n", report.HostPath)
+	} else {
+		fmt.Fprintf(&b, "대상: %s → %s\n", report.VolumeKey, report.VolumeName)
+	}
 	fmt.Fprintf(&b, "백업 내용: %d개 항목, %s\n", report.BackupContent.Entries, humanBytes(report.BackupContent.Bytes))
 	fmt.Fprintf(&b, "교체 후 데이터 상태: %s\n", report.DataState)
 	fmt.Fprintf(&b, "안전 백업: %s\n", report.SafetyBackup)

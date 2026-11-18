@@ -73,6 +73,7 @@ const (
 	// rest are operation failures (exit 1). The values are additive.
 	CategoryRestoreBackupRequired    Category = "restore_backup_required"
 	CategoryRestoreVolumeUnknown     Category = "restore_volume_unknown"
+	CategoryRestoreBindUnknown       Category = "restore_bind_unknown"
 	CategoryRestoreArtifactInvalid   Category = "restore_artifact_invalid"
 	CategoryRestoreIntegrityFailed   Category = "restore_integrity_failed"
 	CategoryRestoreTargetMismatch    Category = "restore_target_mismatch"

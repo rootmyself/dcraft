@@ -21,6 +21,9 @@ func TestExitCodesSeparateDecisionErrorsFromOperationFailures(t *testing.T) {
 		{core.OutcomeFailure, []core.Category{core.CategoryProjectNameConflict}, 2},
 		{core.OutcomeFailure, []core.Category{core.CategoryServiceUnknown}, 2},
 		{core.OutcomeFailure, []core.Category{core.CategoryInvalidOption}, 2},
+		{core.OutcomeFailure, []core.Category{core.CategoryRestoreVolumeUnknown}, 2},
+		{core.OutcomeFailure, []core.Category{core.CategoryRestoreBindUnknown}, 2},
+		{core.OutcomeFailure, []core.Category{core.CategoryRestoreTargetMismatch}, 1},
 	}
 	for _, tc := range cases {
 		res := core.Result{Outcome: tc.outcome}
