@@ -7,6 +7,8 @@ const (
 	msgDockerMissingActionTwo   = "설치 후 새 터미널에서 docker --version이 성공하는지 확인하세요."
 	msgDockerMissingActionThree = "WSL2에서는 Docker Desktop의 WSL 통합을 켜세요."
 	msgDockerNotExecutable      = "Docker CLI를 실행할 수 없습니다."
+	msgStreamUnsupported        = "실시간 입출력 연결을 준비하지 못했습니다."
+	msgStreamUnsupportedAction  = "dcraft를 다시 설치하거나 빌드한 뒤 실행하세요."
 
 	msgEndpointUnknown          = "Docker 연결 대상을 확인할 수 없습니다."
 	msgEndpointUnknownActionOne = "docker context ls로 현재 컨텍스트를 확인하세요."

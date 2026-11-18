@@ -8,6 +8,7 @@ const (
 	msgStageVerify        = "결과 확인"
 	msgStageHistory       = "이력 기록"
 	msgStagePlan          = "작업 계획"
+	msgStageInputs        = "입력 확인"
 
 	msgWorkingDirUnknown = "현재 작업 폴더를 확인할 수 없습니다."
 	msgWorkingDirAction  = "터미널을 다시 열거나 --path로 대상 폴더를 지정하세요."
@@ -42,6 +43,9 @@ const (
 
 	msgPlanUnsupported       = "이 작업은 실행 전에 확인할 계획을 제공하지 않습니다."
 	msgPlanUnsupportedAction = "대화형 화면 없이 승인 옵션을 명시해 실행하거나 dcraft --help로 사용법을 확인하세요."
+
+	msgInputsUnsupported       = "이 작업은 대화형 입력을 제공하지 않습니다."
+	msgInputsUnsupportedAction = "명령과 옵션을 지정해 실행하거나 dcraft --help로 사용법을 확인하세요."
 )
 
 func approvalRequiredMessage(kind ApprovalKind) string {

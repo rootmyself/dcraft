@@ -47,4 +47,26 @@ const (
 	msgBusyQuit           = "작업이 진행 중입니다. 지금 화면을 닫으면 일부 변경이 남을 수 있습니다. 완료된 뒤 종료하거나, 중단하려면 ctrl+c를 누르세요."
 	msgCanceling          = "중단을 요청했습니다. 진행 중인 작업이 안전하게 끝날 때까지 기다리세요. 일부 변경이 남을 수 있습니다."
 	msgHintBusy           = "ctrl+c 중단 요청 · 작업 완료 후 q 종료"
+
+	// Interactive inputs are collected only where a feature declares them
+	// (exec). The TUI renders labels and choices; the feature owns validation.
+	msgLoadingInputs   = "실행에 필요한 입력을 확인하는 중…"
+	msgFormTitle       = "실행 전 확인"
+	msgFormAction      = "작업"
+	msgFormRunTitle    = "실행 내용"
+	msgFormEmpty       = "(아직 입력 없음)"
+	msgFormRequired    = "%s 항목을 입력하세요."
+	msgFormCanceled    = "입력을 취소했습니다. 아무것도 실행하지 않았습니다."
+	msgFormUnsupported = "이 작업은 대화형 입력을 지원하지 않습니다."
+	msgHintForm        = "tab 필드 이동 · ↑/↓ 선택 · enter 다음/실행 · esc 취소"
+
+	// Live screens. Closing a screen only detaches; it never stops services.
+	msgLiveStreaming = "실시간 로그 (서비스는 계속 실행 중)"
+	msgLiveAttached  = "서비스에 접속했습니다."
+	msgLiveService   = "서비스"
+	msgLiveCommand   = "명령"
+	msgHintLive      = "q/esc/ctrl+c 화면 닫기 · 서비스는 계속 실행"
+	msgHintAttach    = "ctrl+] 접속 종료 · 명령이 끝나면 자동 복귀"
+	msgLiveStopped   = "실시간 화면을 닫았습니다. 서비스는 계속 실행 중입니다."
+	msgLastOutput    = "마지막 실시간 출력"
 )
