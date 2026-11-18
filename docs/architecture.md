@@ -5,14 +5,15 @@ fork these types or recreate these rules in a feature or UI package. Shared
 interface changes go to the integration owner as a change request (see the end
 of this file).
 
-Scope of this version: one working binary, nine registered features (`status`,
+Scope of this version: one working binary, eleven registered features (`status`,
 `install-compose`, `up`, `stop`, `down`, `restart`, `update`, `secrets`,
-`rollback`), the common operation seam, target resolution, named environments,
-automatic project-name allocation, same-stack coordination, runtime secret
-references, diagnostics, CLI/TUI assembly, state layout, machine-readable
-results, the approval/plan preview flow, explicit update with bounded readiness
-and the previous-good record, previous-good rollback, and tests. Logs/exec,
-generation, build-time/AWS secrets, hooks and backup/restore are later tickets.
+`logs`, `exec`, `rollback`), the common operation seam, target resolution,
+named environments, automatic project-name allocation, same-stack coordination,
+runtime secret references, service/instance selection, live terminal attach,
+diagnostics, CLI/TUI assembly, state layout, machine-readable results, the
+approval/plan preview flow, explicit update with bounded readiness, the
+previous-good record, previous-good rollback, and tests. Generation, build-time/
+AWS secrets, hooks and backup/restore are later tickets.
 
 ---
 
@@ -41,7 +42,10 @@ cmd/dcraft                 process entry, signal context, TTY check, exit codes
         +-- internal/features/stop    > thin lifecycle registration units
         +-- internal/features/down   /
         +-- internal/features/restart
+        +-- internal/features/logs   live log stream (ticket #5)
+        +-- internal/features/exec   attached command execution (ticket #5)
         +-- internal/features/all    feature registration files (one per feature)
+        +-- internal/selector        service/instance selection (ticket #5)
         +-- internal/stack           Backend/read types + Lifecycle/Identity seams
         +-- internal/compose         Preflight + Inspect + Lifecycle adapter (Docker CLI)
         +-- internal/composeinstall  approved Compose plugin installation
@@ -99,6 +103,8 @@ core.NewEngine(registry, target.New(), composeAdapter, stateStore, clock)
 | `Options map[string]string` | parsed feature-flag values |
 | `Approvals []core.ApprovalKind` | explicit approvals supplied by the caller |
 | `Interactive bool` | prompts are possible; never bypasses approval |
+| `IO core.IO` | caller-provided live terminal streams for logs/exec; nil fields mean the process standard streams |
+| `JSON bool` | the caller asked for one machine-readable result; a UI hint only, never a safety rule |
 
 Engine sequence (stage names are stable machine values; titles are Korean):
 
@@ -191,7 +197,31 @@ type core.Presenter interface {
 type core.Planner interface {
     Plan(ctx context.Context, in core.Invocation) (core.Plan, error)
 }
+// LiveFeature: stdout is user process data, not the result document.
+type core.LiveFeature interface {
+    LiveMode() core.LiveMode // "stream" (logs) or "attach" (exec)
+}
+// InputProvider: the TUI collects missing values; the feature owns meaning.
+type core.InputProvider interface {
+    Inputs(ctx context.Context, in core.Invocation) ([]core.InputField, error)
+    WithInputs(req core.Request, values map[string]string) (core.Request, error)
+}
+// CanceledReporter: a feature-specific cancellation effect, normalized by the
+// engine to the canceled/warning/exit-130 contract.
+type core.CanceledReporter interface {
+    CanceledDiagnostic() core.Diagnostic
+}
 ```
+
+`InputField` is UI metadata (`choice`/`text`, label, help, options, required);
+it is not a safety policy. `WithInputs` maps collected values to request
+fields, and the feature validates them again when it runs.
+
+`Engine.Inputs(ctx, req, sink) core.InputsReport` resolves the same target and
+preflight requirements as `Run`, then calls the feature's `InputProvider`
+implementation. It never checks an approval, never runs the feature and never
+writes history, so the TUI can show the service, instance and command before
+attaching. The CLI never calls it and never prompts.
 
 `Engine.Plan(ctx, req, sink) core.PlanReport` resolves the same target and
 preflight requirements as `Run`, then calls the feature's `Plan`. It never
@@ -207,7 +237,8 @@ effect, and never contain secret values. `PlanReport.Result()` converts a failed
 plan into the common result shape for both interfaces to render.
 
 `core.Invocation` gives a feature: resolved `Target`, `Services`, `Args`,
-`Options`, `Interactive`, `Preflight` report, `Reporter`, `Clock`, `State`.
+`Options`, `Interactive`, `Preflight` report, `IO`, `JSON`, `Reporter`,
+`Clock`, `State`.
 Use `in.Option(name)` and `in.BoolOption(name)`.
 
 ---
@@ -555,8 +586,10 @@ is in the payload and in every Compose call.
   feature first shows a confirmation screen with the requested target
   (path/files/profiles/project name), the whole-stack scope and the effect.
   `enter` runs the same engine path, `esc` cancels, `q` quits without running.
-  The TUI provides whole-stack operations only; service selection is the CLI
-  `-s/--service`.
+  Lifecycle screens still operate on the whole stack; service selection for
+  those mutations stays the CLI `-s/--service`. The ticket-05 logs/exec screens
+  select a service/instance through the published selector and a generic
+  `core.InputProvider` form, without a feature-specific branch in the TUI.
 - During an in-flight mutating operation, `q` explains that the operation is
   running and that quitting can leave partial effects (it does not orphan the
   Compose process). `ctrl+c` requests safe cancellation: the per-run context is
@@ -601,6 +634,13 @@ Human output: successful feature `Presenter` text goes to stdout; warnings and
 failure diagnostics go to stderr; JSON mode writes only JSON to stdout and
 nothing to stderr for operation outcomes. Usage errors remain human text.
 
+Live features follow the same rule. The CLI passes the command streams as
+`core.IO`; a `LiveStream` feature (logs) is refused in JSON mode with a Korean
+usage error and exit 2, because its stdout is user data that cannot become one
+result object. A `LiveAttach` feature (exec) may run in JSON mode by capturing
+the command and returning it under `data.exec`; it never attaches a TTY then.
+`logs --json` therefore fails before any Docker call.
+
 The CLI never prompts. An approval-gated command without `--approve <kind>`
 returns the engine's approval failure (exit 2) with Korean text describing the
 effect; non-interactive and interactive terminals behave identically. For any
@@ -638,6 +678,13 @@ It derives everything from the registry:
 - `r` re-runs read-only features directly, re-plans every Planner and asks for
   confirmation again for other mutating features. The selected environment is
   reused; `q` and `ctrl+c` quit outside an operation;
+- a live feature opens a live screen instead of the loading text. Logs stop
+  following with `q`/`esc`/`ctrl+c`; an attached command forwards keys and
+  detaches with `ctrl+]`. Both return to the management view, keep the last
+  output lines visible, and never stop a service;
+- a feature implementing `core.InputProvider` first opens the generic form
+  (`phaseForm`) fed by `Engine.Inputs`; `esc` runs nothing and the exact
+  service/instance/command values are shown before the feature runs;
 - normal quit is not an operation and does not touch services. During an
   in-flight mutating operation `q` explains the risk; `ctrl+c` requests safe
   cancellation and keeps the screen for the canceled result (see §5).
@@ -658,8 +705,8 @@ Approval flow (generic, engine-enforced):
    `previous_version` and `data_restore` will reuse it without a TUI branch.
 
 No feature action is selectable unless it is registered. The current build
-registers `status` (primary), `install-compose`, `up`, `stop`, `down` and
-`restart`.
+registers `status` (primary), `install-compose`, `up`, `stop`, `down`,
+`restart`, `update`, `secrets`, `logs` and `exec`.
 
 ---
 
@@ -1092,6 +1139,90 @@ not run deploy hooks, and never deletes retention images/tags or prunes.
 
 ---
 
+## 7.3 Logs and exec (ticket #5)
+
+Two read-only live features share one published selector and one streaming
+boundary. Neither stops a service, and leaving a screen only detaches.
+
+### Service and instance selection (`internal/selector`)
+
+Published for later screens; do not create a second selection model.
+
+- `Services(snap)` lists configured services with their observed instances in
+  a stable order. Instances of services outside the active configuration are
+  not selectable.
+- `Select(snap, requested)` validates explicit service names (empty = every
+  configured service). Unknown names are `service_unknown` (exit 2) with the
+  available list; explicit order is preserved and repeats are dropped.
+- `ChooseInstance(service, index)` applies the zero-based `-i/--index`. A
+  stopped instance remains loggable; an out-of-range index is
+  `instance_unknown` (exit 2) with the instance list.
+- `LogTargets(snap, requested, index)` is the logs selection. `--index`
+  requires exactly one explicit service; without it, a scaled service streams
+  every instance with its Compose log prefix.
+- `OneRunning(snap, requested, index)` is the exec selection. Exactly one
+  service and one running instance are required. A scaled service without an
+  index fails with `selection_required` (exit 2) and lists the instances; a
+  stopped service or a stopped explicit instance is `instance_stopped`
+  (exit 1). The first instance is never chosen implicitly.
+- Indexes are zero-based everywhere in dcraft; the Compose adapter maps them
+  to Compose's one-based `--index`. Using a sorted instance list and the
+  default Compose naming means index N corresponds to `...-N+1`.
+
+### `logs`
+
+- Flags: `-s/--service` (repeatable; empty = whole stack), `-i/--index`
+  (single service), `--no-follow` (follow is the default), `--tail`, `--since`,
+  `--timestamps`.
+- Color is requested only when the caller's stdout is a terminal. Logs never
+  allocate a pseudo-terminal and never change terminal mode.
+- Ctrl+C (or leaving the TUI live screen) cancels the follow. The result is
+  `canceled` (exit 130), the `stream` stage says the stream was detached, and
+  the service keeps running.
+- Stages: `select_instance` (인스턴스 선택), `stream` (로그 스트림).
+- `logs --json` is refused with a Korean usage error and exit 2: a live stream
+  cannot be one result and must never be interleaved with the final JSON
+  object.
+
+### `exec`
+
+- Requires one service and a non-empty argv. `AcceptsArgs` keeps options before
+  positional arguments and the shared `--` terminator; `-s/--service`,
+  `-i/--index`, `-T/--no-tty`.
+- The argv is passed to `docker compose exec` unchanged after the service.
+  dcraft never invokes `sh -c` and never guesses a shell. The image must
+  contain the command; a missing command is `exec_failed` (exit 1) with Korean
+  guidance, not a silent shell fallback.
+- A pseudo-terminal is allocated only when the caller can relay an interactive
+  terminal and `-T` is absent. `-T`, piped input, and JSON mode never allocate
+  one.
+- A non-zero remote status is a dcraft failure (exit 1); the tool's status is
+  carried in the diagnostic's additive `exit_code` field so a remote exit 2 or
+  130 can never be confused with dcraft's usage (2) or cancellation (130).
+  Success payload `data.exec` contains `service`, `instance`, `index`,
+  `command`, `tty`, `exit_code` and, in JSON mode, captured `stdout`/`stderr`.
+- `exec --json` forces non-interactive capture and never writes live bytes to
+  stdout. On failure the schema rule still omits `data`; the remote status is
+  on the diagnostic.
+- Stages: `select_instance`, `attach` (명령 실행). Cancellation restores the
+  terminal and states that the service keeps running.
+- Terminal ownership lives in `internal/execx.RunStream`: raw mode is applied
+  only to a real terminal stdin and restored with `defer` on success, failure
+  and cancellation. dcraft's own exit codes stay 0/1/2/130.
+
+### TUI
+
+- A `core.LiveFeature` opens a live screen. Logs stop with `q`/`esc`/`ctrl+c`;
+  an attached command forwards keys and detaches with `ctrl+]` (or exits by
+  itself). The last output lines remain visible in the management view.
+- A `core.InputProvider` feature opens a generic form (choice and text fields)
+  that shows the resolved values before running; `esc` runs nothing, and the
+  feature validates the values again through `WithInputs`.
+- The TUI never passes JSON mode, never uses the CLI's standard streams for a
+  live feature, and normal quit touches no service.
+
+---
+
 ## 8. Per-computer state
 
 `internal/state.Root(getenv)`:
@@ -1157,7 +1288,23 @@ type execx.Runner interface {
     LookPath(file string) (string, error)
     Run(ctx context.Context, cmd execx.Command) (execx.Result, error)
 }
+
+// Optional live capability required by logs/exec.
+type execx.Streamer interface {
+    RunStream(ctx context.Context, cmd execx.Command, stream execx.Stream) (execx.Result, error)
+}
+type execx.Stream struct {
+    Stdin, Stdout, Stderr io...   // caller streams
+    TTY                   bool    // allocate a child pty and set raw mode
+    Width, Height         int
+}
 ```
+
+`RunStream` streams without buffering the live output; `Result` keeps only a
+bounded tail for diagnostics. With `TTY` it allocates a pseudo-terminal for the
+child and forwards bytes; only a real terminal stdin is put in raw mode, and the
+previous mode is restored on success, failure and cancellation. A non-zero exit
+is a `Result`; start failures and cancellation are errors.
 
 - `execx.Command{Name, Args, Dir, Env, Stdin}`, `execx.Result{Stdout, Stderr,
   ExitCode}`. Non-zero exits are results, not Go errors; start failures and
@@ -1174,6 +1321,10 @@ type execx.Runner interface {
   and Korean errors; this package performs no policy.
 - `internal/stack.Backend` keeps the read-only stack boundary separate from the
   UI. No Kubernetes backend or multi-backend registry exists now.
+- `stack.Streamer` (`Logs`, `Exec`) is the narrow live-output boundary used by
+  the logs/exec features and implemented by `internal/compose`. Its requests
+  carry a zero-based instance index and the exact argv; the adapter owns the
+  Compose argument mapping, never a shell.
 - Compose semantics (validation, merge, path resolution, profiles, ps JSON) are
   delegated to the Compose CLI; dcraft does not reimplement YAML.
 
@@ -1219,6 +1370,11 @@ Desktop's VM-backed unix socket is **local**, not remote.
 | `environment_isolation_limits` | environment isolation never covers host resources | info |
 | `project_name_conflict` | declared/recorded project name belongs to another stack (folder or environment) | error (exit 2) |
 | `service_unknown` | explicit `-s/--service` is not in the Compose configuration | error (exit 2) |
+| `selection_required` | a service/instance must be chosen explicitly; ambiguous scaled service | error (exit 2) |
+| `instance_unknown` | explicit `-i/--index` is outside the instance list | error (exit 2) |
+| `instance_stopped` | the selected service/instance is not running | error (exit 1) |
+| `logs_failed` | the Compose log stream failed | error (exit 1) |
+| `exec_failed` | the command could not start or exited non-zero | error (exit 1) |
 | `stack_busy` | another operation holds the same stack lock | error |
 | `lifecycle_failed` | a Compose lifecycle call failed | error |
 | `update_failed` | a build, pull or detached apply failed; the stage and observed state are reported | error |
@@ -1257,10 +1413,14 @@ the full `compose version` command confirms the classification.
 
 `Result.ExitCode` returns 2 for `approval_required`, `environment_required`,
 `environment_unknown`, `environment_input_conflict`, `project_name_conflict`,
-`service_unknown` and `invalid_option`: those mean the caller must supply a
-different decision (an approval, an environment, a free name, an existing
-service, a valid option). dcraft never prompts to resolve them; non-interactive
-runs fail with the explanation instead. New categories are additive v1 values.
+`service_unknown`, `invalid_option`, `secret_input_invalid`,
+`secret_unsupported`, `selection_required` and `instance_unknown`: those mean
+the caller must supply a different decision (an approval, an environment, a
+free name, an existing service, a valid option, a valid secret reference, a
+service/instance selection). dcraft never
+prompts to resolve them; non-interactive runs fail with the explanation instead.
+`instance_stopped`, `logs_failed` and `exec_failed` are operation failures
+(exit 1). New categories are additive v1 values.
 
 A failed update records the failed stage in `stages` (for example `verify`) and
 puts the observed `service=status` summary plus per-instance state in the
@@ -1381,7 +1541,23 @@ Tested seams:
   run as separate stacks with separate declared project names and host ports,
   env-file values reach the containers, status reports each environment and
   never mixes their services, fixed-port/bind overlap is reported from static
-  declarations before applying, and an unrelated canary stack is unchanged.
+  declarations before applying, and an unrelated canary stack is unchanged;
+- service/instance selection: default all services, explicit order, unknown
+  service, 0-based indexes, stopped instance loggable, exec ambiguity/stops,
+  and the exit-code split (selection = 2, operation = 1);
+- live execution units: logs flag mapping, no pty and no color without a TTY,
+  cancellation detached without service commands, JSON refusal; exec exact
+  argv with no shell, TTY only with a terminal and no `-T`, JSON capture,
+  remote non-zero mapping with `exit_code`, missing command and stopped service;
+- execx streaming: piped and pty modes, input forwarding, output capture and
+  context cancellation, and terminal restoration after success and failure;
+- TUI live screens: logs streaming, quit to the management view, attach key
+  forwarding and `ctrl+]` detach, generic input form, no run before confirm;
+- real Docker logs/exec: a scaled `web=2` stack with distinct instances, logs
+  follow streaming a new line and ctrl+c leaving both containers running,
+  exec reaching the right instance in both indexes, literal argv (no shell),
+  missing command, stopped service, non-zero remote exit, and quitting the TUI
+  logs screen leaving the stack running, with cleanup limited to its project.
 - real Docker update: repeat update keeps container IDs and `Created`; a normal
   update keeps the build cache while `--no-cache` re-executes the build and
   changes the image identity; a source change rebuilds/recreates only that
@@ -1432,8 +1608,8 @@ Docker or external network. Unrun platforms/paths are not claimed as verified.
 
 ## 12. Not implemented here (owned by later tickets)
 
-- `logs`, `exec`, `backup`, `restore`; no registration exists for them and no
-  menu action is shown.
+- `backup`, `restore`; no registration exists for them and no menu action is
+  shown. (`logs`/`exec` are implemented by ticket #5; rollback by ticket #11.)
 - TUI alias creation/editing: aliases are created by editing `.dcraft.yaml` in
   this version (selection is provided by both interfaces).
 - Build-time secrets (BuildKit mounts), AWS Secrets Manager sources, host
@@ -1443,16 +1619,28 @@ Docker or external network. Unrun platforms/paths are not claimed as verified.
   are implemented by ticket #9 below; Compose installation is implemented by
   ticket #6; update readiness and the previous-good record by ticket #7.
 - Good-version history beyond the single record (rollback has no multi-version
-  picker), TUI flag collection for future features, service selection in the
-  TUI (CLI `-s` only). The TUI plan/confirm
-  component is generic; `install-compose`, `update` and `rollback` are planners
-  in this build. An ordinary update shows its plan and requires one `enter` to
-  run, not an approval; rollback shows the same plan screen and collects only
-  `previous_version`.
+  picker). The TUI plan/confirm component is generic; `install-compose`,
+  `update` and `rollback` are planners in this build. An ordinary update shows
+  its plan and requires one `enter` to run, not an approval; rollback shows the
+  same plan screen and collects only `previous_version`. TUI service selection
+  exists for the ticket-05 live screens through `core.InputProvider`; lifecycle
+  mutations still use the CLI `-s/--service`.
 - Docker itself (installation, repair, replacement), administrator escalation,
   Docker Desktop/WSL integration changes.
 
-Residual risks: Compose capability detection is based on running the installed
+Residual risks: Exec and logs run through the Docker CLI with the user's
+privileges; a command can change application data, and dcraft does not sandbox
+it, restore files it changes, or claim otherwise. Live output is user data:
+dcraft never fetches secret values, but an application can print its own
+secrets, and dcraft does not censor that. Logs/exec errors report a bounded tail
+of tool output (which may include application output) as diagnostic detail.
+`--index` maps a zero-based sorted instance list to Compose's one-based index;
+a service with a custom `container_name` cannot be scaled, so the mapping holds
+for the scaled (default-named) case only. The child pseudo-terminal size is
+captured when the command starts; later terminal resizes are not forwarded. TUI
+live output keeps a bounded line window and drops lines if rendering falls
+behind. TUI exec forwards printable and common navigation keys, not every
+terminal-specific escape sequence. Compose capability detection is based on running the installed
 CLI (version/JSON probes), so a heavily patched Compose may pass probes and fail
 later; diagnostic details are tool output and could contain user-provided file
 content, though dcraft never fetches or prints secret values; status parses a
@@ -1526,6 +1714,18 @@ Before changing a shared type/interface, send the integration owner:
 3. tests proving CLI and TUI still share the seam and no safety rule moved into
    a UI;
 4. documentation updates to this file.
+
+Published by ticket #5 (consume, do not fork): `internal/selector` types and
+functions (`Service`, `Instance`, `Selection`, `Services`, `Select`,
+`ChooseInstance`, `LogTargets`, `OneRunning`), `stack.Streamer` +
+`stack.LogsRequest`/`ExecRequest`/`ExecResult`/`CommandError`,
+`execx.Streamer` + `execx.Stream`, `core.IO` + `Request.IO`/`Invocation.IO` +
+`Request.JSON`/`Invocation.JSON`, `core.LiveFeature`/`LiveMode`
+(stream/attach), `core.InputProvider` + `InputField`/`InputKind`/`InputOption` +
+`Engine.Inputs`/`InputsReport`, `core.CanceledReporter`,
+`Diagnostic.ExitCode`, the `select_instance`/`stream`/`attach`/`inputs` stage
+names, the `logs`/`exec` payloads under `data.logs`/`data.exec`, and the new
+diagnostic categories/exit mapping.
 
 Published by ticket #9 (consume, do not fork): `internal/secretref` types
 (`Phase`, `Delivery`, `SourceType`, `Reference`, `Catalog`, `Runtime`,
