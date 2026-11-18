@@ -153,7 +153,7 @@ func (e *Engine) Run(ctx context.Context, req Request, sink Sink) (res Result) {
 	// change, so the independent approval belongs to apply, not to the menu
 	// preview. The TUI routes the approval-gated apply through the generic
 	// plan + confirmation screen.
-	wizardSteps := req.Options["wizard"] == "steps"
+	wizardSteps := desc.Wizard && req.Options["wizard"] == "steps"
 	if required := desc.Approval; required != ApprovalNone && !wizardSteps && !HasApproval(req.Approvals, required) {
 		if err := ctx.Err(); err != nil {
 			res.Outcome = OutcomeCanceled
