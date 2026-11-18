@@ -217,6 +217,7 @@ type updateJSON struct {
 					Service      string `json:"service"`
 					ImageID      string `json:"image_id"`
 					RetentionTag string `json:"retention_tag"`
+					Build        bool   `json:"build"`
 				} `json:"services"`
 			} `json:"good_version"`
 			Notices []string `json:"notices"`
@@ -268,6 +269,13 @@ func TestUpdateCLIReportsPlanFlagsAndReadiness(t *testing.T) {
 	} {
 		if !strings.Contains(res.stdout, want) {
 			t.Fatalf("human output misses %q:\n%s", want, res.stdout)
+		}
+	}
+	// The ordinary CLI shows the same target/planned work before running, on
+	// stderr, without asking for another approval.
+	for _, want := range []string{"갱신 대상", "예정 작업", "정확한 미래 상태 diff가 아닙니다"} {
+		if !strings.Contains(res.stderr, want) {
+			t.Fatalf("pre-run preview misses %q on stderr:\n%s", want, res.stderr)
 		}
 	}
 

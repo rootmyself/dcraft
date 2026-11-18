@@ -106,6 +106,50 @@ func recordedTags(parsed updateJSON) map[string]string {
 	return out
 }
 
+// updateImageCleanup removes only images and tags this test created. It is
+// registered before the project down cleanup, so it runs after the containers
+// are gone (cleanups run LIFO). Shared images such as busybox:1.36 are never
+// deleted; only their dcraft-owned retention tags are removed.
+type updateImageCleanup struct {
+	refs []string
+	ids  []string
+}
+
+func (c *updateImageCleanup) track(parsed updateJSON) {
+	if parsed.Data.Update.GoodVersion == nil {
+		return
+	}
+	for _, svc := range parsed.Data.Update.GoodVersion.Services {
+		c.refs = append(c.refs, svc.RetentionTag)
+		if svc.Build {
+			c.ids = append(c.ids, svc.ImageID)
+		}
+	}
+}
+
+func (c *updateImageCleanup) addRef(ref string) { c.refs = append(c.refs, ref) }
+
+func (c *updateImageCleanup) register(t *testing.T) {
+	t.Cleanup(func() {
+		seen := map[string]bool{}
+		for _, id := range c.ids {
+			if seen[id] {
+				continue
+			}
+			seen[id] = true
+			_, _ = dockerRun(t, nil, "", "image", "rm", "-f", id)
+		}
+		seen = map[string]bool{}
+		for _, ref := range c.refs {
+			if ref == "" || seen[ref] {
+				continue
+			}
+			seen[ref] = true
+			_, _ = dockerRun(t, nil, "", "image", "rm", "-f", ref)
+		}
+	})
+}
+
 func cleanupUpdateProject(t *testing.T, env []string, dir, project, file string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
@@ -233,6 +277,10 @@ func TestIntegrationUpdateRepeatSourceImageAndRetention(t *testing.T) {
 		t.Skipf("alpine:3.20 is required for the tag-move scenario: %v\n%s", err, out)
 	}
 
+	imagesCleanup := &updateImageCleanup{}
+	imagesCleanup.addRef(apiRef)
+	imagesCleanup.addRef(project + "-app")
+	imagesCleanup.register(t)
 	writeCompose := func(appMarker string) {
 		doc := fmt.Sprintf(`name: %s
 services:
@@ -266,16 +314,13 @@ services:
 		}
 	}
 	writeCompose("v1")
+	imagesCleanup.register(t)
 	t.Cleanup(func() { cleanupUpdateProject(t, env, dir, project, composePath) })
-	// Remove only this test's images and tags after the project is gone.
-	t.Cleanup(func() {
-		for _, ref := range []string{project + "-app", "dcraft-good/" + project + "-app", "dcraft-good/" + project + "-api", "dcraft-good/" + project + "-other"} {
-			_, _ = dockerRun(t, nil, "", "image", "rm", "-f", ref)
-		}
-	})
 
 	first, res := updateJSONFor(t, dir, dcraftEnv)
 	requireSuccessUpdate(t, first, res)
+	imagesCleanup.track(first)
+	imagesCleanup.track(first)
 	if got := readinessByService(first)["app"]; got != "healthy" {
 		t.Fatalf("app readiness = %q", got)
 	}
@@ -314,6 +359,7 @@ services:
 	// Unchanged repeat: no container is recreated.
 	second, res := updateJSONFor(t, dir, dcraftEnv)
 	requireSuccessUpdate(t, second, res)
+	imagesCleanup.track(second)
 	for name, before := range map[string]string{"app": appID, "api": apiID, "other": otherID} {
 		if after := composeInspect(t, env, project, composePath, name); after != before {
 			t.Fatalf("repeat update recreated %s: %s -> %s", name, before, after)
@@ -333,6 +379,7 @@ services:
 	writeCompose("v2")
 	third, res := updateJSONFor(t, dir, dcraftEnv)
 	requireSuccessUpdate(t, third, res)
+	imagesCleanup.track(third)
 	newAppID := composeInspect(t, env, project, composePath, "app")
 	if newAppID == appID {
 		t.Fatal("source change did not recreate the local build service")
@@ -354,6 +401,7 @@ services:
 	registryPush(t, "alpine:3.20", apiRef)
 	fourth, res := updateJSONFor(t, dir, dcraftEnv)
 	requireSuccessUpdate(t, fourth, res)
+	imagesCleanup.track(fourth)
 	newAPIID := composeInspect(t, env, project, composePath, "api")
 	if newAPIID == apiID {
 		t.Fatal("moved tag did not recreate the image-only service")
@@ -380,6 +428,7 @@ services:
 	}
 	forced, res := updateJSONFor(t, dir, dcraftEnv, "--force-recreate")
 	requireSuccessUpdate(t, forced, res)
+	imagesCleanup.track(forced)
 	if got := composeInspect(t, env, project, composePath, "api"); got == newAPIID {
 		t.Fatal("--force-recreate did not recreate the container")
 	}
@@ -405,8 +454,9 @@ services:
 	t.Cleanup(func() { cleanupUpdateProject(t, env, canaryDir, canaryName, canaryCompose) })
 	canaryID := composeInspect(t, env, canaryName, canaryCompose, "hold")
 	canaryCreated := containerIDCreated(t, canaryID)
-	_, res = updateJSONFor(t, dir, dcraftEnv)
-	requireSuccessUpdate(t, parseUpdate(t, res.stdout), res)
+	last, res := updateJSONFor(t, dir, dcraftEnv)
+	requireSuccessUpdate(t, last, res)
+	imagesCleanup.track(last)
 	if got := composeInspect(t, env, canaryName, canaryCompose, "hold"); got != canaryID {
 		t.Fatalf("update recreated another stack's container: %s -> %s", canaryID, got)
 	}
@@ -456,10 +506,14 @@ services:
 	if err := os.WriteFile(composePath, []byte(base), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	imagesCleanup := &updateImageCleanup{}
+	imagesCleanup.register(t)
 	t.Cleanup(func() { cleanupUpdateProject(t, env, dir, project, composePath) })
 
 	first, res := updateJSONFor(t, dir, dcraftEnv)
 	requireSuccessUpdate(t, first, res)
+	imagesCleanup.track(first)
+	imagesCleanup.track(first)
 	if got := readinessByService(first)["healthy"]; got != "healthy" {
 		t.Fatalf("healthy = %q", got)
 	}
@@ -579,10 +633,14 @@ services:
 	if err := os.WriteFile(composePath, []byte(doc), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	imagesCleanup := &updateImageCleanup{}
+	imagesCleanup.register(t)
 	t.Cleanup(func() { cleanupUpdateProject(t, env, dir, project, composePath) })
 
 	first, res := updateJSONFor(t, dir, dcraftEnv)
 	requireSuccessUpdate(t, first, res)
+	imagesCleanup.track(first)
+	imagesCleanup.track(first)
 	recordPath := stateFileFor(t, stateDir)
 	before, err := os.ReadFile(recordPath)
 	if err != nil {
@@ -650,6 +708,8 @@ services:
 	if err := os.WriteFile(filepath.Join(dir, "Dockerfile"), []byte(dockerfile), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	imagesCleanup := &updateImageCleanup{}
+	imagesCleanup.register(t)
 	t.Cleanup(func() { cleanupUpdateProject(t, env, dir, project, composePath) })
 
 	// A different stack must stay untouched.
@@ -718,6 +778,8 @@ services:
 	}
 	if parsed := parseUpdate(t, winner.stdout); parsed.Outcome != "success" {
 		t.Fatalf("update outcome = %q", parsed.Outcome)
+	} else {
+		imagesCleanup.track(parsed)
 	}
 	if got := composeInspect(t, env, canaryName, canaryCompose, "hold"); got != canaryID {
 		t.Fatalf("concurrent update changed another stack: %s -> %s", canaryID, got)

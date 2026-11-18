@@ -2,7 +2,6 @@ package state
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -181,7 +180,3 @@ func (s *Store) SaveGoodVersion(target core.Target, rec GoodVersion) error {
 	}
 	return nil
 }
-
-// ErrNoGoodVersion reports an absent previous-good record without treating it
-// as a filesystem failure.
-var ErrNoGoodVersion = errors.New("no previous good version")

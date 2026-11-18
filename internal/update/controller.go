@@ -426,6 +426,9 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation, opts Options) 
 		payload.Update.RecordDetail = recordErr.Error()
 		payload.Update.Notices = append(payload.Update.Notices, msgGoodRecordFailed)
 	} else {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return Payload{}, ctxErr
+		}
 		payload.Update.RecordStatus = RecordRecorded
 		payload.Update.GoodVersion = recorded
 		payload.Update.Notices = append(payload.Update.Notices, msgGoodRecorded, msgGoodRetentionNote)
@@ -603,6 +606,9 @@ func (c *Controller) recordGoodVersion(ctx context.Context, in core.Invocation, 
 		if imageID == "" {
 			return state.GoodVersion{}, errors.New(msgGoodNoImages)
 		}
+		if err := ctx.Err(); err != nil {
+			return state.GoodVersion{}, err
+		}
 		tag := retentionTag(projectName, def.Name, imageID)
 		if err := c.updater.TagImage(ctx, imageID, tag); err != nil {
 			return state.GoodVersion{}, err
@@ -640,6 +646,11 @@ func (c *Controller) recordGoodVersion(ctx context.Context, in core.Invocation, 
 			SecretRefs: []state.SecretReference{},
 		},
 		Services: services,
+	}
+	// A canceled operation must not overwrite the escape route even if the
+	// verification had already passed.
+	if err := ctx.Err(); err != nil {
+		return state.GoodVersion{}, err
 	}
 	ls := c.store.(lockStore)
 	if err := ls.SaveGoodVersion(target, rec); err != nil {

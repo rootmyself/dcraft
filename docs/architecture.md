@@ -5,12 +5,13 @@ fork these types or recreate these rules in a feature or UI package. Shared
 interface changes go to the integration owner as a change request (see the end
 of this file).
 
-Scope of this version: one working binary, five registered features (`status`,
-`up`, `stop`, `down`, `restart`), the common operation seam, target resolution,
-named environments, automatic project-name allocation, same-stack coordination,
-diagnostics, CLI/TUI assembly, state layout, machine-readable results and tests.
-Logs/exec, generation, install, update, secrets, hooks, backup/restore and
-rollback are later tickets.
+Scope of this version: one working binary, seven registered features (`status`,
+`install-compose`, `up`, `stop`, `down`, `restart`, `update`), the common
+operation seam, target resolution, named environments, automatic project-name
+allocation, same-stack coordination, diagnostics, CLI/TUI assembly, state layout,
+machine-readable results, the approval/plan preview flow, explicit update with
+bounded readiness and the previous-good record, and tests. Logs/exec, generation,
+secrets, hooks, backup/restore and rollback are later tickets.
 
 ---
 
@@ -31,6 +32,8 @@ cmd/dcraft                 process entry, signal context, TTY check, exit codes
         +-- internal/target          Compose target discovery + environment expansion
         +-- internal/environments    .dcraft.yaml aliases + static host-resource scan
         +-- internal/lifecycle       shared up/stop/down/restart controller
+        +-- internal/update          explicit update: preview, build/pull/apply,
+        |                            bounded readiness, previous-good record
         +-- internal/identity        read-only name/identity readout
         +-- internal/features/status reference read-only feature
         +-- internal/features/up     \
@@ -40,6 +43,8 @@ cmd/dcraft                 process entry, signal context, TTY check, exit codes
         +-- internal/features/all    feature registration files (one per feature)
         +-- internal/stack           Backend/read types + Lifecycle/Identity seams
         +-- internal/compose         Preflight + Inspect + Lifecycle adapter (Docker CLI)
+        +-- internal/composeinstall  approved Compose plugin installation
+        +-- internal/artifacts       HTTP download + atomic file-install boundary
         +-- internal/state           filesystem StateStore, name registry, stack lock
         +-- internal/execx           external command boundary
             internal/execx/execxtest fake Runner for tests
@@ -57,9 +62,11 @@ Dependency rules:
   consumes. `stack.Lifecycle` and `stack.Identity` are the narrow write and
   identity boundaries consumed by `internal/lifecycle`. A future backend can
   implement them without changing CLI/TUI code; do not build that backend now.
-- `internal/lifecycle` knows `core`, `stack` and `state`; it never imports
-  Cobra, Bubble Tea or `internal/compose` (the Compose adapter is passed as the
-  published interfaces).
+- `internal/lifecycle` and `internal/update` know `core`, `stack` and `state`;
+  they never import Cobra, Bubble Tea or `internal/compose` (the Compose adapter
+  is passed as the published interfaces). Update consumes `stack.Updater` and
+  the same per-stack lock; it does not reuse the lifecycle controller's action
+  entry point because update has its own stages.
 - `internal/identity` implements the read-only `core.IdentityReader` from the
   same `stack.Identity` and `state.Store` boundaries. It never writes, locks or
   creates state.
@@ -95,13 +102,24 @@ core.NewEngine(registry, target.New(), composeAdapter, stateStore, clock)
 Engine sequence (stage names are stable machine values; titles are Korean):
 
 1. `resolve_target` — `core.Resolver.Resolve`; target warnings become
-   diagnostics. Fatal failure stops here.
+   diagnostics. Fatal failure stops here. A feature marked
+   `Descriptor.TargetOptional` resolves a valid folder without Compose files
+   (target resolution still validates the folder and explicit `-f/--env-file`
+   inputs).
 2. Approval check — no stage; if `Descriptor.Approval` is not supplied in
    `Request.Approvals`, the result is a failure with category
    `approval_required`, `required_approval`, and exit code 2. **The engine
-   decides this; a UI may only collect and pass the approval.**
-3. `preflight` — `core.Preflight.Check`; error diagnostics stop the feature.
-   Warnings/info are kept.
+   decides this; a UI may only collect and pass the approval.** The install
+   approval message states the effect at policy level (one official Compose
+   plugin file in the user's Docker CLI plugin path; no Docker CLI/Engine/
+   Desktop change, no administrator rights).
+3. `preflight` — `core.Preflight.Check(ctx, requires)`; error diagnostics stop
+   the feature. Warnings/info are kept. The requirements come from
+   `Descriptor.Requires`; an empty declaration means the full default
+   (`docker_cli`, `docker_engine`, `compose`) so every pre-existing feature
+   keeps today's behavior. A feature that needs only a subset (Compose install
+   needs `docker_cli`) declares it; a feature cannot bypass preflight by
+   declaring an unknown value (registry validation rejects it).
 4. Read-only identity read — for `ReadOnly` features with no explicit `-p` and
    a configured `Engine.Identity`, the engine resolves the effective project
    name before `Invocation` (see §3.2). It adds no stage, never writes or locks,
@@ -130,10 +148,21 @@ Failure and interruption:
 - There is no hidden background handoff, no automatic rollback, no atomicity
   claim.
 
-Preflight is always the full local check in this version: Docker CLI presence,
-endpoint locality, Compose presence/version, engine reachability/permission,
-and Compose capability probes. A feature that genuinely must work without
-Docker is a contract change, not a feature-local bypass.
+Preflight capability values (`core.Requirement`):
+
+| value | meaning | default |
+|---|---|---|
+| `docker_cli` | `docker` is present and runnable | yes |
+| `docker_engine` | a reachable local engine is required | yes |
+| `compose` | an installed, supported Compose is required | yes |
+
+`docker_cli` alone skips endpoint/engine/Compose checks; `compose` additionally
+checks Compose presence/version/capability; `docker_engine` additionally checks
+engine reachability and permission. A remote endpoint is still refused whenever
+`docker_engine` or `compose` is required. A feature that genuinely needs no
+Docker capability is a future contract extension (an explicit "none" value);
+an empty slice never means "check nothing". Descriptor requirements are
+validated at registration.
 
 Approval kinds (`core.ApprovalKind`), independent and non-substitutable:
 
@@ -145,8 +174,8 @@ Approval kinds (`core.ApprovalKind`), independent and non-substitutable:
 | `data_restore` | replace data from a backup |
 | `file_overwrite` | replace existing generated files |
 
-CLI supplies them with repeated `--approve <kind>`; the TUI will collect them in
-the ticket that owns that approval flow. Read-only features may not require an
+CLI supplies them with repeated `--approve <kind>`; the TUI collects them in a
+generic plan → confirm screen (see §6). Read-only features may not require an
 approval (registry validation).
 
 Optional feature capabilities:
@@ -158,7 +187,23 @@ type core.Verifier interface {
 type core.Presenter interface {
     Present(res core.Result, width int) string
 }
+type core.Planner interface {
+    Plan(ctx context.Context, in core.Invocation) (core.Plan, error)
+}
 ```
+
+`Engine.Plan(ctx, req, sink) core.PlanReport` resolves the same target and
+preflight requirements as `Run`, then calls the feature's `Plan`. It never
+checks an approval, never calls `Run`, and never writes history. `Plan` must not
+change anything. Any Planner is previewed by both interfaces; for an
+approval-gated feature the plan is the approval confirmation, and for an
+ordinary `update` (no approval) it is the target/planned-work preview before the
+single deliberate run. `PlanReport` carries feature, outcome, target, tools, stages,
+diagnostics and the Korean plan text. Both paths share the same target and
+preflight code, so a preview cannot silently use a different selection. Plan
+text must state the concrete source, version, destination, permission need and
+effect, and never contain secret values. `PlanReport.Result()` converts a failed
+plan into the common result shape for both interfaces to render.
 
 `core.Invocation` gives a feature: resolved `Target`, `Services`, `Args`,
 `Options`, `Interactive`, `Preflight` report, `Reporter`, `Clock`, `State`.
@@ -211,6 +256,10 @@ Rules (`internal/target.Resolver`):
   paths and the default `.env` behave exactly as a direct Compose invocation.
 - Existing Compose files and Dockerfiles are never modified. Status and target
   resolution are read-only.
+- `TargetRequest.AllowMissingConfiguration` is set by the engine from
+  `Descriptor.TargetOptional`; callers never set it. It only turns "no Compose
+  file in the folder" into a valid empty selection. The folder must still
+  exist, and explicit `-f`/`--env-file` inputs are still validated as files.
 
 State identity is `ProjectDir + Environment`, not the Compose project name (the
 name itself is stored state). This keeps the same folder/environment tied to
@@ -343,14 +392,16 @@ type core.Feature interface {
 | `RecordsHistory` | stack-changing feature whose success is written to history |
 | `Primary` | TUI opening screen; exactly one registered feature |
 | `SupportsServices` | adds common `--service/-s` flag |
+| `Requires` | preflight capabilities this feature needs; empty = full default |
+| `TargetOptional` | feature does not operate on a Compose project; a folder without Compose files is valid |
 | `AcceptsArgs` | allows positional args; flags then stop at the first arg |
 | `Flags []core.Flag` | feature-owned flags parsed by the shared CLI |
 
 Registry validation rejects duplicate names, invalid names, missing Korean text,
-read-only+approval combinations, a second primary, reserved flag names
-(`path`, `file`, `env-file`, `profile`, `project-name`, `env`, `json`,
-`approve`, `help`, `service`), reserved shorthands (`f`, `p`, `s`, `h`, `v`),
-duplicate flags and invalid bool defaults.
+read-only+approval combinations, a second primary, unknown preflight
+requirements, reserved flag names (`path`, `file`, `env-file`, `profile`,
+`project-name`, `env`, `json`, `approve`, `help`, `service`), reserved
+shorthands (`f`, `p`, `s`, `h`, `v`), duplicate flags and invalid bool defaults.
 
 ### Adding a feature (the only steps)
 
@@ -541,6 +592,16 @@ Human output: successful feature `Presenter` text goes to stdout; warnings and
 failure diagnostics go to stderr; JSON mode writes only JSON to stdout and
 nothing to stderr for operation outcomes. Usage errors remain human text.
 
+The CLI never prompts. An approval-gated command without `--approve <kind>`
+returns the engine's approval failure (exit 2) with Korean text describing the
+effect; non-interactive and interactive terminals behave identically. For any
+feature that implements `core.Planner`, human mode calls `Engine.Plan` and
+prints the plan to stderr before `Engine.Run`: `install-compose` shows the
+source, version, destination, permission and integrity, and ordinary `update`
+shows the target and planned work (then runs without another approval). A failed
+plan is rendered as the common failure and nothing is run. JSON mode does not
+make a separate plan call; the result carries the same public metadata.
+
 ### TUI (`internal/ui/tui`)
 
 `tui.NewModel(ctx, Options)` is pure construction; `tui.Run` starts Bubble Tea.
@@ -557,18 +618,39 @@ It derives everything from the registry:
   `↑/↓` + `enter` selection. Nothing is preselected; `q` quits without running
   a feature. An explicit `--env` skips the screen. A broken alias file is not
   hidden: running the feature surfaces the same `resolve_target` failure.
-- selecting a mutating feature shows the small confirmation screen from §5
-  (requested target and environment, whole-stack scope, effect); `esc` returns
-  to the menu;
-- `r` re-runs read-only features directly and asks for confirmation again for
-  mutating features. The selected environment is reused; `q` and `ctrl+c` quit
-  outside an operation;
+- selecting a mutating feature that has no independent approval shows the small
+  confirmation screen (requested target and environment, whole-stack scope,
+  effect); `esc` returns to the menu;
+- a feature that implements `core.Planner` starts the read-only plan screen
+  instead of the generic confirmation. For an approval-gated feature the plan is
+  the approval confirmation (flow below); for an ordinary `update` the same plan
+  is the target/planned-work preview and one `enter` runs it without an extra
+  approval kind;
+- `r` re-runs read-only features directly, re-plans every Planner and asks for
+  confirmation again for other mutating features. The selected environment is
+  reused; `q` and `ctrl+c` quit outside an operation;
 - normal quit is not an operation and does not touch services. During an
   in-flight mutating operation `q` explains the risk; `ctrl+c` requests safe
   cancellation and keeps the screen for the canceled result (see §5).
 
-No feature action is selectable unless it is registered. This ticket registers
-`status`, `up`, `stop`, `down` and `restart`.
+Approval flow (generic, engine-enforced):
+
+1. Selecting a feature that implements `core.Planner` starts `Engine.Plan`, not
+   `Engine.Run`. If the descriptor also requires an approval, the plan screen
+   shows that approval kind.
+2. The read-only plan is rendered with the approval kind; `enter` approves and
+   passes only that kind in the request; `esc`/`n` declines and runs nothing,
+   showing a canceled result that states no change was made.
+3. After approval the same engine runs the feature. The TUI adds no safety rule;
+   it only collects and passes the approval. A feature that requires an approval
+   but has no planner is not silently approved; the engine returns the normal
+   approval failure.
+4. The confirm screen is not feature-specific, so `script_trust`,
+   `previous_version` and `data_restore` will reuse it without a TUI branch.
+
+No feature action is selectable unless it is registered. The current build
+registers `status` (primary), `install-compose`, `up`, `stop`, `down` and
+`restart`.
 
 ---
 
@@ -663,11 +745,268 @@ configured healthcheck and every instance running and healthy. `starting` and
 `unhealthy` are never success. Stopped/not-created services are shown without
 claiming app health.
 
+Compose install payload (`internal/composeinstall` → `data.install`):
+
+```json
+{
+  "changed": true,
+  "already_available": false,
+  "version": "v5.8.0",
+  "source": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-darwin-aarch64",
+  "destination": "/Users/me/.docker/cli-plugins/docker-compose",
+  "checksum_verified": true,
+  "size_bytes": 32440418,
+  "recheck_output": "Docker Compose version v5.8.0"
+}
+```
+
+Stable stages for `install-compose`: `plan` (설치 계획), `download` (내려받기),
+`verify` (무결성 확인), `install` (설치), `recheck` (기능 재확인). On success
+`changed` is false when Compose was already usable or the target already
+existed in a usable path; the feature never overwrites a file. Failure diagnostics
+state what was and was not changed; cancellation text explains that the target
+is either absent or complete because the plugin is published atomically.
+
 Secret boundary: status never requests resolved environment, labels or commands.
 It parses only names, images, build presence, healthcheck presence, ports and
 runtime state. Compose/ps JSON is decoded into narrow structs; extra fields are
 dropped immediately. Diagnostic `detail` is truncated tool output; no dcraft
-feature may add fetched secret values to it.
+feature may add fetched secret values to it. The install payload contains only
+public release metadata and a filesystem path.
+
+---
+
+## 7.1 Compose installation contract (ticket 06 / issue #7)
+
+Feature: flat command `dcraft install-compose`, approval `install`,
+`Requires: [docker_cli]`, `TargetOptional: true`. It never installs or repairs
+Docker itself, never escalates privileges, and never changes Docker
+Desktop/WSL integration.
+
+Destination resolution (first match):
+
+1. `DCRAFT_COMPOSE_PLUGIN_DIR` — absolute directory, documented test/explicit
+   override; the binary is `<dir>/docker-compose`.
+2. `$DOCKER_CONFIG/cli-plugins/docker-compose` when `DOCKER_CONFIG` is set.
+3. `~/.docker/cli-plugins/docker-compose`.
+
+The target must be a user-writable Docker CLI plugin path. A relative override,
+an unknown home directory, or an unsupported platform is refused with
+`compose_install_manual` and the exact manual commands; no risky attempt is
+made. dcraft never writes system directories or application bundles.
+
+Source and integrity:
+
+- The latest stable official release is resolved at install time from
+  `https://api.github.com/repos/docker/compose/releases/latest` (draft and
+  prerelease ignored, major ≥ 2). `DCRAFT_COMPOSE_RELEASE_API` is a documented
+  test/enterprise override; the resolved plan always shows the full source URL.
+- Platform mapping: darwin/linux × amd64/arm64 → `docker-compose-<os>-<arch>`
+  with Docker's `x86_64`/`aarch64` names. Other platforms get manual steps.
+- Integrity requires the published `checksums.txt` asset. If the release does
+  not publish it, has no entry for the asset, or the per-asset `digest` conflicts
+  with `checksums.txt`, dcraft refuses (`compose_integrity_unavailable`) instead
+  of installing unverified bytes. The published asset size detects truncation.
+- The downloaded file must be a native executable for this platform
+  (Mach-O `MH_EXECUTE` for darwin, 64-bit ELF `ET_EXEC`/`ET_DYN` for linux) and
+  its CPU/machine must match `runtime.GOARCH`; wrong format is
+  `compose_artifact_invalid`, wrong architecture is `compose_arch_mismatch`.
+- Version numbers are never hardcoded as "latest"; the tag comes from the
+  resolved release.
+
+Install and verification:
+
+- The feature never overwrites an existing plugin path (including a symlink)
+  and never falls back to a standalone `docker-compose`. If Compose already
+  works, it reports `already_available` with `changed=false`.
+- `internal/artifacts.OSInstaller` copies into a temporary file in the
+  destination directory, applies mode 0755, and publishes with one atomic
+  no-replace operation; a concurrent creation yields `ErrExists`. Partial
+  plugin files cannot appear.
+- After installation the feature runs `docker compose version` through the same
+  `execx.Runner` and only reports success when it succeeds. A recheck failure is
+  `compose_recheck_failed` and states that the file may already be installed.
+- Cancellation is reported with an install-specific `canceled` diagnostic: the
+  target is either absent or complete; temporary download files are removed.
+
+Engine and dependency boundary: `deps.Deps` exposes `Getenv`,
+`Downloader artifacts.Downloader` and `Installer artifacts.Installer`. The
+downloader only performs HTTP GET/download; the installer only checks existence
+and performs atomic placement. Release resolution, integrity, platform and
+Korean diagnostics stay in `internal/composeinstall`.
+
+---
+
+## 7.2 Explicit update contract (ticket 07 / issue #8)
+
+Feature: flat `dcraft update [--no-cache] [--build-pull] [--no-pull]
+[--force-recreate] [--timeout <seconds>] [-s/--service ...]`, no approval,
+`RecordsHistory: true`, full default preflight. It runs only on an explicit
+command or a deliberate TUI action. There is no file watcher, new-image
+detector, periodic refresh, remote source download or hidden background run.
+
+Stages (stable machine names; Korean titles in the UI):
+
+| stage | title | effect |
+|---|---|---|
+| `resolve_project` | 프로젝트 이름 확인 | same name/service validation as every stack change |
+| `allocate_name` | 프로젝트 이름 배정 | `state.AllocateName`; recorded name reused |
+| `coordinate` | 같은 스택 작업 조정 | `state.AcquireStackLock`; held to the end |
+| `plan` | 갱신 계획 | read-only model + container baseline; `--no-pull` image check |
+| `build` | 로컬 이미지 빌드 | cached `compose build`; skipped when no build service |
+| `pull` | 이미지 취득 | `compose pull` for image-only services; skipped for `--no-pull` |
+| `apply` | 변경 적용 | `compose up --detach [--force-recreate] --pull missing|never` |
+| `verify` | 실행 상태 확인 | bounded readback; failure marks this stage failed |
+| `record` | 정상 버전 기록 | retention tags + `state.json`; failure is a warning |
+
+Ordinary behavior: local build services build with the normal cache; image-only
+services pull their configured tag/digest. Unchanged services are not
+force-recreated; real Docker verifies identical container IDs and `Created` on a
+repeat update. `config --hash` is **not** image identity and is never used to
+claim "unchanged"; Compose itself compares the resolved image/config during
+`up`, so a moved tag recreates the service. `up --wait` is never used as proof:
+it returns 0 for crash-looping `restart: always` containers, for a
+no-healthcheck container that dies right after, and for a re-up of an exited
+container.
+
+Four independent explicit choices (never combined behind one flag; their cost is
+printed in the Korean preview):
+
+- `--no-cache`: `compose build --no-cache` for local build services only. It
+  re-executes every build step and takes longer; it is not a base-image refresh.
+- `--build-pull`: `compose build --pull`. It refreshes base images of local
+  builds; it does not pull an image-only service's configured reference.
+- `--no-pull`: skip the image refresh. dcraft preflights each image-only
+  reference with `docker image inspect` **before** build/apply and fails with
+  `image_missing` if it is absent; apply uses `--pull never`. The default
+  refreshes only image-only services, never local build services.
+- `--force-recreate`: `compose up --force-recreate`; without it only
+  Compose-changed containers are recreated. It increases the short interruption.
+
+`--timeout` is an integer 1–3600 seconds and bounds only readiness observation;
+invalid values are `invalid_option` (exit 2). It is not passed to Compose.
+
+Readiness: after apply, update reads the engine itself (`docker compose ps -a
+-q` then `docker inspect` for the exact image ID, state, health, exit code and
+`RestartCount`) in a bounded poll/settle loop. Per service the published
+classification is `healthy`, `running_unverified`, `unhealthy`, `exited`,
+`restarting`, `not_started`, `not_created` or `timeout`. Only `healthy` and
+`running_unverified` may be part of a completed update; `verified` is true only
+when every service passed a configured healthcheck. `running_unverified` is
+reported as "실행 중 · 앱 확인 안 됨 (healthcheck 없음)" and is never called
+healthy. `RestartCount` is compared with the pre-apply baseline (a new container
+must stay at 0) and the settle re-read catches a process that exits or restarts
+just after the first success. `unhealthy`, `exited`, `restarting`,
+`not_started`, `not_created` and `timeout` stop the operation with the observed
+state, the failed stage and recovery actions; there is no automatic rollback.
+
+Preview: update implements `core.Planner`. `Engine.Plan` is read-only: no name
+allocation, no lock, no build/pull and no state write. The text states the
+target, per-service planned work, the chosen option costs and explicitly that it
+is a step plan, not an exact future-state diff (images, builds and hooks can
+change conditions). The CLI prints it to stderr before running in human mode;
+the TUI reuses the generic plan → confirm screen and one `enter` runs the
+ordinary update without a second approval. JSON mode carries `plan.text` and the
+list of build/pull services in the result.
+
+Payload `data.update`: `project_name`, `project_name_source`, `scope`
+(`stack|services`), `services`, `options` (`no_cache`, `build_pull`,
+`image_pull`, `force_recreate`, `timeout_seconds`), `plan` (`text`,
+`services`, `build_services`, `pull_services`), `built`, `pulled`, `applied`,
+`verified`, `readiness` (per-service classification above), `record_status`
+(`recorded|failed|skipped`), `good_version` (when recorded), `record_detail`
+(when recording failed) and Korean `notices`. Target, stage list and outcome stay
+in the common result envelope. On failure `data` is omitted; the failed stage,
+the observed `service=status` summary and the per-instance detail are in the
+diagnostics.
+
+### Previous-good deployment record (published for rollback, consumed by #12)
+
+Exactly one record per stack **and** environment lives at
+`<state>/stacks/<folder>-<hash12>/state.json` (format version 1). Types in
+`internal/state`:
+
+```go
+type GoodVersion struct {
+    Version     int
+    RecordedAt  time.Time
+    OperationID string
+    Target      GoodTarget
+    Services    []GoodService
+}
+type GoodTarget struct {
+    ProjectDir, ProjectName, Environment, DefaultEnvFile string
+    Files, EnvFiles, Profiles []string // original order
+    SecretRefs []SecretReference      // references only, never values
+}
+type GoodService struct {
+    Service, ImageID, ImageRef, RetentionTag string
+    Build, Healthcheck bool
+}
+```
+
+- `ImageID` is the exact full `sha256:...` ID of the running container
+  (`docker inspect .Image`). It is never the movable tag and never
+  `com.docker.compose.image` (that label is the per-platform manifest digest,
+  not the image ID).
+- `RetentionTag` is a dcraft-owned tag
+  `dcraft-good/<project>-<service>:<first16-of-image-id>`. Update creates it with
+  `docker tag` and verifies `docker image inspect <tag> --format '{{.Id}}'`
+  resolves to the recorded ID. It is unique per image, so it never moves.
+- Written **only after** `verify` succeeded, while holding the per-stack lock;
+  failed, unhealthy or canceled updates leave the previous file byte-identical
+  (verified with real Docker). It replaces atomically (temp + rename,
+  `0600`).
+- It stores references only: file list in order, explicit env files, profiles,
+  effective project name, environment and secret references. It never stores
+  resolved secret values or container environments.
+- `(*state.Store).LoadGoodVersion(target)` returns
+  `(GoodVersion, bool, error)`; `SaveGoodVersion(target, rec)` is the atomic
+  writer. A first update on a previously unmanaged stack records the state it
+  verified; no earlier history is invented. `OperationID` is reserved for a
+  future engine-invocation id and is empty in this build; consumers must not
+  treat it as required.
+- dcraft never deletes retention tags/images and never prunes. #12 (rollback)
+  must preflight the recorded ID with the local engine, never rely on the
+  movable tag alone, and never replace a record outside the same lock.
+
+### Same-stack coordination
+
+`update` takes `state.AcquireStackLock` after name allocation and holds it across
+`plan`, `build`, `pull`, `apply`, `verify` and `record`; the release is deferred
+and therefore happens on success, failure and cancellation. A concurrent `up`,
+`update`, rollback or backup on the same stack fails immediately with
+`stack_busy` (exit 1) and the holder in the detail; a different folder or
+environment is unaffected. There is no queue/wait policy in this version.
+**Rollback (#12) and backup/restore (#16–#19) MUST take the same lock for their
+read-record/change/write sequences**; a record replacement outside it can
+interleave with a failed update and destroy the escape route.
+
+### Hook seam for ticket #13 (documented; not implemented)
+
+`update` and `up` contain no hook code. The application point #13 should own is
+in the engine, not in a feature:
+
+- Add one shared capability — `Descriptor.Hooks core.HookScope` with `HookNone`
+  (zero value, default) and `HookUpUpdate`, or an optional
+  `core.HookCapable` interface returning the same scope. This is a new `core`
+  field/capability and therefore a change request for #13; no unused code is
+  added here.
+- When set, the engine runs registered pre-hooks after target resolution,
+  approval/preflight and **before** `feature.Run`; post-hooks run after the
+  feature's stages and verification succeed (for update: after `verify`, before
+  `record`). `deps.Deps` gains the hook registry/trust service; `update` does
+  not.
+- `script_trust` is an independent approval and never replaces the feature's own
+  `Approval` (update has none). The hook layer re-checks trust and content
+  identity immediately before each execution; first run and any content change
+  need the approval. Non-interactive without explicit trust runs nothing and
+  fails.
+- Pre-hook failure blocks build/apply (no update stage runs) and may change
+  inputs, so the feature must re-read the target/model after it. Post-hook
+  failure is reported separately from the completed update and never claims the
+  deployment failed or was rolled back. Hooks never attach to rollback, status,
+  logs, stop or backup/restore.
 
 ---
 
@@ -695,7 +1034,7 @@ Layout:
 <state>/stacks/<folder>-<hash12>/
     history.jsonl     # append-only operation records, 0600
     .lock             # per-stack change lock + holder JSON, 0600
-    state.json        # reserved for #7 last-good state
+    state.json        # previous-good deployment record, 0600 (see §7.2)
 ```
 
 - The key is derived from the canonical absolute project folder **and** the
@@ -707,8 +1046,12 @@ Layout:
   diagnostics. Never resolved secret values.
 - Status reads and writes no state.
 - History is written only for successful `RecordsHistory` features; failed
-  verifications are never recorded as good. Ticket #7 extends good-version
-  records.
+  verifications are never recorded as good.
+- `state.json` is the single previous-good deployment record consumed by
+  rollback (#12): full image IDs, dcraft-owned retention tags and reproducible
+  file/env-file/profile/project/environment/secret-reference data. It is written
+  only by a verified-good update under the per-stack lock; failed, unhealthy or
+  canceled updates never touch it. See §7.2 for the exact types and rules.
 - Name claims are keyed by the same folder + environment identity. They hold the
   effective Compose project name, its source and the owning folder; the
   automatic-name mapping is reused on rerun, after stop and after down.
@@ -743,6 +1086,10 @@ type execx.Runner interface {
 - `internal/compose.Compose` is the only Compose adapter. It implements
   `core.Preflight`, `stack.Backend` (`Name`, `Inspect`), `stack.Lifecycle` and
   `stack.Identity`.
+- `internal/artifacts` is the only artifact boundary: `Downloader` (HTTP GET and
+  download to a file) and `Installer` (existence check and atomic no-replace
+  placement). Features own release resolution, checksums, platform validation
+  and Korean errors; this package performs no policy.
 - `internal/stack.Backend` keeps the read-only stack boundary separate from the
   UI. No Kubernetes backend or multi-backend registry exists now.
 - Compose semantics (validation, merge, path resolution, profiles, ps JSON) are
@@ -765,6 +1112,17 @@ Desktop's VM-backed unix socket is **local**, not remote.
 | `engine_endpoint_unknown` | endpoint/context could not be determined or is unsupported | error |
 | `compose_missing` | `docker compose` unavailable | error |
 | `compose_unsupported` | Compose lacks a required feature/version | error |
+| `compose_release_unavailable` | official release metadata could not be resolved | error |
+| `compose_install_manual` | install is not safely automatable here; manual steps given | error |
+| `compose_install_exists` | target plugin path already exists; never overwritten | error |
+| `compose_download_failed` | download/transport failure or truncated asset | error |
+| `compose_integrity_unavailable` | source publishes no usable checksum metadata | error |
+| `compose_integrity_mismatch` | downloaded SHA-256 does not match the published value | error |
+| `compose_artifact_invalid` | artifact is not a native executable for this OS | error |
+| `compose_arch_mismatch` | artifact architecture does not match this computer | error |
+| `compose_install_permission` | destination is not writable by the user | error |
+| `compose_install_failed` | other install/placement failure | error |
+| `compose_recheck_failed` | installed, but `docker compose version` still fails | error |
 | `no_configuration` | no Compose file in the target folder | error |
 | `invalid_configuration` | Compose file cannot be parsed/validated | error |
 | `target_invalid` | path/file/env input is missing or not a file/folder | error |
@@ -781,6 +1139,10 @@ Desktop's VM-backed unix socket is **local**, not remote.
 | `service_unknown` | explicit `-s/--service` is not in the Compose configuration | error (exit 2) |
 | `stack_busy` | another operation holds the same stack lock | error |
 | `lifecycle_failed` | a Compose lifecycle call failed | error |
+| `update_failed` | a build, pull or detached apply failed; the stage and observed state are reported | error |
+| `readiness_failed` | post-update state was unhealthy, exited, restarting, not started/created or timed out | error |
+| `image_missing` | `--no-pull` found a required local image absent; nothing changed | error |
+| `invalid_option` | an explicit feature option is invalid (for example `--timeout`) | error (exit 2) |
 | `state_failed` | name/lock state could not be read or written | error |
 | `verification_failed` | post-operation verification failed | error |
 | `canceled` | operation interrupted | warning (exit 130 outcome) |
@@ -792,11 +1154,25 @@ Each diagnostic carries Korean `message`, optional raw `detail`, and Korean
 `next_actions`. Machine consumers switch on `category`, never on message text.
 Warnings do not block success and are rendered on both interfaces.
 
-`Result.ExitCode` returns 2 for `approval_required`, `project_name_conflict` and
-`service_unknown`: those mean the caller must supply a different decision (an
-approval, a free name, an existing service). dcraft never prompts to resolve
-them; non-interactive runs fail with the explanation instead. `approval_required`
-keeps its existing behavior; the two new categories are additive v1 values.
+Only `compose_missing` adds the `dcraft install-compose` next action. Docker
+missing, engine unreachable/permission, remote endpoint, Compose unsupported and
+older Compose keep their own Korean actions and never suggest a Compose install.
+Compose presence is checked independently of the engine; if a Docker CLI reports
+the missing plugin as an unknown top-level flag for `compose version --short`,
+the full `compose version` command confirms the classification.
+
+`Result.ExitCode` returns 2 for `approval_required`, `environment_required`,
+`environment_unknown`, `environment_input_conflict`, `project_name_conflict`,
+`service_unknown` and `invalid_option`: those mean the caller must supply a
+different decision (an approval, an environment, a free name, an existing
+service, a valid option). dcraft never prompts to resolve them; non-interactive
+runs fail with the explanation instead. New categories are additive v1 values.
+
+A failed update records the failed stage in `stages` (for example `verify`) and
+puts the observed `service=status` summary plus per-instance state in the
+diagnostic. A record-write failure after a verified update is not an operation
+failure: the stage is failed, the payload says `record_status=failed`, and the
+previous record is untouched.
 
 ---
 
@@ -816,7 +1192,8 @@ Tested seams:
 - Compose inspection parsing (health, instances, connections, unconfigured
   services, no secret leakage, stable Compose arguments);
 - engine seam with fake features (approval, stages, verification, history,
-  cancellation, panic recovery, warnings);
+  cancellation, panic recovery, warnings, planned requirements, target
+  optionality, plan preview without approval/run);
 - registry validation and CLI/TUI assembly from registries;
 - state layout and permissions, automatic-name allocation (first/suffix/reuse/
   declared/conflict/external ownership/environment/concurrency), the read-only
@@ -832,6 +1209,29 @@ Tested seams:
   `restart --no-deps` for explicit services), config/project parsing and
   `lifecycle_failed`/`stack_busy`/`project_name_conflict`/`service_unknown`
   diagnostics with the fake runner;
+- update unit/fake-runner: every readiness classification (healthy,
+  running_unverified, unhealthy, exited, restarting/crash-loop, not_started,
+  not_created, timeout), settle re-read after an early exit/restart, bounded
+  timeout messages, the four independent flag semantics, `--no-pull` image
+  preflight before mutation, service selection, invalid `--timeout` exit 2,
+  preview content/limits, stage order, lock release on success/failure/cancel,
+  `stack_busy` on the same stack with another stack unaffected, record
+  replacement only on success, record-tag failure as a warning with the old
+  record intact, retention-tag naming and no delete/prune path, and no secret
+  values in payload or record;
+- Compose update adapter with the fake runner: narrow model parsing (no
+  environment values), exact image ID/health/restart-count parsing, build/pull/
+  apply argument construction, no `--wait`, and missing-image vs engine-failure
+  classification;
+- Compose install feature with a fake downloader/installer: plan text, existing
+  plugin refusal, already-available no-op, checksum mismatch, truncated
+  download, non-executable artifact, wrong architecture, permission failure,
+  recheck failure, cancellation cleanup and stage order;
+- artifacts boundary: atomic placement, no overwrite (file and symlink), temp
+  cleanup, HTTP status/truncation handling;
+- release resolution against captured real GitHub response shapes for every
+  supported platform, missing/conflicting checksum metadata, unsupported
+  platforms and broken API responses (no external network in default tests);
 - process e2e with a fake `docker` shim: exit codes, JSON purity, non-interactive
   no-args, help, parent isolation, SIGINT→130, missing `--env` exit 2 with the
   alias list, `--env` in `status`, `target.environment`, alias inputs in the
@@ -839,10 +1239,22 @@ Tested seams:
   reuse, same-name folders, explicit and configured name conflicts, unknown
   service, no secret values in output/history, TUI menu + confirmation +
   quit-without-run, status in a fresh state dir creates no files, status uses
-  the recorded/declared/explicit name and rewrites nothing;
+  the recorded/declared/explicit name and rewrites nothing, install approval
+  exit 2, blocked release source clean failure, missing Docker CLI reported as
+  Docker (not Compose), update pre-run preview on stderr then success, update
+  JSON purity/stage order/readiness values/no secret values, update invalid
+  timeout exit 2, `--no-pull` missing image fails before any build/pull/apply,
+  unhealthy update keeps the old record, cancellation exit 130 with no record,
+  update service selection;
+- process status check against the real Docker CLI with a `DOCKER_CONFIG`
+  without cli-plugins (install offered only for a genuinely missing Compose);
 - pty process tests: TUI enter+quit, environment selection screen and keyboard
   choice, quit-from-selection runs nothing, no mutating Docker command,
-  mutating confirmation before running, up through the same engine;
+  mutating confirmation before running, up through the same engine, install plan
+  shown, decline changes nothing, approval installs and re-checks;
+- guarded real install (`DCRAFT_COMPOSE_REAL_INSTALL=1`): official download,
+  published checksum, temp plugin directory, independent `docker compose
+  version`, real home Compose untouched;
 - real Docker integration behind `DCRAFT_INTEGRATION=1`: isolated
   `dcraft-test-*` project, real healthchecks, connection info, compose file
   unchanged, containers unchanged after TUI quit, nested-folder block, cleanup
@@ -862,6 +1274,19 @@ Tested seams:
   env-file values reach the containers, status reports each environment and
   never mixes their services, fixed-port/bind overlap is reported from static
   declarations before applying, and an unrelated canary stack is unchanged.
+- real Docker update: repeat update keeps container IDs and `Created`; a source
+  change rebuilds/recreates only that service; a tag moved in a temporary local
+  registry (host-network `registry:2`, removed afterwards) recreates only the
+  image-only service and records the new exact image ID; a healthcheck pass is
+  success/healthy and a no-healthcheck service is `running_unverified` (never
+  verified); unhealthy, crash-loop (`restart: always`), early exit and timeout
+  all fail with the observed `service=status` and leave the previous record
+  byte-identical; cancellation mid-apply exits 130 with the record intact; the
+  record has image IDs/retention tags/file/env/profile/name/environment data and
+  no resolved secret value; a retention tag still resolves to the recorded
+  image after a forced recreation and after `down`; update holds the per-stack
+  lock and a concurrent `up` fails `stack_busy` while a canary stack is
+  unchanged; cleanup removes only this test's projects/images/registry.
 
 Commands:
 
@@ -869,50 +1294,81 @@ Commands:
 gofmt -l .
 go vet ./...
 go build ./...
-go test ./...
+go test -count=1 ./...
 DCRAFT_INTEGRATION=1 go test ./test/e2e/... -run TestIntegration -v
+DCRAFT_COMPOSE_REAL_INSTALL=1 go test ./test/e2e/... -run TestRealComposeInstall -v
 ```
 
-Real-Docker tests skip without `DCRAFT_INTEGRATION=1`. Unit tests never require
-Docker. Unrun platforms/paths are not claimed as verified.
+Real-Docker tests skip without their guard variable. Unit tests never require
+Docker or external network. Unrun platforms/paths are not claimed as verified.
 
 ---
 
 ## 12. Not implemented here (owned by later tickets)
 
-- `update`, `logs`, `exec`, `backup`, `restore`, `rollback`; no registration
-  exists for them and no menu action is shown.
+- `logs`, `exec`, `backup`, `restore`, `rollback`; no registration exists for
+  them and no menu action is shown.
 - TUI alias creation/editing: aliases are created by editing `.dcraft.yaml` in
   this version (selection is provided by both interfaces).
-- Secrets, host scripts/hooks, generated Compose/Dockerfile files, Compose
-  installation, previous-good records, Kubernetes, remote engines, resident
-  daemon/web UI.
-- Good-version history (ticket #7/#11), TUI flag/approval collection for future
-  features, service selection in the TUI (CLI `-s` only).
+- Secrets, host scripts/hooks (the #13 seam is documented in §7.2 but no hook
+  code exists), generated Compose/Dockerfile files and generator flows,
+  rollback itself (the previous-good record is published and written; #12
+  consumes it), Kubernetes, remote engines, resident daemon/web UI.
+- Good-version history beyond the single record, TUI flag collection for future
+  features, service selection in the TUI (CLI `-s` only). The TUI plan/confirm
+  component is generic; `install-compose` and `update` are planners in this
+  build. An ordinary update shows its plan and requires one `enter` to run, not
+  an approval.
+- Docker itself (installation, repair, replacement), administrator escalation,
+  Docker Desktop/WSL integration changes.
 
-Residual risks (tickets #3 and #4): Compose capability detection is based on
-running the installed CLI (version/JSON probes), so a heavily patched Compose may
-pass probes and fail later; diagnostic details are tool output and could contain
-user-provided file content, though dcraft never fetches or prints secret values;
-status parses a subset of Compose/ps output, so unknown future fields are ignored
-by design; the TUI renders long status text without a scroll viewport.
-Environment alias files are hand-edited (no TUI editor); the host-resource
-conflict scan is static and best-effort (no interpolation/merge evaluation), so
-undetected sharing is possible and complete isolation is never claimed.
-Environment aliases and lifecycle names are separate: aliases partition state,
-files and profiles; the lifecycle controller allocates or honors the Compose
-project name per folder+environment.
-Lifecycle residual risks: an unreadable `names.json` makes read-only features
-fall back to the Compose default with an `identity_unreadable` warning instead of
-failing; a declared name equal to Compose's derived default is treated as
-automatic; a declared rename of a recorded target leaves the old project
-unmanaged by design; per-stack coordination fails fast instead of queuing, so an
-automation caller must retry; `flock` coordination is verified on macOS
-(Linux/WSL2 use the same syscall but were not run on this machine); a declared
-project name shared by several environment aliases produces the ticket-04
-`project_name_shared` warning but still stops at apply time with
-`project_name_conflict`, because two environments must not operate on one
-Compose project.
+Residual risks: Compose capability detection is based on running the installed
+CLI (version/JSON probes), so a heavily patched Compose may pass probes and fail
+later; diagnostic details are tool output and could contain user-provided file
+content, though dcraft never fetches or prints secret values; status parses a
+subset of Compose/ps output, so unknown future fields are ignored by design; the
+TUI renders long status text without a scroll viewport. Environment alias files
+are hand-edited (no TUI editor); the host-resource conflict scan is static and
+best-effort (no interpolation/merge evaluation), so undetected sharing is
+possible and complete isolation is never claimed. Environment aliases and
+lifecycle names are separate: aliases partition state, files and profiles; the
+lifecycle controller allocates or honors the Compose project name per
+folder+environment. Lifecycle residual risks: an unreadable `names.json` makes
+read-only features fall back to the Compose default with an
+`identity_unreadable` warning instead of failing; a declared name equal to
+Compose's derived default is treated as automatic; a declared rename of a
+recorded target leaves the old project unmanaged by design; per-stack
+coordination fails fast instead of queuing, so an automation caller must retry;
+`flock` coordination is verified on macOS (Linux/WSL2 use the same syscall but
+were not run on this machine); a declared project name shared by several
+environment aliases produces the ticket-04 `project_name_shared` warning but
+still stops at apply time with `project_name_conflict`, because two environments
+must not operate on one Compose project. Install residual risks: the plan and
+the install run resolve the release separately, so a release published between
+confirmation and download could change the version; integrity and the recheck
+still apply to the version actually installed. The release API is rate-limited
+for unauthenticated use; a rate-limited response is a clean
+`compose_release_unavailable` with manual guidance.
+
+Update residual risks: readiness is a bounded poll with a settle window, so a
+process that dies after the window can still be reported as running (the app is
+then `running_unverified` at best when it has no healthcheck); only configured
+healthchecks are used. A record-write failure after a verified update is not an
+operation failure (consistent with history), so it surfaces as
+`record_status=failed` plus a Korean notice rather than a `Diagnostic`; the
+previous record remains intact. A service-scoped update (`-s`) verifies only the
+selected services; Compose may still start dependencies, and their health is not
+part of this operation's readiness result. Retention tags accumulate one per
+service and image ID; dcraft never deletes them and has no retention policy. Only one
+previous-good deployment is kept and it is not a history. Name allocation in
+`internal/update` follows the published lifecycle rules through
+`stack.Identity`/`state.AllocateName`, but the small resolution sequence is
+currently duplicated; extracting a shared allocator is a change request to the
+integration owner. `--no-pull` still lets Compose attempt a pull if an image is
+absent between the preflight and apply (the window is small and the preflight
+fails first in normal use). Real-Docker verification ran on macOS arm64 with
+Docker Desktop; the registry scenario uses Docker host networking, so a machine
+without that support skips that part instead of claiming it passed.
 
 ---
 
@@ -935,6 +1391,26 @@ Published by ticket #3 (consume, do not fork): `stack.Lifecycle`,
 `internal/identity.New`/`Reader.ReadProjectName`, the `names.json`/`.lock` state
 layout, the lifecycle stage names and the new diagnostic categories/exit-code
 mapping.
+
+Published by ticket #7 (consume, do not fork): `stack.Updater` (`UpdateModel`,
+`Containers`, `Build`, `Pull`, `Apply`, `ImageID`, `TagImage`), `stack.UpdateModel`,
+`stack.ServiceDefinition`, `stack.BuildOptions`, `stack.ApplyOptions`,
+`stack.Container`, `stack.ImageMissingError`, `stack.Readiness`/
+`stack.ServiceReadiness`/`stack.ReadinessInstance`, `state.GoodVersion`/
+`GoodTarget`/`GoodService`/`SecretReference`/`GoodVersionPath`/
+`LoadGoodVersion`/`SaveGoodVersion`, `update.Controller`/`Options`/`Plan`/
+`Payload`/`Report`, update stage names and the `update_failed`/
+`readiness_failed`/`image_missing`/`invalid_option` categories. `#12` consumes
+the record and must take the same per-stack lock; `#9`/`#10` may populate
+`GoodTarget.SecretRefs` additively, never with values.
+
+Ticket #7 change request to the integration owner: the CLI/TUI preview path now
+calls `Engine.Plan` for every `core.Planner` in human/TUI mode, not only for
+approval-gated features. This is required for the ordinary update preview; the
+engine's approval policy is unchanged, `install-compose` behavior is unchanged,
+and JSON mode still makes no separate plan call. Ticket #13 needs the hook
+capability described in §7.2 (a new `core` descriptor field/capability and a
+hook trust service in `deps.Deps`).
 
 Allowed without a request: new feature package, new registration file, feature
 payload type under `data`, feature-local Korean strings and tests. A lifecycle-like

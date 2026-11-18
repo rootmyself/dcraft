@@ -39,9 +39,16 @@ const probeProject = "dcraft-capability-probe"
 
 var dockerVersionRe = regexp.MustCompile(`(?i)docker version\s+([0-9][^\s,]*)`)
 
-// Check implements core.Preflight.
-func (c *Compose) Check(ctx context.Context) core.PreflightReport {
+// Check implements core.Preflight. It checks exactly the capabilities the
+// caller declared; an empty set means the full default check. A feature that
+// needs only the Docker CLI (installing Compose) does not require a reachable
+// engine or an installed Compose.
+func (c *Compose) Check(ctx context.Context, requires core.Requirements) core.PreflightReport {
 	report := core.PreflightReport{Diagnostics: []core.Diagnostic{}}
+	requires = core.NormalizeRequirements(requires)
+	if !requires.Has(core.RequirementDockerCLI) {
+		return report
+	}
 
 	if _, err := c.runner.LookPath("docker"); err != nil {
 		report.Diagnostics = append(report.Diagnostics, core.Diagnostic{
@@ -58,6 +65,10 @@ func (c *Compose) Check(ctx context.Context) core.PreflightReport {
 		if m := dockerVersionRe.FindStringSubmatch(res.Combined()); m != nil {
 			report.Tools.DockerVersion = m[1]
 		}
+	}
+
+	if !requires.Has(core.RequirementEngine) && !requires.Has(core.RequirementCompose) {
+		return report
 	}
 
 	endpoint, err := c.dockerEndpoint(ctx)
@@ -95,72 +106,129 @@ func (c *Compose) Check(ctx context.Context) core.PreflightReport {
 		return report
 	}
 
+	if requires.Has(core.RequirementCompose) {
+		if diag, ok := c.checkCompose(ctx, &report); ok {
+			report.Diagnostics = append(report.Diagnostics, diag)
+			return report
+		}
+	}
+
+	if requires.Has(core.RequirementEngine) {
+		infoRes, infoErr := c.run(ctx, execx.Command{Name: "docker", Args: []string{"info", "--format", "{{.ServerVersion}}"}})
+		if infoErr != nil {
+			report.Diagnostics = append(report.Diagnostics, core.Diagnostic{
+				Category:    core.CategoryDockerMissing,
+				Severity:    core.SeverityError,
+				Message:     msgDockerNotExecutable,
+				Detail:      infoErr.Error(),
+				NextActions: []string{msgDockerMissingActionTwo},
+			})
+			return report
+		}
+		if !infoRes.Succeeded() {
+			report.Diagnostics = append(report.Diagnostics, engineDiagnostic(infoRes))
+			return report
+		}
+		report.Tools.EngineVersion = strings.TrimSpace(string(infoRes.Stdout))
+	}
+
+	if requires.Has(core.RequirementCompose) {
+		if diag, ok := c.capabilityProbe(ctx); ok {
+			report.Diagnostics = append(report.Diagnostics, diag)
+		}
+	}
+	return report
+}
+
+// checkCompose verifies that docker compose exists, runs, and is new enough.
+// It reports one blocking diagnostic and no error when Compose is unusable.
+func (c *Compose) checkCompose(ctx context.Context, report *core.PreflightReport) (core.Diagnostic, bool) {
 	versionRes, versionErr := c.run(ctx, execx.Command{Name: "docker", Args: []string{"compose", "version", "--short"}})
 	if versionErr != nil {
-		report.Diagnostics = append(report.Diagnostics, core.Diagnostic{
+		return core.Diagnostic{
 			Category:    core.CategoryDockerMissing,
 			Severity:    core.SeverityError,
 			Message:     msgDockerNotExecutable,
 			Detail:      versionErr.Error(),
 			NextActions: []string{msgDockerMissingActionTwo},
-		})
-		return report
+		}, true
 	}
+	composeVersion := strings.TrimSpace(string(versionRes.Stdout))
 	if !versionRes.Succeeded() {
-		text := versionRes.Combined()
-		if isComposeMissingText(text) {
-			report.Diagnostics = append(report.Diagnostics, core.Diagnostic{
+		shortText := versionRes.Combined()
+		// A missing plugin can surface either as an unknown command or, on
+		// some Docker CLI versions, as an unknown top-level flag. Confirm
+		// with the full version command before classifying.
+		fullRes, fullErr := c.run(ctx, execx.Command{Name: "docker", Args: []string{"compose", "version"}})
+		if fullErr == nil && fullRes.Succeeded() {
+			// Compose exists but does not provide --short. Use the same
+			// machine value shape as --short.
+			composeVersion = parseComposeVersion(fullRes.Combined())
+			if composeVersion == "" {
+				return core.Diagnostic{
+					Category:    core.CategoryComposeUnsupported,
+					Severity:    core.SeverityError,
+					Message:     msgComposeUnsupported,
+					Detail:      summarize(fullRes.Combined()),
+					NextActions: []string{msgComposeUnsupportedActionOne, msgComposeUnsupportedActionTwo, msgComposeUnsupportedActionThree},
+				}, true
+			}
+			report.Tools.ComposeVersion = composeVersion
+			if major, ok := majorVersion(composeVersion); !ok || major < 2 {
+				return core.Diagnostic{
+					Category:    core.CategoryComposeUnsupported,
+					Severity:    core.SeverityError,
+					Message:     msgComposeTooOld,
+					Detail:      composeVersion,
+					NextActions: []string{msgComposeUnsupportedActionOne, msgComposeUnsupportedActionTwo, msgComposeUnsupportedActionThree},
+				}, true
+			}
+			return core.Diagnostic{}, false
+		}
+		fullText := ""
+		if fullErr == nil {
+			fullText = fullRes.Combined()
+		}
+		if isComposeMissingText(shortText) || isComposeMissingText(fullText) {
+			return core.Diagnostic{
 				Category:    core.CategoryComposeMissing,
 				Severity:    core.SeverityError,
 				Message:     msgComposeMissing,
-				Detail:      summarize(text),
-				NextActions: []string{msgComposeMissingActionOne, msgComposeMissingActionTwo, msgComposeMissingActionThree},
-			})
-			return report
+				Detail:      summarize(shortText + "\n" + fullText),
+				NextActions: []string{msgComposeMissingActionOne, msgComposeMissingActionTwo, msgComposeMissingActionThree, msgComposeMissingActionFour},
+			}, true
 		}
-		report.Diagnostics = append(report.Diagnostics, core.Diagnostic{
+		return core.Diagnostic{
 			Category:    core.CategoryComposeUnsupported,
 			Severity:    core.SeverityError,
 			Message:     msgComposeUnsupported,
-			Detail:      summarize(text),
+			Detail:      summarize(shortText),
 			NextActions: []string{msgComposeUnsupportedActionOne, msgComposeUnsupportedActionTwo, msgComposeUnsupportedActionThree},
-		})
-		return report
+		}, true
 	}
-	composeVersion := strings.TrimSpace(string(versionRes.Stdout))
 	report.Tools.ComposeVersion = composeVersion
 	if major, ok := majorVersion(composeVersion); !ok || major < 2 {
-		report.Diagnostics = append(report.Diagnostics, core.Diagnostic{
+		return core.Diagnostic{
 			Category:    core.CategoryComposeUnsupported,
 			Severity:    core.SeverityError,
 			Message:     msgComposeTooOld,
 			Detail:      composeVersion,
 			NextActions: []string{msgComposeUnsupportedActionOne, msgComposeUnsupportedActionTwo, msgComposeUnsupportedActionThree},
-		})
-		return report
+		}, true
 	}
+	return core.Diagnostic{}, false
+}
 
-	infoRes, infoErr := c.run(ctx, execx.Command{Name: "docker", Args: []string{"info", "--format", "{{.ServerVersion}}"}})
-	if infoErr != nil {
-		report.Diagnostics = append(report.Diagnostics, core.Diagnostic{
-			Category:    core.CategoryDockerMissing,
-			Severity:    core.SeverityError,
-			Message:     msgDockerNotExecutable,
-			Detail:      infoErr.Error(),
-			NextActions: []string{msgDockerMissingActionTwo},
-		})
-		return report
-	}
-	if !infoRes.Succeeded() {
-		report.Diagnostics = append(report.Diagnostics, engineDiagnostic(infoRes))
-		return report
-	}
-	report.Tools.EngineVersion = strings.TrimSpace(string(infoRes.Stdout))
+var composeVersionRe = regexp.MustCompile(`(?i)(?:compose\s+version\s+)?v?([0-9]+(?:\.[0-9]+){1,3})`)
 
-	if diag, ok := c.capabilityProbe(ctx); ok {
-		report.Diagnostics = append(report.Diagnostics, diag)
+// parseComposeVersion extracts the bare version from the full `docker compose
+// version` output (for example "Docker Compose version v5.7.0").
+func parseComposeVersion(text string) string {
+	m := composeVersionRe.FindStringSubmatch(strings.TrimSpace(text))
+	if m == nil {
+		return ""
 	}
-	return report
+	return m[1]
 }
 
 func (c *Compose) run(ctx context.Context, cmd execx.Command) (execx.Result, error) {

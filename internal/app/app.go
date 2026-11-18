@@ -5,6 +5,7 @@ package app
 import (
 	"os"
 
+	"github.com/rootmyself/dcraft/internal/artifacts"
 	"github.com/rootmyself/dcraft/internal/compose"
 	"github.com/rootmyself/dcraft/internal/core"
 	"github.com/rootmyself/dcraft/internal/deps"
@@ -19,10 +20,12 @@ import (
 // Options are the process-level dependencies. Tests substitute runners,
 // environment lookups, clocks and directories.
 type Options struct {
-	Getenv func(string) string
-	Getwd  func() (string, error)
-	Runner execx.Runner
-	Clock  core.Clock
+	Getenv     func(string) string
+	Getwd      func() (string, error)
+	Runner     execx.Runner
+	Clock      core.Clock
+	Downloader artifacts.Downloader
+	Installer  artifacts.Installer
 }
 
 // App is the built object graph.
@@ -48,6 +51,12 @@ func New(opts Options) (*App, error) {
 	if opts.Clock == nil {
 		opts.Clock = core.SystemClock{}
 	}
+	if opts.Downloader == nil {
+		opts.Downloader = artifacts.HTTPDownloader{}
+	}
+	if opts.Installer == nil {
+		opts.Installer = artifacts.OSInstaller{}
+	}
 
 	stateRoot, err := state.Root(opts.Getenv)
 	if err != nil {
@@ -57,11 +66,14 @@ func New(opts Options) (*App, error) {
 	composeAdapter := compose.New(opts.Runner, opts.Getenv)
 	controller := lifecycle.New(composeAdapter, composeAdapter, composeAdapter, store, opts.Clock)
 	d := &deps.Deps{
-		Runner:    opts.Runner,
-		Clock:     opts.Clock,
-		State:     store,
-		Compose:   composeAdapter,
-		Lifecycle: controller,
+		Runner:     opts.Runner,
+		Getenv:     opts.Getenv,
+		Clock:      opts.Clock,
+		State:      store,
+		Compose:    composeAdapter,
+		Lifecycle:  controller,
+		Downloader: opts.Downloader,
+		Installer:  opts.Installer,
 	}
 
 	registry := core.NewRegistry()

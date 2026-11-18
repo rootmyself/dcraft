@@ -592,6 +592,11 @@ func TestPreviewShowsTargetPlanAndHonestLimits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if entries, err := os.ReadDir(c.store.(*state.Store).Root()); err != nil {
+		t.Fatal(err)
+	} else if len(entries) != 0 {
+		t.Fatalf("preview wrote state: %v", entries)
+	}
 	for _, want := range []string{
 		"/work/app/compose.yaml", ".env.dev", "dev", "app", "api", "db",
 		"캐시 사용 안 함", "강제 재생성", "정확한 미래 상태 diff가 아닙니다",
@@ -694,6 +699,11 @@ func TestCancellationDuringApplyIsNotSuccess(t *testing.T) {
 	if len(u.tags) != 0 {
 		t.Fatalf("cancellation created retention tags: %v", u.tags)
 	}
+	probe, lockErr := store.AcquireStackLock(context.Background(), core.Target{ProjectDir: "/work/app"}, state.LockHolder{Action: "probe"})
+	if lockErr != nil {
+		t.Fatalf("lock was not released after cancellation: %v", lockErr)
+	}
+	_ = probe.Release()
 }
 
 func TestRecordFailureIsAWarningAndKeepsOldRecord(t *testing.T) {

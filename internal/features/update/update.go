@@ -52,6 +52,25 @@ func (f *Feature) Run(ctx context.Context, in core.Invocation) (any, error) {
 	return f.control.Run(ctx, in, opts)
 }
 
+// Plan is the read-only preview shown before an ordinary update. It changes
+// nothing (no name allocation, no lock, no build/pull) and never claims an
+// exact future-state diff.
+func (f *Feature) Plan(ctx context.Context, in core.Invocation) (core.Plan, error) {
+	if f.control == nil {
+		return core.Plan{}, core.Fail(core.Diagnostic{
+			Category:    core.CategoryInternal,
+			Severity:    core.SeverityError,
+			Message:     msgNoController,
+			NextActions: []string{msgNoControllerNext},
+		})
+	}
+	plan, err := f.control.Preview(ctx, in)
+	if err != nil {
+		return core.Plan{}, err
+	}
+	return core.Plan{Text: plan.Text}, nil
+}
+
 func (f *Feature) Present(res core.Result, width int) string {
 	return behavior.Present(res, width)
 }

@@ -195,6 +195,27 @@ func newFeatureCommand(opts Options, tf *targetFlags, feature core.Feature) *cob
 			fmt.Fprint(opts.Stderr, "오류: 작업 엔진이 준비되지 않았습니다.\n")
 			return &ExitError{Code: 1}
 		}
+		previewAllowed := d.Approval == core.ApprovalNone || core.HasApproval(approvals, d.Approval)
+		if !tf.json && previewAllowed {
+			if _, ok := feature.(core.Planner); ok {
+				// This read-only preview uses the same plan path as the TUI so
+				// the human sees the target and planned work before anything is
+				// built, pulled or changed. The engine still enforces any
+				// independent approval; an ordinary update needs none.
+				plan := opts.Engine.Plan(cmd.Context(), req, nil)
+				if plan.Failed() {
+					res := plan.Result()
+					if err := renderResult(opts.Stdout, opts.Stderr, feature, res, false); err != nil {
+						return &ExitError{Code: 1}
+					}
+					return &ExitError{Code: res.ExitCode()}
+				}
+				if text := strings.TrimSpace(plan.Text); text != "" {
+					fmt.Fprintln(opts.Stderr, text)
+					fmt.Fprintln(opts.Stderr)
+				}
+			}
+		}
 		res := opts.Engine.Run(cmd.Context(), req, nil)
 		if err := renderResult(opts.Stdout, opts.Stderr, feature, res, tf.json); err != nil {
 			return &ExitError{Code: 1}

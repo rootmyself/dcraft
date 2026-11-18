@@ -66,6 +66,7 @@ func (c *Compose) UpdateModel(ctx context.Context, t core.Target) (stack.UpdateM
 
 type inspectContainer struct {
 	ID           string `json:"Id"`
+	Name         string `json:"Name"`
 	Created      string `json:"Created"`
 	Image        string `json:"Image"`
 	RestartCount int    `json:"RestartCount"`
@@ -148,7 +149,7 @@ func (c *Compose) Containers(ctx context.Context, t core.Target) ([]stack.Contai
 		svc := doc.Config.Labels["com.docker.compose.service"]
 		container := stack.Container{
 			ID:           doc.ID,
-			Name:         strings.TrimPrefix(doc.Config.Labels["com.docker.compose.container-number"], "/"),
+			Name:         strings.TrimPrefix(doc.Name, "/"),
 			Service:      svc,
 			ImageID:      doc.Image,
 			ImageRef:     doc.Config.Image,

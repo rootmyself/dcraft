@@ -1,0 +1,343 @@
+{
+  "tag_name": "v5.8.0",
+  "prerelease": false,
+  "draft": false,
+  "assets": [
+    {
+      "name": "checksums.txt",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/checksums.txt",
+      "size": 4616,
+      "digest": "sha256:c5e5b8306f9ddf54ebc1e0686c48df7e700942b4bd90216879d0324952625d8f"
+    },
+    {
+      "name": "docker-compose-darwin-aarch64",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-darwin-aarch64",
+      "size": 32440418,
+      "digest": "sha256:008b8fcf6c6d60340f5796626a0f0d51c042085793a9b1653343011727140b71"
+    },
+    {
+      "name": "docker-compose-darwin-aarch64.provenance.json",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-darwin-aarch64.provenance.json",
+      "size": 60712,
+      "digest": "sha256:83c06c17739103dd913be56c3d020360c7ed3ea2a186bbbcc11d83b155e23536"
+    },
+    {
+      "name": "docker-compose-darwin-aarch64.sbom.json",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-darwin-aarch64.sbom.json",
+      "size": 236756,
+      "digest": "sha256:3ed77f6d576a9f4986e395bb121f294b6359e7727320c89caee6a4bb4a1b638e"
+    },
+    {
+      "name": "docker-compose-darwin-aarch64.sha256",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-darwin-aarch64.sha256",
+      "size": 96,
+      "digest": "sha256:c9e24d89ce7cb9c16c5bf3a6241aa871daa1b2bc1e3a8820da14bb04305e7bf6"
+    },
+    {
+      "name": "docker-compose-darwin-aarch64.sigstore.json",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-darwin-aarch64.sigstore.json",
+      "size": 91351,
+      "digest": "sha256:69bd09921bcaf3a18fbf7c3b5eb8182300fb6aa7a3d5037ebe7f48c0dd6dcc7d"
+    },
+    {
+      "name": "docker-compose-darwin-x86_64",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-darwin-x86_64",
+      "size": 34811712,
+      "digest": "sha256:5c41cd573c549dc66abb03c5b29d6d4dfaae206b2e79848d1c32482bb2a3b416"
+    },
+    {
+      "name": "docker-compose-darwin-x86_64.provenance.json",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-darwin-x86_64.provenance.json",
+      "size": 60711,
+      "digest": "sha256:e4557f6e1068780910bd629ec9d32e7033ea63e7f48aa775d234c02f08dea04f"
+    },
+    {
+      "name": "docker-compose-darwin-x86_64.sbom.json",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-darwin-x86_64.sbom.json",
+      "size": 236755,
+      "digest": "sha256:5150d4e055bd663d5e4a13da094c5e1fb7e1edb0cc7cf1b91bf8e451bedb223b"
+    },
+    {
+      "name": "docker-compose-darwin-x86_64.sha256",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-darwin-x86_64.sha256",
+      "size": 95,
+      "digest": "sha256:c0adfcc303d1ddd48508cc36cebaf0112fa3e54807e7ea3f28b4e1cc35523b6d"
+    },
+    {
+      "name": "docker-compose-darwin-x86_64.sigstore.json",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-darwin-x86_64.sigstore.json",
+      "size": 91299,
+      "digest": "sha256:8f2fe354616bf152e6241a0249044532b9dc873c004df7146bf4c6c31ce198a0"
+    },
+    {
+      "name": "docker-compose-linux-aarch64",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-aarch64",
+      "size": 32155346,
+      "digest": "sha256:1a9c918b2fb49b9c87f0018c64b5abd0d30715155e98dc939779fbaee6c414d3"
+    },
+    {
+      "name": "docker-compose-linux-aarch64.provenance.json",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-aarch64.provenance.json",
+      "size": 60706,
+      "digest": "sha256:b865e379468f1e04700d1f67d94ff1140b5ff44bb394a79697edf4444b715428"
+    },
+    {
+      "name": "docker-compose-linux-aarch64.sbom.json",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-aarch64.sbom.json",
+      "size": 236743,
+      "digest": "sha256:4fd7e3a5363432635c5b9fe88d93992be708a0c386a411d3eadabe22c8eff41f"
+    },
+    {
+      "name": "docker-compose-linux-aarch64.sha256",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-aarch64.sha256",
+      "size": 95,
+      "digest": "sha256:632d6d8a43e63f420a84a89aa2550e883229ddab6eb02caa49c37026ef53f87b"
+    },
+    {
+      "name": "docker-compose-linux-aarch64.sigstore.json",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-aarch64.sigstore.json",
+      "size": 91247,
+      "digest": "sha256:ab0a0737921879d0fccd74e20f977b8c80465f389b66fe078b2c28b723f7008e"
+    },
+    {
+      "name": "docker-compose-linux-armv6",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-armv6",
+      "size": 32338768,
+      "digest": "sha256:c88658466ae9a4dadae64e6a4ec125202212bd460934537bd482bcd5e313f57b"
+    },
+    {
+      "name": "docker-compose-linux-armv6.provenance.json",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-armv6.provenance.json",
+      "size": 60736,
+      "digest": "sha256:c2781b410820aa9363b3b058b2cbc1969268e22a9ff9105803d9997765cebd53"
+    },
+    {
+      "name": "docker-compose-linux-armv6.sbom.json",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-armv6.sbom.json",
+      "size": 236741,
+      "digest": "sha256:2a9c96dc8d99734dd0fdfb5f72d8b24a30349acf5400d2a438e45707aae35b3f"
+    },
+    {
+      "name": "docker-compose-linux-armv6.sha256",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-armv6.sha256",
+      "size": 93,
+      "digest": "sha256:797f6dfd697ffeb5ef2311c4276c2b4923563ff515c972dd85c5dc9a109d81e3"
+    },
+    {
+      "name": "docker-compose-linux-armv6.sigstore.json",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-armv6.sigstore.json",
+      "size": 91515,
+      "digest": "sha256:6eb5e0450a086546d5101c5691b53d1de53a0e533b038b1d2cc24dfd585fe300"
+    },
+    {
+      "name": "docker-compose-linux-armv7",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-armv7",
+      "size": 32272050,
+      "digest": "sha256:a7a79755648b975b66df08b4bfbe12b29f113d5dd8c7cd5b6b53b69efff2f422"
+    },
+    {
+      "name": "docker-compose-linux-armv7.provenance.json",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-armv7.provenance.json",
+      "size": 60736,
+      "digest": "sha256:3c9797e3c9ab990bc20628c845a78253524414376a191874e6c3c7c511e075c4"
+    },
+    {
+      "name": "docker-compose-linux-armv7.sbom.json",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-armv7.sbom.json",
+      "size": 236741,
+      "digest": "sha256:388c5b3aa7cf114e1904cd5fa10f88c66bc1f96f56002c78747d0d179f32b3f0"
+    },
+    {
+      "name": "docker-compose-linux-armv7.sha256",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-armv7.sha256",
+      "size": 93,
+      "digest": "sha256:5774e4276a6e5e75001b0dfd1a6f091d3ec10fcdcec070a32088cb0d7be939a8"
+    },
+    {
+      "name": "docker-compose-linux-armv7.sigstore.json",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-armv7.sigstore.json",
+      "size": 91235,
+      "digest": "sha256:9b790929ef819e07f988cfac16fcd1bed4ca2527d3ce49b288dd267f04160a83"
+    },
+    {
+      "name": "docker-compose-linux-ppc64le",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-ppc64le",
+      "size": 33904564,
+      "digest": "sha256:921437ba1fe9b5f7e3146c74c4d6c56673881741561c71bc23106b1e45886b1d"
+    },
+    {
+      "name": "docker-compose-linux-ppc64le.provenance.json",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-ppc64le.provenance.json",
+      "size": 60710,
+      "digest": "sha256:9f315d8ea4d11f897f4e37b5e32573cbe020d47a5e4c74a5072c03dd47b4cf4a"
+    },
+    {
+      "name": "docker-compose-linux-ppc64le.sbom.json",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-ppc64le.sbom.json",
+      "size": 236743,
+      "digest": "sha256:e74cb7d6fa886dd2dc8ff4e069a1f7ca39e170c3fafbee3021c860a1a9138d7f"
+    },
+    {
+      "name": "docker-compose-linux-ppc64le.sha256",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-ppc64le.sha256",
+      "size": 95,
+      "digest": "sha256:1f22ecbabd9cd738501290e6a8bb95d106f4315af3ed454dfdcf172989d37810"
+    },
+    {
+      "name": "docker-compose-linux-ppc64le.sigstore.json",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-ppc64le.sigstore.json",
+      "size": 91295,
+      "digest": "sha256:99c90ced96e45b7bbaeedabed8738249589819917a1b666a8d7e04ebd33c390d"
+    },
+    {
+      "name": "docker-compose-linux-riscv64",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-riscv64",
+      "size": 31128519,
+      "digest": "sha256:0af052a262dcf3a28214c7c86442046fc5e50b698e838d1904395d7a5333b142"
+    },
+    {
+      "name": "docker-compose-linux-riscv64.provenance.json",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-riscv64.provenance.json",
+      "size": 60710,
+      "digest": "sha256:0df52fe5e4e11e55cdfc4bb9675f5a32a72dfcb6449317ea7ba2d75851e6e752"
+    },
+    {
+      "name": "docker-compose-linux-riscv64.sbom.json",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-riscv64.sbom.json",
+      "size": 236743,
+      "digest": "sha256:70b04591b015d1e72356604013112836112c247bd895432170da4c983867c36a"
+    },
+    {
+      "name": "docker-compose-linux-riscv64.sha256",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-riscv64.sha256",
+      "size": 95,
+      "digest": "sha256:2147e168078da923b38032bb9e8b43388a5b87bfc477962ea53fab0bdc688843"
+    },
+    {
+      "name": "docker-compose-linux-riscv64.sigstore.json",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-riscv64.sigstore.json",
+      "size": 91243,
+      "digest": "sha256:f09c7c25cb80e554b3891935a5bac5adada018ce72d0d906e956f0d086db6a49"
+    },
+    {
+      "name": "docker-compose-linux-s390x",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-s390x",
+      "size": 35225089,
+      "digest": "sha256:444af1a82eb51edd4a2aa5b1a209724f2acd19644e488fbd8c1dc8fd7d477f97"
+    },
+    {
+      "name": "docker-compose-linux-s390x.provenance.json",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-s390x.provenance.json",
+      "size": 60697,
+      "digest": "sha256:c850dd770fbfc354e0a39151610697be3aff3be69d3439d7f6be37f2ba59d523"
+    },
+    {
+      "name": "docker-compose-linux-s390x.sbom.json",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-s390x.sbom.json",
+      "size": 236741,
+      "digest": "sha256:f96dbe43a2a06179026aeb5858bd7d267d3b29803bb36bc503fb670d4cd49462"
+    },
+    {
+      "name": "docker-compose-linux-s390x.sha256",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-s390x.sha256",
+      "size": 93,
+      "digest": "sha256:9232908b9cff79d10b56f32a37e847ffe08a89f0990c67ad20fa3f52f20f0209"
+    },
+    {
+      "name": "docker-compose-linux-s390x.sigstore.json",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-s390x.sigstore.json",
+      "size": 91139,
+      "digest": "sha256:91ea8210a84b4256eb37615cb6f780752fd654c33edfe265010e8cfb83d2c142"
+    },
+    {
+      "name": "docker-compose-linux-x86_64",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-x86_64",
+      "size": 34442228,
+      "digest": "sha256:b8840f5008c447f41fce0a57ae3adeab42c89b1eb6e6012524bcabbfb4ffbaf6"
+    },
+    {
+      "name": "docker-compose-linux-x86_64.provenance.json",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-x86_64.provenance.json",
+      "size": 60704,
+      "digest": "sha256:08a9f2c8c73eead549431d31f20ae20c5a292be977099bf5a63442538bc143c2"
+    },
+    {
+      "name": "docker-compose-linux-x86_64.sbom.json",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-x86_64.sbom.json",
+      "size": 236742,
+      "digest": "sha256:6d71813cf121feeca7449f54c566217913bc17755a7448f998528e802aa76033"
+    },
+    {
+      "name": "docker-compose-linux-x86_64.sha256",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-x86_64.sha256",
+      "size": 94,
+      "digest": "sha256:c4317939c6176b9708fb69837f724aa34ee954fc0347c5472868b84043eb513a"
+    },
+    {
+      "name": "docker-compose-linux-x86_64.sigstore.json",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-linux-x86_64.sigstore.json",
+      "size": 91143,
+      "digest": "sha256:8bb7efba1cbca22e02fec9d7b96d3cee2e7855ef6724ec153dfee6d93b84bcb0"
+    },
+    {
+      "name": "docker-compose-windows-aarch64.exe",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-windows-aarch64.exe",
+      "size": 32388608,
+      "digest": "sha256:ec7a100a77d9aedbaa6e2b13a10140729860b58b8d2b6855d8191c52e7dd50fc"
+    },
+    {
+      "name": "docker-compose-windows-aarch64.exe.sha256",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-windows-aarch64.exe.sha256",
+      "size": 101,
+      "digest": "sha256:640e251a797060f5a0688a6923a6a6d5ce6a9ec589146615c6d6a4317acb3fa5"
+    },
+    {
+      "name": "docker-compose-windows-aarch64.provenance.json",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-windows-aarch64.provenance.json",
+      "size": 60734,
+      "digest": "sha256:5a248c80d2a9e1a5a7152097fdd85e6b4635d7e900503f6f8fdce609e6707401"
+    },
+    {
+      "name": "docker-compose-windows-aarch64.sbom.json",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-windows-aarch64.sbom.json",
+      "size": 244570,
+      "digest": "sha256:bea13dee36a9c0823711143c4f4f0211cccefaa2a2187191fe216cd079934993"
+    },
+    {
+      "name": "docker-compose-windows-aarch64.sigstore.json",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-windows-aarch64.sigstore.json",
+      "size": 91375,
+      "digest": "sha256:9044cdec8170be2feaea596733baf8749b6881774839106ed8f9060a8bebb795"
+    },
+    {
+      "name": "docker-compose-windows-x86_64.exe",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-windows-x86_64.exe",
+      "size": 35110400,
+      "digest": "sha256:0c2d9245a5f61e8e3cc85009b8b4888fa82fded08239d28bd6da5ca818eda2b2"
+    },
+    {
+      "name": "docker-compose-windows-x86_64.exe.sha256",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-windows-x86_64.exe.sha256",
+      "size": 100,
+      "digest": "sha256:70615f77f23423cb58582de83ad0c291c0df96e42054d67d595b9a68196b0d14"
+    },
+    {
+      "name": "docker-compose-windows-x86_64.provenance.json",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-windows-x86_64.provenance.json",
+      "size": 60733,
+      "digest": "sha256:c0f515b6df76eed70be06dc15654fba3bcf6b6f380c63c20dff993708fe025b5"
+    },
+    {
+      "name": "docker-compose-windows-x86_64.sbom.json",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-windows-x86_64.sbom.json",
+      "size": 244569,
+      "digest": "sha256:4d675e5cd8cc819be166d28d723fc0c7e631f66a08c1af49aecdfc5e689c2730"
+    },
+    {
+      "name": "docker-compose-windows-x86_64.sigstore.json",
+      "browser_download_url": "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-windows-x86_64.sigstore.json",
+      "size": 91235,
+      "digest": "sha256:4ba36bcb3c6ddef90b9aee5f93a0072efeb9f4789143b2f1440f0c231bce0196"
+    }
+  ]
+}

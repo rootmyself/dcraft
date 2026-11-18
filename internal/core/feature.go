@@ -47,6 +47,17 @@ type Descriptor struct {
 	// SupportsServices exposes the common --service flag for commands that
 	// operate on explicit Compose services.
 	SupportsServices bool
+	// Requires lists the preflight capabilities this feature needs. Empty
+	// means the full local environment check (Docker CLI, engine, Compose),
+	// so existing features keep exactly today's behavior. A feature that
+	// exists precisely because a capability is missing declares a narrower
+	// set instead of bypassing preflight.
+	Requires Requirements
+	// TargetOptional marks features that do not operate on a Compose project.
+	// Target resolution still validates the target folder, but a folder
+	// without Compose configuration is not an error. Status and every stack
+	// operation keep the default (a Compose project is required).
+	TargetOptional bool
 	// AcceptsArgs allows positional arguments (for example exec commands).
 	AcceptsArgs bool
 	// Flags are feature-owned options parsed by the shared CLI assembly.
@@ -104,6 +115,13 @@ func validateDescriptor(d Descriptor) error {
 	}
 	if d.ReadOnly && d.Approval != ApprovalNone {
 		return fmt.Errorf("feature %q: read-only features cannot require approval", d.Name)
+	}
+	for _, r := range d.Requires {
+		switch r {
+		case RequirementDockerCLI, RequirementEngine, RequirementCompose:
+		default:
+			return fmt.Errorf("feature %q: unknown preflight requirement %q", d.Name, r)
+		}
 	}
 	seenNames := map[string]bool{}
 	seenShorthands := map[string]bool{}
