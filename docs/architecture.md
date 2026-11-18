@@ -136,20 +136,23 @@ Engine sequence (stage names are stable machine values; titles are Korean):
 5. Feature `Run` — feature stages appear between preflight and verification. If
    a feature reports no stage, the engine adds a fallback `execute` stage.
 6. `verify` — only if the feature also implements `core.Verifier`. Raw errors
-   become `verification_failed`; no history is written.
+   become `verification_failed`; a panic is recovered and becomes
+   `internal_error`; no history is written.
 7. `history` — only if `Descriptor.RecordsHistory`. Written after success. A
    history write failure is a `history_failed` **warning**; the operation stays
    successful because the stack change already happened. Never report a
    completed change as failed solely because history failed, and never record a
-   failed verification as a good version.
+   failed verification as a good version. The record snapshots completed stages
+   only: the still-open `history` stage is not written into itself, so a
+   persisted record never ends with a `started` stage.
 
 Failure and interruption:
 
 - Features return `*core.Error` (built with `core.Fail` / `core.FailCause`).
   Diagnostics carry a stable category, Korean message and Korean next actions.
 - A raw Go error becomes `internal_error`.
-- A panic inside a feature is recovered and becomes `internal_error`; the
-  process must not crash the TUI.
+- A panic inside a feature or inside `core.Verifier.Verify` is recovered and
+  becomes `internal_error`; the process must not crash the TUI.
 - `context.Canceled` / deadline / canceled context yields outcome `canceled`, a
   `canceled` diagnostic that states partial effects may remain, and exit 130.
 - There is no hidden background handoff, no automatic rollback, no atomicity
@@ -165,11 +168,13 @@ Preflight capability values (`core.Requirement`):
 
 `docker_cli` alone skips endpoint/engine/Compose checks; `compose` additionally
 checks Compose presence/version/capability; `docker_engine` additionally checks
-engine reachability and permission. A remote endpoint is still refused whenever
-`docker_engine` or `compose` is required. A feature that genuinely needs no
-Docker capability is a future contract extension (an explicit "none" value);
-an empty slice never means "check nothing". Descriptor requirements are
-validated at registration.
+engine reachability and permission. `compose` and `docker_engine` implicitly
+include `docker_cli`; normalization adds it, so a narrower declaration can never
+disable the Docker lookup or the remote-endpoint refusal. A remote endpoint is
+still refused whenever `docker_engine` or `compose` is required. A feature that
+genuinely needs no Docker capability is a future contract extension (an explicit
+"none" value); an empty slice never means "check nothing". Descriptor
+requirements are validated at registration (unknown values are rejected).
 
 Approval kinds (`core.ApprovalKind`), independent and non-substitutable:
 
@@ -292,6 +297,10 @@ Rules (`internal/target.Resolver`):
   `Descriptor.TargetOptional`; callers never set it. It only turns "no Compose
   file in the folder" into a valid empty selection. The folder must still
   exist, and explicit `-f`/`--env-file` inputs are still validated as files.
+  Because a target-optional feature does not operate on a Compose project, it
+  also skips environment-alias resolution: registered aliases never make an
+  alias mandatory, a broken `.dcraft.yaml` never blocks the feature, and plain
+  folder/Compose defaults apply. An explicit `--env` has no effect there.
 
 State identity is `ProjectDir + Environment`, not the Compose project name (the
 name itself is stored state). This keeps the same folder/environment tied to
@@ -438,7 +447,9 @@ type core.Feature interface {
 | `Flags []core.Flag` | feature-owned flags parsed by the shared CLI |
 
 Registry validation rejects duplicate names, invalid names, missing Korean text,
-read-only+approval combinations, a second primary, unknown preflight
+read-only+approval combinations, read-only+history combinations, a mutating
+primary feature without an independent approval (the TUI would otherwise run it
+as soon as it opens), a second primary, unknown preflight
 requirements, reserved flag names (`path`, `file`, `env-file`, `profile`,
 `project-name`, `env`, `json`, `approve`, `help`, `service`), reserved
 shorthands (`f`, `p`, `s`, `h`, `v`), duplicate flags and invalid bool defaults.
@@ -749,7 +760,7 @@ registers `status` (primary), `install-compose`, `up`, `stop`, `down`,
 
 - `action`, `target`, `stages`, `outcome` are separate from `diagnostics`.
 - `required_approval` appears on approval failures.
-- `data` is feature-specific and omitted on failure.
+- `data` is feature-specific and omitted on failure and on cancellation.
 - `stages` and `diagnostics` are always arrays (`[]`, never `null`).
 - Progress is not embedded in the final JSON. The `core.Sink` receives live
   `Stage` events; only human UIs consume them. `--json` stdout contains exactly
@@ -911,7 +922,7 @@ Stages (stable machine names; Korean titles in the UI):
 | `plan` | 갱신 계획 | read-only model + container baseline; `--no-pull` image check |
 | `build` | 로컬 이미지 빌드 | cached `compose build`; skipped when no build service |
 | `pull` | 이미지 취득 | `compose pull` for image-only services; skipped for `--no-pull` |
-| `apply` | 변경 적용 | `compose up --detach [--force-recreate] --pull missing|never` |
+| `apply` | 변경 적용 | `compose up --detach [--force-recreate] --pull missing|never`; runtime secret delivery prepared and committed through the same boundary as `up` |
 | `verify` | 실행 상태 확인 | bounded readback; failure marks this stage failed |
 | `record` | 정상 버전 기록 | retention tags + `state.json`; failure is a warning |
 
@@ -920,7 +931,10 @@ services pull their configured tag/digest. Unchanged services are not
 force-recreated; real Docker verifies identical container IDs and `Created` on a
 repeat update. `config --hash` is **not** image identity and is never used to
 claim "unchanged"; Compose itself compares the resolved image/config during
-`up`, so a moved tag recreates the service. `up --wait` is never used as proof:
+`up`, so a moved tag recreates the service. Runtime secret references are
+resolved by `apply` exactly as by `up` (current environment values in the
+Compose subprocess, file delivery rewritten from its source), so an update with
+`--force-recreate` delivers the current values; update never stores them. `up --wait` is never used as proof:
 it returns 0 for crash-looping `restart: always` containers, for a
 no-healthcheck container that dies right after, and for a re-up of an exited
 container.
@@ -1015,7 +1029,11 @@ type GoodService struct {
   `0600`).
 - It stores references only: file list in order, explicit env files, profiles,
   effective project name, environment and secret references. It never stores
-  resolved secret values or container environments.
+  resolved secret values or container environments. Every `GoodTarget.SecretRefs`
+  entry carries the service, phase, delivery, source kind, source name/ref and
+  delivery target; update populates it from the current `.dcraft.yaml` only
+  after `verify` succeeded and while holding the per-stack lock. Rollback (#12)
+  re-resolves these references; it never reads a stored value.
 - `(*state.Store).LoadGoodVersion(target)` returns
   `(GoodVersion, bool, error)`; `SaveGoodVersion(target, rec)` is the atomic
   writer. A first update on a previously unmanaged stack records the state it
@@ -1182,8 +1200,10 @@ Layout:
   environments never share state; the readable folder name stays in the key.
   Symlinked spellings of an existing folder canonicalize to one identity.
 - Directories are created lazily with `0700`; files with `0600`.
-- History records contain operation id, action, outcome, timestamps, stages and
-  diagnostics. Never resolved secret values.
+- History records contain operation id, action, outcome, timestamps, completed
+  stages and diagnostics. The record-writing `history` stage itself is excluded,
+  so a persisted record never ends with a `started` stage. Never resolved
+  secret values.
 - Status reads and writes no state.
 - History is written only for successful `RecordsHistory` features; failed
   verifications are never recorded as good.
@@ -1355,7 +1375,9 @@ previous record is untouched.
 Tested seams:
 
 - target resolution (temp folders, override order, explicit order, parent
-  isolation, env files, profiles, project name);
+  isolation, env files, profiles, project name); target-optional resolution
+  ignores registered environment aliases and broken `.dcraft.yaml` catalogs
+  while the same folder still requires an alias for stack features;
 - environment config parsing (missing file, empty file, alias order, relative
   paths, invalid/duplicate/missing fields), mandatory selection, no implicit
   choice, no-alias defaults, expansion order, explicit-input conflicts,
@@ -1363,10 +1385,15 @@ Tested seams:
   port/bind/external-resource overlap warnings;
 - preflight classification with `execxtest.Runner` (all diagnostic categories,
   local Desktop socket vs remote refusal, no engine contact for remote);
-- Compose inspection parsing (health, instances, connections, unconfigured
+  `compose`-only and `docker_engine`-only declarations still look up Docker,
+  refuse a remote endpoint, and check exactly their own capability, while
+  `docker_cli` alone stays minimal;
+- compose inspection parsing (health, instances, connections, unconfigured
   services, no secret leakage, stable Compose arguments);
-- engine seam with fake features (approval, stages, verification, history,
-  cancellation, panic recovery, warnings, planned requirements, target
+- engine seam with fake features (approval, stages, verification, a panicking
+  verifier mapped to `internal_error`, data omitted on failure and
+  cancellation, history stage excluded from its own record, cancellation,
+  panic recovery, warnings, planned requirements, target
   optionality, plan preview without approval/run);
 - registry validation and CLI/TUI assembly from registries;
 - state layout and permissions, automatic-name allocation (first/suffix/reuse/
@@ -1483,7 +1510,10 @@ Tested seams:
   changes the image identity; a source change rebuilds/recreates only that
   service; a tag moved in a temporary local registry (host-network `registry:2`,
   removed afterwards) recreates only the image-only service and records the new
-  exact image ID; a healthcheck pass is
+  exact image ID; runtime env/file secrets reach a force-recreated container
+  with their current values, the record stores references (service, source kind,
+  ref, target) without values, and `down` still removes the materialized file
+  and managed override; a healthcheck pass is
   success/healthy and a no-healthcheck service is `running_unverified` (never
   verified); unhealthy, crash-loop (`restart: always`), early exit and timeout
   all fail with the observed `service=status` and leave the previous record

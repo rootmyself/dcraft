@@ -42,7 +42,6 @@ type stubFeature struct {
 }
 
 func (f *stubFeature) Descriptor() core.Descriptor { return f.desc }
-
 func (f *stubFeature) Run(ctx context.Context, in core.Invocation) (any, error) {
 	f.runs++
 	if f.outcome == core.OutcomeFailure {
@@ -666,5 +665,46 @@ func TestCtrlCDuringMutatingOperationRequestsSafeCancellation(t *testing.T) {
 	m = nm.(*Model)
 	if !isQuit(t, cmd) {
 		t.Fatal("q did not quit after the canceled result")
+	}
+}
+
+type panicVerifyFeature struct {
+	*stubFeature
+}
+
+func (f *panicVerifyFeature) Verify(context.Context, core.Invocation, any) error {
+	panic("verifier exploded")
+}
+
+// A panicking verifier must be reported as a failed result, never crash the
+// TUI process.
+func TestVerifierPanicRendersFailureInsteadOfCrashing(t *testing.T) {
+	feature := &panicVerifyFeature{stubFeature: &stubFeature{
+		desc: descriptor("status", true),
+		body: "상태 본문",
+	}}
+	m := newTestModel(t, feature)
+	initModel(t, m)
+
+	if m.result == nil {
+		t.Fatal("panicking verifier produced no result")
+	}
+	if m.result.Outcome != core.OutcomeFailure {
+		t.Fatalf("outcome = %q, want failure", m.result.Outcome)
+	}
+	found := false
+	for _, d := range m.result.Diagnostics {
+		if d.Category == core.CategoryInternal {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("diagnostics = %+v, want internal_error", m.result.Diagnostics)
+	}
+	if m.result.Data != nil {
+		t.Fatalf("data = %#v on failure, want omitted", m.result.Data)
+	}
+	if !strings.Contains(m.View(), "작업 실패") {
+		t.Fatalf("failure screen not rendered:\n%s", m.View())
 	}
 }

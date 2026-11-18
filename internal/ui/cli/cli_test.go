@@ -360,6 +360,51 @@ func TestFailureJSONHasNoStderrAndFailureExit(t *testing.T) {
 	}
 }
 
+type panicVerifyFeature struct {
+	*stubFeature
+}
+
+func (f *panicVerifyFeature) Verify(context.Context, core.Invocation, any) error {
+	panic("verifier exploded")
+}
+
+// The CLI must report a panicking verifier as one internal_error result with
+// exit 1 instead of crashing the process.
+func TestVerifierPanicExitsOneWithAResult(t *testing.T) {
+	feature := &panicVerifyFeature{stubFeature: &stubFeature{
+		desc: core.Descriptor{
+			Name: "update", Title: "갱신", Summary: "갱신합니다.", Usage: "dcraft update",
+		},
+	}}
+	h := newHarness(t, feature)
+	err := h.run("update", "--json")
+	if exitCode(err) != 1 {
+		t.Fatalf("exit = %d, want 1", exitCode(err))
+	}
+	if h.stderr.Len() != 0 {
+		t.Fatalf("JSON failure wrote stderr: %q", h.stderr.String())
+	}
+	var res core.Result
+	if err := json.Unmarshal(h.stdout.Bytes(), &res); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, h.stdout.String())
+	}
+	if res.Outcome != core.OutcomeFailure {
+		t.Fatalf("outcome = %q", res.Outcome)
+	}
+	found := false
+	for _, d := range res.Diagnostics {
+		if d.Category == core.CategoryInternal {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("diagnostics = %+v, want internal_error", res.Diagnostics)
+	}
+	if res.Data != nil {
+		t.Fatalf("data = %#v on failure, want omitted", res.Data)
+	}
+}
+
 func TestHumanFailureGoesToStderrWithKoreanGuidance(t *testing.T) {
 	status := &stubFeature{desc: descriptor("status"), run: func(ctx context.Context, in core.Invocation) (any, error) {
 		return nil, core.Fail(core.Diagnostic{

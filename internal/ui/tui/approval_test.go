@@ -140,11 +140,12 @@ func TestPlanFailureIsShownInsteadOfConfirmation(t *testing.T) {
 // An ordinary update is not approval-gated: the same read-only plan screen is
 // shown as the preview, and one enter runs it without an extra approval kind.
 func TestOrdinaryPlannerShowsPlanAndRunsWithoutApproval(t *testing.T) {
+	status := &stubFeature{desc: descriptor("status", true), body: "상태 본문"}
 	upd := &stubPlanner{
 		stubFeature: &stubFeature{
 			desc: core.Descriptor{
 				Name: "update", Title: "갱신", Summary: "현재 설정을 적용합니다.",
-				Usage: "dcraft update", Primary: true, RecordsHistory: true,
+				Usage: "dcraft update", RecordsHistory: true,
 			},
 			body: "갱신 결과 본문",
 		},
@@ -152,8 +153,16 @@ func TestOrdinaryPlannerShowsPlanAndRunsWithoutApproval(t *testing.T) {
 			return core.Plan{Text: "예정 작업\n  - web: 이미지 취득(nginx:1.27) 후 적용"}, nil
 		},
 	}
-	m := newTestModel(t, upd)
+	m := newTestModel(t, status, upd)
 	initModel(t, m)
+
+	// The primary status feature is read-only; select the ordinary update from
+	// the menu, exactly as a user would.
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("down")})
+	m = nm.(*Model)
+	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(*Model)
+	feed(t, m, execute(t, cmd))
 
 	view := m.View()
 	for _, want := range []string{"예정 작업", "이미지 취득", "다음 작업", "enter 실행", "esc 취소"} {
@@ -168,7 +177,7 @@ func TestOrdinaryPlannerShowsPlanAndRunsWithoutApproval(t *testing.T) {
 		t.Fatalf("plan runs = %d, want 1", upd.planRuns)
 	}
 
-	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	nm, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = nm.(*Model)
 	feed(t, m, execute(t, cmd))
 	if upd.runs != 1 {

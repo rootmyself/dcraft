@@ -120,6 +120,17 @@ func validateDescriptor(d Descriptor) error {
 	if d.ReadOnly && d.Approval != ApprovalNone {
 		return fmt.Errorf("feature %q: read-only features cannot require approval", d.Name)
 	}
+	// History is the record of a stack change. A read-only feature has no
+	// change to record, so the pair is contradictory rather than merely odd.
+	if d.ReadOnly && d.RecordsHistory {
+		return fmt.Errorf("feature %q: read-only features cannot record history", d.Name)
+	}
+	// The primary feature opens automatically in the TUI. A mutating primary
+	// without an independent approval would run as soon as the TUI opens, so
+	// it cannot be registered this way.
+	if d.Primary && !d.ReadOnly && d.Approval == ApprovalNone {
+		return fmt.Errorf("feature %q: a mutating primary feature requires an approval", d.Name)
+	}
 	for _, r := range d.Requires {
 		switch r {
 		case RequirementDockerCLI, RequirementEngine, RequirementCompose:

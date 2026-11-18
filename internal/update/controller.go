@@ -583,6 +583,10 @@ func (c *Controller) observedState(ctx context.Context, target core.Target) stri
 // recordGoodVersion tags and records the verified deployment. It is only called
 // after verification succeeded, while the per-stack lock is held.
 func (c *Controller) recordGoodVersion(ctx context.Context, in core.Invocation, target core.Target, projectName string, model stack.UpdateModel) (state.GoodVersion, error) {
+	secretRefs, err := recordedSecretRefs(target.ProjectDir)
+	if err != nil {
+		return state.GoodVersion{}, err
+	}
 	containers, err := c.updater.Containers(ctx, target)
 	if err != nil {
 		return state.GoodVersion{}, err
@@ -641,9 +645,8 @@ func (c *Controller) recordGoodVersion(ctx context.Context, in core.Invocation, 
 			ProjectName:    projectName,
 			Environment:    in.Target.Environment,
 			DefaultEnvFile: in.Target.DefaultEnvFile,
-			// Secret references are populated by the secret-source tickets; the
-			// record never stores a resolved value.
-			SecretRefs: []state.SecretReference{},
+			// References only; resolved values are never recorded.
+			SecretRefs: secretRefs,
 		},
 		Services: services,
 	}

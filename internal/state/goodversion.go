@@ -52,8 +52,15 @@ type SecretReference struct {
 	Phase    string `json:"phase,omitempty"`
 	Delivery string `json:"delivery,omitempty"`
 	Source   string `json:"source,omitempty"`
-	Name     string `json:"name"`
-	Field    string `json:"field,omitempty"`
+	// Name is the source reference: an environment variable name or a
+	// project-relative/absolute file path.
+	Name string `json:"name"`
+	// Target is the delivery target: an environment variable name or the
+	// /run/secrets file name. It is recorded so a later rollback can explain
+	// and reproduce the same delivery without reading stale configuration.
+	Target string `json:"target,omitempty"`
+	// Field is reserved for structured sources such as AWS Secrets Manager.
+	Field string `json:"field,omitempty"`
 }
 
 // GoodService is the recorded image identity of one service. ImageID is the
