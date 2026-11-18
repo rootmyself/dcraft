@@ -95,11 +95,11 @@ func TestWizardSkipsStepsWhoseConditionIsNotMet(t *testing.T) {
 			},
 			{
 				Name: "context", Title: "빌드 컨텍스트", Prompt: "컨텍스트",
-				AllowCustom: true, Default: ".", DependsOn: &core.WizardCondition{Name: "from", Values: []string{"dockerfile"}},
+				AllowCustom: true, Default: ".", DependsOn: "from", DependsValue: "dockerfile",
 			},
 			{
 				Name: "image", Title: "이미지 참조", Prompt: "이미지",
-				AllowCustom: true, DependsOn: &core.WizardCondition{Name: "from", Values: []string{"image"}},
+				AllowCustom: true, DependsOn: "from", DependsValue: "image",
 			},
 			{
 				Name: "note", Title: "메모", Prompt: "메모",

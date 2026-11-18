@@ -411,10 +411,10 @@ func TestWizardStepsSuggestsFilesWithoutSelectingThemSilently(t *testing.T) {
 	if steps["service-name"].Default != "app" {
 		t.Fatalf("service default = %q", steps["service-name"].Default)
 	}
-	if steps["context"].DependsOn == nil || steps["context"].DependsOn.Name != "from" {
+	if steps["context"].DependsOn != "from" || steps["context"].DependsValue != "dockerfile" {
 		t.Fatalf("context step is not conditional: %+v", steps["context"])
 	}
-	if steps["image"].DependsOn == nil || steps["image"].DependsOn.Values[0] != "image" {
+	if steps["image"].DependsOn != "from" || steps["image"].DependsValue != "image" {
 		t.Fatalf("image step is not conditional: %+v", steps["image"])
 	}
 	for _, name := range []string{"port", "volume", "env-var", "command"} {

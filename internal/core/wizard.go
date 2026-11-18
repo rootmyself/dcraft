@@ -53,18 +53,15 @@ type WizardStep struct {
 	CustomHint string `json:"custom_hint,omitempty"`
 	// Default is preselected for a choice step or prefilled for an input step.
 	Default string `json:"default,omitempty"`
-	// Optional lets an input step accept an empty answer. A choice step
-	// represents "none" with an empty option value instead.
+	// Optional allows an empty custom answer. The answer is stored as an
+	// empty string and the flow advances; it is used for optional selectors
+	// such as an AWS field/region/profile or init runtime fields.
 	Optional bool `json:"optional,omitempty"`
-	// DependsOn makes the step conditional on an earlier answer. The TUI skips
-	// the step unless the named answer is one of Values.
-	DependsOn *WizardCondition `json:"depends_on,omitempty"`
-}
-
-// WizardCondition selects a step by an earlier answer.
-type WizardCondition struct {
-	Name   string   `json:"name"`
-	Values []string `json:"values"`
+	// DependsOn and DependsValue hide the step until another answered step
+	// has the exact value. Empty DependsOn always shows the step. Hidden
+	// steps are skipped by navigation and do not contribute an answer.
+	DependsOn    string `json:"depends_on,omitempty"`
+	DependsValue string `json:"depends_value,omitempty"`
 }
 
 // WizardOption is one selectable value. Value is machine data; Label is Korean

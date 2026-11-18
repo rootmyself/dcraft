@@ -66,7 +66,10 @@ func (m *Model) beginWizardSteps(res core.Result) {
 		return
 	}
 	m.wizardSpec = spec
-	m.wizardStep = m.firstWizardStep()
+	m.wizardStep = 0
+	if first := m.firstVisibleStep(0); first >= 0 {
+		m.wizardStep = first
+	}
 	m.phase = phaseWizardStep
 	m.initWizardStep()
 }
@@ -86,58 +89,6 @@ func (m *Model) wizardTextInput() bool {
 	}
 	step := m.wizardSpec.Steps[m.wizardStep]
 	return len(step.Options) == 0 && step.AllowCustom
-}
-
-// wizardStepApplies decides whether a step is visible for the answers collected
-// so far. A conditional step is skipped entirely, never shown disabled.
-func (m *Model) wizardStepApplies(step core.WizardStep) bool {
-	if step.DependsOn == nil {
-		return true
-	}
-	answer := m.wizardAnswers[step.DependsOn.Name]
-	for _, value := range step.DependsOn.Values {
-		if answer == value {
-			return true
-		}
-	}
-	return false
-}
-
-func (m *Model) firstWizardStep() int {
-	for i, step := range m.wizardSpec.Steps {
-		if m.wizardStepApplies(step) {
-			return i
-		}
-	}
-	return 0
-}
-
-func (m *Model) nextWizardStep(from int) int {
-	for i := from; i < len(m.wizardSpec.Steps); i++ {
-		if m.wizardStepApplies(m.wizardSpec.Steps[i]) {
-			return i
-		}
-	}
-	return -1
-}
-
-func (m *Model) previousWizardStepIndex(from int) int {
-	for i := from; i >= 0; i-- {
-		if m.wizardStepApplies(m.wizardSpec.Steps[i]) {
-			return i
-		}
-	}
-	return -1
-}
-
-// pruneWizardAnswers drops answers whose step no longer applies after an
-// earlier answer changed (for example switching from Dockerfile to image mode).
-func (m *Model) pruneWizardAnswers() {
-	for _, step := range m.wizardSpec.Steps {
-		if _, ok := m.wizardAnswers[step.Name]; ok && !m.wizardStepApplies(step) {
-			delete(m.wizardAnswers, step.Name)
-		}
-	}
 }
 
 func (m *Model) initWizardStep() {
@@ -209,7 +160,6 @@ func (m *Model) updateWizard(msg tea.KeyMsg) tea.Cmd {
 					value = strings.Join(chosen, "\n")
 				}
 				m.wizardAnswers[step.Name] = value
-				m.pruneWizardAnswers()
 				m.advanceWizard()
 			case "left":
 				m.previousWizardStep()
@@ -230,7 +180,6 @@ func (m *Model) updateWizard(msg tea.KeyMsg) tea.Cmd {
 				return nil
 			}
 			m.wizardAnswers[step.Name] = value
-			m.pruneWizardAnswers()
 			m.advanceWizard()
 		case "left":
 			if m.wizardInput == "" {
@@ -255,8 +204,8 @@ func (m *Model) updateWizard(msg tea.KeyMsg) tea.Cmd {
 				return m.applyWizard()
 			}
 		case "left":
-			if previous := m.previousWizardStepIndex(len(m.wizardSpec.Steps) - 1); previous >= 0 {
-				m.wizardStep = previous
+			if prev := m.previousVisibleStep(len(m.wizardSpec.Steps) - 1); prev >= 0 {
+				m.wizardStep = prev
 				m.phase = phaseWizardStep
 				m.initWizardStep()
 			}
@@ -265,16 +214,63 @@ func (m *Model) updateWizard(msg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
+// wizardStepVisible evaluates a step's single dependency against the answers
+// collected so far. A hidden step never contributes an answer.
+func wizardStepVisible(answers map[string]string, step core.WizardStep) bool {
+	if step.DependsOn == "" {
+		return true
+	}
+	return answers[step.DependsOn] == step.DependsValue
+}
+
+func (m *Model) firstVisibleStep(from int) int {
+	for i := from; i < len(m.wizardSpec.Steps); i++ {
+		if wizardStepVisible(m.wizardAnswers, m.wizardSpec.Steps[i]) {
+			return i
+		}
+	}
+	return -1
+}
+
+func (m *Model) previousVisibleStep(from int) int {
+	for i := from; i >= 0 && i < len(m.wizardSpec.Steps); i-- {
+		if wizardStepVisible(m.wizardAnswers, m.wizardSpec.Steps[i]) {
+			return i
+		}
+	}
+	return -1
+}
+
+func (m *Model) wizardProgress() (int, int) {
+	ordinal, total := 0, 0
+	for i, step := range m.wizardSpec.Steps {
+		if !wizardStepVisible(m.wizardAnswers, step) {
+			continue
+		}
+		total++
+		if i <= m.wizardStep {
+			ordinal = total
+		}
+	}
+	if ordinal == 0 {
+		ordinal = 1
+	}
+	if total == 0 {
+		total = 1
+	}
+	return ordinal, total
+}
+
 func (m *Model) previousWizardStep() {
-	if previous := m.previousWizardStepIndex(m.wizardStep - 1); previous >= 0 {
-		m.wizardStep = previous
+	if prev := m.previousVisibleStep(m.wizardStep - 1); prev >= 0 {
+		m.wizardStep = prev
 		m.phase = phaseWizardStep
 		m.initWizardStep()
 	}
 }
 
 func (m *Model) advanceWizard() {
-	if next := m.nextWizardStep(m.wizardStep + 1); next >= 0 {
+	if next := m.firstVisibleStep(m.wizardStep + 1); next >= 0 {
 		m.wizardStep = next
 		m.initWizardStep()
 		return
@@ -366,6 +362,19 @@ func (m *Model) cancelWizard() {
 	m.notice = msgWizardCanceled
 }
 
+// previewApprovals lists every independent approval the apply will need: a
+// descriptor approval and any approvals the feature declared in the spec.
+func (m *Model) previewApprovals() []core.ApprovalKind {
+	var kinds []core.ApprovalKind
+	if m.wizardFeature != nil {
+		if kind := m.wizardFeature.Descriptor().Approval; kind != core.ApprovalNone {
+			kinds = append(kinds, kind)
+		}
+	}
+	kinds = append(kinds, m.wizardSpec.RequiredApprovals...)
+	return uniqueApprovalKinds(kinds)
+}
+
 func (m *Model) wizardView() string {
 	var b strings.Builder
 	switch m.phase {
@@ -382,7 +391,8 @@ func (m *Model) wizardView() string {
 			return b.String()
 		}
 		step := m.wizardSpec.Steps[m.wizardStep]
-		fmt.Fprintf(&b, "%s %d/%d\n", msgWizardProgress, m.wizardStep+1, len(m.wizardSpec.Steps))
+		ordinal, total := m.wizardProgress()
+		fmt.Fprintf(&b, "%s %d/%d\n", msgWizardProgress, ordinal, total)
 		b.WriteString(titleStyle.Render(step.Title))
 		b.WriteString("\n\n")
 		b.WriteString(step.Prompt)
@@ -422,16 +432,14 @@ func (m *Model) wizardView() string {
 			}
 		}
 	case phaseWizardPreview:
+		if approvals := m.previewApprovals(); len(approvals) > 0 {
+			for _, kind := range approvals {
+				fmt.Fprintf(&b, "%s: %s (%s)\n", msgWizardRequiredApprovals, kind.KoreanLabel(), kind)
+			}
+			b.WriteString("enter 계획 확인 · left 이전 단계 · esc 취소\n\n")
+		}
 		b.WriteString(m.wizardPreview)
 		b.WriteString("\n")
-		if len(m.wizardSpec.RequiredApprovals) > 0 {
-			b.WriteString("\n")
-			b.WriteString(titleStyle.Render(msgWizardRequiredApprovals))
-			b.WriteString("\n")
-			for _, kind := range m.wizardSpec.RequiredApprovals {
-				fmt.Fprintf(&b, "- %s (%s)\n", kind.KoreanLabel(), kind)
-			}
-		}
 	}
 	if m.notice != "" {
 		b.WriteString("\n")
@@ -445,6 +453,10 @@ func (m *Model) wizardHints() string {
 	switch m.phase {
 	case phaseWizardStep:
 		if m.wizardTextInput() {
+			step := m.wizardSpec.Steps[m.wizardStep]
+			if step.Optional {
+				return msgHintWizardOptional
+			}
 			return msgHintWizardInput
 		}
 		if m.wizardStep >= 0 && m.wizardStep < len(m.wizardSpec.Steps) && m.wizardSpec.Steps[m.wizardStep].Multi {

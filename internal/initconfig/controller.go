@@ -399,8 +399,7 @@ func (c *Controller) WizardSteps(ctx context.Context, in core.Invocation) (core.
 	}
 	c.RememberWizardTarget(in.Target, approvals)
 
-	dockerOnly := &core.WizardCondition{Name: "from", Values: []string{string(ModeDockerfile)}}
-	imageOnly := &core.WizardCondition{Name: "from", Values: []string{string(ModeImage)}}
+	const modeStep = "from"
 	spec := core.WizardSpec{
 		Title: msgWizardTitle,
 		Steps: []core.WizardStep{
@@ -418,15 +417,15 @@ func (c *Controller) WizardSteps(ctx context.Context, in core.Invocation) (core.
 			},
 			{
 				Name: "context", Title: msgWizardContextTitle, Prompt: msgWizardContextPrompt,
-				AllowCustom: true, Default: ".", CustomHint: msgWizardContextHint, DependsOn: dockerOnly,
+				AllowCustom: true, Default: ".", CustomHint: msgWizardContextHint, DependsOn: modeStep, DependsValue: string(ModeDockerfile),
 			},
 			{
 				Name: "dockerfile", Title: msgWizardDockerTitle, Prompt: msgWizardDockerPrompt,
-				AllowCustom: true, Default: "Dockerfile", CustomHint: msgWizardDockerHint, DependsOn: dockerOnly,
+				AllowCustom: true, Default: "Dockerfile", CustomHint: msgWizardDockerHint, DependsOn: modeStep, DependsValue: string(ModeDockerfile),
 			},
 			{
 				Name: "image", Title: msgWizardImageTitle, Prompt: msgWizardImagePrompt,
-				AllowCustom: true, CustomHint: msgWizardImageHint, DependsOn: imageOnly,
+				AllowCustom: true, CustomHint: msgWizardImageHint, DependsOn: modeStep, DependsValue: string(ModeImage),
 			},
 			{
 				Name: "output", Title: msgWizardOutputTitle, Prompt: msgWizardOutputPrompt,

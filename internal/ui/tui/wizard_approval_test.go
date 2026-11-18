@@ -48,7 +48,11 @@ func TestApprovalWizardUsesTheGenericPlanAndDataRestoreApproval(t *testing.T) {
 	if m.phase != phaseWizardPreview {
 		t.Fatalf("phase = %v, want wizard preview; view:\n%s", m.phase, m.View())
 	}
-	// The preview is not an approval: enter plans, it does not apply.
+	// The preview names the approval the feature will need, but it is not
+	// itself an approval: enter plans, it does not apply.
+	if view := m.View(); !strings.Contains(view, "승인:") || !strings.Contains(view, "data_restore") {
+		t.Fatalf("preview does not show the declared approval:\n%s", view)
+	}
 	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = nm.(*Model)
 	feed(t, m, execute(t, cmd))

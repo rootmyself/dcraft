@@ -65,7 +65,7 @@ func New(opts Options) (*App, error) {
 		return nil, err
 	}
 	store := state.New(stateRoot)
-	secretRuntime := secretref.NewRuntime(store, opts.Getenv)
+	secretRuntime := secretref.NewRuntimeWithRunner(store, opts.Getenv, opts.Runner)
 	hookService := hooks.New(store, opts.Getenv)
 	composeAdapter := compose.New(opts.Runner, opts.Getenv)
 	composeAdapter.SetSecretRuntime(secretRuntime)
