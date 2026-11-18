@@ -24,6 +24,10 @@ const (
 	msgHistoryFailed       = "작업 이력을 기록하지 못했습니다."
 	msgHistoryFailedAction = "상태 폴더(DCRAFT_STATE_DIR)의 쓰기 권한과 여유 공간을 확인하세요."
 
+	msgIdentityUnreadable          = "저장된 프로젝트 이름을 확인하지 못해 Compose 기본 이름으로 계속합니다."
+	msgIdentityUnreadableActionOne = "상태 폴더(DCRAFT_STATE_DIR)의 names.json 권한과 JSON 내용을 확인하세요."
+	msgIdentityUnreadableActionTwo = "dcraft는 읽기만 시도했으며 이 작업에서 상태를 쓰지 않았습니다."
+
 	msgCanceled          = "작업이 중단되었습니다. 이미 완료된 단계의 효과는 남아 있을 수 있습니다."
 	msgCanceledActionOne = "dcraft status로 현재 상태를 확인하세요."
 	msgCanceledActionTwo = "중단된 작업을 성공으로 간주하지 마세요."

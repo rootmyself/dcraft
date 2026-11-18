@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/rootmyself/dcraft/internal/app"
+	"github.com/rootmyself/dcraft/internal/core"
 	"github.com/rootmyself/dcraft/internal/execx/execxtest"
 	"github.com/rootmyself/dcraft/internal/ui/cli"
 	"github.com/rootmyself/dcraft/internal/ui/tui"
@@ -29,8 +30,31 @@ func TestRegistrationWiresStatusIntoBothInterfaces(t *testing.T) {
 		t.Fatalf("incomplete app graph: %+v", a)
 	}
 	features := a.Registry.All()
-	if len(features) != 1 || features[0].Descriptor().Name != "status" {
-		t.Fatalf("registered features = %v", features)
+	byName := map[string]core.Feature{}
+	for _, f := range features {
+		byName[f.Descriptor().Name] = f
+	}
+	for _, name := range []string{"status", "up", "stop", "down", "restart"} {
+		if _, ok := byName[name]; !ok {
+			t.Fatalf("registered features = %v, missing %q", features, name)
+		}
+	}
+	if len(features) != 5 {
+		t.Fatalf("registered features = %d, want 5", len(features))
+	}
+	for _, name := range []string{"up", "stop", "restart"} {
+		if !byName[name].Descriptor().SupportsServices {
+			t.Fatalf("%s does not accept service selection", name)
+		}
+	}
+	if byName["down"].Descriptor().SupportsServices {
+		t.Fatal("down must stay project-wide")
+	}
+	for _, name := range []string{"up", "stop", "down", "restart"} {
+		d := byName[name].Descriptor()
+		if d.ReadOnly || !d.RecordsHistory {
+			t.Fatalf("%s descriptor = %+v", name, d)
+		}
 	}
 	primary, ok := a.Registry.Primary()
 	if !ok || primary.Descriptor().Name != "status" {
@@ -43,14 +67,14 @@ func TestRegistrationWiresStatusIntoBothInterfaces(t *testing.T) {
 		Stdout:   io.Discard,
 		Stderr:   io.Discard,
 	})
-	found := false
+	found := map[string]bool{}
 	for _, cmd := range root.Commands() {
-		if cmd.Name() == "status" {
-			found = true
-		}
+		found[cmd.Name()] = true
 	}
-	if !found {
-		t.Fatal("status command was not derived from the real registry")
+	for _, name := range []string{"status", "up", "stop", "down", "restart"} {
+		if !found[name] {
+			t.Fatalf("command %q was not derived from the real registry", name)
+		}
 	}
 
 	model := tui.NewModel(nil, tui.Options{Engine: a.Engine, Registry: a.Registry})

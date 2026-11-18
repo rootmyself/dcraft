@@ -10,6 +10,8 @@ import (
 	"github.com/rootmyself/dcraft/internal/deps"
 	"github.com/rootmyself/dcraft/internal/execx"
 	"github.com/rootmyself/dcraft/internal/features/all"
+	"github.com/rootmyself/dcraft/internal/identity"
+	"github.com/rootmyself/dcraft/internal/lifecycle"
 	"github.com/rootmyself/dcraft/internal/state"
 	"github.com/rootmyself/dcraft/internal/target"
 )
@@ -53,17 +55,20 @@ func New(opts Options) (*App, error) {
 	}
 	store := state.New(stateRoot)
 	composeAdapter := compose.New(opts.Runner, opts.Getenv)
+	controller := lifecycle.New(composeAdapter, composeAdapter, composeAdapter, store, opts.Clock)
 	d := &deps.Deps{
-		Runner:  opts.Runner,
-		Clock:   opts.Clock,
-		State:   store,
-		Compose: composeAdapter,
+		Runner:    opts.Runner,
+		Clock:     opts.Clock,
+		State:     store,
+		Compose:   composeAdapter,
+		Lifecycle: controller,
 	}
 
 	registry := core.NewRegistry()
 	all.Register(registry, d)
 
 	engine := core.NewEngine(registry, target.New(), composeAdapter, store, opts.Clock)
+	engine.Identity = identity.New(composeAdapter, store)
 	engine.CWD = opts.Getwd
 
 	return &App{Options: opts, Registry: registry, Engine: engine, Deps: d}, nil
