@@ -181,6 +181,8 @@ func TestLoadRejectsInvalidConfigs(t *testing.T) {
 		{"alias not mapping", "environments:\n  dev: compose.yaml\n", "항목 묶음"},
 		{"compose_files not list", "environments:\n  dev:\n    compose_files: compose.yaml\n", "목록"},
 		{"list item not string", "environments:\n  dev:\n    compose_files: [compose.yaml, {x: 1}]\n", "문자열"},
+		{"list item number", "environments:\n  dev:\n    compose_files: [123]\n", "문자열"},
+		{"numeric alias", "environments:\n  123: {profiles: [dev]}\n", "별칭"},
 		{"empty list item", "environments:\n  dev:\n    compose_files: [\"\"]\n", "빈 값"},
 		{"duplicate file", "environments:\n  dev:\n    compose_files: [compose.yaml, ./compose.yaml]\n", "중복"},
 		{"duplicate profile", "environments:\n  dev:\n    profiles: [dev, dev]\n", "중복"},

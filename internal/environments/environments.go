@@ -144,7 +144,7 @@ func Load(projectDir string) (Catalog, error) {
 	seen := map[string]int{}
 	for i := 0; i+1 < len(envNode.Content); i += 2 {
 		keyNode, valNode := envNode.Content[i], envNode.Content[i+1]
-		if keyNode.Kind != yaml.ScalarNode {
+		if keyNode.Kind != yaml.ScalarNode || keyNode.Tag != "!!str" {
 			return cat, invalidConfig(msgConfigAliasKey, lineOf(keyNode))
 		}
 		name := keyNode.Value
@@ -192,7 +192,7 @@ func parseEnvironment(projectDir, name string, node *yaml.Node) (core.Environmen
 	seenFields := map[string]int{}
 	for i := 0; i+1 < len(node.Content); i += 2 {
 		fieldNode, valueNode := node.Content[i], node.Content[i+1]
-		if fieldNode.Kind != yaml.ScalarNode {
+		if fieldNode.Kind != yaml.ScalarNode || fieldNode.Tag != "!!str" {
 			return env, invalidConfig(fmt.Sprintf(msgEnvUnknownField, name, fieldNode.Value), lineOf(fieldNode))
 		}
 		field := fieldNode.Value
@@ -243,7 +243,7 @@ func stringList(projectDir, name, field string, node *yaml.Node) ([]string, erro
 	out := make([]string, 0, len(node.Content))
 	seen := map[string]bool{}
 	for _, item := range node.Content {
-		if item.Kind != yaml.ScalarNode || item.Tag == "!!null" {
+		if item.Kind != yaml.ScalarNode || item.Tag != "!!str" {
 			return nil, invalidConfig(fmt.Sprintf(msgEnvListItem, name, field), lineOf(item))
 		}
 		raw := strings.TrimSpace(item.Value)
@@ -274,7 +274,7 @@ func profileList(name string, node *yaml.Node) ([]string, error) {
 	out := make([]string, 0, len(node.Content))
 	seen := map[string]bool{}
 	for _, item := range node.Content {
-		if item.Kind != yaml.ScalarNode || item.Tag == "!!null" {
+		if item.Kind != yaml.ScalarNode || item.Tag != "!!str" {
 			return nil, invalidConfig(fmt.Sprintf(msgEnvListItem, name, "profiles"), lineOf(item))
 		}
 		profile := strings.TrimSpace(item.Value)

@@ -378,10 +378,10 @@ func environmentSummary(env core.Environment) string {
 	if len(env.Files) == 0 {
 		parts = append(parts, msgEnvDefaultFiles)
 	} else {
-		parts = append(parts, fmt.Sprintf("%s %d", msgEnvComposeFiles, len(env.Files)))
+		parts = append(parts, fmt.Sprintf("%s %d개", msgEnvComposeFiles, len(env.Files)))
 	}
 	if len(env.EnvFiles) > 0 {
-		parts = append(parts, fmt.Sprintf("%s %d", msgEnvEnvFiles, len(env.EnvFiles)))
+		parts = append(parts, fmt.Sprintf("%s %d개", msgEnvEnvFiles, len(env.EnvFiles)))
 	}
 	if len(env.Profiles) > 0 {
 		parts = append(parts, msgEnvProfiles+" "+strings.Join(env.Profiles, ", "))

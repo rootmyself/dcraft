@@ -74,7 +74,7 @@ func ReadDeclarations(files []string) (Declarations, error) {
 }
 
 type scanDoc struct {
-	Name     string                 `yaml:"name"`
+	Name     yaml.Node              `yaml:"name"`
 	Services map[string]scanService `yaml:"services"`
 	Volumes  map[string]scanScope   `yaml:"volumes"`
 	Networks map[string]scanScope   `yaml:"networks"`
@@ -86,8 +86,8 @@ type scanService struct {
 }
 
 type scanScope struct {
-	External bool   `yaml:"external"`
-	Name     string `yaml:"name"`
+	External yaml.Node `yaml:"external"`
+	Name     yaml.Node `yaml:"name"`
 }
 
 func parseDoc(root *yaml.Node, out *Declarations) {
@@ -95,7 +95,7 @@ func parseDoc(root *yaml.Node, out *Declarations) {
 	if err := root.Decode(&doc); err != nil {
 		return
 	}
-	if name := strings.TrimSpace(doc.Name); name != "" {
+	if name := strings.TrimSpace(doc.Name.Value); name != "" {
 		out.ProjectName = name
 	}
 	services := make([]string, 0, len(doc.Services))
@@ -122,15 +122,9 @@ func parseDoc(root *yaml.Node, out *Declarations) {
 	}
 	sort.Strings(volumes)
 	for _, key := range volumes {
-		scope := doc.Volumes[key]
-		if !scope.External {
-			continue
+		if name, ok := externalScopeName(doc.Volumes[key], key); ok {
+			out.ExternalVolumes = append(out.ExternalVolumes, name)
 		}
-		name := scope.Name
-		if name == "" {
-			name = key
-		}
-		out.ExternalVolumes = append(out.ExternalVolumes, name)
 	}
 	networks := make([]string, 0, len(doc.Networks))
 	for name := range doc.Networks {
@@ -138,21 +132,45 @@ func parseDoc(root *yaml.Node, out *Declarations) {
 	}
 	sort.Strings(networks)
 	for _, key := range networks {
-		scope := doc.Networks[key]
-		if !scope.External {
-			continue
+		if name, ok := externalScopeName(doc.Networks[key], key); ok {
+			out.ExternalNetworks = append(out.ExternalNetworks, name)
 		}
-		name := scope.Name
-		if name == "" {
-			name = key
-		}
-		out.ExternalNetworks = append(out.ExternalNetworks, name)
 	}
 }
 
 var (
 	publishedPortRe = regexp.MustCompile(`^\d+(-\d+)?$`)
 )
+
+// externalScopeName understands both `external: true` plus `name:` and the
+// older `external: {name: ...}` form. It never guesses a scope as external.
+func externalScopeName(scope scanScope, key string) (string, bool) {
+	external := resolveAlias(&scope.External)
+	if external == nil {
+		return "", false
+	}
+	name := strings.TrimSpace(resolveAlias(&scope.Name).Value)
+	switch external.Kind {
+	case yaml.ScalarNode:
+		if !strings.EqualFold(external.Value, "true") {
+			return "", false
+		}
+	case yaml.MappingNode:
+		var legacy scanScope
+		if err := external.Decode(&legacy); err != nil {
+			return "", false
+		}
+		if legacyName := strings.TrimSpace(resolveAlias(&legacy.Name).Value); legacyName != "" {
+			name = legacyName
+		}
+	default:
+		return "", false
+	}
+	if name == "" {
+		name = key
+	}
+	return name, true
+}
 
 func parsePort(service string, node *yaml.Node) (Port, bool) {
 	node = resolveAlias(node)

@@ -528,6 +528,43 @@ environments:
 	}
 }
 
+func TestResolveUnderstandsLegacyExternalScopeSyntax(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "compose.dev.yaml", `name: app-dev
+services:
+  app:
+    image: alpine:3.20
+    volumes: [shared-data:/data]
+volumes:
+  shared-data:
+    external: true
+    name: team-shared-data
+`)
+	writeFile(t, dir, "compose.prod.yaml", `name: app-prod
+services:
+  app:
+    image: alpine:3.20
+    volumes: [shared-data:/data]
+volumes:
+  shared-data:
+    external:
+      name: team-shared-data
+`)
+	writeEnvironmentConfig(t, dir, `
+environments:
+  dev: {compose_files: [compose.dev.yaml]}
+  prod: {compose_files: [compose.prod.yaml]}
+`)
+	_, warnings, err := target.New().Resolve(context.Background(), core.TargetRequest{Path: dir, Environment: "dev"}, dir)
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	overlap := overlapDiagnostic(t, warnings)
+	if !strings.Contains(overlap.Detail, "team-shared-data") {
+		t.Fatalf("overlap %+v missing legacy external volume", overlap)
+	}
+}
+
 func TestResolveIgnoresRelativeBindsAndDistinctHostIPs(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "compose.dev.yaml", `name: app-dev
