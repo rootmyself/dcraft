@@ -11,18 +11,27 @@ import (
 	"github.com/rootmyself/dcraft/internal/stack"
 )
 
-// Feature manages project-local runtime secret references. It stores only
+// Feature manages project-local secret references. It stores only
 // references and shares all validation with the CLI action path and the TUI
 // wizard's apply path.
 type Feature struct {
 	identity stack.Identity
 	runtime  *secretref.Runtime
+	builds   []BuildModelReader
+}
+
+// BuildModelReader is the narrow Compose capability the build phase needs: it
+// says whether a service has a build section. It is implemented by the Compose
+// adapter and optional for runtime-only use.
+type BuildModelReader interface {
+	UpdateModel(ctx context.Context, target core.Target) (stack.UpdateModel, error)
 }
 
 // New builds the feature. identity validates service names against the
-// resolved Compose configuration; runtime owns per-stack materialization.
-func New(identity stack.Identity, runtime *secretref.Runtime) *Feature {
-	return &Feature{identity: identity, runtime: runtime}
+// resolved Compose configuration; runtime owns per-stack materialization; the
+// optional build reader validates build-phase services.
+func New(identity stack.Identity, runtime *secretref.Runtime, builds ...BuildModelReader) *Feature {
+	return &Feature{identity: identity, runtime: runtime, builds: builds}
 }
 
 // Payload is the machine-readable result of the secrets command.
@@ -33,11 +42,12 @@ type Payload struct {
 // Report describes the saved references and the delivery effect. It contains
 // no resolved values.
 type Report struct {
-	Action       string          `json:"action"`
-	ConfigFile   string          `json:"config_file"`
-	OverrideFile string          `json:"override_file,omitempty"`
-	References   []ReferenceView `json:"references"`
-	Notices      []string        `json:"notices"`
+	Action            string          `json:"action"`
+	ConfigFile        string          `json:"config_file"`
+	OverrideFile      string          `json:"override_file,omitempty"`
+	BuildOverrideFile string          `json:"build_override_file,omitempty"`
+	References        []ReferenceView `json:"references"`
+	Notices           []string        `json:"notices"`
 }
 
 // ReferenceView is one saved reference plus its user-visible effect.
@@ -114,7 +124,17 @@ func (f *Feature) applyWizard(ctx context.Context, in core.Invocation) (any, err
 		Ref:      strings.TrimSpace(in.Option("ref")),
 		Target:   strings.TrimSpace(in.Option("target")),
 	}
+	normalizePhaseDelivery(&ref)
 	return f.add(ctx, in, ref)
+}
+
+// normalizePhaseDelivery fixes build-phase delivery to the BuildKit mount. The
+// wizard's delivery step is shared with runtime delivery; a build answer is
+// always a BuildKit secret mount, never an environment value.
+func normalizePhaseDelivery(ref *secretref.Reference) {
+	if ref.Phase == secretref.PhaseBuild {
+		ref.Delivery = secretref.DeliveryFile
+	}
 }
 
 func (f *Feature) add(ctx context.Context, in core.Invocation, ref secretref.Reference) (any, error) {
@@ -126,10 +146,16 @@ func (f *Feature) add(ctx context.Context, in core.Invocation, ref secretref.Ref
 	if ref.Phase == "" {
 		ref.Phase = secretref.PhaseRuntime
 	}
+	if ref.Phase == secretref.PhaseBuild && ref.Delivery == "" {
+		ref.Delivery = secretref.DeliveryFile
+	}
 	if err := requireAddInput(ref); err != nil {
 		return nil, err
 	}
 	err = core.RunStage(in.Reporter, "validate", msgStageValidate, func() error {
+		if err := secretref.ValidateReference(ref); err != nil {
+			return err
+		}
 		if f.identity == nil {
 			return core.Fail(core.Diagnostic{
 				Category:    core.CategoryInternal,
@@ -143,7 +169,10 @@ func (f *Feature) add(ctx context.Context, in core.Invocation, ref secretref.Ref
 			return err
 		}
 		newCatalog := secretref.Catalog{References: []secretref.Reference{ref}}
-		return secretref.ValidateServices(newCatalog, cfg.Services)
+		if err := secretref.ValidateServices(newCatalog, cfg.Services); err != nil {
+			return err
+		}
+		return f.validateBuildService(ctx, in, ref)
 	})
 	if err != nil {
 		return nil, err
@@ -199,7 +228,9 @@ func (f *Feature) remove(ctx context.Context, in core.Invocation, services []str
 		return nil, err
 	}
 	notices := []string{msgRemoved}
-	if removed.Delivery == secretref.DeliveryFile {
+	if removed.Phase == secretref.PhaseBuild {
+		notices = append(notices, msgRemovedBuildNotice)
+	} else if removed.Delivery == secretref.DeliveryFile {
 		notices = append(notices, msgRemovedFileNotice)
 	}
 	return f.buildReport(in, "remove", cat, notices)
@@ -230,6 +261,47 @@ func (f *Feature) regenerate(target core.Target) error {
 	return nil
 }
 
+// validateBuildService rejects a build-phase reference for a service Compose
+// would never build. It runs before saving so the configuration cannot claim a
+// build delivery that has nowhere to go.
+func (f *Feature) validateBuildService(ctx context.Context, in core.Invocation, ref secretref.Reference) error {
+	if ref.Phase != secretref.PhaseBuild {
+		return nil
+	}
+	if len(f.builds) == 0 {
+		return core.Fail(core.Diagnostic{
+			Category:    core.CategoryInternal,
+			Severity:    core.SeverityError,
+			Message:     msgBuildModelUnavailable,
+			NextActions: []string{msgNoComposeAction},
+		})
+	}
+	model, err := f.builds[0].UpdateModel(ctx, in.Target)
+	if err != nil {
+		return err
+	}
+	for _, def := range model.Services {
+		if def.Name != ref.Service {
+			continue
+		}
+		if !def.Build {
+			return core.Fail(core.Diagnostic{
+				Category:    core.CategoryBuildServiceInvalid,
+				Severity:    core.SeverityError,
+				Message:     fmt.Sprintf(msgBuildServiceMissing, ref.Service),
+				NextActions: []string{msgBuildServiceAction},
+			})
+		}
+		return nil
+	}
+	return core.Fail(core.Diagnostic{
+		Category:    core.CategoryServiceUnknown,
+		Severity:    core.SeverityError,
+		Message:     fmt.Sprintf(msgBuildServiceUnknown, ref.Service),
+		NextActions: []string{msgUnknownServiceAction},
+	})
+}
+
 func (f *Feature) buildReport(in core.Invocation, action string, cat secretref.Catalog, notices []string) (Payload, error) {
 	views := make([]ReferenceView, 0, len(cat.References))
 	for _, ref := range cat.References {
@@ -254,6 +326,11 @@ func (f *Feature) buildReport(in core.Invocation, action string, cat secretref.C
 		if path, err := f.runtime.OverridePath(in.Target); err == nil {
 			if _, statErr := os.Stat(path); statErr == nil {
 				report.OverrideFile = path
+			}
+		}
+		if path, err := f.runtime.BuildOverridePath(in.Target); err == nil {
+			if _, statErr := os.Stat(path); statErr == nil {
+				report.BuildOverrideFile = path
 			}
 		}
 	}
@@ -306,6 +383,7 @@ func (f *Feature) wizardSteps(ctx context.Context, in core.Invocation) (any, err
 				Prompt: msgWizardPhasePrompt, Default: string(secretref.PhaseRuntime),
 				Options: []core.WizardOption{
 					{Value: string(secretref.PhaseRuntime), Label: msgWizardPhaseRuntime},
+					{Value: string(secretref.PhaseBuild), Label: msgWizardPhaseBuild},
 				},
 			},
 			{
@@ -346,19 +424,27 @@ func (f *Feature) WizardPreview(answers map[string]string) (string, error) {
 	if ref.Phase == "" {
 		ref.Phase = secretref.PhaseRuntime
 	}
-	if err := secretref.Validate(ref); err != nil {
-		return "", inputError(msgPreviewInvalid+" "+err.Error(), "")
+	normalizePhaseDelivery(&ref)
+	if err := secretref.ValidateReference(ref); err != nil {
+		return "", err
 	}
 	var b strings.Builder
 	b.WriteString(msgPreviewTitle)
 	b.WriteString("\n")
 	fmt.Fprintf(&b, "%s: %s\n", msgPreviewService, ref.Service)
 	fmt.Fprintf(&b, "%s: %s\n", msgPreviewPhase, phaseLabel(ref.Phase))
-	fmt.Fprintf(&b, "%s: %s\n", msgPreviewDelivery, deliveryLabel(ref.Delivery, ref.EffectiveTarget()))
+	fmt.Fprintf(&b, "%s: %s\n", msgPreviewDelivery, deliveryLabel(ref.Phase, ref.Delivery, ref.EffectiveTarget()))
 	fmt.Fprintf(&b, "%s: %s (%s)\n", msgPreviewSource, sourceLabel(ref.Source), ref.Ref)
 	fmt.Fprintf(&b, "%s: %s\n", msgPreviewEffect, effectText(ref))
 	b.WriteString(msgPreviewNote)
-	if ref.Delivery == secretref.DeliveryEnvironment {
+	if ref.Phase == secretref.PhaseBuild {
+		b.WriteString("\n")
+		b.WriteString(msgPreviewBuildFixed)
+		b.WriteString("\n")
+		b.WriteString(msgPreviewBuildDockerfile)
+		b.WriteString("\n")
+		b.WriteString(msgPreviewBuildCache)
+	} else if ref.Delivery == secretref.DeliveryEnvironment {
 		b.WriteString("\n")
 		b.WriteString(msgPreviewEnvVisible)
 	} else {
@@ -421,6 +507,9 @@ func requireAddInput(ref secretref.Reference) error {
 
 func effectText(ref secretref.Reference) string {
 	target := ref.EffectiveTarget()
+	if ref.Phase == secretref.PhaseBuild {
+		return fmt.Sprintf(msgEffectBuild, target, "/run/secrets/"+target)
+	}
 	switch ref.Delivery {
 	case secretref.DeliveryEnvironment:
 		return fmt.Sprintf(msgEffectEnv, target)
@@ -433,8 +522,12 @@ func effectText(ref secretref.Reference) string {
 
 func disclosureMessages(views []ReferenceView) []string {
 	var notices []string
-	hasEnv, hasFile := false, false
+	hasEnv, hasFile, hasBuild := false, false, false
 	for _, view := range views {
+		if secretref.Phase(view.Phase) == secretref.PhaseBuild {
+			hasBuild = true
+			continue
+		}
 		switch secretref.Delivery(view.Delivery) {
 		case secretref.DeliveryEnvironment:
 			hasEnv = true
@@ -448,17 +541,27 @@ func disclosureMessages(views []ReferenceView) []string {
 	if hasFile {
 		notices = append(notices, msgFileApp)
 	}
+	if hasBuild {
+		notices = append(notices, msgBuildFixed, msgBuildDockerfile, msgBuildCache, msgBuildNoFallback)
+	}
 	return notices
 }
 
 func phaseLabel(phase secretref.Phase) string {
-	if phase == secretref.PhaseRuntime {
+	switch phase {
+	case secretref.PhaseRuntime:
 		return msgPhaseRuntime
+	case secretref.PhaseBuild:
+		return msgPhaseBuild
+	default:
+		return string(phase)
 	}
-	return string(phase)
 }
 
-func deliveryLabel(delivery secretref.Delivery, target string) string {
+func deliveryLabel(phase secretref.Phase, delivery secretref.Delivery, target string) string {
+	if phase == secretref.PhaseBuild {
+		return fmt.Sprintf(msgDeliveryBuildLabel, "/run/secrets/"+target)
+	}
 	switch delivery {
 	case secretref.DeliveryEnvironment:
 		return fmt.Sprintf(msgDeliveryEnvLabel, target)

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rootmyself/dcraft/internal/core"
+	"github.com/rootmyself/dcraft/internal/secretref"
 	"github.com/rootmyself/dcraft/internal/stack"
 	"github.com/rootmyself/dcraft/internal/state"
 )
@@ -146,6 +147,9 @@ func buildPlan(in core.Invocation, projectName string, model stack.UpdateModel, 
 	fmt.Fprintf(&b, "  베이스 이미지 새로 받기: %s\n", yesNo(opts.BuildPull))
 	fmt.Fprintf(&b, "  이미지 새로 고침: %s\n", yesNo(opts.Pull))
 	fmt.Fprintf(&b, "  강제 재생성: %s\n", yesNo(opts.ForceRecreate))
+	if hasBuildSecretRefs(in.Target) {
+		b.WriteString(msgPlanBuildSecrets + "\n")
+	}
 	if opts.NoCache {
 		b.WriteString(msgPlanNoCacheCost + "\n")
 	}
@@ -250,4 +254,15 @@ func goodVersionSummary(rec *state.GoodVersion) []string {
 		lines = append(lines, fmt.Sprintf("  - %s: %s (%s)", svc.Service, svc.ImageID, svc.RetentionTag))
 	}
 	return lines
+}
+
+// hasBuildSecretRefs reports whether the project saves build-phase
+// references. The preview then explains that a changed value needs an explicit
+// cache bypass; dcraft never stores or compares the old value.
+func hasBuildSecretRefs(target core.Target) bool {
+	cat, err := secretref.Load(target.ProjectDir)
+	if err != nil {
+		return false
+	}
+	return cat.HasPhase(secretref.PhaseBuild)
 }

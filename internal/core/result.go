@@ -151,6 +151,7 @@ func (r Result) ExitCode() int {
 				CategoryEnvironmentRequired, CategoryEnvironmentUnknown, CategoryEnvironmentConflict,
 				CategoryProjectNameConflict, CategoryServiceUnknown, CategoryInvalidOption,
 				CategorySecretInputInvalid, CategorySecretUnsupported,
+				CategoryBuildServiceInvalid,
 				CategorySelectionRequired, CategoryInstanceUnknown:
 				return 2
 			}
