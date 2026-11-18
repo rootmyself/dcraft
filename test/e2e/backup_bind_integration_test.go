@@ -484,8 +484,8 @@ func TestIntegrationBindBackupInterruptionRestoresServices(t *testing.T) {
 	if got := serviceState(t, app); got != "running" {
 		t.Fatalf("app was not restored after interruption: %s", got)
 	}
-	assertNoBackupHelpers(t)
-	if names := backupHelperNames(t); len(names) != 0 {
+	assertNoBackupHelpers(t, dir)
+	if names := backupHelperNames(t, dir); len(names) != 0 {
 		t.Fatalf("host-side backup left helper containers: %v", names)
 	}
 }

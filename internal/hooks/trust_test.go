@@ -40,7 +40,7 @@ func shaOf(t *testing.T, path string) string {
 
 func TestPlanMarksFirstRunAndApprovalMakesItTrusted(t *testing.T) {
 	dir, path := projectWithHook(t, "scripts/pre.sh", "pre")
-	store := state.New(t.TempDir())
+	store := state.New(privateStateDir(t))
 	svc := hooks.New(store, os.Getenv)
 
 	plan, err := svc.Plan(context.Background(), target(dir))
@@ -76,7 +76,7 @@ func TestPlanMarksFirstRunAndApprovalMakesItTrusted(t *testing.T) {
 
 func TestContentChangeInvalidatesThePreviousApproval(t *testing.T) {
 	dir, path := projectWithHook(t, "scripts/pre.sh", "pre")
-	svc := hooks.New(state.New(t.TempDir()), os.Getenv)
+	svc := hooks.New(state.New(privateStateDir(t)), os.Getenv)
 	plan, err := svc.Plan(context.Background(), target(dir))
 	if err != nil {
 		t.Fatal(err)
@@ -103,7 +103,7 @@ func TestContentChangeInvalidatesThePreviousApproval(t *testing.T) {
 func TestTrustIsKeyedByTargetAndStage(t *testing.T) {
 	dirA, _ := projectWithHook(t, "scripts/pre.sh", "pre")
 	dirB, _ := projectWithHook(t, "scripts/pre.sh", "pre")
-	store := state.New(t.TempDir())
+	store := state.New(privateStateDir(t))
 	svc := hooks.New(store, os.Getenv)
 	plan, err := svc.Plan(context.Background(), target(dirA))
 	if err != nil {
@@ -136,6 +136,9 @@ func TestTrustIsKeyedByTargetAndStage(t *testing.T) {
 func TestTrustRecordIsMachineLocalNotProjectShared(t *testing.T) {
 	dir, _ := projectWithHook(t, "scripts/pre.sh", "pre")
 	stateDir := t.TempDir()
+	if err := os.Chmod(stateDir, 0o700); err != nil {
+		t.Fatalf("chmod state dir: %v", err)
+	}
 	svc := hooks.New(state.New(stateDir), os.Getenv)
 	plan, err := svc.Plan(context.Background(), target(dir))
 	if err != nil {
@@ -169,7 +172,7 @@ func TestTrustRecordIsMachineLocalNotProjectShared(t *testing.T) {
 func TestPlanRejectsUnusableScripts(t *testing.T) {
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, ".dcraft.yaml"), "hooks:\n  - path: scripts/missing.sh\n    stage: pre\n")
-	svc := hooks.New(state.New(t.TempDir()), os.Getenv)
+	svc := hooks.New(state.New(privateStateDir(t)), os.Getenv)
 	_, err := svc.Plan(context.Background(), target(dir))
 	hasCategory(t, err, core.CategoryHookInvalid)
 
@@ -179,13 +182,13 @@ func TestPlanRejectsUnusableScripts(t *testing.T) {
 		t.Fatal(err)
 	}
 	write(t, filepath.Join(dir2, ".dcraft.yaml"), "hooks:\n  - path: scripts/pre.sh\n    stage: pre\n")
-	_, err = hooks.New(state.New(t.TempDir()), os.Getenv).Plan(context.Background(), target(dir2))
+	_, err = hooks.New(state.New(privateStateDir(t)), os.Getenv).Plan(context.Background(), target(dir2))
 	hasCategory(t, err, core.CategoryHookInvalid)
 }
 
 func TestCorruptTrustRecordFailsSafely(t *testing.T) {
 	dir, _ := projectWithHook(t, "scripts/pre.sh", "pre")
-	store := state.New(t.TempDir())
+	store := state.New(privateStateDir(t))
 	stackDir, err := store.StackDir(target(dir))
 	if err != nil {
 		t.Fatal(err)
@@ -200,7 +203,7 @@ func TestCorruptTrustRecordFailsSafely(t *testing.T) {
 
 func TestTrustRecordFileIsPrivate(t *testing.T) {
 	dir, _ := projectWithHook(t, "scripts/pre.sh", "pre")
-	store := state.New(t.TempDir())
+	store := state.New(privateStateDir(t))
 	svc := hooks.New(store, os.Getenv)
 	plan, err := svc.Plan(context.Background(), target(dir))
 	if err != nil {
@@ -225,7 +228,7 @@ func TestTrustRecordFileIsPrivate(t *testing.T) {
 func TestDescribeShowsRegistrationsWithoutRunningOrFailingOnMissingScripts(t *testing.T) {
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, ".dcraft.yaml"), "hooks:\n  - path: scripts/missing.sh\n    stage: pre\n")
-	views, err := hooks.New(state.New(t.TempDir()), os.Getenv).Describe(context.Background(), target(dir))
+	views, err := hooks.New(state.New(privateStateDir(t)), os.Getenv).Describe(context.Background(), target(dir))
 	if err != nil {
 		t.Fatal(err)
 	}

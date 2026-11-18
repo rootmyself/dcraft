@@ -148,7 +148,7 @@ func testModel() stack.UpdateModel {
 
 func saveRecord(t *testing.T, store *state.Store, target core.Target, rec state.GoodVersion) {
 	t.Helper()
-	if err := store.SaveGoodVersion(target, rec); err != nil {
+	if err := store.SaveGoodVersion(context.Background(), target, rec); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -210,7 +210,7 @@ func requireCategory(t *testing.T, err error, category core.Category) {
 // dcraft managed it) fails before any change and never invents a version.
 func TestRunWithoutRecordFailsBeforeChanging(t *testing.T) {
 	target := newTestTarget(t)
-	store := state.New(t.TempDir())
+	store := state.New(privateStateDir(t))
 	applier := &fakeApplier{}
 	c := newController(&fakeUpdater{images: map[string]string{}}, applier, store)
 
@@ -235,7 +235,7 @@ func TestRunMissingRecordedImageAbortsBeforeApply(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			target := newTestTarget(t)
-			store := state.New(t.TempDir())
+			store := state.New(privateStateDir(t))
 			saveRecord(t, store, target, testRecord(target))
 			applier := &fakeApplier{}
 			u := &fakeUpdater{model: testModel(), images: tc.images}
@@ -253,7 +253,7 @@ func TestRunMissingRecordedImageAbortsBeforeApply(t *testing.T) {
 // A recorded Compose file that no longer exists aborts before any change.
 func TestRunMissingRecordedFileAbortsBeforeApply(t *testing.T) {
 	target := newTestTarget(t)
-	store := state.New(t.TempDir())
+	store := state.New(privateStateDir(t))
 	saveRecord(t, store, target, testRecord(target))
 	applier := &fakeApplier{}
 	c := newController(&fakeUpdater{model: testModel(), images: map[string]string{
@@ -274,7 +274,7 @@ func TestRunMissingRecordedFileAbortsBeforeApply(t *testing.T) {
 // execution configuration, verifies the real image ID and keeps the record.
 func TestRunAppliesRecordedImagesAndVerifies(t *testing.T) {
 	target := newTestTarget(t)
-	store := state.New(t.TempDir())
+	store := state.New(privateStateDir(t))
 	saveRecord(t, store, target, testRecord(target))
 	recordPath, err := store.GoodVersionPath(target)
 	if err != nil {
@@ -331,7 +331,7 @@ func TestRunAppliesRecordedImagesAndVerifies(t *testing.T) {
 // verification failure, never success.
 func TestRunImageMismatchAfterApplyFails(t *testing.T) {
 	target := newTestTarget(t)
-	store := state.New(t.TempDir())
+	store := state.New(privateStateDir(t))
 	saveRecord(t, store, target, testRecord(target))
 	applier := &fakeApplier{}
 	u := &fakeUpdater{
@@ -382,7 +382,7 @@ func TestRunUnhealthyAfterApplyFails(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			target := newTestTarget(t)
-			store := state.New(t.TempDir())
+			store := state.New(privateStateDir(t))
 			saveRecord(t, store, target, testRecord(target))
 			applier := &fakeApplier{}
 			u := &fakeUpdater{
@@ -401,7 +401,7 @@ func TestRunUnhealthyAfterApplyFails(t *testing.T) {
 // record untouched.
 func TestRunCanceledApplyIsNotSuccess(t *testing.T) {
 	target := newTestTarget(t)
-	store := state.New(t.TempDir())
+	store := state.New(privateStateDir(t))
 	saveRecord(t, store, target, testRecord(target))
 	recordPath, err := store.GoodVersionPath(target)
 	if err != nil {
@@ -435,7 +435,7 @@ func TestRunCanceledApplyIsNotSuccess(t *testing.T) {
 // images and reports that no older version exists.
 func TestRunRepeatedRollbackKeepsSameVersion(t *testing.T) {
 	target := newTestTarget(t)
-	store := state.New(t.TempDir())
+	store := state.New(privateStateDir(t))
 	saveRecord(t, store, target, testRecord(target))
 	recordPath, err := store.GoodVersionPath(target)
 	if err != nil {
@@ -489,7 +489,7 @@ func TestRunMissingSecretSourceAbortsBeforeApply(t *testing.T) {
 
 	t.Run("recorded env missing", func(t *testing.T) {
 		target := newTestTarget(t)
-		store := state.New(t.TempDir())
+		store := state.New(privateStateDir(t))
 		rec := testRecord(target)
 		rec.Target.SecretRefs = []state.SecretReference{{
 			Service: "web", Phase: "runtime", Delivery: "environment", Source: "env", Name: "APP_TOKEN",
@@ -508,7 +508,7 @@ func TestRunMissingSecretSourceAbortsBeforeApply(t *testing.T) {
 
 	t.Run("recorded file missing", func(t *testing.T) {
 		target := newTestTarget(t)
-		store := state.New(t.TempDir())
+		store := state.New(privateStateDir(t))
 		rec := testRecord(target)
 		rec.Target.SecretRefs = []state.SecretReference{{
 			Service: "web", Phase: "runtime", Delivery: "file", Source: "file", Name: "missing.secret",
@@ -527,7 +527,7 @@ func TestRunMissingSecretSourceAbortsBeforeApply(t *testing.T) {
 
 	t.Run("recorded aws unsupported", func(t *testing.T) {
 		target := newTestTarget(t)
-		store := state.New(t.TempDir())
+		store := state.New(privateStateDir(t))
 		rec := testRecord(target)
 		rec.Target.SecretRefs = []state.SecretReference{{
 			Service: "web", Phase: "runtime", Delivery: "environment", Source: "aws", Name: "prod/app", Field: "token",
@@ -559,7 +559,7 @@ func TestRunMissingSecretSourceAbortsBeforeApply(t *testing.T) {
 `), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		store := state.New(t.TempDir())
+		store := state.New(privateStateDir(t))
 		saveRecord(t, store, target, testRecord(target))
 		applier := &fakeApplier{}
 		u := &fakeUpdater{model: testModel(), images: map[string]string{testImage: testImage, testTag: testImage}}
@@ -589,7 +589,7 @@ func TestRunInvalidRecordAbortsBeforeApply(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			target := newTestTarget(t)
-			store := state.New(t.TempDir())
+			store := state.New(privateStateDir(t))
 			rec := testRecord(target)
 			tc.mutate(&rec)
 			saveRecord(t, store, target, rec)
@@ -610,7 +610,7 @@ func TestRunInvalidRecordAbortsBeforeApply(t *testing.T) {
 // error (exit 2) and changes nothing.
 func TestRunExplicitProjectNameConflictFails(t *testing.T) {
 	target := newTestTarget(t)
-	store := state.New(t.TempDir())
+	store := state.New(privateStateDir(t))
 	saveRecord(t, store, target, testRecord(target))
 	applier := &fakeApplier{}
 	u := &fakeUpdater{model: testModel(), images: map[string]string{testImage: testImage, testTag: testImage}}
@@ -629,7 +629,7 @@ func TestRunExplicitProjectNameConflictFails(t *testing.T) {
 // reported as stack_busy and nothing is applied.
 func TestRunStackBusyFailsBeforeApply(t *testing.T) {
 	target := newTestTarget(t)
-	store := state.New(t.TempDir())
+	store := state.New(privateStateDir(t))
 	saveRecord(t, store, target, testRecord(target))
 	lock, err := store.AcquireStackLock(context.Background(), target, state.LockHolder{Action: "update"})
 	if err != nil {
@@ -651,7 +651,7 @@ func TestRunStackBusyFailsBeforeApply(t *testing.T) {
 // recorded service missing from that configuration aborts.
 func TestRunUsesRecordedExecutionConfig(t *testing.T) {
 	target := newTestTarget(t)
-	store := state.New(t.TempDir())
+	store := state.New(privateStateDir(t))
 	rec := testRecord(target)
 	extraFile := filepath.Join(target.ProjectDir, "compose.extra.yaml")
 	if err := os.WriteFile(extraFile, []byte("services: {}\n"), 0o644); err != nil {
@@ -705,7 +705,7 @@ func TestRunUsesRecordedExecutionConfig(t *testing.T) {
 // Services that are not in the record stay untouched and are reported.
 func TestRunLeavesExtraServicesAlone(t *testing.T) {
 	target := newTestTarget(t)
-	store := state.New(t.TempDir())
+	store := state.New(privateStateDir(t))
 	saveRecord(t, store, target, testRecord(target))
 	model := testModel()
 	model.Services = append(model.Services, stack.ServiceDefinition{Name: "extra"})
@@ -732,7 +732,7 @@ func TestRunLeavesExtraServicesAlone(t *testing.T) {
 // and changes nothing.
 func TestPreviewDescribesRecordedRollback(t *testing.T) {
 	target := newTestTarget(t)
-	store := state.New(t.TempDir())
+	store := state.New(privateStateDir(t))
 	saveRecord(t, store, target, testRecord(target))
 	applier := &fakeApplier{}
 	u := &fakeUpdater{model: testModel(), images: map[string]string{testImage: testImage, testTag: testImage}}
@@ -766,7 +766,7 @@ func TestRunKeepsRecordsSeparatedByEnvironment(t *testing.T) {
 	dev := core.Target{ProjectDir: dir, Files: []string{filepath.Join(dir, "compose.yaml")}, ProjectName: "project", Environment: "dev"}
 	prod := dev
 	prod.Environment = "prod"
-	store := state.New(t.TempDir())
+	store := state.New(privateStateDir(t))
 	rec := testRecord(dev)
 	rec.Target.Environment = "dev"
 	saveRecord(t, store, dev, rec)
@@ -803,7 +803,7 @@ func TestRunChecksBuildPhaseSecretSources(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			target := newTestTarget(t)
-			store := state.New(t.TempDir())
+			store := state.New(privateStateDir(t))
 			rec := testRecord(target)
 			rec.Target.SecretRefs = []state.SecretReference{{
 				Service: "web", Phase: "build", Delivery: "environment", Source: "env", Name: "BUILD_TOKEN",
@@ -842,7 +842,7 @@ func TestRunChecksBuildPhaseSecretSources(t *testing.T) {
 // A recorded reference with an unknown phase is refused rather than ignored.
 func TestRunRejectsUnknownSecretPhase(t *testing.T) {
 	target := newTestTarget(t)
-	store := state.New(t.TempDir())
+	store := state.New(privateStateDir(t))
 	rec := testRecord(target)
 	rec.Target.SecretRefs = []state.SecretReference{{
 		Service: "web", Phase: "deploy", Delivery: "environment", Source: "env", Name: "TOKEN",

@@ -84,6 +84,7 @@ type Model struct {
 	pendingApprovals []core.ApprovalKind
 	approvedHooks    []core.HookEntry
 	planText         string
+	planFingerprint  string
 
 	// req carries the feature input collected from the interactive form. A
 	// feature that implements core.InputProvider fills it before running; the
@@ -200,6 +201,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.planText = msg.report.Text
+		m.planFingerprint = msg.report.Fingerprint
 		m.approvedHooks = append([]core.HookEntry{}, msg.report.Hooks...)
 		required := append([]core.ApprovalKind{}, msg.report.RequiredApprovals...)
 		if m.active != nil {
@@ -518,6 +520,8 @@ func (m *Model) begin(f core.Feature) tea.Cmd {
 	if m.req.Feature != f.Descriptor().Name {
 		m.req = core.Request{Feature: f.Descriptor().Name, Target: m.target}
 	}
+	// A new flow has no approved plan yet; the plan message sets it again.
+	m.req.PlanFingerprint = ""
 	m.resetRunState()
 	m.setupLive(f)
 	if plansBeforeRun(f) {
@@ -531,6 +535,8 @@ func (m *Model) begin(f core.Feature) tea.Cmd {
 func (m *Model) beginRequest(f core.Feature, req core.Request) tea.Cmd {
 	req.Feature = f.Descriptor().Name
 	req.Target = m.target
+	// Inputs were collected without a plan, so there is nothing to bind yet.
+	req.PlanFingerprint = ""
 	m.req = req
 	m.resetRunState()
 	m.setupLive(f)
@@ -541,6 +547,9 @@ func (m *Model) beginRequest(f core.Feature, req core.Request) tea.Cmd {
 // already the confirmation; ordinary updates need no second approval.
 func (m *Model) startRun(f core.Feature, options map[string]string) tea.Cmd {
 	m.ensureRequest(f)
+	// The confirmed plan is bound to its previewed inputs. It is copied into
+	// the request before resetRunState clears the screen state.
+	m.req.PlanFingerprint = m.planFingerprint
 	m.resetRunState()
 	m.setupLive(f)
 	return m.launchRun(f, nil, options)
@@ -548,6 +557,7 @@ func (m *Model) startRun(f core.Feature, options map[string]string) tea.Cmd {
 
 func (m *Model) runApproved(f core.Feature, approvals []core.ApprovalKind) tea.Cmd {
 	m.ensureRequest(f)
+	m.req.PlanFingerprint = m.planFingerprint
 	m.resetRunState()
 	m.setupLive(f)
 	return m.launchRun(f, approvals, nil)
@@ -579,6 +589,7 @@ func (m *Model) resetRunState() {
 	m.pendingApprovals = nil
 	m.approvedHooks = nil
 	m.planText = ""
+	m.planFingerprint = ""
 	m.notice = ""
 	m.closeLive()
 	m.form = nil
@@ -626,6 +637,8 @@ func (m *Model) declineApproval() {
 	m.pendingApprovals = nil
 	m.approvedHooks = nil
 	m.planText = ""
+	m.planFingerprint = ""
+	m.req.PlanFingerprint = ""
 	m.phase = phaseReady
 }
 
@@ -636,6 +649,9 @@ func (m *Model) runCmd(f core.Feature, approvals []core.ApprovalKind, options ma
 	req.Target = m.target
 	req.Approvals = approvals
 	req.ApprovedHooks = append([]core.HookEntry{}, m.approvedHooks...)
+	// The confirmed plan fingerprint was copied into m.req before the screen
+	// state was reset.
+	req.PlanFingerprint = m.req.PlanFingerprint
 	req.Interactive = true
 	req.JSON = false
 	if options != nil {

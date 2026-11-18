@@ -51,7 +51,7 @@ func secretRunner(t *testing.T, upOutput string) *execxtest.Runner {
 func secretCompose(t *testing.T, project string, runner *execxtest.Runner, env map[string]string) (*Compose, *secretref.Runtime) {
 	t.Helper()
 	_ = project
-	store := state.New(t.TempDir())
+	store := state.New(privateStateDir(t))
 	rt := secretref.NewRuntime(store, func(name string) string { return env[name] })
 	c := New(runner, nil)
 	c.SetSecretRuntime(rt)
@@ -88,7 +88,7 @@ func TestUpAppliesOnlySelectedServiceClosureAndPassesEnv(t *testing.T) {
 		return base(cmd)
 	}
 	accessed := map[string]int{}
-	store := state.New(t.TempDir())
+	store := state.New(privateStateDir(t))
 	rt := secretref.NewRuntime(store, func(name string) string {
 		accessed[name]++
 		return "value-of-" + name
@@ -224,6 +224,80 @@ func TestUpRedactsKnownValueFromComposeOutput(t *testing.T) {
 	if !strings.Contains(res.Output, "[redacted]") {
 		t.Fatalf("output was not redacted: %q", res.Output)
 	}
+}
+
+func TestLifecycleToolOutputIsRedactedBeforeItBecomesADiagnostic(t *testing.T) {
+	_, target := secretProject(t, `secrets:
+  - service: web
+    phase: runtime
+    delivery: environment
+    source: env
+    ref: WEB_SECRET
+`)
+	const sentinel = "sentinel-compose-output-7714"
+	env := map[string]string{"WEB_SECRET": sentinel}
+	runner := &execxtest.Runner{Handler: func(cmd execx.Command) (execx.Result, error) {
+		line := strings.Join(cmd.Args, " ")
+		switch {
+		case strings.Contains(line, "config --format json"):
+			return execx.Result{Stdout: []byte(`{"name":"dcraft-test-secrets","services":{"web":{"image":"busybox"}}}`)}, nil
+		case strings.Contains(line, " stop"):
+			return execx.Result{Stderr: []byte("stop failed: " + sentinel), ExitCode: 1}, nil
+		case strings.Contains(line, " down"):
+			return execx.Result{Stderr: []byte("down failed: " + sentinel), ExitCode: 1}, nil
+		case strings.Contains(line, " up --detach"):
+			return execx.Result{Stderr: []byte("up failed: " + sentinel), ExitCode: 1}, nil
+		default:
+			return execx.Result{Stderr: []byte("unexpected " + line), ExitCode: 9}, nil
+		}
+	}}
+	c, _ := secretCompose(t, target.ProjectDir, runner, env)
+
+	stopRes, err := c.Stop(context.Background(), target, nil)
+	if err == nil || strings.Contains(stopRes.Output, sentinel) || !strings.Contains(stopRes.Output, "[redacted]") {
+		t.Fatalf("stop output = %q, err=%v", stopRes.Output, err)
+	}
+	downRes, err := c.Down(context.Background(), target)
+	if err == nil || strings.Contains(downRes.Output, sentinel) || !strings.Contains(downRes.Output, "[redacted]") {
+		t.Fatalf("down output = %q, err=%v", downRes.Output, err)
+	}
+	upRes, err := c.Up(context.Background(), target, nil)
+	if err == nil || strings.Contains(upRes.Output, sentinel) || !strings.Contains(upRes.Output, "[redacted]") {
+		t.Fatalf("up output = %q, err=%v", upRes.Output, err)
+	}
+
+	// A config/probe failure becomes a diagnostic detail. It must carry the
+	// redacted text that the engine later puts into JSON and history.
+	failRunner := &execxtest.Runner{Handler: func(cmd execx.Command) (execx.Result, error) {
+		return execx.Result{Stderr: []byte("config failed: " + sentinel), ExitCode: 1}, nil
+	}}
+	c2, _ := secretCompose(t, target.ProjectDir, failRunner, env)
+	_, err = c2.ConfigInfo(context.Background(), target)
+	if err == nil {
+		t.Fatal("ConfigInfo accepted a failing config")
+	}
+	if strings.Contains(errorText(err), sentinel) || !strings.Contains(errorText(err), "[redacted]") {
+		t.Fatalf("config diagnostic = %q", errorText(err))
+	}
+	_, err = c2.DerivedProjectName(context.Background(), target)
+	if err == nil {
+		t.Fatal("DerivedProjectName accepted a failing probe")
+	}
+	if strings.Contains(errorText(err), sentinel) || !strings.Contains(errorText(err), "[redacted]") {
+		t.Fatalf("derived-name diagnostic = %q", errorText(err))
+	}
+}
+
+func errorText(err error) string {
+	var ce *core.Error
+	if errors.As(err, &ce) {
+		var parts []string
+		for _, d := range ce.Diagnostics {
+			parts = append(parts, d.Message, d.Detail)
+		}
+		return strings.Join(parts, "\n")
+	}
+	return err.Error()
 }
 
 func TestRestartRecreatesMissingFileSecretWithoutEnvValues(t *testing.T) {

@@ -43,7 +43,7 @@ func testTarget(dir string) core.Target {
 }
 
 func TestReadProjectNameUsesTheRecordedAllocationWithoutWriting(t *testing.T) {
-	stateDir := t.TempDir()
+	stateDir := privateStateDir(t)
 	store := state.New(stateDir)
 	tgt := testTarget("/work/hello-world")
 	if _, err := store.AllocateName(context.Background(), state.NameRequest{
@@ -94,7 +94,7 @@ func TestReadProjectNameFallsBackToComposeWithoutAllocation(t *testing.T) {
 }
 
 func TestReadProjectNamePrefersADeclaredNameOverTheAllocation(t *testing.T) {
-	store := state.New(t.TempDir())
+	store := state.New(privateStateDir(t))
 	tgt := testTarget("/work/hello-world")
 	if _, err := store.AllocateName(context.Background(), state.NameRequest{
 		Target: tgt, BaseName: "hello-world",
@@ -115,7 +115,7 @@ func TestReadProjectNamePrefersAnExplicitNameWithoutComposeCalls(t *testing.T) {
 	id := &fakeIdentity{}
 	tgt := testTarget("/work/app")
 	tgt.ProjectName = "explicit-name"
-	got, err := identity.New(id, state.New(t.TempDir())).ReadProjectName(context.Background(), tgt)
+	got, err := identity.New(id, state.New(privateStateDir(t))).ReadProjectName(context.Background(), tgt)
 	if err != nil {
 		t.Fatalf("ReadProjectName: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestReadProjectNamePrefersAnExplicitNameWithoutComposeCalls(t *testing.T) {
 
 func TestReadProjectNamePropagatesErrors(t *testing.T) {
 	id := &fakeIdentity{configErr: context.DeadlineExceeded}
-	if _, err := identity.New(id, state.New(t.TempDir())).ReadProjectName(context.Background(), testTarget("/work/app")); err == nil {
+	if _, err := identity.New(id, state.New(privateStateDir(t))).ReadProjectName(context.Background(), testTarget("/work/app")); err == nil {
 		t.Fatal("identity error was swallowed")
 	}
 }

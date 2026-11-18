@@ -1,7 +1,9 @@
 package state
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +12,15 @@ import (
 
 	"github.com/rootmyself/dcraft/internal/core"
 )
+
+func privateStateRootDir(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o700); err != nil {
+		t.Fatalf("chmod private state dir: %v", err)
+	}
+	return dir
+}
 
 func goodVersionFixture() GoodVersion {
 	return GoodVersion{
@@ -37,14 +48,14 @@ func goodVersionFixture() GoodVersion {
 }
 
 func TestGoodVersionRoundTripKeepsOnlyReferences(t *testing.T) {
-	store := New(t.TempDir())
+	store := New(privateStateRootDir(t))
 	target := core.Target{ProjectDir: "/work/app", Environment: "prod"}
 
 	if _, ok, err := store.LoadGoodVersion(target); err != nil || ok {
 		t.Fatalf("missing record: ok=%v err=%v", ok, err)
 	}
 	want := goodVersionFixture()
-	if err := store.SaveGoodVersion(target, want); err != nil {
+	if err := store.SaveGoodVersion(context.Background(), target, want); err != nil {
 		t.Fatalf("save: %v", err)
 	}
 	got, ok, err := store.LoadGoodVersion(target)
@@ -94,17 +105,17 @@ func TestGoodVersionRoundTripKeepsOnlyReferences(t *testing.T) {
 }
 
 func TestGoodVersionReplacementKeepsExactlyOneRecord(t *testing.T) {
-	store := New(t.TempDir())
+	store := New(privateStateRootDir(t))
 	target := core.Target{ProjectDir: "/work/app"}
 
 	first := goodVersionFixture()
-	if err := store.SaveGoodVersion(target, first); err != nil {
+	if err := store.SaveGoodVersion(context.Background(), target, first); err != nil {
 		t.Fatal(err)
 	}
 	second := goodVersionFixture()
 	second.OperationID = "op_second"
 	second.Services[0].ImageID = "sha256:2222222222222222222222222222222222222222222222222222222222222222"
-	if err := store.SaveGoodVersion(target, second); err != nil {
+	if err := store.SaveGoodVersion(context.Background(), target, second); err != nil {
 		t.Fatal(err)
 	}
 
@@ -132,14 +143,14 @@ func TestGoodVersionReplacementKeepsExactlyOneRecord(t *testing.T) {
 }
 
 func TestGoodVersionIsolatedPerEnvironmentAndFolder(t *testing.T) {
-	store := New(t.TempDir())
+	store := New(privateStateRootDir(t))
 	base := goodVersionFixture()
 
 	prod := core.Target{ProjectDir: "/work/app", Environment: "prod"}
 	dev := core.Target{ProjectDir: "/work/app", Environment: "dev"}
 	other := core.Target{ProjectDir: "/work/other", Environment: "prod"}
 
-	if err := store.SaveGoodVersion(prod, base); err != nil {
+	if err := store.SaveGoodVersion(context.Background(), prod, base); err != nil {
 		t.Fatal(err)
 	}
 	for _, target := range []core.Target{dev, other} {
@@ -149,8 +160,50 @@ func TestGoodVersionIsolatedPerEnvironmentAndFolder(t *testing.T) {
 	}
 }
 
+func TestSaveGoodVersionCanceledAtCommitLeavesPreviousRecordByteIdentical(t *testing.T) {
+	store := New(privateStateRootDir(t))
+	target := core.Target{ProjectDir: "/work/app", Environment: "prod"}
+	first := goodVersionFixture()
+	if err := store.SaveGoodVersion(context.Background(), target, first); err != nil {
+		t.Fatalf("save first: %v", err)
+	}
+	path, err := store.GoodVersionPath(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	second := goodVersionFixture()
+	second.OperationID = "op_canceled"
+	second.RecordedAt = second.RecordedAt.Add(time.Hour)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := store.SaveGoodVersion(ctx, target, second); !errors.Is(err, context.Canceled) {
+		t.Fatalf("save err = %v, want context.Canceled", err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Fatalf("canceled save replaced the good-version record:\nbefore=%s\nafter=%s", before, after)
+	}
+	entries, err := os.ReadDir(filepath.Dir(path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".state-") && strings.HasSuffix(entry.Name(), ".tmp") {
+			t.Fatalf("canceled save left a temp file: %s", entry.Name())
+		}
+	}
+}
+
 func TestGoodVersionRejectsCorruptAndNewerRecords(t *testing.T) {
-	store := New(t.TempDir())
+	store := New(privateStateRootDir(t))
 	target := core.Target{ProjectDir: "/work/app"}
 	path, err := store.GoodVersionPath(target)
 	if err != nil {

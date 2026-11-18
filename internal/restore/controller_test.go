@@ -86,7 +86,7 @@ func (f *fakeBackend) StartServices(_ context.Context, _ core.Target, services [
 	return data.OpResult{}, nil
 }
 
-func (f *fakeBackend) ArchiveVolume(_ context.Context, volume, hostDir string) (data.OpResult, error) {
+func (f *fakeBackend) ArchiveVolume(_ context.Context, _ core.Target, volume, hostDir string) (data.OpResult, error) {
 	f.record("archive:" + volume)
 	if f.archiveErr != nil {
 		return data.OpResult{Output: "tar: can't open '/data/secret': Permission denied"}, f.archiveErr
@@ -174,6 +174,9 @@ func (r *stageReporter) End(string, core.StageStatus, string) {}
 func newRestoreController(t *testing.T, backend *fakeBackend, name string, space SpaceChecker) (*Controller, *stageReporter, string) {
 	t.Helper()
 	stateDir := t.TempDir()
+	if err := os.Chmod(stateDir, 0o700); err != nil {
+		t.Fatalf("chmod state dir: %v", err)
+	}
 	controller := New(Config{
 		Backend: backend,
 		Names:   fakeNames{name: name},

@@ -76,11 +76,18 @@ func (c *Compose) redactError(ctx context.Context, t core.Target, err error) err
 	var ce *core.Error
 	if errors.As(err, &ce) {
 		for i := range ce.Diagnostics {
-			ce.Diagnostics[i].Detail = c.Redact(ctx, t, ce.Diagnostics[i].Detail)
-			ce.Diagnostics[i].Message = c.Redact(ctx, t, ce.Diagnostics[i].Message)
+			ce.Diagnostics[i] = c.redactDiagnostic(ctx, t, ce.Diagnostics[i])
 		}
 	}
 	return err
+}
+
+// redactDiagnostic removes known fetched values from text that is about to
+// become a user-visible diagnostic, a JSON field or a history record.
+func (c *Compose) redactDiagnostic(ctx context.Context, t core.Target, d core.Diagnostic) core.Diagnostic {
+	d.Detail = c.Redact(ctx, t, d.Detail)
+	d.Message = c.Redact(ctx, t, d.Message)
+	return d
 }
 
 // ProjectName implements data.Backend. Compose's config document always
@@ -401,11 +408,12 @@ func (c *Compose) HelperImage() string {
 // every exit path (success, error, cancellation, deadline) removes it by name
 // with a bounded retry loop. The container is never left to the fate of the
 // killed CLI child; the caller holds the stack lock until this method returns.
-func (c *Compose) ArchiveVolume(ctx context.Context, volumeName, hostDir string) (data.OpResult, error) {
-	name := "dcraft-backup-" + randomSuffix()
+func (c *Compose) ArchiveVolume(ctx context.Context, target core.Target, volumeName, hostDir string) (data.OpResult, error) {
+	token := data.HelperToken(target)
+	name := "dcraft-backup-" + token + "-" + randomSuffix()
 	createArgs := []string{
 		"create", "--name", name,
-		"--label", "dcraft.backup=1",
+		"--label", "dcraft.backup=" + token,
 		"--label", "dcraft.backup.volume=" + volumeName,
 		"-v", volumeName + ":/data:ro",
 		"-v", hostDir + ":/backup",

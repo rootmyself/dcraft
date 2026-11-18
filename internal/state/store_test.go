@@ -43,7 +43,7 @@ func TestRootDefaultsUnderUserConfigDir(t *testing.T) {
 }
 
 func TestStackDirIsStableAndEnvironmentSeparated(t *testing.T) {
-	store := state.New(t.TempDir())
+	store := state.New(privateStateDir(t))
 	dev := core.Target{ProjectDir: "/work/hello-world", Environment: ""}
 	staging := core.Target{ProjectDir: "/work/hello-world", Environment: "staging"}
 
@@ -71,7 +71,7 @@ func TestStackDirIsStableAndEnvironmentSeparated(t *testing.T) {
 }
 
 func TestDifferentFoldersWithSameNameDoNotShareState(t *testing.T) {
-	store := state.New(t.TempDir())
+	store := state.New(privateStateDir(t))
 	a, _ := store.StackDir(core.Target{ProjectDir: "/work/a/hello"})
 	b, _ := store.StackDir(core.Target{ProjectDir: "/work/b/hello"})
 	if a == b {
@@ -83,7 +83,7 @@ func TestDifferentFoldersWithSameNameDoNotShareState(t *testing.T) {
 }
 
 func TestStackDirDoesNotCreateAnything(t *testing.T) {
-	root := t.TempDir()
+	root := privateStateDir(t)
 	store := state.New(root)
 	dir, err := store.StackDir(core.Target{ProjectDir: "/work/app"})
 	if err != nil {
@@ -95,14 +95,14 @@ func TestStackDirDoesNotCreateAnything(t *testing.T) {
 }
 
 func TestStackDirRequiresProjectDir(t *testing.T) {
-	store := state.New(t.TempDir())
+	store := state.New(privateStateDir(t))
 	if _, err := store.StackDir(core.Target{}); err == nil {
 		t.Fatal("empty target accepted")
 	}
 }
 
 func TestAppendOperationWritesSeparateJSONLinesWithPrivatePermissions(t *testing.T) {
-	root := t.TempDir()
+	root := privateStateDir(t)
 	store := state.New(root)
 	target := core.Target{ProjectDir: "/work/app", Environment: "prod"}
 	started := time.Date(2026, 11, 18, 12, 0, 0, 0, time.UTC)

@@ -267,6 +267,9 @@ environments:
 func TestEnvironmentSelectionSeparatesStateAndHistory(t *testing.T) {
 	dir := prepareEnvironmentProject(t)
 	root := t.TempDir()
+	if err := os.Chmod(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	t.Setenv(state.EnvStateDir, root)
 	resolvedRoot, err := state.Root(os.Getenv)
 	if err != nil {

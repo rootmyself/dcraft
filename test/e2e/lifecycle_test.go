@@ -122,7 +122,7 @@ func TestLifecycleUpAllocatesReadableNameAndReusesIt(t *testing.T) {
 	for _, st := range parsed.Stages {
 		stageNames = append(stageNames, st.Name)
 	}
-	if want := "resolve_target,preflight,resolve_project,allocate_name,coordinate,up,observe,history"; strings.Join(stageNames, ",") != want {
+	if want := "resolve_target,preflight,resolve_project,coordinate,allocate_name,up,observe,history"; strings.Join(stageNames, ",") != want {
 		t.Fatalf("stages = %v, want %s", stageNames, want)
 	}
 	report := parsed.Data.Lifecycle

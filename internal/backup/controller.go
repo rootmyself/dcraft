@@ -527,7 +527,7 @@ func (c *Controller) archiveOne(ctx context.Context, in core.Invocation, target 
 			archiveErr = ArchiveHostDir(ctx, src.Name, filepath.Join(partial, DataFile))
 		} else {
 			var res data.OpResult
-			res, archiveErr = c.cfg.Backend.ArchiveVolume(ctx, src.Name, partial)
+			res, archiveErr = c.cfg.Backend.ArchiveVolume(ctx, target, src.Name, partial)
 			output = res.Output
 		}
 		if ctxErr := ctx.Err(); ctxErr != nil {
