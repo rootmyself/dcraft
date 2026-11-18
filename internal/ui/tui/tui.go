@@ -41,8 +41,9 @@ const (
 	phaseLoading
 	phasePlanning
 	phaseConfirm
-	phaseOptions
-	phaseSelectingChoices
+	phaseWizardLoading
+	phaseWizardStep
+	phaseWizardPreview
 	phaseReady
 )
 
@@ -77,19 +78,22 @@ type Model struct {
 	// no feature-specific branch is added here.
 	pendingApproval core.ApprovalKind
 	planText        string
-	planReady       bool
 
-	// Generic feature-flag input. Values are only collected here; the
-	// feature's own validation and Korean diagnostics remain authoritative.
-	optionValues   map[string]string
-	optionLists    map[string][]string
-	optionFocus    int
-	optionError    string
-	choices        []core.OptionChoice
-	choiceFlag     string
-	choiceSelected map[string]bool
-	choiceCursor   int
-	choiceLoading  bool
+	// Wizard state is generic: the feature supplies the steps and the effect
+	// preview, the TUI only collects answers with the keyboard.
+	wizardFeature    core.Feature
+	wizardSpec       core.WizardSpec
+	wizardStep       int
+	wizardChoice     int
+	wizardInput      string
+	wizardAnswers    map[string]string
+	wizardPreview    string
+	wizardPreviewErr error
+	wizardAwaiting   bool
+	wizardApplying   bool
+	wizardCanceled   bool
+	wizardReturnRes  *core.Result
+	wizardReturnFeat core.Feature
 }
 
 // NewModel builds the initial screen without running anything.
@@ -135,11 +139,6 @@ type environmentListMsg struct {
 	err  error
 }
 
-type choicesMsg struct {
-	flag   string
-	report core.ChoicesReport
-}
-
 func (m *Model) Init() tea.Cmd {
 	switch m.phase {
 	case phaseLoadingEnvironments:
@@ -172,28 +171,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.phase = phaseReady
 			return m, nil
 		}
-		m.pendingApproval = m.active.Descriptor().Approval
 		m.planText = msg.report.Text
+		if m.active != nil && m.active.Descriptor().Approval != core.ApprovalNone {
+			m.pendingApproval = m.active.Descriptor().Approval
+		} else {
+			// Ordinary update: the plan is the preview; one deliberate
+			// confirmation runs it without an extra approval kind.
+			m.pending = m.active
+		}
 		m.phase = phaseConfirm
-		return m, nil
-	case choicesMsg:
-		if m.phase != phaseSelectingChoices {
-			return m, nil
-		}
-		if msg.report.Failed() {
-			res := msg.report.Result()
-			m.result = &res
-			m.phase = phaseReady
-			m.choiceLoading = false
-			return m, nil
-		}
-		m.choices = msg.report.Choices
-		m.choiceSelected = map[string]bool{}
-		for _, value := range m.optionLists[msg.flag] {
-			m.choiceSelected[value] = true
-		}
-		m.choiceCursor = 0
-		m.choiceLoading = false
 		return m, nil
 	case environmentListMsg:
 		if m.phase != phaseLoadingEnvironments {
@@ -210,24 +196,37 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.phase = phaseSelectingEnvironment
 		return m, nil
 	case resultMsg:
+		if m.wizardCanceled {
+			// A canceled wizard step run may deliver its result after the
+			// user already returned to the previous screen.
+			m.wizardCanceled = false
+			return m, nil
+		}
 		res := msg.res
-		m.result = &res
 		m.currentStage = nil
-		m.phase = phaseReady
-		m.notice = ""
 		if m.runCancel != nil {
 			m.runCancel()
 			m.runCancel = nil
 			m.runCtx = nil
 		}
+		if m.wizardAwaiting {
+			m.wizardAwaiting = false
+			m.beginWizardSteps(res)
+			return m, nil
+		}
+		if m.wizardApplying {
+			m.wizardApplying = false
+			m.wizardFeature = nil
+			m.wizardSpec = core.WizardSpec{}
+			m.wizardAnswers = nil
+			m.wizardPreview = ""
+			m.wizardPreviewErr = nil
+		}
+		m.result = &res
+		m.phase = phaseReady
+		m.notice = ""
 		return m, nil
 	case tea.KeyMsg:
-		if m.phase == phaseOptions {
-			return m.updateOptions(msg)
-		}
-		if m.phase == phaseSelectingChoices {
-			return m.updateChoices(msg)
-		}
 		if m.phase == phaseConfirm {
 			switch msg.String() {
 			case "q", "ctrl+c":
@@ -239,7 +238,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.declineApproval()
 				} else {
 					m.pending = nil
-					m.planReady = false
 					m.planText = ""
 					m.phase = phaseReady
 					m.notice = ""
@@ -257,31 +255,23 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					return m, m.runApproved(feature, approval)
 				}
-				if m.planReady {
-					f := m.active
-					m.planReady = false
-					m.planText = ""
-					if f == nil {
-						m.phase = phaseReady
-						return m, nil
-					}
-					m.phase = phaseLoading
-					m.runCtx, m.runCancel = context.WithCancel(m.ctx)
-					m.events = make(chan core.Stage, 64)
-					return m, tea.Batch(m.runCmd(f, nil, m.events, m.runCtx), waitStageCmd(m.events))
-				}
 				if m.pending == nil {
 					m.phase = phaseReady
 					return m, nil
 				}
 				f := m.pending
 				m.pending = nil
-				return m, m.runCollected(f)
+				return m, m.startRun(f)
 			}
 			return m, nil
 		}
 		switch msg.String() {
 		case "q":
+			if m.wizardTextInput() {
+				// A typed value may legitimately contain q; the wizard
+				// handler below receives it.
+				break
+			}
 			if m.phase == phaseLoading && m.active != nil && !m.active.Descriptor().ReadOnly {
 				// A mutating Compose process is still running. Quitting here
 				// would orphan a hidden change; say so instead of hiding it.
@@ -302,6 +292,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			return m, tea.Quit
+		case "esc":
+			if m.isWizardPhase() {
+				m.cancelWizard()
+			}
+			return m, nil
+		}
+		if m.isWizardPhase() {
+			return m, m.updateWizard(msg)
 		}
 		if m.phase == phaseSelectingEnvironment {
 			switch msg.String() {
@@ -330,7 +328,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.active == nil || m.phase != phaseReady {
 				return m, nil
 			}
-			if m.active.Descriptor().ReadOnly || plannedApproval(m.active) || needsOptions(m.active) {
+			if m.active.Descriptor().Wizard {
+				return m, m.beginWizard(m.active)
+			}
+			if m.active.Descriptor().ReadOnly || plansBeforeRun(m.active) {
 				return m, m.begin(m.active)
 			}
 			m.pending = m.active
@@ -350,7 +351,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			if m.phase == phaseReady && len(m.features) > 0 {
 				f := m.features[m.selected]
-				if f.Descriptor().ReadOnly || plannedApproval(f) || needsOptions(f) {
+				if f.Descriptor().Wizard {
+					return m, m.beginWizard(f)
+				}
+				if f.Descriptor().ReadOnly || plansBeforeRun(f) {
 					return m, m.begin(f)
 				}
 				m.pending = f
@@ -373,24 +377,21 @@ func (m *Model) listEnvironmentsCmd() tea.Cmd {
 	}
 }
 
-// plannedApproval reports whether a feature's independent approval is
-// collected through the read-only plan screen. Such a feature needs no extra
-// generic confirmation: the plan itself is the confirmation.
-func plannedApproval(f core.Feature) bool {
+// plansBeforeRun reports whether a feature can describe its planned work
+// before it runs. Such a feature sees a read-only plan first: approval-gated
+// features collect their independent approval on that screen, and an ordinary
+// update simply confirms the same target and planned work once.
+func plansBeforeRun(f core.Feature) bool {
 	if f == nil {
-		return false
-	}
-	d := f.Descriptor()
-	if d.Approval == core.ApprovalNone {
 		return false
 	}
 	_, ok := f.(core.Planner)
 	return ok
 }
 
-// begin starts a feature. Approval-gated features that can describe their
-// exact effect go through a read-only plan first; everything else runs
-// directly, preserving the ticket 01 behavior.
+// begin starts a feature. Features that can describe their planned work go
+// through a read-only plan first; everything else runs directly, preserving the
+// ticket 01 behavior.
 func (m *Model) begin(f core.Feature) tea.Cmd {
 	m.active = f
 	m.result = nil
@@ -405,20 +406,32 @@ func (m *Model) begin(f core.Feature) tea.Cmd {
 		m.runCtx = nil
 	}
 	m.events = make(chan core.Stage, 64)
-	if f != nil {
-		desc := f.Descriptor()
-		if needsOptions(f) {
-			m.startOptions(f)
-			return nil
-		}
-		if _, ok := f.(core.Planner); ok {
-			m.phase = phasePlanning
-			return tea.Batch(m.planCmd(f, m.events), waitStageCmd(m.events))
-		}
+	if plansBeforeRun(f) {
+		m.phase = phasePlanning
+		return tea.Batch(m.planCmd(f, m.events), waitStageCmd(m.events))
 	}
 	m.phase = phaseLoading
 	m.runCtx, m.runCancel = context.WithCancel(m.ctx)
-	return tea.Batch(m.runCmd(f, nil, m.events, m.runCtx), waitStageCmd(m.events))
+	return tea.Batch(m.runCmd(f, nil, nil, m.events, m.runCtx), waitStageCmd(m.events))
+}
+
+// startRun runs a feature without another plan pass. The plan (when shown) is
+// already the confirmation; ordinary updates need no second approval.
+func (m *Model) startRun(f core.Feature) tea.Cmd {
+	m.active = f
+	m.result = nil
+	m.currentStage = nil
+	m.pending = nil
+	m.pendingApproval = ""
+	m.planText = ""
+	m.notice = ""
+	if m.runCancel != nil {
+		m.runCancel()
+	}
+	m.phase = phaseLoading
+	m.runCtx, m.runCancel = context.WithCancel(m.ctx)
+	m.events = make(chan core.Stage, 64)
+	return tea.Batch(m.runCmd(f, nil, nil, m.events, m.runCtx), waitStageCmd(m.events))
 }
 
 func (m *Model) runApproved(f core.Feature, approval core.ApprovalKind) tea.Cmd {
@@ -426,13 +439,32 @@ func (m *Model) runApproved(f core.Feature, approval core.ApprovalKind) tea.Cmd 
 	m.result = nil
 	m.currentStage = nil
 	m.pending = nil
+	m.pendingApproval = ""
+	m.planText = ""
 	m.notice = ""
 	if m.runCancel != nil {
 		m.runCancel()
 	}
 	m.runCtx, m.runCancel = context.WithCancel(m.ctx)
 	m.events = make(chan core.Stage, 64)
-	return tea.Batch(m.runCmd(f, []core.ApprovalKind{approval}, m.events, m.runCtx), waitStageCmd(m.events))
+	return tea.Batch(m.runCmd(f, []core.ApprovalKind{approval}, nil, m.events, m.runCtx), waitStageCmd(m.events))
+}
+
+func (m *Model) beginWithOptions(f core.Feature, options map[string]string) tea.Cmd {
+	m.active = f
+	m.result = nil
+	m.currentStage = nil
+	m.pending = nil
+	m.pendingApproval = ""
+	m.planText = ""
+	m.notice = ""
+	if m.runCancel != nil {
+		m.runCancel()
+	}
+	m.runCtx, m.runCancel = context.WithCancel(m.ctx)
+	m.events = make(chan core.Stage, 64)
+	m.phase = phaseLoading
+	return tea.Batch(m.runCmd(f, nil, options, m.events, m.runCtx), waitStageCmd(m.events))
 }
 
 func (m *Model) declineApproval() {
@@ -460,14 +492,13 @@ func (m *Model) declineApproval() {
 	m.phase = phaseReady
 }
 
-func (m *Model) runCmd(f core.Feature, approvals []core.ApprovalKind, events chan core.Stage, ctx context.Context) tea.Cmd {
+func (m *Model) runCmd(f core.Feature, approvals []core.ApprovalKind, options map[string]string, events chan core.Stage, ctx context.Context) tea.Cmd {
 	engine := m.engine
 	req := core.Request{
 		Feature:     f.Descriptor().Name,
 		Target:      m.target,
-		Options:     cloneOptions(m.optionValues),
-		OptionLists: cloneOptionLists(m.optionLists),
 		Approvals:   approvals,
+		Options:     options,
 		Interactive: true,
 	}
 	return func() tea.Msg {
@@ -503,8 +534,6 @@ func (m *Model) planCmd(f core.Feature, events chan core.Stage) tea.Cmd {
 	req := core.Request{
 		Feature:     f.Descriptor().Name,
 		Target:      m.target,
-		Options:     cloneOptions(m.optionValues),
-		OptionLists: cloneOptionLists(m.optionLists),
 		Interactive: true,
 	}
 	return func() tea.Msg {
@@ -611,6 +640,9 @@ func (m *Model) View() string {
 		b.WriteString("\n")
 		b.WriteString(hintStyle.Render(msgEnvIsolationNote))
 		b.WriteString("\n")
+	case phaseWizardLoading, phaseWizardStep, phaseWizardPreview:
+		b.WriteString(m.wizardView())
+		b.WriteString("\n")
 	case phaseLoading:
 		b.WriteString(msgWorking)
 		b.WriteString("\n")
@@ -695,6 +727,11 @@ func (m *Model) confirmView() string {
 	}
 	fmt.Fprintf(&b, "%s: %s\n", msgConfirmScopeLabel, msgConfirmScope)
 	fmt.Fprintf(&b, "%s: %s\n", msgConfirmEffectLabel, d.Summary)
+	if strings.TrimSpace(m.planText) != "" {
+		b.WriteString("\n")
+		b.WriteString(m.planText)
+		b.WriteString("\n")
+	}
 	b.WriteString(msgConfirmRisk)
 	return strings.TrimRight(b.String(), "\n")
 }
@@ -711,6 +748,9 @@ func (m *Model) contentWidth() int {
 }
 
 func (m *Model) hints() string {
+	if m.isWizardPhase() {
+		return m.wizardHints()
+	}
 	if m.phase == phaseConfirm {
 		if m.pendingApproval != core.ApprovalNone {
 			return msgHintConfirm

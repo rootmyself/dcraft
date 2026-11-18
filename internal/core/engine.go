@@ -556,7 +556,7 @@ func (e *Engine) applyFailure(ctx context.Context, res *Result, err error) {
 	res.Outcome = OutcomeFailure
 	var ce *Error
 	if errors.As(err, &ce) && len(ce.Diagnostics) > 0 {
-		res.Diagnostics = append(res.Diagnostics, ce.Diagnostics...)
+		res.Diagnostics = append(res.Diagnostics, ce.AllDiagnostics()...)
 		return
 	}
 	res.Diagnostics = append(res.Diagnostics, Diagnostic{
