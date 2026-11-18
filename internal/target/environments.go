@@ -140,7 +140,7 @@ func filesForAlias(env core.Environment, projectDir string) []string {
 	if len(env.Files) > 0 {
 		return env.Files
 	}
-	files, _, err := discoverIn(projectDir)
+	files, _, err := discoverIn(projectDir, false)
 	if err != nil {
 		return nil
 	}

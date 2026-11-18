@@ -34,13 +34,13 @@ func TestRegistrationWiresStatusIntoBothInterfaces(t *testing.T) {
 	for _, f := range features {
 		byName[f.Descriptor().Name] = f
 	}
-	for _, name := range []string{"status", "up", "stop", "down", "restart"} {
+	for _, name := range []string{"status", "install-compose", "up", "stop", "down", "restart"} {
 		if _, ok := byName[name]; !ok {
 			t.Fatalf("registered features = %v, missing %q", features, name)
 		}
 	}
-	if len(features) != 5 {
-		t.Fatalf("registered features = %d, want 5", len(features))
+	if len(features) != 6 {
+		t.Fatalf("registered features = %d, want 6", len(features))
 	}
 	for _, name := range []string{"up", "stop", "restart"} {
 		if !byName[name].Descriptor().SupportsServices {
@@ -67,12 +67,12 @@ func TestRegistrationWiresStatusIntoBothInterfaces(t *testing.T) {
 		Stdout:   io.Discard,
 		Stderr:   io.Discard,
 	})
-	found := map[string]bool{}
+	commands := map[string]bool{}
 	for _, cmd := range root.Commands() {
-		found[cmd.Name()] = true
+		commands[cmd.Name()] = true
 	}
-	for _, name := range []string{"status", "up", "stop", "down", "restart"} {
-		if !found[name] {
+	for _, name := range []string{"status", "install-compose", "up", "stop", "down", "restart"} {
+		if !commands[name] {
 			t.Fatalf("command %q was not derived from the real registry", name)
 		}
 	}

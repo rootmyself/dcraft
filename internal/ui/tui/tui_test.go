@@ -19,7 +19,7 @@ func (stubResolver) Resolve(ctx context.Context, req core.TargetRequest, cwd str
 
 type stubPreflight struct{}
 
-func (stubPreflight) Check(ctx context.Context) core.PreflightReport {
+func (stubPreflight) Check(ctx context.Context, requires core.Requirements) core.PreflightReport {
 	return core.PreflightReport{Tools: core.ToolInfo{DockerVersion: "29.10.0"}, Diagnostics: []core.Diagnostic{}}
 }
 
@@ -63,7 +63,7 @@ func descriptor(name string, primary bool) core.Descriptor {
 	}
 }
 
-func newTestModel(t *testing.T, features ...*stubFeature) *Model {
+func newTestModel(t *testing.T, features ...core.Feature) *Model {
 	t.Helper()
 	reg := core.NewRegistry()
 	for _, f := range features {

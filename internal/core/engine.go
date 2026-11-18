@@ -135,22 +135,7 @@ func (e *Engine) Run(ctx context.Context, req Request, sink Sink) (res Result) {
 
 	var target Target
 	var warnings []Diagnostic
-	resolveErr := RunStage(rec, "resolve_target", msgStageResolveTarget, func() error {
-		if e.Resolver == nil {
-			return errors.New("target resolver is not configured")
-		}
-		cwd, err := e.cwd()
-		if err != nil {
-			return FailCause(err, Diagnostic{
-				Category:    CategoryTargetInvalid,
-				Severity:    SeverityError,
-				Message:     msgWorkingDirUnknown,
-				NextActions: []string{msgWorkingDirAction},
-			})
-		}
-		target, warnings, err = e.Resolver.Resolve(ctx, req.Target, cwd)
-		return err
-	})
+	resolveErr := e.resolveTarget(ctx, rec, req, desc, &target, &warnings)
 	if len(target.ProjectDir) > 0 || target.Environment != "" || len(target.Files) > 0 {
 		res.Target = target
 	}
@@ -173,25 +158,13 @@ func (e *Engine) Run(ctx context.Context, req Request, sink Sink) (res Result) {
 			Severity:    SeverityError,
 			Message:     approvalRequiredMessage(required),
 			Detail:      string(required),
-			NextActions: []string{msgApprovalRequiredActionOne, msgApprovalRequiredActionTwo},
+			NextActions: approvalRequiredActions(required),
 		})
 		return res
 	}
 
 	var pf PreflightReport
-	preflightErr := RunStage(rec, "preflight", msgStagePreflight, func() error {
-		if e.Preflight == nil {
-			return errors.New("preflight is not configured")
-		}
-		pf = e.Preflight.Check(ctx)
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if HasError(pf.Diagnostics) {
-			return Fail(pf.Diagnostics...)
-		}
-		return nil
-	})
+	preflightErr := e.runPreflight(ctx, rec, desc, &pf)
 	res.Tools = pf.Tools
 	if preflightErr != nil {
 		if isCanceled(ctx, preflightErr) {
@@ -337,6 +310,211 @@ func (e *Engine) Run(ctx context.Context, req Request, sink Sink) (res Result) {
 	return res
 }
 
+// resolveTarget runs the shared resolve_target stage. A feature marked
+// TargetOptional resolves a folder without Compose files; every other feature
+// keeps the full requirement.
+func (e *Engine) resolveTarget(ctx context.Context, rec *recorder, req Request, desc Descriptor, target *Target, warnings *[]Diagnostic) error {
+	return RunStage(rec, "resolve_target", msgStageResolveTarget, func() error {
+		if e.Resolver == nil {
+			return errors.New("target resolver is not configured")
+		}
+		cwd, err := e.cwd()
+		if err != nil {
+			return FailCause(err, Diagnostic{
+				Category:    CategoryTargetInvalid,
+				Severity:    SeverityError,
+				Message:     msgWorkingDirUnknown,
+				NextActions: []string{msgWorkingDirAction},
+			})
+		}
+		targetReq := req.Target
+		targetReq.AllowMissingConfiguration = desc.TargetOptional
+		*target, *warnings, err = e.Resolver.Resolve(ctx, targetReq, cwd)
+		return err
+	})
+}
+
+// runPreflight checks exactly the capabilities the descriptor declared.
+func (e *Engine) runPreflight(ctx context.Context, rec *recorder, desc Descriptor, pf *PreflightReport) error {
+	return RunStage(rec, "preflight", msgStagePreflight, func() error {
+		if e.Preflight == nil {
+			return errors.New("preflight is not configured")
+		}
+		*pf = e.Preflight.Check(ctx, NormalizeRequirements(desc.Requires))
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if HasError(pf.Diagnostics) {
+			return Fail(pf.Diagnostics...)
+		}
+		return nil
+	})
+}
+
+// Plan resolves the same target and preflight as Run and asks the feature for
+// a read-only preview. It never consumes an approval and never calls Run, so
+// an interactive interface can show the exact effect before collecting the
+// approval. It returns a report instead of a Go error for the same reason Run
+// does.
+func (e *Engine) Plan(ctx context.Context, req Request, sink Sink) (report PlanReport) {
+	clock := e.Clock
+	if clock == nil {
+		clock = SystemClock{}
+	}
+	report = PlanReport{
+		Feature:     req.Feature,
+		Outcome:     OutcomeFailure,
+		Target:      Target{ProjectDir: req.Target.Path, Environment: req.Target.Environment},
+		Stages:      []Stage{},
+		Diagnostics: []Diagnostic{},
+	}
+	report.Target.Normalize()
+	defer func() {
+		report.Target.Normalize()
+		if report.Stages == nil {
+			report.Stages = []Stage{}
+		}
+		if report.Diagnostics == nil {
+			report.Diagnostics = []Diagnostic{}
+		}
+	}()
+
+	rec := &recorder{stages: &report.Stages, clock: clock, sink: sink}
+	if ctx.Err() != nil {
+		report.Outcome = OutcomeCanceled
+		addCanceledDiagnosticTo(&report.Diagnostics)
+		return report
+	}
+
+	feature, ok := e.lookup(req.Feature)
+	if !ok {
+		report.Diagnostics = append(report.Diagnostics, Diagnostic{
+			Category:    CategoryInternal,
+			Severity:    SeverityError,
+			Message:     fmt.Sprintf("등록되지 않은 작업입니다: %s", req.Feature),
+			NextActions: []string{"dcraft --help로 사용 가능한 명령을 확인하세요."},
+		})
+		return report
+	}
+	desc := feature.Descriptor()
+	planner, ok := feature.(Planner)
+	if !ok {
+		report.Diagnostics = append(report.Diagnostics, Diagnostic{
+			Category:    CategoryInternal,
+			Severity:    SeverityError,
+			Message:     msgPlanUnsupported,
+			NextActions: []string{msgPlanUnsupportedAction},
+		})
+		return report
+	}
+
+	var target Target
+	var warnings []Diagnostic
+	resolveErr := e.resolveTarget(ctx, rec, req, desc, &target, &warnings)
+	if len(target.ProjectDir) > 0 || target.Environment != "" || len(target.Files) > 0 {
+		report.Target = target
+	}
+	report.Diagnostics = append(report.Diagnostics, warnings...)
+	if resolveErr != nil {
+		if isCanceled(ctx, resolveErr) {
+			report.Outcome = OutcomeCanceled
+			addCanceledDiagnosticTo(&report.Diagnostics)
+			return report
+		}
+		report.Diagnostics = append(report.Diagnostics, failureDiagnostics(resolveErr)...)
+		return report
+	}
+
+	var pf PreflightReport
+	preflightErr := e.runPreflight(ctx, rec, desc, &pf)
+	report.Tools = pf.Tools
+	if preflightErr != nil {
+		if isCanceled(ctx, preflightErr) {
+			report.Outcome = OutcomeCanceled
+			addCanceledDiagnosticTo(&report.Diagnostics)
+			return report
+		}
+		report.Diagnostics = append(report.Diagnostics, pf.Diagnostics...)
+		if !HasError(report.Diagnostics) {
+			report.Diagnostics = append(report.Diagnostics, Diagnostic{
+				Category:    CategoryInternal,
+				Severity:    SeverityError,
+				Message:     msgPreflightFailed,
+				Detail:      errDetail(preflightErr),
+				NextActions: []string{msgPreflightFailedAction},
+			})
+		}
+		return report
+	}
+	report.Diagnostics = append(report.Diagnostics, pf.Diagnostics...)
+
+	inv := Invocation{
+		Target:      target,
+		Services:    append([]string{}, req.Services...),
+		Args:        append([]string{}, req.Args...),
+		Options:     req.Options,
+		Interactive: req.Interactive,
+		Preflight:   pf,
+		Reporter:    rec,
+		Clock:       clock,
+		State:       e.State,
+	}
+
+	stageCountBefore := len(report.Stages)
+	plan, planErr := e.runPlan(ctx, planner, inv)
+	if len(report.Stages) == stageCountBefore {
+		rec.Begin("plan", msgStagePlan)
+		status := StageSucceeded
+		if planErr != nil {
+			status = StageFailed
+			if isCanceled(ctx, planErr) {
+				status = StageCanceled
+			}
+		}
+		rec.End("plan", status, "")
+	}
+	if planErr != nil {
+		if isCanceled(ctx, planErr) {
+			report.Outcome = OutcomeCanceled
+			addCanceledDiagnosticTo(&report.Diagnostics)
+			return report
+		}
+		report.Diagnostics = append(report.Diagnostics, failureDiagnostics(planErr)...)
+		return report
+	}
+	if ctx.Err() != nil {
+		report.Outcome = OutcomeCanceled
+		addCanceledDiagnosticTo(&report.Diagnostics)
+		return report
+	}
+	report.Text = plan.Text
+	report.Outcome = OutcomeSuccess
+	return report
+}
+
+func (e *Engine) runPlan(ctx context.Context, p Planner, in Invocation) (plan Plan, err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("feature panic: %v", recovered)
+		}
+	}()
+	return p.Plan(ctx, in)
+}
+
+func failureDiagnostics(err error) []Diagnostic {
+	var ce *Error
+	if errors.As(err, &ce) && len(ce.Diagnostics) > 0 {
+		return append([]Diagnostic{}, ce.Diagnostics...)
+	}
+	return []Diagnostic{{
+		Category:    CategoryInternal,
+		Severity:    SeverityError,
+		Message:     msgInternalError,
+		Detail:      errDetail(err),
+		NextActions: []string{msgInternalErrorAction},
+	}}
+}
+
 func (e *Engine) runFeature(ctx context.Context, f Feature, in Invocation) (payload any, err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
@@ -429,12 +607,16 @@ func isCanceled(ctx context.Context, err error) bool {
 }
 
 func addCanceledDiagnostic(res *Result) {
-	for _, d := range res.Diagnostics {
+	addCanceledDiagnosticTo(&res.Diagnostics)
+}
+
+func addCanceledDiagnosticTo(diags *[]Diagnostic) {
+	for _, d := range *diags {
 		if d.Category == CategoryCanceled {
 			return
 		}
 	}
-	res.Diagnostics = append(res.Diagnostics, Diagnostic{
+	*diags = append(*diags, Diagnostic{
 		Category:    CategoryCanceled,
 		Severity:    SeverityWarning,
 		Message:     msgCanceled,
