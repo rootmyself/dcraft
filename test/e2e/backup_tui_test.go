@@ -14,19 +14,10 @@ func TestBackupTUIWizardSelectsVolumeAndShowsTheEffectBeforeRunning(t *testing.T
 	writeProject(t, project)
 	env := fake.env(t, t.TempDir())
 
-	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
-		{wait: "> 스택 상태 (status)", send: "up"},
-		{wait: "> 비밀값 연결 (secrets)", send: "up"},
-		{wait: "> 이전 버전 복원 (rollback)", send: "up"},
-		{wait: "> 데이터 복원 (restore)", send: "up"},
-		{wait: "> 스택 재시작 (restart)", send: "up"},
-		{wait: "> 로그 보기 (logs)", send: "up"},
-		{wait: "> Compose 설치 (install-compose)", send: "up"},
-		{wait: "> 호스트 스크립트 (hooks)", send: "up"},
-		{wait: "> Git 호스트 스크립트 생성 (generate-git-hook)", send: "up"},
-		{wait: "> 서비스 접속 (exec)", send: "up"},
-		{wait: "> 실행환경 별칭 (environments)", send: "up"},
-		{wait: "> 스택 제거 (down)", send: "up"},
+	// The menu order is the registration order; compute the distance from
+	// status so another ticket's feature does not break this journey.
+	steps := []lifecyclePTYStep{
+		{wait: "> 스택 상태 (status)", send: strings.Repeat("\x1b[B", menuDownPresses(t, "backup"))},
 		{wait: "> 데이터 백업 (backup)", send: "\r"},
 		{wait: "데이터 백업 설정", send: "\r"}, // choose the first named volume
 		{wait: "백업 저장 폴더", send: "\r"},  // accept the shown default path
@@ -34,7 +25,8 @@ func TestBackupTUIWizardSelectsVolumeAndShowsTheEffectBeforeRunning(t *testing.T
 		{wait: "영향 서비스: app, worker", send: ""},
 		{wait: "저장 폴더: ./dcraft-backups", send: "\r"},
 		{wait: "백업 완료", send: ""},
-	})
+	}
+	output, code := runLifecyclePTYSteps(t, project, env, steps)
 	if code != 0 {
 		t.Fatalf("TUI exit = %d\n%s", code, output)
 	}
@@ -68,19 +60,10 @@ func TestBackupTUIWizardSelectsAMixOfVolumeAndBindFolder(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
-		{wait: "> 스택 상태 (status)", send: "up"},
-		{wait: "> 비밀값 연결 (secrets)", send: "up"},
-		{wait: "> 이전 버전 복원 (rollback)", send: "up"},
-		{wait: "> 데이터 복원 (restore)", send: "up"},
-		{wait: "> 스택 재시작 (restart)", send: "up"},
-		{wait: "> 로그 보기 (logs)", send: "up"},
-		{wait: "> Compose 설치 (install-compose)", send: "up"},
-		{wait: "> 호스트 스크립트 (hooks)", send: "up"},
-		{wait: "> Git 호스트 스크립트 생성 (generate-git-hook)", send: "up"},
-		{wait: "> 서비스 접속 (exec)", send: "up"},
-		{wait: "> 실행환경 별칭 (environments)", send: "up"},
-		{wait: "> 스택 제거 (down)", send: "up"},
+	// The menu order is the registration order; compute the distance from
+	// status so another ticket's feature does not break this journey.
+	steps := []lifecyclePTYStep{
+		{wait: "> 스택 상태 (status)", send: strings.Repeat("\x1b[B", menuDownPresses(t, "backup"))},
 		{wait: "> 데이터 백업 (backup)", send: "\r"},
 		{wait: "백업할 데이터 선택", send: " "}, // check the first volume
 		{wait: "> [x] 볼륨 data", send: "down"},
@@ -90,7 +73,8 @@ func TestBackupTUIWizardSelectsAMixOfVolumeAndBindFolder(t *testing.T) {
 		{wait: "백업 계획", send: ""},
 		{wait: "다른 스택 공유: 없음", send: "\r"},
 		{wait: "백업 완료", send: ""},
-	})
+	}
+	output, code := runLifecyclePTYSteps(t, project, env, steps)
 	if code != 0 {
 		t.Fatalf("TUI exit = %d\n%s", code, output)
 	}
