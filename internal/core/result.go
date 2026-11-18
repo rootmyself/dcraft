@@ -151,7 +151,8 @@ func (r Result) ExitCode() int {
 				CategoryEnvironmentRequired, CategoryEnvironmentUnknown, CategoryEnvironmentConflict,
 				CategoryProjectNameConflict, CategoryServiceUnknown, CategoryInvalidOption,
 				CategorySecretInputInvalid, CategorySecretUnsupported,
-				CategoryBackupOutputRequired, CategoryBackupVolumeRequired, CategoryBackupVolumeUnknown:
+				CategoryBackupOutputRequired, CategoryBackupVolumeRequired, CategoryBackupVolumeUnknown,
+				CategorySelectionRequired, CategoryInstanceUnknown:
 				return 2
 			}
 		}

@@ -141,7 +141,7 @@ func (e *Engine) Run(ctx context.Context, req Request, sink Sink) (res Result) {
 	}
 	res.Diagnostics = append(res.Diagnostics, warnings...)
 	if resolveErr != nil {
-		e.applyFailure(ctx, &res, resolveErr)
+		e.applyFailure(ctx, &res, resolveErr, nil)
 		return res
 	}
 
@@ -219,6 +219,8 @@ func (e *Engine) Run(ctx context.Context, req Request, sink Sink) (res Result) {
 		OptionLists: req.OptionLists,
 		Interactive: req.Interactive,
 		Preflight:   pf,
+		IO:          req.IO,
+		JSON:        req.JSON,
 		Reporter:    rec,
 		Clock:       clock,
 		State:       e.State,
@@ -238,7 +240,7 @@ func (e *Engine) Run(ctx context.Context, req Request, sink Sink) (res Result) {
 		rec.End("execute", status, "")
 	}
 	if runErr != nil {
-		e.applyFailure(ctx, &res, runErr)
+		e.applyFailure(ctx, &res, runErr, feature)
 		return res
 	}
 	if ctx.Err() != nil {
@@ -460,6 +462,8 @@ func (e *Engine) Plan(ctx context.Context, req Request, sink Sink) (report PlanR
 		OptionLists: req.OptionLists,
 		Interactive: req.Interactive,
 		Preflight:   pf,
+		IO:          req.IO,
+		JSON:        req.JSON,
 		Reporter:    rec,
 		Clock:       clock,
 		State:       e.State,
@@ -493,6 +497,170 @@ func (e *Engine) Plan(ctx context.Context, req Request, sink Sink) (report PlanR
 		return report
 	}
 	report.Text = plan.Text
+	report.Outcome = OutcomeSuccess
+	return report
+}
+
+// Inputs resolves the same target and preflight as Run, then asks a feature
+// that implements InputProvider which values an interactive interface must
+// collect. It never checks an approval, never runs the feature and never
+// writes history, so the TUI can show the request (service, instance, command)
+// before anything is attached.
+func (e *Engine) Inputs(ctx context.Context, req Request, sink Sink) (report InputsReport) {
+	clock := e.Clock
+	if clock == nil {
+		clock = SystemClock{}
+	}
+	report = InputsReport{
+		Feature:     req.Feature,
+		Outcome:     OutcomeFailure,
+		Target:      Target{ProjectDir: req.Target.Path, Environment: req.Target.Environment},
+		Stages:      []Stage{},
+		Diagnostics: []Diagnostic{},
+		Fields:      []InputField{},
+	}
+	report.Target.Normalize()
+	defer func() {
+		report.Target.Normalize()
+		if report.Stages == nil {
+			report.Stages = []Stage{}
+		}
+		if report.Diagnostics == nil {
+			report.Diagnostics = []Diagnostic{}
+		}
+		if report.Fields == nil {
+			report.Fields = []InputField{}
+		}
+	}()
+
+	rec := &recorder{stages: &report.Stages, clock: clock, sink: sink}
+	if ctx.Err() != nil {
+		report.Outcome = OutcomeCanceled
+		addCanceledDiagnosticTo(&report.Diagnostics)
+		return report
+	}
+
+	feature, ok := e.lookup(req.Feature)
+	if !ok {
+		report.Diagnostics = append(report.Diagnostics, Diagnostic{
+			Category:    CategoryInternal,
+			Severity:    SeverityError,
+			Message:     fmt.Sprintf("등록되지 않은 작업입니다: %s", req.Feature),
+			NextActions: []string{"dcraft --help로 사용 가능한 명령을 확인하세요."},
+		})
+		return report
+	}
+	desc := feature.Descriptor()
+	provider, ok := feature.(InputProvider)
+	if !ok {
+		report.Diagnostics = append(report.Diagnostics, Diagnostic{
+			Category:    CategoryInternal,
+			Severity:    SeverityError,
+			Message:     msgInputsUnsupported,
+			NextActions: []string{msgInputsUnsupportedAction},
+		})
+		return report
+	}
+
+	var target Target
+	var warnings []Diagnostic
+	resolveErr := e.resolveTarget(ctx, rec, req, desc, &target, &warnings)
+	if len(target.ProjectDir) > 0 || target.Environment != "" || len(target.Files) > 0 {
+		report.Target = target
+	}
+	report.Diagnostics = append(report.Diagnostics, warnings...)
+	if resolveErr != nil {
+		if isCanceled(ctx, resolveErr) {
+			report.Outcome = OutcomeCanceled
+			addCanceledDiagnosticTo(&report.Diagnostics)
+			return report
+		}
+		report.Diagnostics = append(report.Diagnostics, failureDiagnostics(resolveErr)...)
+		return report
+	}
+
+	var pf PreflightReport
+	preflightErr := e.runPreflight(ctx, rec, desc, &pf)
+	report.Tools = pf.Tools
+	if preflightErr != nil {
+		if isCanceled(ctx, preflightErr) {
+			report.Outcome = OutcomeCanceled
+			addCanceledDiagnosticTo(&report.Diagnostics)
+			return report
+		}
+		report.Diagnostics = append(report.Diagnostics, pf.Diagnostics...)
+		if !HasError(report.Diagnostics) {
+			report.Diagnostics = append(report.Diagnostics, Diagnostic{
+				Category:    CategoryInternal,
+				Severity:    SeverityError,
+				Message:     msgPreflightFailed,
+				Detail:      errDetail(preflightErr),
+				NextActions: []string{msgPreflightFailedAction},
+			})
+		}
+		return report
+	}
+	report.Diagnostics = append(report.Diagnostics, pf.Diagnostics...)
+
+	// The form must see the same stack as Run. Read-only features resolve the
+	// recorded/declared project identity here exactly as Run does, before the
+	// feature lists services and instances.
+	if desc.ReadOnly && e.Identity != nil && strings.TrimSpace(target.ProjectName) == "" {
+		name, identErr := e.Identity.ReadProjectName(ctx, target)
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			report.Outcome = OutcomeCanceled
+			addCanceledDiagnosticTo(&report.Diagnostics)
+			return report
+		}
+		if identErr != nil {
+			report.Diagnostics = append(report.Diagnostics, Diagnostic{
+				Category:    CategoryIdentityUnreadable,
+				Severity:    SeverityWarning,
+				Message:     msgIdentityUnreadable,
+				Detail:      errDetail(identErr),
+				NextActions: []string{msgIdentityUnreadableActionOne, msgIdentityUnreadableActionTwo},
+			})
+		} else if name != "" {
+			target.ProjectName = name
+			report.Target.ProjectName = name
+		}
+	}
+
+	inv := Invocation{
+		Target:      target,
+		Services:    append([]string{}, req.Services...),
+		Args:        append([]string{}, req.Args...),
+		Options:     req.Options,
+		Interactive: req.Interactive,
+		Preflight:   pf,
+		IO:          req.IO,
+		JSON:        req.JSON,
+		Reporter:    rec,
+		Clock:       clock,
+		State:       e.State,
+	}
+
+	fields, inputErr := RunStageValue(rec, "inputs", msgStageInputs, func() ([]InputField, error) {
+		return provider.Inputs(ctx, inv)
+	})
+	if inputErr != nil {
+		if isCanceled(ctx, inputErr) {
+			report.Outcome = OutcomeCanceled
+			addCanceledDiagnosticTo(&report.Diagnostics)
+			return report
+		}
+		report.Diagnostics = append(report.Diagnostics, failureDiagnostics(inputErr)...)
+		return report
+	}
+	if ctx.Err() != nil {
+		report.Outcome = OutcomeCanceled
+		addCanceledDiagnosticTo(&report.Diagnostics)
+		return report
+	}
+	if fields == nil {
+		fields = []InputField{}
+	}
+	report.Fields = fields
 	report.Outcome = OutcomeSuccess
 	return report
 }
@@ -550,10 +718,10 @@ func (e *Engine) operationID() string {
 	return e.NewOperationID()
 }
 
-func (e *Engine) applyFailure(ctx context.Context, res *Result, err error) {
+func (e *Engine) applyFailure(ctx context.Context, res *Result, err error, feature Feature) {
 	if isCanceled(ctx, err) {
 		res.Outcome = OutcomeCanceled
-		addCanceledDiagnostic(res)
+		addCanceledDiagnosticFor(&res.Diagnostics, feature)
 		return
 	}
 	res.Outcome = OutcomeFailure
@@ -613,6 +781,26 @@ func isCanceled(ctx context.Context, err error) bool {
 
 func addCanceledDiagnostic(res *Result) {
 	addCanceledDiagnosticTo(&res.Diagnostics)
+}
+
+// addCanceledDiagnosticFor lets a feature describe its own cancellation effect
+// while the outcome and exit code stay the shared canceled contract.
+func addCanceledDiagnosticFor(diags *[]Diagnostic, feature Feature) {
+	if feature != nil {
+		if reporter, ok := feature.(CanceledReporter); ok {
+			for _, d := range *diags {
+				if d.Category == CategoryCanceled {
+					return
+				}
+			}
+			d := reporter.CanceledDiagnostic()
+			d.Category = CategoryCanceled
+			d.Severity = SeverityWarning
+			*diags = append(*diags, d)
+			return
+		}
+	}
+	addCanceledDiagnosticTo(diags)
 }
 
 func addCanceledDiagnosticTo(diags *[]Diagnostic) {

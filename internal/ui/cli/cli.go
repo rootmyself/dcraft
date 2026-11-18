@@ -188,6 +188,12 @@ func newFeatureCommand(opts Options, tf *targetFlags, feature core.Feature) *cob
 		if d.SupportsServices {
 			services, _ = cmd.Flags().GetStringArray("service")
 		}
+		if tf.json {
+			if live, ok := feature.(core.LiveFeature); ok && live.LiveMode() == core.LiveStream {
+				fmt.Fprint(opts.Stderr, msgJSONLiveUnsupported)
+				return &ExitError{Code: 2}
+			}
+		}
 		req := core.Request{
 			Feature:     d.Name,
 			Target:      tf.targetRequest(),
@@ -197,6 +203,13 @@ func newFeatureCommand(opts Options, tf *targetFlags, feature core.Feature) *cob
 			OptionLists: optionLists,
 			Approvals:   approvals,
 			Interactive: opts.Interactive && !tf.json,
+			IO: core.IO{
+				Stdin:  cmd.InOrStdin(),
+				Stdout: opts.Stdout,
+				Stderr: opts.Stderr,
+				TTY:    opts.Interactive && !tf.json,
+			},
+			JSON: tf.json,
 		}
 		if opts.Engine == nil {
 			fmt.Fprint(opts.Stderr, "오류: 작업 엔진이 준비되지 않았습니다.\n")
