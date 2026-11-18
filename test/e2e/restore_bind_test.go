@@ -227,9 +227,9 @@ func TestRestoreBindTUIWizardSelectsABindArtifactAndTarget(t *testing.T) {
 	restoreBindArtifact(t, project, hostDir)
 
 	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
-		{wait: "> 스택 상태 (status)", send: "up"},
-		{wait: "> 비밀값 연결 (secrets)", send: "up"},
-		{wait: "> 이전 버전 복원 (rollback)", send: "up"},
+		// The menu order is the registration order; compute the distance from
+		// status so another ticket's feature does not break this journey.
+		{wait: "> 스택 상태 (status)", send: strings.Repeat("\x1b[B", menuDownPresses(t, "restore"))},
 		{wait: "> 데이터 복원 (restore)", send: "\r"},
 		{wait: "복원할 백업 선택", send: "\r"},
 		{wait: "복원 대상 선택", send: "down"},
