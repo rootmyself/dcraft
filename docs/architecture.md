@@ -5,18 +5,17 @@ fork these types or recreate these rules in a feature or UI package. Shared
 interface changes go to the integration owner as a change request (see the end
 of this file).
 
-Scope of this version: one working binary, twelve registered features (`status`,
-`install-compose`, `up`, `stop`, `down`, `restart`, `update`, `secrets`,
-`hooks`, `logs`, `exec`, `backup`), the common operation seam, target
-resolution, named
-environments, automatic project-name allocation, same-stack coordination,
-runtime secret references, explicit host scripts with independent script
-trust, service/instance selection, live terminal attach, versioned volume
-backup,
-diagnostics, CLI/TUI assembly, state layout, machine-readable results, the
-approval/plan preview flow, explicit update with bounded readiness and the
-previous-good record, and tests. Generation, build-time/AWS secrets,
-bind-folder backup, restore and rollback are later tickets.
+Scope of this version: one working binary, thirteen registered features
+(`status`, `install-compose`, `up`, `stop`, `down`, `restart`, `update`,
+`secrets`, `hooks`, `logs`, `exec`, `backup`, `rollback`), the common operation
+seam, target resolution, named environments, automatic project-name allocation,
+same-stack coordination, runtime and build-time secret references, explicit
+host scripts with independent script trust, service/instance selection, live
+terminal attach, versioned volume backup, diagnostics, CLI/TUI assembly, state
+layout, machine-readable results, the approval/plan preview flow, explicit
+update with bounded readiness, the previous-good record, previous-good
+rollback, and tests. Generation, AWS Secrets Manager sources, bind-folder
+backup and restore are later tickets.
 
 ---
 
@@ -1177,6 +1176,90 @@ Execution rules:
 Stable stage names: `hooks_pre` (사전 스크립트), `revalidate_inputs` (입력
 재확인), `hooks_post` (사후 스크립트). Exit codes remain 0/1/2/130.
 
+### Previous-good rollback contract (ticket 11 / issue #12)
+
+Feature: flat `dcraft rollback [--timeout <seconds>]`, approval
+`previous_version`, `RecordsHistory: true`, full default preflight. It returns
+to the **single** previous verified-good deployment recorded by update
+(`state.json`, §7.2). There is no multi-version history, picker or automatic
+rollback.
+
+Stages (stable machine names; Korean titles): `load_record` (기록 확인),
+`precheck` (변경 전 확인), `apply` (이전 이미지 적용), `verify` (실행 상태 확인),
+`report` (결과 정리). The per-stack lock is acquired at the start of
+`load_record` and held through the record read, apply and verification, so a
+rollback cannot interleave with a failed update or a backup. The record is read
+under the lock and remains byte-identical.
+
+Precheck (all before any stack change, all reported with distinct categories):
+
+- `rollback_unavailable`: no record for this stack and environment — first run,
+  never-updated or pre-existing external stack. dcraft never invents a version.
+- `rollback_record_invalid`: record format/folder/environment mismatch,
+  duplicate service, non-immutable image identity (not a full `sha256:` ID) or
+  malformed retention tag, or a recorded service missing from the recorded
+  Compose configuration.
+- `rollback_input_missing`: recorded project folder, Compose file or env file is
+  gone.
+- `rollback_image_missing`: the recorded image ID or its dcraft-owned retention
+  tag is absent, or the tag now resolves to another ID. A newer image is never
+  substituted.
+- `rollback_secret_unavailable`: a recorded secret reference or a current
+  `.dcraft.yaml` reference for the recorded service closure cannot be resolved
+  (missing/empty env or file source, AWS source not implemented, unknown
+  source). Values are read for availability only and never stored or printed.
+  In a recorded `SecretReference`, `name` is the source reference (env var name,
+  local path or AWS secret id), `field` the optional AWS field, and
+  `service`/`phase`/`delivery`/`source` the saved connection metadata. Both
+  `phase: runtime` and `phase: build` references are availability-checked;
+  rollback never rebuilds, so build values are not delivered by this operation.
+  Current runtime delivery comes from the project's saved references through
+  the published secret runtime.
+
+`apply` uses `internal/compose.ApplyRollback` (published as `stack.Rollbacker`):
+it writes a temporary dcraft-managed override that pins every recorded service
+to its exact image ID, prepares the project's current runtime secret delivery
+for those services, and runs `compose up --detach --pull never --no-build
+<recorded services>`. Compose therefore cannot pull or build; a missing image
+fails instead of being replaced. Only the recorded services are selected, so a
+service added after the record is left untouched and reported in a notice. The
+recorded file order, env files, profiles, project name and environment are used
+instead of the current discovery; an explicit `-p` that conflicts with the
+record is `invalid_option` (exit 2) and runs nothing. File *contents* are not
+snapshotted, so editing a recorded Compose file changes the configuration that
+rollback applies; the record reproduces the execution selection, not file bytes.
+
+`verify` reuses update's published readiness classification (`stack.Readiness`:
+`healthy`, `running_unverified`, `unhealthy`, `exited`, `restarting`,
+`not_started`, `not_created`, `timeout`) with the same bounded poll/settle and
+restart-count baseline. `unhealthy`, `exited`, `restarting`, `not_started`,
+`not_created` and `timeout` fail with `readiness_failed`. Independently, every
+observed instance's image ID must equal the recorded ID; a mismatch fails with
+`rollback_verify_failed`. `running_unverified` is never called healthy.
+
+Payload `data.rollback`: `project_name`, `environment`, `scope`, `services`,
+`recorded_at`, `images` (`service`/`image_id`/`retention_tag`), `applied`,
+`verified` (true only when every service passed a configured healthcheck),
+`image_ids_verified`, `already_at_version`, `readiness`, `record_status`
+(always `unchanged`), `data_restored` (always false), `hooks_run` (always false)
+and Korean `notices`. On failure `data` is omitted; the failed stage, observed
+`service=status` summary and per-instance image state are in the diagnostics.
+
+Record policy: rollback **keeps the record unchanged**. There is exactly one
+previous version, so a repeated rollback re-applies the same recorded images
+(Compose leaves unchanged containers alone), reports `already_at_version` and
+states that no older version exists. The rolled-back deployment is not written
+back as a new "previous". Failed or canceled rollbacks never write the record or
+history.
+
+Honesty: rollback restores images and the recorded execution selection only. It
+does not restore DB/volume data, external systems or script side effects, does
+not run deploy hooks, and never deletes retention images/tags or prunes. It
+never writes the project `.dcraft.yaml`: newer hook or secret registrations are
+read as the current configuration, not rolled back to a recorded file. The
+descriptor declares no hook scope, so the engine runs no pre/post host scripts
+for rollback even when the project registers them.
+
 ---
 
 ## 7.3 Logs and exec (ticket #5)
@@ -1425,7 +1508,14 @@ Desktop's VM-backed unix socket is **local**, not remote.
 | `update_failed` | a build, pull or detached apply failed; the stage and observed state are reported | error |
 | `readiness_failed` | post-update state was unhealthy, exited, restarting, not started/created or timed out | error |
 | `image_missing` | `--no-pull` found a required local image absent; nothing changed | error |
-| `invalid_option` | an explicit feature option is invalid (for example `--timeout`) | error (exit 2) |
+| `invalid_option` | an explicit feature option is invalid (for example `--timeout`) or conflicts with the recorded rollback target | error (exit 2) |
+| `rollback_unavailable` | no previous-good record for this stack and environment; nothing inferred | error |
+| `rollback_record_invalid` | stored record is malformed, belongs elsewhere or no longer matches the recorded configuration | error |
+| `rollback_input_missing` | a recorded Compose/env file or folder is missing; nothing changed | error |
+| `rollback_image_missing` | a recorded image ID or retention tag is missing or moved; no substitution | error |
+| `rollback_secret_unavailable` | a recorded/current secret reference cannot be re-resolved; nothing changed | error |
+| `rollback_failed` | the recorded images could not be applied; stage and observed state are reported | error |
+| `rollback_verify_failed` | after apply, a running image ID differs from the record | error |
 | `state_failed` | name/lock state could not be read or written | error |
 | `verification_failed` | post-operation verification failed | error |
 | `canceled` | operation interrupted | warning (exit 130 outcome) |
@@ -1433,7 +1523,7 @@ Desktop's VM-backed unix socket is **local**, not remote.
 | `identity_unreadable` | stored/declared project identity could not be read; Compose default used | warning |
 | `secret_invalid` | `.dcraft.yaml` secrets syntax, fields, duplicates or unsupported values are invalid | error |
 | `secret_input_invalid` | explicit secret reference input is missing or invalid | error (exit 2) |
-| `secret_unsupported` | build-phase or AWS-source reference is not implemented | error (exit 2) |
+| `secret_unsupported` | an AWS-source reference (or another unsupported secret shape) is not implemented | error (exit 2) |
 | `secret_source_unavailable` | referenced environment/file source is missing, unreadable or empty | error |
 | `secret_apply_failed` | delivery preparation/materialization/override failed; a partial rotation may remain | error |
 | `backup_output_required` | no explicit backup output directory was given | error (exit 2) |
@@ -1877,6 +1967,21 @@ Tested seams:
   lock and a concurrent `up` fails `stack_busy` while a canary stack's container
   IDs and volume data are unchanged; cleanup removes only this test's
   projects/images/registry.
+- rollback unit/fake: no record, malformed/non-immutable record, missing
+  Compose/env file, missing image ID, missing or moved retention tag, missing
+  env/file/AWS secret source, explicit project-name conflict, stack busy, image
+  ID mismatch after apply, unhealthy/exited/restarting readiness failures,
+  cancellation, idempotent repeat, recorded execution configuration over
+  current discovery, extra configured services untouched, no build/pull/tag/
+  prune path, payload honesty fields and no record change on failure/cancel.
+- real Docker rollback: a verified v1 update plus a failed v2 update (record
+  stays v1); rollback restores the recorded image ID and execution
+  configuration (env marker and baked image content), leaves named-volume data
+  unchanged, keeps the record byte-identical, reports `already_at_version` on
+  a repeat and leaves a canary stack unchanged; a missing retention tag, a
+  missing image ID and a missing recorded secret source all abort before the
+  stack changes; cancellation mid-apply exits 130 with the record intact; a
+  fresh stack with no record fails cleanly without creating containers.
 
 Commands:
 
@@ -1898,27 +2003,28 @@ Docker or external network. Unrun platforms/paths are not claimed as verified.
 
 ## 12. Not implemented here (owned by later tickets)
 
-- `restore`, `rollback`; no registration exists for them and no menu action is
-  shown. Bind-folder backup (#17), volume restore (#18) and bind restore (#19)
-  are not implemented; `backup` supports named volumes only.
+- `restore`; no registration exists and no menu action is shown. `backup`
+  supports named volumes only; bind-folder backup (#17), volume restore (#18)
+  and bind restore (#19) are not implemented.
 - TUI alias creation/editing: aliases are created by editing `.dcraft.yaml` in
   this version (selection is provided by both interfaces).
-- Build-time secrets (BuildKit mounts), AWS Secrets Manager sources, generated
-  Compose/Dockerfile files and generator flows, rollback itself (the
-  previous-good record is published and written; #12 consumes it), Kubernetes,
-  remote engines, resident daemon/web UI. Runtime environment/file references
-  are implemented by ticket #9 below; Compose installation is implemented by
-  ticket #6; update readiness and the previous-good record by ticket #7; host
-  hooks and script trust by ticket #12 (§7.2).
-- Good-version history beyond the single record. The TUI plan/confirm component
-  is generic; `install-compose`, `update` and `backup` are planners in this
-  build, and `secrets`/`backup` use the generic wizard. An ordinary update shows
-  its plan and requires one `enter` to run, not an approval. `up` also goes
-  through the generic plan because it declares the hook scope; with no hooks the
-  plan text is empty and only the ordinary confirmation remains. Backup uses
-  its wizard preview. TUI service/instance selection exists for the ticket-05
-  live screens through `core.InputProvider`; lifecycle mutations still use the
-  CLI `-s/--service`.
+- AWS Secrets Manager sources, generated Compose/Dockerfile files and generator
+  flows, Kubernetes, remote engines, resident daemon/web UI. Runtime
+  environment/file references are implemented by ticket #9 below; Compose
+  installation by ticket #6; update readiness and the previous-good record by
+  ticket #7; host hooks and script trust by ticket #12; named-volume backup by
+  ticket #15; build-time delivery by ticket #10 and previous-good rollback by
+  ticket #11.
+- Good-version history beyond the single record (rollback has no multi-version
+  picker). The TUI plan/confirm component is generic; `install-compose`,
+  `update`, `backup` and `rollback` are planners in this build, and
+  `secrets`/`backup` use the generic wizard. An ordinary update shows its plan
+  and requires one `enter` to run, not an approval; rollback shows the same plan
+  screen and collects only `previous_version`. `up` also goes through the
+  generic plan because it declares the hook scope; with no hooks the plan text
+  is empty and only the ordinary confirmation remains. TUI service/instance
+  selection exists for the ticket-05 live screens through `core.InputProvider`;
+  lifecycle mutations still use the CLI `-s/--service`.
 - Docker itself (installation, repair, replacement), administrator escalation,
   Docker Desktop/WSL integration changes.
 
@@ -2019,6 +2125,20 @@ The project-name variable is empty in a pre hook on a first `up` because name
 allocation happens inside the feature. Generated-script features must not treat
 registration or plan display as trust.
 
+Rollback residual risks: the record stores the file *list*, not file bytes, so
+editing a recorded Compose file changes the configuration a rollback applies;
+rollback cannot reproduce a version whose Compose files were changed or deleted.
+Secret values are re-resolved from their current external sources, so old values
+are not guaranteed and a source removed after the record aborts the rollback.
+AWS sources are recognized and refused (ticket #11). The readiness
+classification is currently a second implementation of update's rules against
+the same `stack.Readiness` values (§13 change request). Cancellation inside
+apply leaves Compose's partial stop/recreate effects; the apply stage detail
+reports the observed state and the engine adds the generic canceled diagnostic.
+Rollback applies only recorded services; a service added after the record is
+not reverted or removed and is reported in a notice. `flock` coordination and
+real-Docker verification ran on macOS arm64 with Docker Desktop only.
+
 ---
 
 ## 13. Change request checklist
@@ -2099,6 +2219,16 @@ Published by ticket #7 (consume, do not fork): `stack.Updater` (`UpdateModel`,
 the record and must take the same per-stack lock; `#9`/`#10` may populate
 `GoodTarget.SecretRefs` additively, never with values.
 
+Published by ticket #11 (consume, do not fork): `stack.Rollbacker`
+(`ApplyRollback`), `stack.RollbackPin`, the rollback stage names, the
+`rollback_unavailable`/`rollback_record_invalid`/`rollback_input_missing`/
+`rollback_image_missing`/`rollback_secret_unavailable`/`rollback_failed`/
+`rollback_verify_failed` categories and `data.rollback`. The record schema is
+unchanged; rollback only reads it. Readiness classification is currently
+implemented in both `internal/update` and `internal/rollback` against the same
+published `stack.Readiness` values; extracting one shared bounded-readiness
+helper is a change request for the integration owner.
+
 Ticket #7 change request to the integration owner: the CLI/TUI preview path now
 calls `Engine.Plan` for every `core.Planner` in human/TUI mode, not only for
 approval-gated features. This is required for the ordinary update preview; the
@@ -2121,8 +2251,8 @@ code.
 ## 14. Runtime secret references and delivery (ticket #9)
 
 Runtime secrets are references, not a secret store. Only environment-variable
-and local-file sources and runtime delivery are implemented here; build-time
-delivery (#10) and AWS Secrets Manager (#11) extend the same contract.
+and local-file sources are implemented here; build-time delivery extends the
+same contract in 14.6, and AWS Secrets Manager sources remain later work.
 
 ### 14.1 Project config
 
@@ -2131,7 +2261,7 @@ delivery (#10) and AWS Secrets Manager (#11) extend the same contract.
 ```yaml
 secrets:
   - service: web               # Compose service
-    phase: runtime             # runtime (build is recognized, not implemented)
+    phase: runtime             # runtime (build has its own delivery; see 14.6)
     delivery: environment      # environment | file
     source: env                # env | file (aws is recognized, not implemented)
     ref: DB_PASSWORD           # env var name or project-relative/absolute file path
