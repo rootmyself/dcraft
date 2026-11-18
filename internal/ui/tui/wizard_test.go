@@ -280,3 +280,68 @@ func (f *failingWizard) WizardPreview(answers map[string]string) (string, error)
 func stringsContains(haystack, needle string) bool {
 	return strings.Contains(haystack, needle)
 }
+
+func TestWizardMultiStepCollectsAMixedSelection(t *testing.T) {
+	wizard := &wizardStub{
+		desc: core.Descriptor{Name: "backup", Title: "백업", Summary: "백업합니다.", Usage: "dcraft backup", Wizard: true},
+		steps: core.WizardSpec{
+			Title: "백업 설정",
+			Steps: []core.WizardStep{
+				{
+					Name: "sources", Title: "데이터 선택", Prompt: "여러 항목을 고르세요.", Multi: true,
+					Options: []core.WizardOption{
+						{Value: "volume:data", Label: "볼륨 data"},
+						{Value: "bind:/srv/app", Label: "폴더 /srv/app"},
+					},
+				},
+				{Name: "ref", Title: "폴더", Prompt: "입력", AllowCustom: true, Default: "./out"},
+			},
+		},
+		preview: "백업 계획",
+	}
+	m := newWizardModel(t, wizard)
+	openWizard(t, m)
+
+	// Space toggles the highlighted value; down moves; enter confirms the mix.
+	feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeySpace}})
+	feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeyDown}})
+	feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeySpace}})
+	if !strings.Contains(m.View(), "[x] 볼륨 data") || !strings.Contains(m.View(), "[x] 폴더 /srv/app") {
+		t.Fatalf("checked values not rendered:\n%s", m.View())
+	}
+	feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeyEnter}})
+	feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeyEnter}})
+	if m.phase != phaseWizardPreview {
+		t.Fatalf("phase = %v, want preview:\n%s", m.phase, m.View())
+	}
+	feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeyEnter}})
+	if !wizard.applied {
+		t.Fatal("wizard did not apply")
+	}
+	if got := wizard.runs[len(wizard.runs)-1]["sources"]; got != "volume:data\nbind:/srv/app" {
+		t.Fatalf("sources answer = %q", got)
+	}
+}
+
+func TestWizardMultiEnterWithoutTogglesSelectsTheHighlightedValue(t *testing.T) {
+	wizard := &wizardStub{
+		desc: core.Descriptor{Name: "backup", Title: "백업", Summary: "백업합니다.", Usage: "dcraft backup", Wizard: true},
+		steps: core.WizardSpec{Steps: []core.WizardStep{
+			{
+				Name: "sources", Title: "데이터 선택", Prompt: "고르세요.", Multi: true,
+				Options: []core.WizardOption{{Value: "volume:data", Label: "볼륨 data"}},
+			},
+			{Name: "ref", Title: "출력", Prompt: "입력", AllowCustom: true, Default: "./out"},
+		}},
+		preview: "미리보기",
+	}
+	m := newWizardModel(t, wizard)
+	openWizard(t, m)
+	feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeyEnter}})
+	if m.phase != phaseWizardStep || m.wizardStep != 1 {
+		t.Fatalf("enter did not preserve the single-choice flow: phase=%v step=%d", m.phase, m.wizardStep)
+	}
+	if got := m.wizardAnswers["sources"]; got != "volume:data" {
+		t.Fatalf("sources answer = %q", got)
+	}
+}

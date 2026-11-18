@@ -195,9 +195,11 @@ func (c *Compose) Sources(ctx context.Context, t core.Target) ([]data.DataSource
 					continue
 				}
 				e := get("bind\x00"+hostPath, data.DataSource{
-					Kind:     data.KindBind,
-					Name:     hostPath,
-					ReadOnly: true,
+					Kind:          data.KindBind,
+					Name:          hostPath,
+					Declared:      hostPath,
+					DeclaredPaths: []string{hostPath},
+					ReadOnly:      true,
 				})
 				e.source.Services = appendUnique(e.source.Services, service)
 				e.source.MountTargets = appendUnique(e.source.MountTargets, mount.Target)
@@ -276,10 +278,58 @@ func (c *Compose) ServiceRuntime(ctx context.Context, t core.Target) ([]data.Ser
 // containers still reference the volume and must be considered. The query
 // uses the actual engine name, never the Compose key.
 func (c *Compose) VolumeConsumers(ctx context.Context, t core.Target, volumeName string) ([]data.ContainerConsumer, error) {
+	return c.consumersForFilter(ctx, t, "volume="+volumeName)
+}
+
+// BindConsumers implements data.Backend. Docker records the bind source in two
+// spellings: the host path in container inspect on Docker Desktop, and a
+// Docker-visible path such as /host_mnt<host path> for the `volume` ps filter.
+// Both are queried and the results are merged, so a stopped consumer is never
+// missed because of the platform mapping.
+func (c *Compose) BindConsumers(ctx context.Context, t core.Target, hostPath string) ([]data.ContainerConsumer, error) {
+	hostPath = strings.TrimSpace(hostPath)
+	if hostPath == "" {
+		return nil, nil
+	}
+	candidates := []string{hostPath}
+	if strings.HasPrefix(hostPath, "/") && !strings.HasPrefix(hostPath, "/host_mnt/") {
+		candidates = append(candidates, "/host_mnt"+hostPath)
+	}
+	if strings.HasPrefix(hostPath, "/host_mnt/") {
+		candidates = append(candidates, strings.TrimPrefix(hostPath, "/host_mnt"))
+	}
+	seen := map[string]bool{}
+	var out []data.ContainerConsumer
+	for _, candidate := range candidates {
+		consumers, err := c.consumersForFilter(ctx, t, "volume="+candidate)
+		if err != nil {
+			return nil, err
+		}
+		for _, consumer := range consumers {
+			key := consumer.Name + "\x00" + consumer.Project + "\x00" + consumer.Service
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			out = append(out, consumer)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Project != out[j].Project {
+			return out[i].Project < out[j].Project
+		}
+		return out[i].Name < out[j].Name
+	})
+	return out, nil
+}
+
+// consumersForFilter runs one `docker ps -a --filter <filter>` query and parses
+// the tab-separated name/project/service/state records.
+func (c *Compose) consumersForFilter(ctx context.Context, t core.Target, filter string) ([]data.ContainerConsumer, error) {
 	format := "{{.Names}}\t{{.Label \"com.docker.compose.project\"}}\t{{.Label \"com.docker.compose.service\"}}\t{{.State}}"
 	res, err := c.run(ctx, execx.Command{
 		Name: "docker",
-		Args: []string{"ps", "-a", "--filter", "volume=" + volumeName, "--format", format},
+		Args: []string{"ps", "-a", "--filter", filter, "--format", format},
 	})
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return nil, ctxErr

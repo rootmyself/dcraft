@@ -53,3 +53,70 @@ func TestBackupTUIWizardSelectsVolumeAndShowsTheEffectBeforeRunning(t *testing.T
 		}
 	}
 }
+
+func TestBackupTUIWizardSelectsAMixOfVolumeAndBindFolder(t *testing.T) {
+	hostDir := writeBindFixture(t)
+	fake := backupFake(t)
+	fake.writeConfig(t, backupBindConfig(hostDir))
+	project := t.TempDir()
+	writeProject(t, project)
+	env := fake.env(t, t.TempDir())
+	resolved, err := filepath.EvalSymlinks(hostDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
+		{wait: "> 스택 상태 (status)", send: "up"},
+		{wait: "> 비밀값 연결 (secrets)", send: "up"},
+		{wait: "> 이전 버전 복원 (rollback)", send: "up"},
+		{wait: "> 데이터 복원 (restore)", send: "up"},
+		{wait: "> 스택 재시작 (restart)", send: "up"},
+		{wait: "> 로그 보기 (logs)", send: "up"},
+		{wait: "> Compose 설치 (install-compose)", send: "up"},
+		{wait: "> 호스트 스크립트 (hooks)", send: "up"},
+		{wait: "> 서비스 접속 (exec)", send: "up"},
+		{wait: "> 스택 제거 (down)", send: "up"},
+		{wait: "> 데이터 백업 (backup)", send: "\r"},
+		{wait: "백업할 데이터 선택", send: " "}, // check the first volume
+		{wait: "> [x] 볼륨 data", send: "down"},
+		{wait: "> [ ] 폴더 ", send: " "}, // add the bind folder
+		{wait: "[x] 폴더 ", send: "\r"},
+		{wait: "백업 저장 폴더", send: "\r"},
+		{wait: "백업 계획", send: ""},
+		{wait: "다른 스택 공유: 없음", send: "\r"},
+		{wait: "백업 완료", send: ""},
+	})
+	if code != 0 {
+		t.Fatalf("TUI exit = %d\n%s", code, output)
+	}
+	artifacts, err := backup.List(filepath.Join(project, "dcraft-backups"))
+	if err != nil {
+		t.Fatalf("list backups: %v", err)
+	}
+	if len(artifacts) != 2 {
+		t.Fatalf("TUI mixed backup artifacts = %d\n%s", len(artifacts), output)
+	}
+	kinds := map[backup.Kind]int{}
+	for _, artifact := range artifacts {
+		kinds[artifact.Manifest.Source.Kind]++
+		if artifact.Manifest.Source.Kind == backup.KindBind && artifact.Manifest.Source.HostPath != resolved {
+			t.Fatalf("bind host path = %q, want %q", artifact.Manifest.Source.HostPath, resolved)
+		}
+	}
+	if kinds[backup.KindVolume] != 1 || kinds[backup.KindBind] != 1 {
+		t.Fatalf("artifact kinds = %v", kinds)
+	}
+	for _, artifact := range artifacts {
+		if _, err := backup.Verify(artifact.Path); err != nil {
+			t.Fatalf("TUI backup did not verify: %v", err)
+		}
+	}
+	log := strings.Join(fake.calls(t), "\n")
+	if !strings.Contains(log, "create --name dcraft-backup-") {
+		t.Fatalf("the volume half did not use the helper:\n%s", log)
+	}
+	if !strings.Contains(log, " stop app") || !strings.Contains(log, " start app") {
+		t.Fatalf("TUI did not stop and restart the bind consumer:\n%s", log)
+	}
+}

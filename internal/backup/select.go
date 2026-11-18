@@ -34,7 +34,7 @@ func (e *UnsupportedSourceError) Error() string {
 		return fmt.Sprintf("anonymous volume %q has no stable name and cannot be backed up by this command", e.Reference)
 	}
 	if e.Kind == data.KindBind {
-		return fmt.Sprintf("bind folder %q is not a named volume; bind-folder backup is a later ticket", e.Reference)
+		return fmt.Sprintf("%q is a bind-mounted host folder; select it with --bind instead of --volume", e.Reference)
 	}
 	return fmt.Sprintf("data source %q is not a named volume", e.Reference)
 }

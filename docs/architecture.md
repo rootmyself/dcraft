@@ -11,11 +11,11 @@ Scope of this version: one working binary, fourteen registered features
 operation seam, target resolution, named environments, automatic project-name
 allocation, same-stack coordination, runtime and build-time secret references,
 explicit host scripts with independent script trust, service/instance
-selection, live terminal attach, versioned volume backup, safe volume restore,
-diagnostics, CLI/TUI assembly, state layout, machine-readable results, the
-approval/plan preview flow, explicit update with bounded readiness, the
-previous-good record, previous-good rollback, and tests. Generation, AWS
-Secrets Manager sources, bind-folder backup and bind-folder restore are later
+selection, live terminal attach, versioned volume and declared bind-folder
+backup, safe volume restore, diagnostics, CLI/TUI assembly, state layout,
+machine-readable results, the approval/plan preview flow, explicit update with
+bounded readiness, the previous-good record, previous-good rollback, and tests.
+Generation, AWS Secrets Manager sources, and bind-folder restore are later
 tickets.
 
 ---
@@ -731,9 +731,10 @@ It derives everything from the registry:
   approval kind;
 - a feature with `Descriptor.Wizard` starts the generic guided flow (`steps`
   run, keyboard answers, effect preview, `apply` run). `backup` uses it to select
-  a named volume and an output directory and to show affected/running services
-  before anything is stopped. The wizard adds no safety rule; the feature
-  rechecks selection and consumers on the apply run;
+  a mixed volume/bind selection and an output directory and to show
+  affected/running services before anything is stopped. The source step is the
+  published generic `Multi` step; the TUI adds no safety rule; the feature
+  rechecks selection, paths and consumers on the apply run;
 - `r` re-runs read-only features directly, re-plans every Planner and asks for
   confirmation again for other mutating features. The selected environment is
   reused; `q` and `ctrl+c` quit outside an operation;
@@ -1548,11 +1549,14 @@ Desktop's VM-backed unix socket is **local**, not remote.
 | `secret_source_unavailable` | referenced environment/file source is missing, unreadable or empty | error |
 | `secret_apply_failed` | delivery preparation/materialization/override failed; a partial rotation may remain | error |
 | `backup_output_required` | no explicit backup output directory was given | error (exit 2) |
-| `backup_volume_required` | no data volume was selected | error (exit 2) |
-| `backup_volume_unknown` | selected volume key/name is not part of the stack | error (exit 2) |
-| `backup_volume_unsupported` | anonymous volume or bind folder cannot be archived here | error |
+| `backup_volume_required` | no data source (named volume or declared bind folder) was selected | error (exit 2) |
+| `backup_volume_unknown` | selected volume key/name is not part of the stack, or a bind folder was passed through `--volume` | error (exit 2) |
+| `backup_volume_unsupported` | anonymous volume or another unarchivable volume selection | error |
+| `backup_bind_unknown` | `--bind` value is not a declared bind folder or a unique mount target | error (exit 2) |
+| `backup_bind_invalid` | a declared bind folder is missing, not a directory, unreadable, or contains an unsupported name/socket | error |
+| `backup_bind_unsafe` | the bind source is a filesystem root or the output is inside the source | error |
 | `backup_output_invalid` | output is not a writable directory or the artifact would escape it | error |
-| `backup_consumer_unsafe` | another stack, unmanaged container or paused service consumes the volume | error |
+| `backup_consumer_unsafe` | another stack, unmanaged container or paused service consumes the selected volume or bind folder | error |
 | `backup_selection_changed` | the selected source identity changed between discovery and stop | error |
 | `backup_failed` | stop, archive helper, filesystem write, publish or completion-marker failure | error |
 | `backup_integrity_failed` | archive truncation, unsafe entry or manifest mismatch | error |
@@ -1581,12 +1585,12 @@ the full `compose version` command confirms the classification.
 `service_unknown`, `invalid_option`, `secret_input_invalid`,
 `secret_unsupported`, `selection_required`, `instance_unknown`,
 `backup_output_required`, `backup_volume_required`,
-`backup_volume_unknown`, `hook_input_invalid` and
+`backup_volume_unknown`, `backup_bind_unknown`, `hook_input_invalid` and
 `hook_content_changed`: those mean the caller must supply a different decision
 (an approval, an environment, a free name, an existing service, a valid option,
 a valid secret reference, a service/instance selection, or a backup
-volume/output). dcraft never prompts to resolve them; non-interactive runs fail
-with the explanation instead. `instance_stopped`, `logs_failed` and
+volume/bind/output). dcraft never prompts to resolve them; non-interactive runs
+fail with the explanation instead. `instance_stopped`, `logs_failed` and
 `exec_failed` are operation failures (exit 1). New categories are additive v1
 values.
 
@@ -1601,9 +1605,10 @@ previous record is untouched.
 ## 10.1 Data backup and backup format v1 (ticket #16)
 
 Feature: flat command `dcraft backup`; no approval (it exports data, it never
-replaces it), `RecordsHistory: true`, `Wizard: true`, and two feature-owned
-flags: `--output/-o <dir>` (`FlagString`, required) and repeatable
-`--volume <key>` (`FlagList`, required). The CLI never invents a destination;
+replaces it), `RecordsHistory: true`, `Wizard: true`, and three feature-owned
+flags: `--output/-o <dir>` (`FlagString`, required), repeatable `--volume <key>`
+(`FlagList`) and repeatable `--bind <path-or-mount-target>` (`FlagList`). At
+least one volume or bind is required. The CLI never invents a destination;
 a missing value is a `backup_output_required`/`backup_volume_required` failure
 (exit 2) with Korean guidance and no service stop. The TUI uses the published
 `core.Wizard` flow, not a feature-specific screen: the first read-only run
@@ -1614,8 +1619,9 @@ services and the effect, and only `enter` runs the same engine path with
 
 Stable stages: `output` (저장 위치 확인), `coordinate` (스택 잠금),
 `resolve_project` (프로젝트 확인), `discover` (데이터 선택),
-`recheck_selection` (선택 재확인), `inspect_consumers` (소비자 확인),
-`stop_consumers` (서비스 중지), `archive` (볼륨 복사),
+`recheck_selection` (선택 재확인), `check_paths` (경로 안전 확인),
+`inspect_consumers` (소비자 확인),
+`stop_consumers` (서비스 중지), `archive` (볼륨/폴더 복사),
 `verify_archive` (무결성 확인), `publish` (백업 공개),
 `complete` (완료 표시), `restore_state` (서비스 상태 복구).
 
@@ -1628,9 +1634,10 @@ Stable stages: `output` (저장 위치 확인), `coordinate` (스택 잠금),
 - Volume identity comes from `docker compose config --format json`:
   `volumes.<key>.name` (custom `name:` included), `external: true` as declared.
   Engine queries always use the actual engine name, never the Compose key.
-  Anonymous volumes (a `volume` mount with no `source`) and bind mounts are
-  reported by `data.Sources` but are explicitly rejected by this command;
-  bind-folder backup is ticket #17 and restore is #18/#19.
+  Anonymous volumes (a `volume` mount with no `source`) are reported by
+  `data.Sources` but are explicitly rejected by this command. Declared bind
+  mounts are supported through `--bind` (§10.3); anonymous volumes and other
+  unarchivable selections remain rejected. Restore is #18/#19.
 - Consumers are read with `docker ps -a --filter volume=<actual engine name>`
   (`-a` is mandatory: a stopped container still references the volume). A
   consumer is accepted only when its Compose project label equals the selected
@@ -1773,19 +1780,22 @@ characters replaced and a numeric suffix on collision; it is generated by
 ### Published interfaces (consume, do not fork)
 
 - `internal/data`: `Backend` (`ProjectName`, `Sources`, `ServiceRuntime`,
-  `VolumeConsumers(ctx, target, volumeName)`, `StopServices`, `StartServices`,
+  `VolumeConsumers(ctx, target, volumeName)`,
+  `BindConsumers(ctx, target, hostPath)`, `StopServices`, `StartServices`,
   `ArchiveVolume`, `HelperImage`, `Redact`), `DataSource` (`Kind`, `Key`, `Name`,
-  `MountTargets`, `External`, `Anonymous`, `ReadOnly`, `Services`), `Kind`
-  (`volume`/`bind`), `ServiceRuntime`, `ContainerConsumer`, `OpResult`,
+  `Declared`, `DeclaredPaths`, `MountTargets`, `External`, `Anonymous`, `ReadOnly`, `Services`),
+  `Kind` (`volume`/`bind`), `ServiceRuntime`, `ContainerConsumer`, `OpResult`,
   `VolumeHelperImage` and `ArchiveDataFile`. `internal/compose` is the only
   implementation; tests substitute a fake.
 - `internal/backup`: `Schema`, `FormatVersion`, `ManifestFile`, `DataFile`,
   `DataFormatTarGz`, `PartialSuffix`, `Manifest`, `Source`, `StackState`,
   `ArchiveInfo`, `Entry`, `Totals`, `Tool`, `InspectArchive`, `Verify`,
-  `ReadManifest`, `WriteManifest`, `List`, `Artifact`, `SelectVolumeSources`,
-  `SelectableVolumes`, `SourceFrom`, `ArtifactName`, `ArtifactPath`,
-  `UniqueArtifactPath`, `Discovery`, `ConsumerReport`, `Discover`,
-  `CheckConsumers`.
+  `ReadManifest`, `WriteManifest`, `List`, `Artifact`, `Kind`,
+  `SelectVolumeSources`, `SelectableVolumes`, `SelectSources`,
+  `SelectableSources`, `NormalizeBindSource`, `CheckBindSources`,
+  `ResolveForContainment`, `ArchiveHostDir`, `ParseWizardSources`, `SourceFrom`,
+  `ArtifactName`, `ArtifactPath`, `UniqueArtifactPath`, `Discovery`,
+  `ConsumerReport`, `Discover`, `CheckConsumers`.
 - `secretref.Runtime.RedactText(target, text)` is the shared redaction helper.
 - The feature-owned archive image is `alpine:3.20` by default and can be
   overridden with `DCRAFT_BACKUP_IMAGE` (the image is shown in the plan/wizard
@@ -1932,6 +1942,54 @@ feature's `CanceledReporter` text. No project hooks run.
   `restore_verification_failed`, `restore_state_restore_failed` (exit 1).
   `stack_busy` is shared.
 
+## 10.3 Bind-folder backup (ticket #17)
+
+`dcraft backup` also accepts repeatable `--bind <path-or-mount-target>` next to
+`--volume`. The source list is still only the current stack's
+`docker compose config --format json` bind mounts; dcraft never adds an
+arbitrary host folder. The TUI wizard lists named volumes first and bind
+folders second in one generic multi-select step (`core.WizardStep.Multi`, space
+toggles, enter confirms; enter on an untouched list selects the highlighted
+item). The apply run uses the same option lists as the CLI.
+
+Path rules:
+
+- `data.DataSource.Declared` keeps the absolute path as Compose declared it;
+  `DeclaredPaths` carries every distinct spelling that resolves to the same
+  folder (merged into one selectable source); `Name` is the symlink-resolved
+  path (`EvalSymlinks`) used for display, containment checks, archiving and
+  `manifest.source.host_path`. Relative and `~` inputs are accepted only as
+  spellings of a declared source; they resolve against the first Compose file's
+  directory, like Compose.
+- `CheckBindSources` requires an existing readable directory, refuses a
+  filesystem root, and refuses an output directory inside a selected source
+  (including after the output is created and resolved). The check runs before
+  any service stop. Volume-only backups keep their previous behavior.
+- Consumer detection mirrors #16: `docker ps -a --filter volume=<path>` is
+  tried with the host spelling and the Docker-visible `/host_mnt` spelling,
+  stopped containers included, and the union is compared with the selected
+  project/service. Any outside consumer refuses with
+  `backup_consumer_unsafe`; dcraft never stops another stack. The wizard labels
+  show the same shared-use probe before selection.
+- The archive is host-side tar (`backup.ArchiveHostDir`), not a container
+  helper. It stores `./`-relative names, dotfiles, modes (including
+  setuid/setgid/sticky), uid/gid, symlinks and hardlinks; FIFOs/devices are
+  recorded as `other` and not materialized by host verification. Sockets and
+  backslash names are refused; a file whose size changes while it is read fails
+  explicitly. Host tar is a live read, not a filesystem snapshot: an in-place
+  write that keeps the same size cannot be detected. The destination is opened
+  with `O_EXCL` inside a fresh `.partial` directory, so a pre-existing
+  destination symlink is never followed. Verification still uses
+  `backup.Verify` and a fresh temporary extraction directory.
+- `manifest.source.kind` is `bind` with `host_path`; `volume_key` and
+  `volume_name` are empty. `ownership_note` states that xattrs/ACLs are not
+  archived and ownership restoration limits exist. The report includes
+  `msgBindOwnershipNote` and the sensitive-data notice.
+- New additive categories: `backup_bind_unknown` (exit 2);
+  `backup_bind_invalid` and `backup_bind_unsafe` (exit 1). New stage:
+  `check_paths` (경로 안전 확인). No retention, scheduling, remote upload,
+  hooks, auto-collection of secret files, or automatic deletion is added.
+
 ---
 
 ## 11. Verification
@@ -1980,6 +2038,14 @@ Tested seams:
   interruption regression asserts no `dcraft-backup-*` container survives, no
   interrupted artifact is listed, prior services are restored and the
   immediately following backup of the same volume succeeds;
+- bind-folder backup through the same engine: Compose config relative/`~`/
+  symlink normalization, arbitrary-path rejection, output-inside-source and
+  root refusal before any stop, shared-consumer detection with the host and
+  `/host_mnt` spellings, mixed volume+bind artifacts (`kind=bind`,
+  `host_path`), host tar content fidelity (dotfiles, modes, uid/gid, symlinks,
+  hardlinks, FIFOs), destination-symlink refusal, unreadable folder, changed
+  names, cancellation after stop restoring services with no valid artifact,
+  and the TUI multi-select/preview/apply path;
 - registry validation and CLI/TUI assembly from registries;
 - state layout and permissions, automatic-name allocation (first/suffix/reuse/
   declared/conflict/external ownership/environment/concurrency), the read-only
@@ -2135,6 +2201,8 @@ go test -count=1 ./...
 DCRAFT_INTEGRATION=1 go test ./test/e2e/... -run TestIntegration -v
 DCRAFT_INTEGRATION=1 go test ./test/e2e/... -run TestIntegrationHook -v
 DCRAFT_INTEGRATION=1 go test ./test/e2e/... -run TestIntegrationVolumeBackup -v
+DCRAFT_INTEGRATION=1 go test ./test/e2e/... -run TestIntegrationBindBackup -v
+DCRAFT_INTEGRATION=1 go test ./test/e2e/... -run TestIntegrationVolumeRestore -v
 DCRAFT_COMPOSE_REAL_INSTALL=1 go test ./test/e2e/... -run TestRealComposeInstall -v
 ```
 
@@ -2145,9 +2213,10 @@ Docker or external network. Unrun platforms/paths are not claimed as verified.
 
 ## 12. Not implemented here (owned by later tickets)
 
-- `restore`; no registration exists and no menu action is shown. `backup`
-  supports named volumes only; bind-folder backup (#17), volume restore (#18)
-  and bind restore (#19) are not implemented.
+- Bind-folder restore (#19); it consumes the published `restore.Destination`
+  contract, `restore.Executor` and the v1 manifest. `backup` supports named
+  volumes and stack-declared bind folders; volume restore is implemented by
+  ticket #18.
 - TUI alias creation/editing: aliases are created by editing `.dcraft.yaml` in
   this version (selection is provided by both interfaces).
 - AWS Secrets Manager sources, generated Compose/Dockerfile files and generator
@@ -2155,12 +2224,12 @@ Docker or external network. Unrun platforms/paths are not claimed as verified.
   environment/file references are implemented by ticket #9 below; Compose
   installation by ticket #6; update readiness and the previous-good record by
   ticket #7; host hooks and script trust by ticket #12; named-volume backup by
-  ticket #15; build-time delivery by ticket #10 and previous-good rollback by
-  ticket #11.
+  ticket #16 and bind-folder backup by ticket #17; build-time delivery by
+  ticket #10 and previous-good rollback by ticket #11.
 - Good-version history beyond the single record (rollback has no multi-version
   picker). The TUI plan/confirm component is generic; `install-compose`,
-  `update`, `backup` and `rollback` are planners in this build, and
-  `secrets`/`backup` use the generic wizard. An ordinary update shows its plan
+  `update`, `backup`, `restore` and `rollback` are planners in this build, and
+  `secrets`/`backup`/`restore` use the generic wizard. An ordinary update shows its plan
   and requires one `enter` to run, not an approval; rollback shows the same plan
   screen and collects only `previous_version`. `up` also goes through the
   generic plan because it declares the hook scope; with no hooks the plan text
@@ -2232,7 +2301,10 @@ without that support skips that part instead of claiming it passed.
 
 Backup residual risks: the archive helper image (`alpine:3.20`, override
 `DCRAFT_BACKUP_IMAGE`) may be pulled on first use (a hidden but announced
-network action); anonymous volumes and bind folders are deliberately rejected;
+network action); anonymous volumes are deliberately rejected; bind folders are
+copied host-side with the running user's host permissions and the documented
+xattr/ACL/ownership limits; a host file that changes mid-copy fails the
+backup instead of being silently truncated;
 `data.Backend.ArchiveVolume` output and any Compose failure text are redacted by
 the feature, but redaction is best-effort against values referenced by
 `.dcraft.yaml` and cannot remove values the helper or Compose invent/echo from
@@ -2305,6 +2377,18 @@ Published by ticket #16 (consume, do not fork): `internal/data` `Backend`,
 `Request.OptionLists`, `Invocation.OptionLists`/`OptionList`; the backup
 diagnostic categories and the archive-verification-inside-the-lock rule.
 `secretref.Runtime.RedactText` is the shared redaction entry point.
+
+Published by ticket #17 (consume, do not fork): `data.Backend.BindConsumers`,
+`data.DataSource.Declared` (bind path as Compose declared it; `Name` is the
+symlink-resolved path), `core.WizardStep.Multi`, `core.WizardStep` multi-select
+answer convention (newline-joined option values), `backup.Kind`,
+`backup.SelectSources`, `backup.SelectableSources`,
+`backup.NormalizeBindSource`, `backup.CheckBindSources`,
+`backup.ResolveForContainment`, `backup.ArchiveHostDir`,
+`backup.ParseWizardSources`, the `check_paths` stage and the
+`backup_bind_unknown`/`backup_bind_invalid`/`backup_bind_unsafe` categories.
+Bind consumers are queried with both the host spelling and the Docker-visible
+`/host_mnt` spelling.
 
 Published by ticket #5 (consume, do not fork): `internal/selector` types and
 functions (`Service`, `Instance`, `Selection`, `Services`, `Select`,

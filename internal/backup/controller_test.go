@@ -27,20 +27,21 @@ func (f fakeNames) ReadProjectName(ctx context.Context, target core.Target) (str
 }
 
 type fakeBackend struct {
-	mu           sync.Mutex
-	projectName  string
-	sources      []data.DataSource
-	runtime      []data.ServiceRuntime
-	consumers    map[string][]data.ContainerConsumer
-	archive      func(volume, dir string) error
-	events       []string
-	stops        [][]string
-	starts       [][]string
-	helperImage  string
-	projectError error
-	redact       func(string) string
-	sourcesSeq   [][]data.DataSource
-	sourcesCalls int
+	mu            sync.Mutex
+	projectName   string
+	sources       []data.DataSource
+	runtime       []data.ServiceRuntime
+	consumers     map[string][]data.ContainerConsumer
+	bindConsumers map[string][]data.ContainerConsumer
+	archive       func(volume, dir string) error
+	events        []string
+	stops         [][]string
+	starts        [][]string
+	helperImage   string
+	projectError  error
+	redact        func(string) string
+	sourcesSeq    [][]data.DataSource
+	sourcesCalls  int
 }
 
 func (f *fakeBackend) record(event string) {
@@ -77,6 +78,10 @@ func (f *fakeBackend) ServiceRuntime(ctx context.Context, target core.Target) ([
 
 func (f *fakeBackend) VolumeConsumers(ctx context.Context, target core.Target, volumeName string) ([]data.ContainerConsumer, error) {
 	return append([]data.ContainerConsumer{}, f.consumers[volumeName]...), nil
+}
+
+func (f *fakeBackend) BindConsumers(ctx context.Context, target core.Target, hostPath string) ([]data.ContainerConsumer, error) {
+	return append([]data.ContainerConsumer{}, f.bindConsumers[hostPath]...), nil
 }
 
 func (f *fakeBackend) StopServices(ctx context.Context, target core.Target, services []string) (data.OpResult, error) {
@@ -673,15 +678,19 @@ func TestRunReResolvesTheSelectionBeforeStopping(t *testing.T) {
 	}
 }
 
-func TestWizardStepsListsNamedVolumesAndPreviewShowsTheSelectedEffect(t *testing.T) {
+func TestWizardStepsListsVolumesAndBindFoldersAndPreviewShowsTheMixedEffect(t *testing.T) {
 	projectDir := t.TempDir()
+	bindDir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	backend := &fakeBackend{
 		projectName: "proj",
 		sources: []data.DataSource{
 			volumeSource("data", "proj_data", "app", "worker"),
 			volumeSource("logs", "proj_logs", "app"),
 			{Kind: data.KindVolume, Anonymous: true, Services: []string{"app"}},
-			{Kind: data.KindBind, Name: "/host/bind", Services: []string{"app"}},
+			bindSource(bindDir, "app", "worker"),
 		},
 		runtime: []data.ServiceRuntime{
 			{Service: "app", State: "running"},
@@ -695,20 +704,35 @@ func TestWizardStepsListsNamedVolumesAndPreviewShowsTheSelectedEffect(t *testing
 	if err != nil {
 		t.Fatalf("WizardSteps: %v", err)
 	}
-	if len(spec.Steps) != 2 || spec.Steps[0].Name != "volume" || spec.Steps[1].Name != "output" {
+	if len(spec.Steps) != 2 || spec.Steps[0].Name != "sources" || spec.Steps[1].Name != "output" {
 		t.Fatalf("steps = %+v", spec.Steps)
 	}
-	if len(spec.Steps[0].Options) != 2 {
-		t.Fatalf("named volume options = %+v (anonymous/bind must not be offered)", spec.Steps[0].Options)
+	if !spec.Steps[0].Multi {
+		t.Fatal("the mixed source step is not a multi selection")
 	}
-	if !strings.Contains(spec.Steps[0].Options[0].Label, "proj_data") || !strings.Contains(spec.Steps[0].Options[0].Label, "app") {
-		t.Fatalf("option label = %q", spec.Steps[0].Options[0].Label)
+	if len(spec.Steps[0].Options) != 3 {
+		t.Fatalf("source options = %+v (anonymous must not be offered)", spec.Steps[0].Options)
+	}
+	labels := ""
+	for _, option := range spec.Steps[0].Options {
+		labels += option.Label + "\n"
+	}
+	for _, want := range []string{"proj_data", "폴더 " + bindDir, "서비스 app", "다른 스택 공유 없음"} {
+		if !strings.Contains(labels, want) {
+			t.Fatalf("option labels missing %q:\n%s", want, labels)
+		}
 	}
 	if spec.Steps[1].Default == "" || !spec.Steps[1].AllowCustom {
 		t.Fatalf("output step = %+v", spec.Steps[1])
 	}
-	preview := controller.WizardPreview(map[string]string{"volume": "data", "output": "./out"})
-	for _, want := range []string{"proj_data", "app, worker", "실행 중", "app", "./out", "민감"} {
+	preview, err := controller.wizardPreview(map[string]string{
+		"sources": "volume:data\nbind:" + bindDir,
+		"output":  "./out",
+	})
+	if err != nil {
+		t.Fatalf("preview: %v", err)
+	}
+	for _, want := range []string{"proj_data", "폴더 " + bindDir, "app, worker", "실행 중", "./out", "민감", "다른 스택 공유"} {
 		if !strings.Contains(preview, want) {
 			t.Fatalf("preview missing %q:\n%s", want, preview)
 		}
@@ -791,4 +815,336 @@ func TestAnEarlierPublishedBackupIsNamedWhenALaterVolumeFails(t *testing.T) {
 	if !strings.Contains(detail, "dcraft-proj-volume-data") || !strings.Contains(detail, "이미 완료된 백업") {
 		t.Fatalf("published artifact not named: %s", detail)
 	}
+}
+
+func bindInvocation(t *testing.T, projectDir, output string, binds ...string) core.Invocation {
+	t.Helper()
+	in := invocation(t, projectDir, output)
+	in.OptionLists = map[string][]string{"bind": binds}
+	return in
+}
+
+func TestRunBacksUpADeclaredBindFolderWithTheV1Format(t *testing.T) {
+	projectDir := t.TempDir()
+	source := t.TempDir()
+	if err := os.WriteFile(filepath.Join(source, "file.txt"), []byte("hello"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, ".hidden"), []byte("dot"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("file.txt", filepath.Join(source, "link")); err != nil {
+		t.Fatal(err)
+	}
+	output := filepath.Join(t.TempDir(), "backups")
+	backend := &fakeBackend{
+		projectName: "proj",
+		sources:     []data.DataSource{bindSource(source, "app")},
+		runtime:     []data.ServiceRuntime{{Service: "app", State: "running"}},
+		bindConsumers: map[string][]data.ContainerConsumer{
+			source: {{Name: "proj-app-1", Project: "proj", Service: "app", State: "running"}},
+		},
+	}
+	controller, _ := newController(t, backend, fakeNames{name: "proj"}, t.TempDir())
+	payload, err := controller.Run(context.Background(), bindInvocation(t, projectDir, output, source))
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	report := payload.(Payload).Backup
+	if len(report.Artifacts) != 1 {
+		t.Fatalf("artifacts = %+v", report.Artifacts)
+	}
+	if strings.Join(report.Stopped, ",") != "app" || strings.Join(report.Restarted, ",") != "app" {
+		t.Fatalf("stopped/restarted = %v/%v", report.Stopped, report.Restarted)
+	}
+	resolved, err := filepath.EvalSymlinks(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := Verify(report.Artifacts[0].Path)
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if manifest.Source.Kind != data.KindBind || manifest.Source.HostPath != resolved || manifest.Source.VolumeName != "" {
+		t.Fatalf("manifest source = %+v", manifest.Source)
+	}
+	if !manifest.Sensitive || !strings.Contains(manifest.OwnershipNote, "xattr") {
+		t.Fatalf("manifest notes = %+v", manifest)
+	}
+	byPath := map[string]Entry{}
+	for _, entry := range manifest.Entries {
+		byPath[entry.Path] = entry
+	}
+	for _, want := range []string{"./.hidden", "./file.txt", "./link"} {
+		if _, ok := byPath[want]; !ok {
+			t.Fatalf("manifest missing %q: %+v", want, manifest.Entries)
+		}
+	}
+	if byPath["./link"].Type != EntrySymlink {
+		t.Fatalf("symlink entry = %+v", byPath["./link"])
+	}
+	if !containsNotice(report.Notices, "호스트에서 직접 tar") {
+		t.Fatalf("host archive notice missing: %+v", report.Notices)
+	}
+	if containsNotice(report.Notices, "Docker 컨테이너(tar)") {
+		t.Fatalf("volume helper notice shown for a bind-only backup: %+v", report.Notices)
+	}
+	entries, err := os.ReadDir(output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if strings.HasSuffix(entry.Name(), PartialSuffix) {
+			t.Fatalf("partial artifact left behind: %s", entry.Name())
+		}
+	}
+}
+
+func TestRunMixesVolumeAndBindSelectionIntoTwoV1Artifacts(t *testing.T) {
+	projectDir := t.TempDir()
+	source := t.TempDir()
+	if err := os.WriteFile(filepath.Join(source, "bind.txt"), []byte("bind"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	output := filepath.Join(t.TempDir(), "backups")
+	backend := &fakeBackend{
+		projectName: "proj",
+		sources: []data.DataSource{
+			volumeSource("data", "proj_data", "app"),
+			bindSource(source, "app", "worker"),
+		},
+		runtime: []data.ServiceRuntime{
+			{Service: "app", State: "running"},
+			{Service: "worker", State: "running"},
+		},
+		consumers: map[string][]data.ContainerConsumer{
+			"proj_data": {{Name: "proj-app-1", Project: "proj", Service: "app", State: "running"}},
+		},
+		bindConsumers: map[string][]data.ContainerConsumer{
+			source: {{Name: "proj-worker-1", Project: "proj", Service: "worker", State: "running"}},
+		},
+	}
+	backend.defaultArchive(t)
+	controller, _ := newController(t, backend, fakeNames{name: "proj"}, t.TempDir())
+	in := invocation(t, projectDir, output, "data")
+	in.OptionLists["bind"] = []string{source}
+	payload, err := controller.Run(context.Background(), in)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	report := payload.(Payload).Backup
+	if len(report.Artifacts) != 2 {
+		t.Fatalf("artifacts = %+v", report.Artifacts)
+	}
+	kinds := map[data.Kind]int{}
+	for _, artifact := range report.Artifacts {
+		kinds[artifact.Source.Kind]++
+	}
+	if kinds[data.KindVolume] != 1 || kinds[data.KindBind] != 1 {
+		t.Fatalf("artifact kinds = %v", kinds)
+	}
+	if strings.Join(report.Stopped, ",") != "app,worker" {
+		t.Fatalf("stopped = %v", report.Stopped)
+	}
+}
+
+func TestRunRefusesAnOutputInsideTheBindSourceBeforeStopping(t *testing.T) {
+	projectDir := t.TempDir()
+	source := t.TempDir()
+	output := filepath.Join(source, "backups")
+	backend := &fakeBackend{
+		projectName: "proj",
+		sources:     []data.DataSource{bindSource(source, "app")},
+		runtime:     []data.ServiceRuntime{{Service: "app", State: "running"}},
+	}
+	controller, _ := newController(t, backend, fakeNames{name: "proj"}, t.TempDir())
+	_, err := controller.Run(context.Background(), bindInvocation(t, projectDir, output, source))
+	if !hasCategory(err, core.CategoryBackupBindUnsafe) {
+		t.Fatalf("error = %v", err)
+	}
+	if len(backend.stops) != 0 {
+		t.Fatalf("services were stopped before the containment check: %v", backend.stops)
+	}
+	if _, statErr := os.Stat(output); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatal("dcraft created the output directory inside the source")
+	}
+}
+
+func TestRunRefusesAnotherStacksBindConsumerWithoutStoppingAnything(t *testing.T) {
+	projectDir := t.TempDir()
+	source := t.TempDir()
+	output := filepath.Join(t.TempDir(), "backups")
+	backend := &fakeBackend{
+		projectName: "proj",
+		sources:     []data.DataSource{bindSource(source, "app")},
+		runtime:     []data.ServiceRuntime{{Service: "app", State: "running"}},
+		bindConsumers: map[string][]data.ContainerConsumer{
+			source: {{Name: "other-app-1", Project: "other", Service: "app", State: "running"}},
+		},
+	}
+	controller, _ := newController(t, backend, fakeNames{name: "proj"}, t.TempDir())
+	_, err := controller.Run(context.Background(), bindInvocation(t, projectDir, output, source))
+	if !hasCategory(err, core.CategoryBackupConsumerUnsafe) {
+		t.Fatalf("error = %v", err)
+	}
+	if len(backend.stops) != 0 || len(backend.starts) != 0 {
+		t.Fatalf("another stack's consumer caused stop/start: %v %v", backend.stops, backend.starts)
+	}
+	if entries, _ := os.ReadDir(output); len(entries) != 0 {
+		t.Fatalf("artifact was created despite refusal: %v", entries)
+	}
+}
+
+func TestRunFailsClearlyOnAnUnreadableBindFolderWithoutStopping(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can read a mode-000 folder")
+	}
+	projectDir := t.TempDir()
+	source := t.TempDir()
+	if err := os.Chmod(source, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(source, 0o700) })
+	output := filepath.Join(t.TempDir(), "backups")
+	backend := &fakeBackend{
+		projectName: "proj",
+		sources:     []data.DataSource{bindSource(source, "app")},
+		runtime:     []data.ServiceRuntime{{Service: "app", State: "running"}},
+	}
+	controller, _ := newController(t, backend, fakeNames{name: "proj"}, t.TempDir())
+	_, err := controller.Run(context.Background(), bindInvocation(t, projectDir, output, source))
+	if !hasCategory(err, core.CategoryBackupBindInvalid) {
+		t.Fatalf("error = %v", err)
+	}
+	if len(backend.stops) != 0 {
+		t.Fatalf("unreadable folder stopped services: %v", backend.stops)
+	}
+	artifacts, listErr := List(output)
+	if listErr != nil {
+		if !errors.Is(listErr, os.ErrNotExist) {
+			t.Fatal(listErr)
+		}
+		artifacts = nil
+	}
+	if len(artifacts) != 0 {
+		t.Fatalf("unreadable folder published an artifact: %+v", artifacts)
+	}
+}
+
+func TestRunCancellationAfterStopRestoresBindConsumersAndPublishesNothing(t *testing.T) {
+	projectDir := t.TempDir()
+	source := t.TempDir()
+	big, err := os.Create(filepath.Join(source, "big.bin"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := big.Truncate(64 << 20); err != nil {
+		t.Fatal(err)
+	}
+	if err := big.Close(); err != nil {
+		t.Fatal(err)
+	}
+	output := filepath.Join(t.TempDir(), "backups")
+	backend := &fakeBackend{
+		projectName: "proj",
+		sources:     []data.DataSource{bindSource(source, "app")},
+		runtime:     []data.ServiceRuntime{{Service: "app", State: "running"}},
+		bindConsumers: map[string][]data.ContainerConsumer{
+			source: {{Name: "proj-app-1", Project: "proj", Service: "app", State: "running"}},
+		},
+	}
+	controller, _ := newController(t, backend, fakeNames{name: "proj"}, t.TempDir())
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		_, err := controller.Run(ctx, bindInvocation(t, projectDir, output, source))
+		done <- err
+	}()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		backend.mu.Lock()
+		stopped := len(backend.stops) > 0
+		backend.mu.Unlock()
+		if stopped {
+			break
+		}
+		if time.Now().After(deadline) {
+			cancel()
+			t.Fatal("backup never stopped the bind consumer")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	cancel()
+	runErr := <-done
+	if !errors.Is(runErr, context.Canceled) {
+		t.Fatalf("error = %v, want context.Canceled", runErr)
+	}
+	backend.mu.Lock()
+	starts := append([][]string{}, backend.starts...)
+	backend.mu.Unlock()
+	if len(starts) != 1 || strings.Join(starts[0], ",") != "app" {
+		t.Fatalf("canceled backup did not restore services: %v", starts)
+	}
+	artifacts, listErr := List(output)
+	if listErr != nil && !errors.Is(listErr, os.ErrNotExist) {
+		t.Fatal(listErr)
+	}
+	if len(artifacts) != 0 {
+		t.Fatalf("canceled backup was listed as valid: %+v", artifacts)
+	}
+}
+
+func TestRunRestoresServicesAfterAnArchiveReadFailureInsideABindFolder(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can read a mode-000 folder")
+	}
+	projectDir := t.TempDir()
+	source := t.TempDir()
+	locked := filepath.Join(source, "locked")
+	if err := os.Mkdir(locked, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(locked, "secret"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(locked, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o700) })
+	output := filepath.Join(t.TempDir(), "backups")
+	backend := &fakeBackend{
+		projectName: "proj",
+		sources:     []data.DataSource{bindSource(source, "app")},
+		runtime:     []data.ServiceRuntime{{Service: "app", State: "running"}},
+		bindConsumers: map[string][]data.ContainerConsumer{
+			source: {{Name: "proj-app-1", Project: "proj", Service: "app", State: "running"}},
+		},
+	}
+	controller, _ := newController(t, backend, fakeNames{name: "proj"}, t.TempDir())
+	_, err := controller.Run(context.Background(), bindInvocation(t, projectDir, output, source))
+	if !hasCategory(err, core.CategoryBackupBindInvalid) {
+		t.Fatalf("error = %v", err)
+	}
+	if !strings.Contains(errorDetail(err), "locked") {
+		t.Fatalf("unreadable path not named: %s", errorDetail(err))
+	}
+	if len(backend.starts) != 1 || strings.Join(backend.starts[0], ",") != "app" {
+		t.Fatalf("services were not restored after the archive failure: %v", backend.starts)
+	}
+	artifacts, listErr := List(output)
+	if listErr != nil && !errors.Is(listErr, os.ErrNotExist) {
+		t.Fatal(listErr)
+	}
+	if len(artifacts) != 0 {
+		t.Fatalf("failed bind backup was listed as valid: %+v", artifacts)
+	}
+}
+
+func containsNotice(notices []string, substring string) bool {
+	for _, notice := range notices {
+		if strings.Contains(notice, substring) {
+			return true
+		}
+	}
+	return false
 }

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/rootmyself/dcraft/internal/core"
+	"github.com/rootmyself/dcraft/internal/data"
 )
 
 // Present renders a successful backup for humans. It shows the user-chosen
@@ -60,6 +61,13 @@ func payloadFrom(data any) (Payload, bool) {
 func sourceKeys(sources []Source) []string {
 	out := make([]string, 0, len(sources))
 	for _, src := range sources {
+		if src.Kind == data.KindBind {
+			label := "폴더 " + src.HostPath
+			if label != "" {
+				out = append(out, label)
+			}
+			continue
+		}
 		key := src.VolumeKey
 		if key == "" {
 			key = src.VolumeName

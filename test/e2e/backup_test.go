@@ -3,6 +3,7 @@ package e2e
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -331,4 +332,175 @@ func containsNotice(notices []string, substring string) bool {
 		}
 	}
 	return false
+}
+
+func backupBindConfig(hostPath string) string {
+	return fmt.Sprintf(`{
+  "name": "backup-test",
+  "services": {
+    "app": {"volumes": [
+      {"type": "volume", "source": "data", "target": "/data", "volume": {}},
+      {"type": "bind", "source": %q, "target": "/bind", "bind": {}}
+    ]},
+    "worker": {"volumes": [
+      {"type": "volume", "source": "data", "target": "/work", "volume": {}}
+    ]}
+  },
+  "environment": {"APP_PASSWORD": "SUPER_SECRET_VALUE"},
+  "volumes": {
+    "data": {"name": "backup-test_data", "external": false}
+  }
+}`, hostPath)
+}
+
+func writeBindFixture(t *testing.T) string {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), "host-data")
+	if err := os.MkdirAll(filepath.Join(dir, "nested"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "file.txt"), []byte("hello"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".hidden"), []byte("dot"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "nested", "child.txt"), []byte("child"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("file.txt", filepath.Join(dir, "link")); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func TestBackupBindFolderThroughTheCLIUsesTheV1Format(t *testing.T) {
+	hostDir := writeBindFixture(t)
+	fake := backupFake(t)
+	fake.writeConfig(t, backupBindConfig(hostDir))
+	project := projectNamed(t, "backup-project")
+	stateDir := t.TempDir()
+	env := fake.env(t, stateDir)
+	outDir := filepath.Join(t.TempDir(), "backups")
+
+	res := runProcess(t, project, env, strings.NewReader(""), "backup", "--path", project, "--json",
+		"--bind", hostDir, "--output", outDir)
+	if res.code != 0 {
+		t.Fatalf("exit=%d stdout=%s stderr=%s", res.code, res.stdout, res.stderr)
+	}
+	if strings.Contains(res.stdout, "SUPER_SECRET_VALUE") {
+		t.Fatalf("JSON output leaked a project environment value: %s", res.stdout)
+	}
+	report := parseBackup(t, res.stdout).Data.Backup
+	if len(report.Artifacts) != 1 {
+		t.Fatalf("artifacts = %+v", report.Artifacts)
+	}
+	if strings.Join(report.Stopped, ",") != "app" || strings.Join(report.Restarted, ",") != "app" {
+		t.Fatalf("stopped/restarted = %v/%v", report.Stopped, report.Restarted)
+	}
+	resolved, err := filepath.EvalSymlinks(hostDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := backup.Verify(report.Artifacts[0].Path)
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if manifest.Source.Kind != backup.KindBind || manifest.Source.HostPath != resolved || manifest.Source.VolumeName != "" {
+		t.Fatalf("manifest source = %+v", manifest.Source)
+	}
+	paths := map[string]backup.Entry{}
+	for _, entry := range manifest.Entries {
+		paths[entry.Path] = entry
+	}
+	for _, want := range []string{"./.hidden", "./file.txt", "./link", "./nested/child.txt"} {
+		if _, ok := paths[want]; !ok {
+			t.Fatalf("manifest missing %q: %+v", want, manifest.Entries)
+		}
+	}
+	if paths["./link"].Type != backup.EntrySymlink {
+		t.Fatalf("symlink entry = %+v", paths["./link"])
+	}
+	if !containsNotice(report.Notices, "호스트에서 직접 tar") || !containsNotice(report.Notices, "xattr") {
+		t.Fatalf("bind notices missing: %+v", report.Notices)
+	}
+
+	log := strings.Join(fake.calls(t), "\n")
+	if !strings.Contains(log, " stop app") || !strings.Contains(log, " start app") {
+		t.Fatalf("bind consumer was not stopped and restarted:\n%s", log)
+	}
+	if strings.Contains(log, "create --name dcraft-backup-") {
+		t.Fatalf("a bind-only backup used the volume helper:\n%s", log)
+	}
+	if !strings.Contains(log, "ps -a --filter volume="+resolved) || !strings.Contains(log, "ps -a --filter volume=/host_mnt"+resolved) {
+		t.Fatalf("bind consumers were not queried in both spellings:\n%s", log)
+	}
+}
+
+func TestBackupBindFolderMixesWithAVolumeThroughTheCLI(t *testing.T) {
+	hostDir := writeBindFixture(t)
+	fake := backupFake(t)
+	fake.writeConfig(t, backupBindConfig(hostDir))
+	project := projectNamed(t, "backup-project")
+	env := fake.env(t, t.TempDir())
+	outDir := filepath.Join(t.TempDir(), "backups")
+
+	res := runProcess(t, project, env, strings.NewReader(""), "backup", "--path", project, "--json",
+		"--volume", "data", "--bind", hostDir, "--output", outDir)
+	if res.code != 0 {
+		t.Fatalf("exit=%d stdout=%s stderr=%s", res.code, res.stdout, res.stderr)
+	}
+	report := parseBackup(t, res.stdout).Data.Backup
+	if len(report.Artifacts) != 2 {
+		t.Fatalf("artifacts = %+v", report.Artifacts)
+	}
+	kinds := map[backup.Kind]int{}
+	for _, artifact := range report.Artifacts {
+		kinds[artifact.Source.Kind]++
+	}
+	if kinds[backup.KindVolume] != 1 || kinds[backup.KindBind] != 1 {
+		t.Fatalf("artifact kinds = %v", kinds)
+	}
+	log := strings.Join(fake.calls(t), "\n")
+	if !strings.Contains(log, "create --name dcraft-backup-") {
+		t.Fatalf("volume half did not use the helper:\n%s", log)
+	}
+}
+
+func TestBackupRejectsAnArbitraryBindPathAndAnOutputInsideTheBindSource(t *testing.T) {
+	hostDir := writeBindFixture(t)
+	fake := backupFake(t)
+	fake.writeConfig(t, backupBindConfig(hostDir))
+	project := projectNamed(t, "backup-project")
+	env := fake.env(t, t.TempDir())
+
+	res := runProcess(t, project, env, strings.NewReader(""), "backup", "--path", project, "--json",
+		"--bind", filepath.Join(t.TempDir(), "not-declared"), "--output", filepath.Join(t.TempDir(), "backups"))
+	if res.code != 2 {
+		t.Fatalf("arbitrary bind exit = %d; stdout=%s", res.code, res.stdout)
+	}
+	parsed := parseBackup(t, res.stdout)
+	if !hasBackupCategory(parsed.Diagnostics, core.CategoryBackupBindUnknown) {
+		t.Fatalf("diagnostics = %+v", parsed.Diagnostics)
+	}
+	if calls := strings.Join(fake.calls(t), "\n"); strings.Contains(calls, " stop ") {
+		t.Fatalf("unknown bind stopped services:\n%s", calls)
+	}
+
+	inside := filepath.Join(hostDir, "backups")
+	res = runProcess(t, project, env, strings.NewReader(""), "backup", "--path", project, "--json",
+		"--bind", hostDir, "--output", inside)
+	if res.code != 1 {
+		t.Fatalf("inside-output exit = %d; stdout=%s", res.code, res.stdout)
+	}
+	parsed = parseBackup(t, res.stdout)
+	if !hasBackupCategory(parsed.Diagnostics, core.CategoryBackupBindUnsafe) {
+		t.Fatalf("diagnostics = %+v", parsed.Diagnostics)
+	}
+	if calls := strings.Join(fake.calls(t), "\n"); strings.Contains(calls, " stop ") {
+		t.Fatalf("inside-output check stopped services:\n%s", calls)
+	}
+	if _, err := os.Stat(inside); !os.IsNotExist(err) {
+		t.Fatal("dcraft created the output directory inside the bind source")
+	}
 }
