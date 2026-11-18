@@ -134,3 +134,45 @@ func TestInitTUIWizardOverwriteShowsTheApprovalAndDeclineKeepsTheOldFile(t *test
 		t.Fatalf("overwritten file = %s", data)
 	}
 }
+
+func TestInitTUIWizardDoesNotOverwriteAFileCreatedAfterThePreview(t *testing.T) {
+	requireIntegration(t)
+	project := t.TempDir()
+	if err := os.WriteFile(filepath.Join(project, "Dockerfile"), []byte("FROM busybox:1.36\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	composePath := filepath.Join(project, "compose.yaml")
+	env := buildEnv(map[string]string{"DCRAFT_STATE_DIR": t.TempDir()})
+	intruder := "services:\n  intruder:\n    image: busybox:1.36\n"
+
+	steps := append(initWizardNavigation(), initWizardAnswers()...)
+	steps = append(steps,
+		lifecyclePTYStep{
+			wait: "Compose 파일 미리보기",
+			action: func() {
+				if err := os.WriteFile(composePath, []byte(intruder), 0o644); err != nil {
+					t.Errorf("create concurrent compose.yaml: %v", err)
+				}
+			},
+			send: "\r",
+		},
+		lifecyclePTYStep{wait: "파일 덮어쓰기 승인이 필요합니다.", send: ""},
+		lifecyclePTYStep{wait: "다시 미리보기", send: ""},
+	)
+	output, code := runLifecyclePTYSteps(t, project, env, steps)
+	if code != 0 {
+		t.Fatalf("TUI exit = %d\n%s", code, output)
+	}
+	data, err := os.ReadFile(composePath)
+	if err != nil {
+		t.Fatalf("concurrent compose.yaml missing: %v", err)
+	}
+	if string(data) != intruder {
+		t.Fatalf("a file created after the preview was overwritten:\n%s", data)
+	}
+	for _, want := range []string{"파일 덮어쓰기 승인이 필요합니다.", "다시 미리보기", "덮어쓰지 않습니다"} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("failure guidance missing %q:\n%s", want, output)
+		}
+	}
+}

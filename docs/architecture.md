@@ -2467,11 +2467,12 @@ Published by issue #6 (consume, do not fork): `core.ConditionalApproval`
 (read-only, pre-preflight approval inspection; wizard `steps` runs are exempt),
 `WizardSpec.RequiredApprovals`, `WizardStep.Optional`, the string
 `WizardStep.DependsOn`/`DependsValue` conditional fields (shared with the
-secrets AWS steps), `internal/initconfig` (`Controller`, `ComposeValidator`,
-`FileSaver`, `Payload`/`Report`), the `init` feature and registration, the
+secrets AWS steps), additive `Invocation.Approvals` for save-time rechecks,
+`internal/initconfig` (`Controller`, `ComposeValidator`, `FileSaver`,
+`Payload`/`Report`), the `init` feature and registration, the
 `collect`/`preview`/`validate`/`write` init stage names, and the
-`init_input_invalid`/`init_existing_configuration`/`init_invalid`/
-`init_failed` categories.
+`init_input_invalid`/`init_existing_configuration`/`init_destination_changed`/
+`init_invalid`/`init_failed` categories.
 
 Published by ticket #9 (consume, do not fork): `internal/secretref` types
 (`Phase`, `Delivery`, `SourceType`, `Reference`, `Catalog`, `Runtime`,
@@ -2854,8 +2855,18 @@ Existing configuration:
   the independent `file_overwrite` approval. Without an explicit destination a
   matching default file is refused (`init_input_invalid`), even with the
   approval. The CLI supplies the approval with `--approve file_overwrite`; the
-  TUI collects it on the wizard preview. Dockerfiles and other user files are
-  never modified.
+  TUI collects it on the wizard preview and, when an approval is required,
+  routes the apply through the generic plan + confirmation screen. Dockerfiles
+  and other user files are never modified.
+- The save decision is bound to the inspected state. The engine's
+  `ConditionalApproval` inspection and any wizard/CLI preview run before the
+  write; `Invocation.Approvals` carries the same explicit approvals into the
+  feature. If the destination was absent at inspection/preview and a file now
+  exists, a run without `file_overwrite` fails `init_destination_changed`
+  (exit 2) and leaves the new file untouched. A destination that existed when
+  the approval was inspected and was approved still overwrites normally. The
+  no-replace hard link is the final race guard for a file that appears after
+  the save-time check.
 
 `core.ConditionalApproval` is the additive engine capability used here: after
 target resolution and before preflight the feature inspects the resolved
@@ -2863,8 +2874,10 @@ destination without writing and returns `file_overwrite` only when it is
 needed. The engine enforces it exactly like `Descriptor.Approval`, sets
 `Result.RequiredApproval` and includes it in `PlanReport.RequiredApprovals`.
 A wizard `steps` run is exempt; the TUI calls the feature's `WizardPreview`,
-shows the required approvals from `WizardSpec.RequiredApprovals`, and passes
-exactly those kinds with the `wizard=apply` request. `WizardStep.Optional`
+shows the required approvals from `WizardSpec.RequiredApprovals`, and routes
+an apply that needs any approval through the generic plan + confirmation
+screen (the answers stay in the request, and the engine passes the collected
+approvals in `Invocation.Approvals`). `WizardStep.Optional`
 allows empty free-form answers, and `WizardStep.DependsOn`/`DependsValue`
 skips mode-irrelevant questions (for example image reference in Dockerfile
 mode). Existing wizard features keep their behavior.

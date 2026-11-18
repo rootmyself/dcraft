@@ -66,7 +66,7 @@ type prepared struct {
 // target, checked preflight and enforced the file_overwrite approval for an
 // existing destination; this method rechecks the file facts it depends on.
 func (c *Controller) Run(ctx context.Context, in core.Invocation) (any, error) {
-	prepared, err := c.prepare(ctx, in, in.Option("wizard") == "apply")
+	prepared, err := c.prepare(ctx, in, in.Option("wizard") == "apply", false)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +82,7 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation) (any, error) {
 // Plan shows the exact generated file, destination, project name, effects and
 // next command without writing anything.
 func (c *Controller) Plan(ctx context.Context, in core.Invocation) (core.Plan, error) {
-	prepared, err := c.prepare(ctx, in, false)
+	prepared, err := c.prepare(ctx, in, false, true)
 	if err != nil {
 		return core.Plan{}, err
 	}
@@ -125,7 +125,7 @@ func (c *Controller) RequiredApproval(ctx context.Context, in core.Invocation) (
 	return core.ApprovalNone, nil
 }
 
-func (c *Controller) prepare(ctx context.Context, in core.Invocation, wizard bool) (*prepared, error) {
+func (c *Controller) prepare(ctx context.Context, in core.Invocation, wizard, preview bool) (*prepared, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -142,6 +142,13 @@ func (c *Controller) prepare(ctx context.Context, in core.Invocation, wizard boo
 		dest, err := destinationPath(in.Target.ProjectDir, input.Output)
 		if err != nil {
 			return collected{}, err
+		}
+		// The engine inspected approvals before preflight. If the destination
+		// appeared (or changed) after that inspection, a run that did not carry
+		// file_overwrite must not turn into an overwrite just because prepare
+		// sees the file now. A read-only preview still describes the overwrite.
+		if dest.Exists && !preview && !core.HasApproval(in.Approvals, core.ApprovalFileOverwrite) {
+			return collected{}, destinationChangedError(dest.Path)
 		}
 		if dest.Exists && !dest.Explicit {
 			return collected{}, explicitOverwriteError(dest)
@@ -250,6 +257,19 @@ func (c *Controller) prepare(ctx context.Context, in core.Invocation, wizard boo
 	}, nil
 }
 
+// destinationChangedError reports a save-time state change: the destination
+// was absent when approval was inspected (or the preview was shown), and a
+// file now exists. dcraft refuses to replace it without a fresh preview.
+func destinationChangedError(path string) *core.Error {
+	return core.Fail(core.Diagnostic{
+		Category:    core.CategoryInitDestinationChanged,
+		Severity:    core.SeverityError,
+		Message:     msgDestinationChanged,
+		Detail:      path,
+		NextActions: []string{msgDestinationChangedActOne, msgDestinationChangedActTwo, msgDestinationChangedActThree},
+	})
+}
+
 // explicitOverwriteError is used by the conditional approval inspection and
 // again by prepare. A default path is never treated as an explicit overwrite,
 // even with file_overwrite: the destination must be named.
@@ -306,13 +326,7 @@ func (c *Controller) save(ctx context.Context, prepared *prepared) error {
 	}
 	switch {
 	case errors.Is(err, ErrExists):
-		return core.FailCause(err, core.Diagnostic{
-			Category:    core.CategoryInitExistingConfiguration,
-			Severity:    core.SeverityError,
-			Message:     msgSaveExists,
-			Detail:      prepared.dest.Path,
-			NextActions: []string{msgExistingAction, msgExistingOverwrite, msgExistingUntouched},
-		})
+		return destinationChangedError(prepared.dest.Path)
 	case errors.Is(err, ErrSymlink), errors.Is(err, ErrNotRegular):
 		return core.FailCause(err, core.Diagnostic{
 			Category:    core.CategoryInitInputInvalid,
@@ -480,7 +494,7 @@ func (c *Controller) WizardPreview(answers map[string]string) (string, error) {
 	for key, value := range answers {
 		in.Options[key] = value
 	}
-	prepared, err := c.prepare(context.Background(), in, true)
+	prepared, err := c.prepare(context.Background(), in, true, true)
 	if err != nil {
 		return "", err
 	}

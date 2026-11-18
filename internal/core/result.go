@@ -158,7 +158,7 @@ func (r Result) ExitCode() int {
 				CategoryRestoreBackupRequired, CategoryRestoreVolumeUnknown,
 				CategoryRestoreBindUnknown,
 				CategorySelectionRequired, CategoryInstanceUnknown,
-				CategoryInitInputInvalid:
+				CategoryInitInputInvalid, CategoryInitDestinationChanged:
 				return 2
 			}
 		}

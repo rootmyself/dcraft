@@ -70,9 +70,12 @@ Dockerfile의 EXPOSE/CMD는 자동으로 읽지 않습니다. 포트와 명령�
 	msgComposeServiceMiss = "생성한 서비스가 Compose 검증 결과에 없습니다. 파일을 저장하지 않았습니다."
 	msgComposeNameMiss    = "Compose가 프로젝트 이름을 확인하지 못했습니다. 파일을 저장하지 않았습니다."
 
-	msgSaveFailed    = "Compose 파일을 저장하지 못했습니다."
-	msgSaveFailedAct = "저장 폴더의 권한과 여유 공간을 확인하세요. 임시 파일은 정리되며 기존 파일은 저장이 완료되기 전까지 그대로입니다."
-	msgSaveExists    = "저장 중 다른 파일이 같은 경로에 생겨 덮어쓰지 않았습니다. 파일을 확인한 뒤 다시 실행하세요."
+	msgSaveFailed                 = "Compose 파일을 저장하지 못했습니다."
+	msgSaveFailedAct              = "저장 폴더의 권한과 여유 공간을 확인하세요. 임시 파일은 정리되며 기존 파일은 저장이 완료되기 전까지 그대로입니다."
+	msgDestinationChanged         = "미리보기 후 저장 대상이 바뀌었습니다. 덮어쓰지 않았습니다."
+	msgDestinationChangedActOne   = "저장 경로의 현재 파일을 확인한 뒤 다시 미리보기하세요."
+	msgDestinationChangedActTwo   = "덮어쓰려면 --output <기존 파일>과 --approve file_overwrite를 함께 지정하세요."
+	msgDestinationChangedActThree = "새로 생긴 파일은 변경하지 않았습니다."
 
 	msgToolMissing = "Docker CLI를 찾지 못했습니다."
 	msgToolAction  = "Docker를 설치한 뒤 다시 실행하세요."

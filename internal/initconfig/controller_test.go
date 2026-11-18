@@ -206,7 +206,9 @@ func TestRunReplacesOnlyTheExplicitlyChosenExistingFile(t *testing.T) {
 	options["output"] = "compose.yml"
 	saver := &fakeSaver{}
 	controller = New(&fakeValidator{result: fakeValidation("web")}, saver)
-	payload, err := controller.Run(context.Background(), testInvocation(project, options, nil))
+	overwriteInvocation := testInvocation(project, options, nil)
+	overwriteInvocation.Approvals = []core.ApprovalKind{core.ApprovalFileOverwrite}
+	payload, err := controller.Run(context.Background(), overwriteInvocation)
 	if err != nil {
 		t.Fatalf("overwrite: %v", err)
 	}
@@ -310,7 +312,7 @@ func TestRunMapsSaveFailuresAndNeverClaimsSuccess(t *testing.T) {
 		category core.Category
 	}{
 		{errors.New("disk full"), core.CategoryInitFailed},
-		{ErrExists, core.CategoryInitExistingConfiguration},
+		{ErrExists, core.CategoryInitDestinationChanged},
 		{ErrSymlink, core.CategoryInitInputInvalid},
 	}
 	for _, tc := range cases {
@@ -589,5 +591,40 @@ func TestNextCommandKeepsAnExplicitProjectName(t *testing.T) {
 	}
 	if got := nextCommandFor(dest, project, ""); got != "dcraft up" {
 		t.Fatalf("default next command = %q", got)
+	}
+}
+
+func TestRunRefusesAFileThatAppearedAfterTheApprovalInspection(t *testing.T) {
+	project := t.TempDir()
+	existing := filepath.Join(project, "compose.yaml")
+	intruder := "services:\n  intruder:\n    image: busybox:1.36\n"
+	if err := os.WriteFile(existing, []byte(intruder), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	saver := &fakeSaver{}
+	// No Approvals: this is the state after the engine inspected an absent
+	// destination and another process created the file before prepare.
+	controller := New(&fakeValidator{result: fakeValidation("web")}, saver)
+	_, err := controller.Run(context.Background(), testInvocation(project, imageOptions("web"), nil))
+	if err == nil {
+		t.Fatal("run overwrote a file that appeared after the approval inspection")
+	}
+	ce, ok := err.(*core.Error)
+	if !ok || ce.Diagnostics[0].Category != core.CategoryInitDestinationChanged {
+		t.Fatalf("error = %v, want init_destination_changed", err)
+	}
+	result := core.Result{Outcome: core.OutcomeFailure, Diagnostics: ce.Diagnostics}
+	if result.ExitCode() != 2 {
+		t.Fatalf("exit = %d, want 2", result.ExitCode())
+	}
+	data, readErr := os.ReadFile(existing)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if string(data) != intruder {
+		t.Fatalf("existing file changed:\n%s", data)
+	}
+	if saver.calls != 0 {
+		t.Fatal("saver ran for an unapproved overwrite")
 	}
 }

@@ -61,8 +61,12 @@ type harness struct {
 
 func newHarness(t *testing.T, service string) *harness {
 	t.Helper()
-	project := t.TempDir()
-	feature := initfeature.New(initimpl.New(&fakeValidator{service: service}, initimpl.FileSaver{}))
+	return newHarnessWithValidator(t, t.TempDir(), &fakeValidator{service: service})
+}
+
+func newHarnessWithValidator(t *testing.T, project string, validator initimpl.Validator) *harness {
+	t.Helper()
+	feature := initfeature.New(initimpl.New(validator, initimpl.FileSaver{}))
 	reg := core.NewRegistry()
 	if err := reg.Register(feature); err != nil {
 		t.Fatalf("register: %v", err)
@@ -71,6 +75,29 @@ func newHarness(t *testing.T, service string) *harness {
 	engine.CWD = func() (string, error) { return project, nil }
 	engine.NewOperationID = func() string { return "op_init" }
 	return &harness{engine: engine, project: project}
+}
+
+// creatingValidator simulates another process creating the destination after
+// the engine's approval inspection and prepare have both seen it absent.
+type creatingValidator struct {
+	path    string
+	content string
+	written bool
+}
+
+func (v *creatingValidator) Validate(ctx context.Context, dir string, content []byte) (initimpl.Validation, error) {
+	v.path = filepath.Join(dir, "compose.yaml")
+	v.content = "services:\n  intruder:\n    image: busybox:1.36\n"
+	if err := os.WriteFile(v.path, []byte(v.content), 0o644); err != nil {
+		return initimpl.Validation{}, err
+	}
+	v.written = true
+	return initimpl.Validation{
+		Checked:     true,
+		Command:     "docker compose -f - config --format json",
+		ProjectName: "hello-world",
+		Services:    []string{"web"},
+	}, nil
 }
 
 func (h *harness) run(t *testing.T, req core.Request) core.Result {
@@ -246,5 +273,28 @@ func TestCanceledRunUsesTheInitSpecificPartialEffectMessage(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(h.project, "compose.yaml")); !os.IsNotExist(err) {
 		t.Fatal("canceled run created a file")
+	}
+}
+
+func TestRunRefusesAFileCreatedDuringValidation(t *testing.T) {
+	project := t.TempDir()
+	validator := &creatingValidator{}
+	h := newHarnessWithValidator(t, project, validator)
+	res := h.run(t, imageRequest(project))
+	if res.Outcome != core.OutcomeFailure || res.ExitCode() != 2 {
+		t.Fatalf("outcome=%q exit=%d diagnostics=%+v", res.Outcome, res.ExitCode(), res.Diagnostics)
+	}
+	if !hasCategory(res, core.CategoryInitDestinationChanged) {
+		t.Fatalf("diagnostics = %+v, want init_destination_changed", res.Diagnostics)
+	}
+	if !validator.written {
+		t.Fatal("test validator did not create the concurrent file")
+	}
+	data, err := os.ReadFile(validator.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != validator.content {
+		t.Fatalf("concurrent file was overwritten:\n%s", data)
 	}
 }

@@ -494,6 +494,9 @@ func historyFor(t *testing.T, stateDir string) string {
 type lifecyclePTYStep struct {
 	wait string
 	send string
+	// action runs after the wait text appears and before send. It is used to
+	// simulate an external change between a preview and the next keypress.
+	action func()
 }
 
 // runPTYSteps drives the real binary through a pty, waiting for each screen
@@ -527,6 +530,9 @@ func runLifecyclePTYSteps(t *testing.T, dir string, env []string, steps []lifecy
 	}
 	for _, step := range steps {
 		waitFor(step.wait)
+		if step.action != nil {
+			step.action()
+		}
 		if step.send == "" {
 			continue
 		}

@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"go.yaml.in/yaml/v3"
+
 	"github.com/rootmyself/dcraft/internal/stack"
 )
 
@@ -108,11 +110,25 @@ CMD ["httpd", "-f", "-p", "8080", "-h", "/www"]
 		t.Fatalf("dcraft init exit=%d stderr=%q\n%s", res.code, res.stderr, res.stdout)
 	}
 	report := parseInit(t, res.stdout).Data.Init
-	if !strings.Contains(report.Content, fmt.Sprintf("127.0.0.1:%d:8080", port)) {
-		t.Fatalf("preview did not promise the user port:\n%s", report.Content)
+	var generated struct {
+		Services map[string]struct {
+			Ports  []string `yaml:"ports"`
+			Expose []string `yaml:"expose"`
+		} `yaml:"services"`
 	}
-	if strings.Contains(report.Content, "expose:") || strings.Contains(report.Content, "80:80") {
-		t.Fatalf("Dockerfile EXPOSE was imported:\n%s", report.Content)
+	if err := yaml.Unmarshal([]byte(report.Content), &generated); err != nil {
+		t.Fatalf("parse generated compose: %v\n%s", err, report.Content)
+	}
+	app, ok := generated.Services["app"]
+	if !ok {
+		t.Fatalf("generated file has no app service:\n%s", report.Content)
+	}
+	wantPort := fmt.Sprintf("127.0.0.1:%d:8080", port)
+	if len(app.Ports) != 1 || app.Ports[0] != wantPort {
+		t.Fatalf("ports = %v, want exactly [%s] (Dockerfile EXPOSE must not be imported)\n%s", app.Ports, wantPort, report.Content)
+	}
+	if len(app.Expose) != 0 {
+		t.Fatalf("expose = %v, want empty (Dockerfile EXPOSE must not be imported)", app.Expose)
 	}
 	if strings.Contains(report.Content, "command:") {
 		t.Fatalf("Dockerfile CMD was imported:\n%s", report.Content)

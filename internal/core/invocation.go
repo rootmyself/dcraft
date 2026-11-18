@@ -64,10 +64,16 @@ type Request struct {
 // Invocation is what a feature receives after the engine resolved the target,
 // checked approvals and completed preflight.
 type Invocation struct {
-	Target      Target
-	Services    []string
-	Args        []string
-	Options     map[string]string
+	Target   Target
+	Services []string
+	Args     []string
+	Options  map[string]string
+	// Approvals are the explicit approvals the caller supplied. The engine
+	// enforces approval policy before Run; a feature that must re-check a
+	// condition at its own save time (for example a file that appeared after
+	// the approval inspection) reads the same list here. It never bypasses the
+	// engine.
+	Approvals   []ApprovalKind
 	OptionLists map[string][]string
 	Interactive bool
 	Preflight   PreflightReport
