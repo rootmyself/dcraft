@@ -22,6 +22,11 @@ func main() {
 }
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer, getenv func(string) string) int {
+	if versionRequested(args) {
+		printVersion(stdout)
+		return 0
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 

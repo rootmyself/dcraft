@@ -1,0 +1,32 @@
+# Build distribution artifacts only. This workflow does not publish a GitHub
+# Release, upload to a package registry, or use repository secrets. Replace
+# the binary by hand; dcraft has no auto-update.
+name: dist-artifacts
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build artifacts
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: scripts/build.sh
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dcraft-${{ github.ref_name }}
+          path: dist/
+          if-no-files-found: error
