@@ -242,7 +242,7 @@ func TestGenerateS3HookTUIWizardAcceptSavesTheScript(t *testing.T) {
 		{wait: "생성할 스크립트 파일 경로", send: "\r"},
 		{wait: "S3 호스트 스크립트 생성 계획", send: ""},
 		{wait: "dcraft hooks --add", send: "\r"},
-		{wait: "승인: 파일 덮어쓰기", send: "\r"},
+		{wait: "승인 확인", send: "\r"},
 		{wait: "S3 호스트 스크립트를 저장했습니다", send: ""},
 	}
 	output, code := runLifecyclePTYSteps(t, project, env, steps)

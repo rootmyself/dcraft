@@ -88,6 +88,16 @@ check_source() {
   esac
 }
 
+refuse_destination_links() {
+  local links
+  if ! links=$(find "$DEST" -type l -print -quit 2>/dev/null); then
+    die "받을 폴더 안의 심볼릭 링크를 확인하지 못했습니다. 권한을 확인하세요: $DEST"
+  fi
+  if [ -n "$links" ]; then
+    die "받을 폴더 안에 심볼릭 링크가 있습니다. 심볼릭 링크 너머로 쓰지 않습니다: $DEST"
+  fi
+}
+
 prepare_destination() {
   local rel part cur
   [ -d "$PROJECT_DIR" ] || die "프로젝트 폴더를 찾지 못했습니다: $PROJECT_DIR"
@@ -126,9 +136,7 @@ prepare_destination() {
   case "$SELF_DIR" in
     "$DEST_REAL"|"$DEST_REAL"/*) die "받을 폴더가 스크립트 폴더를 포함합니다. 배포 파일이 스크립트를 덮을 수 있어 중단합니다." ;;
   esac
-  if [ -n "$(find "$DEST" -type l -print -quit 2>/dev/null)" ]; then
-    die "받을 폴더 안에 심볼릭 링크가 있습니다. 심볼릭 링크 너머로 쓰지 않습니다: $DEST"
-  fi
+  refuse_destination_links
 }
 
 check_source
@@ -246,6 +254,16 @@ check_source() {
   esac
 }
 
+refuse_destination_links() {
+  local links
+  if ! links=$(find "$DEST" -type l -print -quit 2>/dev/null); then
+    die "받을 폴더 안의 심볼릭 링크를 확인하지 못했습니다. 권한을 확인하세요: $DEST"
+  fi
+  if [ -n "$links" ]; then
+    die "받을 폴더 안에 심볼릭 링크가 있습니다. 심볼릭 링크 너머로 쓰지 않습니다: $DEST"
+  fi
+}
+
 validate_destination() {
   local rel part cur
   [ -d "$PROJECT_DIR" ] || die "프로젝트 폴더를 찾지 못했습니다: $PROJECT_DIR"
@@ -285,9 +303,7 @@ validate_destination() {
       "$PROJECT_DIR"|"$PROJECT_DIR"/*) ;;
       *) die "받을 폴더가 프로젝트 폴더 밖을 가리킵니다. 심볼릭 링크를 확인하세요: $DEST" ;;
     esac
-    if [ -n "$(find "$DEST" -type l -print -quit 2>/dev/null)" ]; then
-      die "받을 폴더 안에 심볼릭 링크가 있습니다. 심볼릭 링크 너머로 복사하지 않습니다: $DEST"
-    fi
+    refuse_destination_links
   fi
 }
 
@@ -302,9 +318,7 @@ prepare_destination() {
   case "$SELF_DIR" in
     "$DEST_REAL"|"$DEST_REAL"/*) die "받을 폴더가 스크립트 폴더를 포함합니다. 배포 파일이 스크립트를 덮을 수 있어 중단합니다." ;;
   esac
-  if [ -n "$(find "$DEST" -type l -print -quit 2>/dev/null)" ]; then
-    die "받을 폴더 안에 심볼릭 링크가 있습니다. 심볼릭 링크 너머로 복사하지 않습니다: $DEST"
-  fi
+  refuse_destination_links
 }
 
 check_source
