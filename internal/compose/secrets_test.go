@@ -58,6 +58,81 @@ func secretCompose(t *testing.T, project string, runner *execxtest.Runner, env m
 	return c, rt
 }
 
+func TestUpDeliversAWSReferencesThroughTheSameSecretSeam(t *testing.T) {
+	_, target := secretProject(t, `secrets:
+  - service: web
+    phase: runtime
+    delivery: environment
+    source: aws
+    ref: prod/db
+    field: password
+    region: ap-northeast-2
+    target: DB_PASSWORD
+  - service: worker
+    phase: runtime
+    delivery: file
+    source: aws
+    ref: prod/token
+    target: worker_token
+`)
+	const envSentinel = "compose-aws-env-sentinel-31b"
+	const fileSentinel = "compose-aws-file-sentinel-92d"
+	runner := secretRunner(t, "Container started")
+	base := runner.Handler
+	var awsCalls []string
+	runner.Handler = func(cmd execx.Command) (execx.Result, error) {
+		if cmd.Name == "aws" {
+			line := strings.Join(cmd.Args, " ")
+			awsCalls = append(awsCalls, line)
+			switch {
+			case strings.Contains(line, "--secret-id prod/db"):
+				return execx.Result{Stdout: []byte(`"{\"password\":\"` + envSentinel + `\"}"` + "\n")}, nil
+			case strings.Contains(line, "--secret-id prod/token"):
+				return execx.Result{Stdout: []byte(`"` + fileSentinel + `"` + "\n")}, nil
+			}
+		}
+		return base(cmd)
+	}
+	store := state.New(t.TempDir())
+	rt := secretref.NewRuntimeWithRunner(store, func(string) string { return "" }, runner)
+	c := New(runner, nil)
+	c.SetSecretRuntime(rt)
+
+	res, err := c.Up(context.Background(), target, nil)
+	if err != nil {
+		t.Fatalf("Up: %v", err)
+	}
+	if len(awsCalls) != 2 {
+		t.Fatalf("aws calls = %v, want one per distinct runtime secret", awsCalls)
+	}
+	notices := strings.Join(res.Notices, "\n")
+	if !strings.Contains(notices, "AWS") || !strings.Contains(notices, "자격 증명") {
+		t.Fatalf("notices = %v, want AWS guidance", res.Notices)
+	}
+	if strings.Contains(res.Output, envSentinel) || strings.Contains(res.Output, fileSentinel) {
+		t.Fatalf("Compose output leaked a value: %q", res.Output)
+	}
+	override, err := rt.OverridePath(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	overrideData, err := os.ReadFile(override)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(overrideData)
+	for _, want := range []string{"DB_PASSWORD", "worker_token"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("override missing %q:\n%s", want, text)
+		}
+	}
+	for _, sentinel := range []string{envSentinel, fileSentinel} {
+		if strings.Contains(text, sentinel) {
+			t.Fatalf("override leaked %q:\n%s", sentinel, text)
+		}
+	}
+}
+
 func TestUpAppliesOnlySelectedServiceClosureAndPassesEnv(t *testing.T) {
 	_, target := secretProject(t, `secrets:
   - service: web

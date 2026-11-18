@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/rootmyself/dcraft/internal/core"
+	"github.com/rootmyself/dcraft/internal/secretref"
 	"github.com/rootmyself/dcraft/internal/stack"
 	"github.com/rootmyself/dcraft/internal/state"
 )
@@ -46,6 +47,9 @@ type Controller struct {
 	store    core.StateStore
 	clock    core.Clock
 	pid      int
+	// awsChecker proves a recorded or current AWS reference is currently
+	// resolvable. It returns no value. The application wires *secretref.Runtime.
+	awsChecker AWSSecretChecker
 
 	// Test seams: the readiness loop uses the injected clock and sleep so the
 	// bounded behavior is exercised without real waits.
@@ -74,6 +78,16 @@ func New(updater stack.Updater, applier stack.Rollbacker, identity stack.Identit
 		now:      time.Now,
 	}
 }
+
+// AWSSecretChecker proves an AWS reference is currently resolvable without
+// returning or persisting the value. *secretref.Runtime implements it.
+type AWSSecretChecker interface {
+	CheckAWS(ctx context.Context, ref secretref.Reference) error
+}
+
+// SetAWSSecretChecker wires the AWS availability boundary. It is optional for
+// projects without AWS references and for tests.
+func (c *Controller) SetAWSSecretChecker(checker AWSSecretChecker) { c.awsChecker = checker }
 
 // Run executes one previous-good rollback. Stages: load_record, precheck,
 // apply, verify, report. The record is read under the same per-stack lock as

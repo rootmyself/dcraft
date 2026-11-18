@@ -211,9 +211,9 @@ func (c *Controller) checkImages(ctx context.Context, pins []stack.RollbackPin) 
 
 // checkSecrets re-resolves every recorded secret reference and every current
 // reference that this apply will deliver, for the recorded services and their
-// depends_on closure. Missing sources and unsupported (AWS) sources abort
-// before any change. Values are read for availability only and never stored or
-// printed.
+// depends_on closure. Missing sources, unavailable AWS references and unknown
+// sources abort before any change. Values are read for availability only and
+// never stored or printed; for AWS, the runtime fetches and discards the value.
 func (c *Controller) checkSecrets(ctx context.Context, target core.Target, rec state.GoodVersion, services []string) error {
 	var problems []string
 	for _, ref := range rec.Target.SecretRefs {
@@ -250,7 +250,17 @@ func (c *Controller) checkSecrets(ctx context.Context, target core.Target, rec s
 				problems = append(problems, "파일 원본을 읽을 수 없습니다: "+name)
 			}
 		case "aws":
-			problems = append(problems, "AWS Secrets Manager 원본은 아직 지원하지 않습니다: "+name)
+			awsRef := secretref.Reference{
+				Service: ref.Service, Phase: secretref.Phase(ref.Phase),
+				Delivery: secretref.Delivery(ref.Delivery), Source: secretref.SourceAWS,
+				Ref: name, Field: ref.Field, Region: ref.Region, Profile: ref.Profile,
+			}
+			if err := c.checkAWSReference(ctx, awsRef); err != nil {
+				if ctxErr := ctx.Err(); ctxErr != nil {
+					return ctxErr
+				}
+				problems = append(problems, fmt.Sprintf("%s:%s AWS 원본을 확인할 수 없습니다: %s", ref.Service, name, diagnosticMessage(err)))
+			}
 		default:
 			problems = append(problems, fmt.Sprintf("지원하지 않는 비밀값 원본입니다: %q", ref.Source))
 		}
@@ -286,7 +296,12 @@ func (c *Controller) checkSecrets(ctx context.Context, target core.Target, rec s
 				problems = append(problems, fmt.Sprintf("%s:%s 파일 원본을 읽을 수 없습니다: %s", ref.Service, ref.EffectiveTarget(), ref.Ref))
 			}
 		case secretref.SourceAWS:
-			problems = append(problems, fmt.Sprintf("%s:%s AWS Secrets Manager 원본은 아직 지원하지 않습니다: %s", ref.Service, ref.EffectiveTarget(), ref.Ref))
+			if err := c.checkAWSReference(ctx, ref); err != nil {
+				if ctxErr := ctx.Err(); ctxErr != nil {
+					return ctxErr
+				}
+				problems = append(problems, fmt.Sprintf("%s:%s AWS 원본을 확인할 수 없습니다: %s", ref.Service, ref.EffectiveTarget(), diagnosticMessage(err)))
+			}
 		default:
 			problems = append(problems, fmt.Sprintf("%s:%s 지원하지 않는 비밀값 원본입니다: %q", ref.Service, ref.EffectiveTarget(), ref.Source))
 		}
@@ -301,6 +316,26 @@ func (c *Controller) checkSecrets(ctx context.Context, target core.Target, rec s
 		Detail:      strings.Join(problems, "; "),
 		NextActions: []string{msgSecretAct1, msgSecretAct2},
 	})
+}
+
+// checkAWSReference proves an AWS reference is resolvable. A controller built
+// without the secret runtime refuses instead of silently treating an AWS
+// reference as available.
+func (c *Controller) checkAWSReference(ctx context.Context, ref secretref.Reference) error {
+	if c.awsChecker == nil {
+		return errors.New("AWS 비밀값 조회 연결이 준비되지 않았습니다")
+	}
+	return c.awsChecker.CheckAWS(ctx, ref)
+}
+
+// diagnosticMessage returns the Korean guidance from a classified error
+// without tool output or a value. It is used in the precheck summary.
+func diagnosticMessage(err error) string {
+	var ce *core.Error
+	if errors.As(err, &ce) && len(ce.Diagnostics) > 0 {
+		return ce.Diagnostics[0].Message
+	}
+	return err.Error()
 }
 
 func readableFile(path string) error {

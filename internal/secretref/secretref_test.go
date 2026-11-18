@@ -71,7 +71,7 @@ func TestLoadRejectsInvalidReferences(t *testing.T) {
 	}{
 		{
 			name: "unknown field",
-			text: "secrets:\n  - service: web\n    phase: runtime\n    delivery: environment\n    source: env\n    ref: X\n    value: leaked\n",
+			text: "secrets:\n  - service: web\n    phase: runtime\n    delivery: environment\n    source: env\n    ref: X\n    mode: leaked\n",
 			want: core.CategorySecretInvalid,
 			msg:  "알 수 없는",
 		},
@@ -96,10 +96,10 @@ func TestLoadRejectsInvalidReferences(t *testing.T) {
 			msg:  "BuildKit",
 		},
 		{
-			name: "aws source is recognized but not implemented",
-			text: "secrets:\n  - service: web\n    phase: runtime\n    delivery: environment\n    source: aws\n    ref: my-secret\n",
+			name: "aws-only field on an env source",
+			text: "secrets:\n  - service: web\n    phase: runtime\n    delivery: environment\n    source: env\n    ref: X\n    field: password\n",
 			want: core.CategorySecretInvalid,
-			msg:  "AWS",
+			msg:  "aws",
 		},
 		{
 			name: "unknown delivery",
@@ -328,6 +328,179 @@ func TestAddAcceptsBuildPhaseFileReferenceWithoutValues(t *testing.T) {
 	}
 	if strings.Contains(string(data), "value:") || strings.Contains(string(data), "secret-value") {
 		t.Fatalf("config persisted a value:\n%s", data)
+	}
+}
+
+func TestLoadReadsAWSReferenceShape(t *testing.T) {
+	dir := t.TempDir()
+	writeConfig(t, dir, `secrets:
+  - service: web
+    phase: runtime
+    delivery: environment
+    source: aws
+    ref: prod/db
+    field: database.password
+    region: ap-northeast-2
+    profile: ops-admin
+    target: DB_PASSWORD
+  - service: builder
+    phase: build
+    delivery: file
+    source: aws
+    ref: arn:aws:secretsmanager:us-east-1:123456789012:secret:build/token-AbCdEf
+    field: token
+    target: token
+`)
+
+	cat, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(cat.References) != 2 {
+		t.Fatalf("references = %+v", cat.References)
+	}
+	web := cat.References[0]
+	if web.Source != SourceAWS || web.Ref != "prod/db" || web.Field != "database.password" ||
+		web.Region != "ap-northeast-2" || web.Profile != "ops-admin" || web.Target != "DB_PASSWORD" {
+		t.Fatalf("web reference = %+v", web)
+	}
+	build := cat.References[1]
+	if build.Source != SourceAWS || build.Phase != PhaseBuild || build.Delivery != DeliveryFile ||
+		build.Field != "token" || build.Target != "token" {
+		t.Fatalf("build reference = %+v", build)
+	}
+}
+
+func TestAddAWSPersistsOnlyTheReference(t *testing.T) {
+	dir := t.TempDir()
+	ref := Reference{
+		Service:  "web",
+		Phase:    PhaseRuntime,
+		Delivery: DeliveryEnvironment,
+		Source:   SourceAWS,
+		Ref:      "prod/db",
+		Field:    "database.password",
+		Region:   "ap-northeast-2",
+		Profile:  "ops-admin",
+		Target:   "DB_PASSWORD",
+	}
+	cat, err := Add(dir, ref)
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	if len(cat.References) != 1 {
+		t.Fatalf("catalog = %+v", cat)
+	}
+	again, err := Add(dir, ref)
+	if err != nil {
+		t.Fatalf("re-Add: %v", err)
+	}
+	if len(again.References) != 1 {
+		t.Fatalf("re-add duplicated the AWS reference: %+v", again.References)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, ".dcraft.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, want := range []string{"source: aws", "ref: prod/db", "field: database.password", "region: ap-northeast-2", "profile: ops-admin"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("config missing %q:\n%s", want, text)
+		}
+	}
+	for _, forbidden := range []string{"value:", "aws_access_key", "aws_secret", "session_token"} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("config stored credential material or a value (%q):\n%s", forbidden, text)
+		}
+	}
+}
+
+func TestValidateAWSReferenceShape(t *testing.T) {
+	valid := func() Reference {
+		return Reference{
+			Service: "web", Phase: PhaseRuntime, Delivery: DeliveryEnvironment,
+			Source: SourceAWS, Ref: "prod/db", Field: "database.password",
+			Region: "ap-northeast-2", Profile: "ops-admin", Target: "DB_PASSWORD",
+		}
+	}
+	if err := ValidateReference(valid()); err != nil {
+		t.Fatalf("valid AWS reference rejected: %v", err)
+	}
+	arn := valid()
+	arn.Ref = "arn:aws:secretsmanager:us-east-1:123456789012:secret:prod/db-AbCdEf"
+	arn.Field = "items.0.token"
+	if err := ValidateReference(arn); err != nil {
+		t.Fatalf("valid AWS ARN/array field rejected: %v", err)
+	}
+	bare := valid()
+	bare.Field, bare.Region, bare.Profile = "", "", ""
+	if err := ValidateReference(bare); err != nil {
+		t.Fatalf("AWS reference without field/region/profile rejected: %v", err)
+	}
+
+	cases := []struct {
+		name   string
+		mutate func(*Reference)
+		msg    string
+	}{
+		{"empty ref", func(r *Reference) { r.Ref = "  " }, "이름"},
+		{"space in ref", func(r *Reference) { r.Ref = "prod db" }, "ref"},
+		{"leading dash ref", func(r *Reference) { r.Ref = "-prod" }, "ref"},
+		{"malformed ARN", func(r *Reference) { r.Ref = "arn:aws:s3:::bucket" }, "ARN"},
+		{"empty field segment", func(r *Reference) { r.Field = "database..password" }, "field"},
+		{"trailing dot field", func(r *Reference) { r.Field = "database." }, "field"},
+		{"space in field", func(r *Reference) { r.Field = "database password" }, "field"},
+		{"uppercase region", func(r *Reference) { r.Region = "US-EAST-1" }, "리전"},
+		{"not a region", func(r *Reference) { r.Region = "notregion" }, "리전"},
+		{"profile with space", func(r *Reference) { r.Profile = "ops admin" }, "profile"},
+		{"leading dash profile", func(r *Reference) { r.Profile = "-admin" }, "profile"},
+		{"field on env source", func(r *Reference) { r.Source = SourceEnv; r.Ref = "DB_PASSWORD" }, "aws"},
+		{"region on file source", func(r *Reference) { r.Source = SourceFile; r.Ref = "token.txt" }, "aws"},
+		{"profile on env source", func(r *Reference) { r.Source = SourceEnv; r.Ref = "DB_PASSWORD" }, "aws"},
+		{"missing target", func(r *Reference) { r.Target = "" }, "target"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ref := valid()
+			tc.mutate(&ref)
+			err := ValidateReference(ref)
+			if err == nil {
+				t.Fatalf("ValidateReference accepted %+v", ref)
+			}
+			var ce *core.Error
+			if !asCoreError(err, &ce) {
+				t.Fatalf("error = %v, want core.Error", err)
+			}
+			if ce.Diagnostics[0].Category != core.CategorySecretInputInvalid {
+				t.Fatalf("category = %q", ce.Diagnostics[0].Category)
+			}
+			if !strings.Contains(strings.ToLower(ce.Diagnostics[0].Message), strings.ToLower(tc.msg)) {
+				t.Fatalf("message %q does not mention %q", ce.Diagnostics[0].Message, tc.msg)
+			}
+		})
+	}
+}
+
+func TestLoadRejectsCredentialLikeFields(t *testing.T) {
+	for _, field := range []string{"aws_access_key_id", "aws_secret_access_key", "session_token", "access_key", "value"} {
+		t.Run(field, func(t *testing.T) {
+			dir := t.TempDir()
+			writeConfig(t, dir, "secrets:\n  - service: web\n    phase: runtime\n    delivery: environment\n    source: aws\n    ref: prod/db\n    target: DB_PASSWORD\n    "+field+": leaked\n")
+			_, err := Load(dir)
+			if err == nil {
+				t.Fatalf("Load accepted credential-like field %q", field)
+			}
+			var ce *core.Error
+			if !asCoreError(err, &ce) {
+				t.Fatalf("error = %v", err)
+			}
+			if ce.Diagnostics[0].Category != core.CategorySecretInvalid {
+				t.Fatalf("category = %q", ce.Diagnostics[0].Category)
+			}
+			if !strings.Contains(ce.Diagnostics[0].Message, "자격 증명") && !strings.Contains(ce.Diagnostics[0].Message, "알 수 없는") {
+				t.Fatalf("message = %q", ce.Diagnostics[0].Message)
+			}
+		})
 	}
 }
 

@@ -10,9 +10,22 @@ import (
 	"time"
 
 	"github.com/rootmyself/dcraft/internal/core"
+	"github.com/rootmyself/dcraft/internal/secretref"
 	"github.com/rootmyself/dcraft/internal/stack"
 	"github.com/rootmyself/dcraft/internal/state"
 )
+
+// fakeAWSChecker proves availability without a value and records the neutral
+// reference rollback asked about.
+type fakeAWSChecker struct {
+	err  error
+	refs []secretref.Reference
+}
+
+func (f *fakeAWSChecker) CheckAWS(_ context.Context, ref secretref.Reference) error {
+	f.refs = append(f.refs, ref)
+	return f.err
+}
 
 // ---- fakes -------------------------------------------------------------
 
@@ -525,7 +538,7 @@ func TestRunMissingSecretSourceAbortsBeforeApply(t *testing.T) {
 		}
 	})
 
-	t.Run("recorded aws unsupported", func(t *testing.T) {
+	t.Run("recorded aws unavailable", func(t *testing.T) {
 		target := newTestTarget(t)
 		store := state.New(t.TempDir())
 		rec := testRecord(target)
@@ -536,6 +549,11 @@ func TestRunMissingSecretSourceAbortsBeforeApply(t *testing.T) {
 		applier := &fakeApplier{}
 		u := &fakeUpdater{model: testModel(), images: map[string]string{testImage: testImage, testTag: testImage}}
 		c := newController(u, applier, store)
+		c.SetAWSSecretChecker(&fakeAWSChecker{err: core.Fail(core.Diagnostic{
+			Category: core.CategorySecretAWSAccessDenied,
+			Severity: core.SeverityError,
+			Message:  "AWS Secrets Manager 원본에 접근할 권한이 없습니다.",
+		})})
 
 		_, err := c.Run(context.Background(), invocationFor(target), Options{Timeout: time.Second})
 		requireCategory(t, err, core.CategoryRollbackSecretUnavailable)
@@ -543,7 +561,59 @@ func TestRunMissingSecretSourceAbortsBeforeApply(t *testing.T) {
 			t.Fatal("error leaked a secret value")
 		}
 		if applier.calls != 0 {
-			t.Fatalf("rollback applied with an unsupported recorded secret: %d calls", applier.calls)
+			t.Fatalf("rollback applied with an unavailable recorded AWS secret: %d calls", applier.calls)
+		}
+	})
+
+	t.Run("recorded aws available", func(t *testing.T) {
+		target := newTestTarget(t)
+		store := state.New(t.TempDir())
+		rec := testRecord(target)
+		rec.Target.SecretRefs = []state.SecretReference{{
+			Service: "web", Phase: "runtime", Delivery: "environment", Source: "aws",
+			Name: "prod/app", Field: "token", Region: "ap-northeast-2", Profile: "ops",
+		}}
+		saveRecord(t, store, target, rec)
+		applier := &fakeApplier{}
+		u := &fakeUpdater{
+			model:      testModel(),
+			images:     map[string]string{testImage: testImage, testTag: testImage},
+			containers: []stack.Container{healthyContainer("web", testImage, true, "healthy")},
+		}
+		checker := &fakeAWSChecker{}
+		c := newController(u, applier, store)
+		c.SetAWSSecretChecker(checker)
+
+		if _, err := c.Run(context.Background(), invocationFor(target), Options{Timeout: 30 * time.Second}); err != nil {
+			t.Fatalf("run: %v", err)
+		}
+		if applier.calls != 1 {
+			t.Fatalf("apply calls = %d, want 1", applier.calls)
+		}
+		if len(checker.refs) != 1 {
+			t.Fatalf("AWS checks = %+v, want one", checker.refs)
+		}
+		got := checker.refs[0]
+		if got.Ref != "prod/app" || got.Field != "token" || got.Region != "ap-northeast-2" || got.Profile != "ops" || got.Source != secretref.SourceAWS {
+			t.Fatalf("AWS check reference = %+v", got)
+		}
+	})
+
+	t.Run("recorded aws without a checker refuses", func(t *testing.T) {
+		target := newTestTarget(t)
+		store := state.New(t.TempDir())
+		rec := testRecord(target)
+		rec.Target.SecretRefs = []state.SecretReference{{
+			Service: "web", Phase: "runtime", Delivery: "environment", Source: "aws", Name: "prod/app",
+		}}
+		saveRecord(t, store, target, rec)
+		applier := &fakeApplier{}
+		u := &fakeUpdater{model: testModel(), images: map[string]string{testImage: testImage, testTag: testImage}}
+		c := newController(u, applier, store)
+		_, err := c.Run(context.Background(), invocationFor(target), Options{Timeout: time.Second})
+		requireCategory(t, err, core.CategoryRollbackSecretUnavailable)
+		if applier.calls != 0 {
+			t.Fatalf("rollback applied without an AWS checker: %d calls", applier.calls)
 		}
 	})
 

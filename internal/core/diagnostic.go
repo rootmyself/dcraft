@@ -134,6 +134,20 @@ const (
 	CategorySecretUnsupported         Category = "secret_unsupported"
 	CategorySecretSource              Category = "secret_source_unavailable"
 	CategorySecretApplyFailed         Category = "secret_apply_failed"
+	// AWS Secrets Manager sources (ticket #10). The AWS CLI keeps the
+	// credential chain outside dcraft; these categories separate a missing
+	// tool, missing credentials/region, service authorization, an unknown
+	// secret or field, a network failure and an unusable value. All are
+	// operation failures (exit 1); only invalid reference syntax is input.
+	CategorySecretAWSCLIMissing         Category = "secret_aws_cli_missing"
+	CategorySecretAWSCredentialsMissing Category = "secret_aws_credentials_missing"
+	CategorySecretAWSRegionMissing      Category = "secret_aws_region_missing"
+	CategorySecretAWSAccessDenied       Category = "secret_aws_access_denied"
+	CategorySecretAWSSecretNotFound     Category = "secret_aws_secret_not_found"
+	CategorySecretAWSFieldInvalid       Category = "secret_aws_field_invalid"
+	CategorySecretAWSNetwork            Category = "secret_aws_network"
+	CategorySecretAWSValueInvalid       Category = "secret_aws_value_invalid"
+	CategorySecretAWSFailed             Category = "secret_aws_failed"
 	// CategoryBuildServiceInvalid means a build-phase secret reference names a
 	// service without a Compose build section. The build would silently do
 	// nothing, so it is a usage error (exit 2), never a silent skip.
