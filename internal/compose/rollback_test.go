@@ -24,6 +24,12 @@ func (f *fakeSecretPreparer) Prepare(_ context.Context, _ core.Target, _ []strin
 	return f.session, nil
 }
 
+// PrepareBuild satisfies the build-secret boundary added by ticket #10.
+// Rollback never builds, so this fake reports an empty build session.
+func (f *fakeSecretPreparer) PrepareBuild(_ context.Context, _ core.Target, _ []string, _ map[string]secretref.BuildServiceHint) (secretref.BuildSession, error) {
+	return secretref.BuildSession{}, nil
+}
+
 func (f *fakeSecretPreparer) CleanupStack(core.Target) error { return nil }
 
 // RedactText matches the SecretPreparer boundary added by ticket #16. This

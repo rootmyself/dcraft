@@ -135,6 +135,49 @@ func (c Catalog) ForServices(services []string) []Reference {
 	return out
 }
 
+// ForPhase returns only the references for one delivery phase. Runtime and
+// build references are prepared by separate lifecycles; a phase filter keeps
+// one phase from being delivered at the other.
+func (c Catalog) ForPhase(phase Phase) []Reference {
+	out := make([]Reference, 0, len(c.References))
+	for _, ref := range c.References {
+		if ref.Phase == phase {
+			out = append(out, ref)
+		}
+	}
+	return out
+}
+
+// ForPhaseServices is ForPhase restricted to the selected services. An empty
+// services list means the whole stack.
+func (c Catalog) ForPhaseServices(phase Phase, services []string) []Reference {
+	refs := c.ForPhase(phase)
+	if len(services) == 0 {
+		return refs
+	}
+	selected := make(map[string]bool, len(services))
+	for _, name := range services {
+		selected[name] = true
+	}
+	out := make([]Reference, 0, len(refs))
+	for _, ref := range refs {
+		if selected[ref.Service] {
+			out = append(out, ref)
+		}
+	}
+	return out
+}
+
+// HasPhase reports whether the catalog contains a reference for the phase.
+func (c Catalog) HasPhase(phase Phase) bool {
+	for _, ref := range c.References {
+		if ref.Phase == phase {
+			return true
+		}
+	}
+	return false
+}
+
 // Has reports whether the catalog contains any reference.
 func (c Catalog) Has() bool { return len(c.References) > 0 }
 
@@ -171,7 +214,14 @@ func Validate(r Reference) error {
 	switch r.Phase {
 	case PhaseRuntime:
 	case PhaseBuild:
-		return &ValidationError{Field: "phase", Reason: "빌드 시점 비밀값은 아직 지원하지 않습니다.", Unsupported: true}
+		// Build values reach the Dockerfile only through a BuildKit secret
+		// mount. There is no environment or ARG/ENV fallback.
+		if r.Delivery != DeliveryFile {
+			return &ValidationError{
+				Field:  "delivery",
+				Reason: "빌드 시점 비밀값은 BuildKit secret mount(file)로만 전달합니다. delivery를 file로 지정하거나 생략하세요.",
+			}
+		}
 	default:
 		return &ValidationError{Field: "phase", Reason: "지원하지 않는 단계입니다: " + string(r.Phase)}
 	}
@@ -220,6 +270,17 @@ func Validate(r Reference) error {
 	}
 	if r.Delivery == DeliveryFile && !secretNameRe.MatchString(target) {
 		return &ValidationError{Field: "target", Reason: "target 파일 비밀값 이름이 올바르지 않습니다: " + target}
+	}
+	return nil
+}
+
+// ValidateReference validates one reference for a user-facing add/save path and
+// maps the field error to the stable input categories. Build-phase environment
+// delivery and AWS are user input errors here; build-phase delivery is part of
+// the contract but must use the BuildKit mount.
+func ValidateReference(r Reference) error {
+	if err := Validate(r); err != nil {
+		return inputError(err)
 	}
 	return nil
 }

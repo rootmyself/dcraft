@@ -30,12 +30,13 @@ type Compose struct {
 	cleanupGrace   time.Duration
 }
 
-// SecretPreparer is the runtime secret boundary published by ticket #9. The
-// Compose adapter owns the effective Compose inputs; the secret runtime owns
-// source resolution and per-stack materialization. A nil preparer preserves
-// the no-secrets behavior.
+// SecretPreparer is the secret boundary published by ticket #9 and extended by
+// ticket #10 for build-time delivery. The Compose adapter owns the effective
+// Compose inputs; the secret runtime owns source resolution and per-stack
+// materialization. A nil preparer preserves the no-secrets behavior.
 type SecretPreparer interface {
 	Prepare(ctx context.Context, target core.Target, services []string, mode secretref.Mode) (secretref.Session, error)
+	PrepareBuild(ctx context.Context, target core.Target, services []string, hints map[string]secretref.BuildServiceHint) (secretref.BuildSession, error)
 	CleanupStack(target core.Target) error
 	// RedactText removes referenced values from tool output. Ticket #16's
 	// data diagnostics use it even though backup fetches no values itself.
