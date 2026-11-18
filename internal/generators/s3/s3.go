@@ -96,7 +96,7 @@ func normalizeSource(raw string, mode Mode) (string, error) {
 		return "", inputError("source", "S3 원본 주소를 입력하세요.", "")
 	}
 	if mode != ModeSync && mode != ModeTar {
-		return "", inputError("mode", "방식은 sync 또는 tar여야 합니다.", string(mode))
+		return "", inputError("mode", "방식은 sync 또는 tar여야 합니다.", "")
 	}
 	if hasControl(source) || strings.IndexFunc(source, unicode.IsSpace) >= 0 {
 		return "", inputError("source", "S3 원본에 공백·제어 문자를 사용할 수 없습니다.", "")
