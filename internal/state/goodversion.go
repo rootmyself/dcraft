@@ -54,6 +54,10 @@ type SecretReference struct {
 	Source   string `json:"source,omitempty"`
 	Name     string `json:"name"`
 	Field    string `json:"field,omitempty"`
+	// Region and Profile are optional AWS CLI selectors needed to reproduce
+	// the lookup. They are not credentials and never contain a value.
+	Region  string `json:"region,omitempty"`
+	Profile string `json:"profile,omitempty"`
 }
 
 // GoodService is the recorded image identity of one service. ImageID is the

@@ -59,6 +59,9 @@ type ReferenceView struct {
 	Ref        string `json:"ref"`
 	Target     string `json:"target"`
 	TargetPath string `json:"target_path,omitempty"`
+	Field      string `json:"field,omitempty"`
+	Region     string `json:"region,omitempty"`
+	Profile    string `json:"profile,omitempty"`
 	Effect     string `json:"effect"`
 }
 
@@ -80,6 +83,9 @@ func (f *Feature) Descriptor() core.Descriptor {
 			{Name: "source", Kind: core.FlagString, Usage: msgFlagSource},
 			{Name: "ref", Kind: core.FlagString, Usage: msgFlagRef},
 			{Name: "target", Kind: core.FlagString, Usage: msgFlagTarget},
+			{Name: "field", Kind: core.FlagString, Usage: msgFlagField},
+			{Name: "region", Kind: core.FlagString, Usage: msgFlagRegion},
+			{Name: "aws-profile", Kind: core.FlagString, Usage: msgFlagAWSProfile},
 		},
 	}
 }
@@ -123,6 +129,9 @@ func (f *Feature) applyWizard(ctx context.Context, in core.Invocation) (any, err
 		Source:   secretref.SourceType(strings.TrimSpace(in.Option("source"))),
 		Ref:      strings.TrimSpace(in.Option("ref")),
 		Target:   strings.TrimSpace(in.Option("target")),
+		Field:    strings.TrimSpace(in.Option("field")),
+		Region:   strings.TrimSpace(in.Option("region")),
+		Profile:  strings.TrimSpace(in.Option("aws-profile")),
 	}
 	normalizePhaseDelivery(&ref)
 	return f.add(ctx, in, ref)
@@ -313,6 +322,9 @@ func (f *Feature) buildReport(in core.Invocation, action string, cat secretref.C
 			Ref:        ref.Ref,
 			Target:     ref.EffectiveTarget(),
 			TargetPath: ref.TargetPath(),
+			Field:      ref.Field,
+			Region:     ref.Region,
+			Profile:    ref.Profile,
 			Effect:     effectText(ref),
 		})
 	}
@@ -400,12 +412,37 @@ func (f *Feature) wizardSteps(ctx context.Context, in core.Invocation) (any, err
 				Options: []core.WizardOption{
 					{Value: string(secretref.SourceEnv), Label: msgWizardSourceEnv},
 					{Value: string(secretref.SourceFile), Label: msgWizardSourceFile},
+					{Value: string(secretref.SourceAWS), Label: msgWizardSourceAWS},
 				},
 			},
 			{
 				Name: "ref", Title: msgWizardRefTitle,
 				Prompt: msgWizardRefPrompt, AllowCustom: true,
 				CustomHint: msgWizardRefHint,
+			},
+			{
+				Name: "target", Title: msgWizardTargetTitle,
+				Prompt: msgWizardTargetPrompt, AllowCustom: true,
+				DependsOn: "source", DependsValue: string(secretref.SourceAWS),
+				CustomHint: msgWizardTargetHint,
+			},
+			{
+				Name: "field", Title: msgWizardFieldTitle,
+				Prompt: msgWizardFieldPrompt, AllowCustom: true, Optional: true,
+				DependsOn: "source", DependsValue: string(secretref.SourceAWS),
+				CustomHint: msgWizardFieldHint,
+			},
+			{
+				Name: "region", Title: msgWizardRegionTitle,
+				Prompt: msgWizardRegionPrompt, AllowCustom: true, Optional: true,
+				DependsOn: "source", DependsValue: string(secretref.SourceAWS),
+				CustomHint: msgWizardRegionHint,
+			},
+			{
+				Name: "aws-profile", Title: msgWizardProfileTitle,
+				Prompt: msgWizardProfilePrompt, AllowCustom: true, Optional: true,
+				DependsOn: "source", DependsValue: string(secretref.SourceAWS),
+				CustomHint: msgWizardProfileHint,
 			},
 		},
 	}
@@ -420,6 +457,10 @@ func (f *Feature) WizardPreview(answers map[string]string) (string, error) {
 		Delivery: secretref.Delivery(strings.TrimSpace(answers["delivery"])),
 		Source:   secretref.SourceType(strings.TrimSpace(answers["source"])),
 		Ref:      strings.TrimSpace(answers["ref"]),
+		Target:   strings.TrimSpace(answers["target"]),
+		Field:    strings.TrimSpace(answers["field"]),
+		Region:   strings.TrimSpace(answers["region"]),
+		Profile:  strings.TrimSpace(answers["aws-profile"]),
 	}
 	if ref.Phase == "" {
 		ref.Phase = secretref.PhaseRuntime
@@ -435,8 +476,23 @@ func (f *Feature) WizardPreview(answers map[string]string) (string, error) {
 	fmt.Fprintf(&b, "%s: %s\n", msgPreviewPhase, phaseLabel(ref.Phase))
 	fmt.Fprintf(&b, "%s: %s\n", msgPreviewDelivery, deliveryLabel(ref.Phase, ref.Delivery, ref.EffectiveTarget()))
 	fmt.Fprintf(&b, "%s: %s (%s)\n", msgPreviewSource, sourceLabel(ref.Source), ref.Ref)
+	if ref.Source == secretref.SourceAWS {
+		if ref.Field != "" {
+			fmt.Fprintf(&b, "%s: %s\n", msgPreviewField, ref.Field)
+		}
+		if ref.Region != "" {
+			fmt.Fprintf(&b, "%s: %s\n", msgPreviewRegion, ref.Region)
+		}
+		if ref.Profile != "" {
+			fmt.Fprintf(&b, "%s: %s\n", msgPreviewProfile, ref.Profile)
+		}
+	}
 	fmt.Fprintf(&b, "%s: %s\n", msgPreviewEffect, effectText(ref))
 	b.WriteString(msgPreviewNote)
+	if ref.Source == secretref.SourceAWS {
+		b.WriteString("\n")
+		b.WriteString(msgPreviewAWS)
+	}
 	if ref.Phase == secretref.PhaseBuild {
 		b.WriteString("\n")
 		b.WriteString(msgPreviewBuildFixed)
@@ -466,6 +522,9 @@ func referenceFromOptions(in core.Invocation, services []string) secretref.Refer
 		Source:   secretref.SourceType(strings.TrimSpace(in.Option("source"))),
 		Ref:      strings.TrimSpace(in.Option("ref")),
 		Target:   strings.TrimSpace(in.Option("target")),
+		Field:    strings.TrimSpace(in.Option("field")),
+		Region:   strings.TrimSpace(in.Option("region")),
+		Profile:  strings.TrimSpace(in.Option("aws-profile")),
 	}
 }
 
@@ -522,8 +581,11 @@ func effectText(ref secretref.Reference) string {
 
 func disclosureMessages(views []ReferenceView) []string {
 	var notices []string
-	hasEnv, hasFile, hasBuild := false, false, false
+	hasEnv, hasFile, hasBuild, hasAWS := false, false, false, false
 	for _, view := range views {
+		if secretref.SourceType(view.Source) == secretref.SourceAWS {
+			hasAWS = true
+		}
 		if secretref.Phase(view.Phase) == secretref.PhaseBuild {
 			hasBuild = true
 			continue
@@ -543,6 +605,9 @@ func disclosureMessages(views []ReferenceView) []string {
 	}
 	if hasBuild {
 		notices = append(notices, msgBuildFixed, msgBuildDockerfile, msgBuildCache, msgBuildNoFallback)
+	}
+	if hasAWS {
+		notices = append(notices, msgAWSCredentialDisclosure, msgAWSFetchPolicy)
 	}
 	return notices
 }
@@ -578,6 +643,8 @@ func sourceLabel(source secretref.SourceType) string {
 		return msgSourceEnv
 	case secretref.SourceFile:
 		return msgSourceFile
+	case secretref.SourceAWS:
+		return msgSourceAWS
 	default:
 		return string(source)
 	}

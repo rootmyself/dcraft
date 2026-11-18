@@ -130,6 +130,61 @@ func answerWizard(t *testing.T, m *Model, toPreview bool) {
 	}
 }
 
+func TestWizardSkipsConditionalStepsAndAllowsOptionalEmptyAnswer(t *testing.T) {
+	newSpec := func() core.WizardSpec {
+		return core.WizardSpec{
+			Title: "조건 단계",
+			Steps: []core.WizardStep{
+				{
+					Name: "source", Title: "원본 종류", Prompt: "원본을 선택하세요.", Default: "env",
+					Options: []core.WizardOption{{Value: "env", Label: "환경변수"}, {Value: "aws", Label: "AWS"}},
+				},
+				{Name: "ref", Title: "참조", Prompt: "참조를 입력하세요.", AllowCustom: true},
+				{
+					Name: "field", Title: "field", Prompt: "field를 입력하세요.", AllowCustom: true,
+					Optional: true, DependsOn: "source", DependsValue: "aws",
+				},
+			},
+		}
+	}
+
+	secretDesc := descriptor("secrets", false)
+	secretDesc.Wizard = true
+
+	// The env answer hides the AWS-only step: ref goes straight to preview.
+	envWizard := &wizardStub{desc: secretDesc, steps: newSpec(), preview: "OK"}
+	envModel := newWizardModel(t, envWizard)
+	openWizard(t, envModel)
+	feed(t, envModel, []tea.Msg{tea.KeyMsg{Type: tea.KeyEnter}}) // source: env
+	feed(t, envModel, []tea.Msg{tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("TOKEN")}})
+	feed(t, envModel, []tea.Msg{tea.KeyMsg{Type: tea.KeyEnter}})
+	if envModel.phase != phaseWizardPreview {
+		t.Fatalf("env flow phase = %v, want preview; view:\n%s", envModel.phase, envModel.View())
+	}
+	if _, answered := envModel.wizardAnswers["field"]; answered {
+		t.Fatalf("hidden AWS step was answered: %+v", envModel.wizardAnswers)
+	}
+
+	// The AWS answer shows the optional step; an empty Enter is accepted.
+	awsWizard := &wizardStub{desc: secretDesc, steps: newSpec(), preview: "OK"}
+	awsModel := newWizardModel(t, awsWizard)
+	openWizard(t, awsModel)
+	feed(t, awsModel, []tea.Msg{tea.KeyMsg{Type: tea.KeyDown}})
+	feed(t, awsModel, []tea.Msg{tea.KeyMsg{Type: tea.KeyEnter}}) // source: aws
+	feed(t, awsModel, []tea.Msg{tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("prod/db")}})
+	feed(t, awsModel, []tea.Msg{tea.KeyMsg{Type: tea.KeyEnter}})
+	if awsModel.phase != phaseWizardStep || !strings.Contains(awsModel.View(), "field") {
+		t.Fatalf("AWS flow did not show the dependent step; phase=%v view:\n%s", awsModel.phase, awsModel.View())
+	}
+	feed(t, awsModel, []tea.Msg{tea.KeyMsg{Type: tea.KeyEnter}}) // empty optional answer
+	if awsModel.phase != phaseWizardPreview {
+		t.Fatalf("AWS flow phase = %v, want preview; view:\n%s", awsModel.phase, awsModel.View())
+	}
+	if value, ok := awsModel.wizardAnswers["field"]; !ok || value != "" {
+		t.Fatalf("optional empty answer = %q (present=%v)", value, ok)
+	}
+}
+
 func TestWizardShowsEffectBeforeSaveAndDeclineSavesNothing(t *testing.T) {
 	wizard := &wizardStub{
 		desc: core.Descriptor{

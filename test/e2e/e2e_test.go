@@ -184,6 +184,8 @@ done
 case "$sub" in
   up)
     if [ -n "$DOCKER_FAKE_SLEEP_UP" ]; then exec sleep "$DOCKER_FAKE_SLEEP_UP"; fi
+    if [ -n "${DOCKER_FAKE_ECHO_ENV:-}" ]; then echo "container env: $(printenv "$DOCKER_FAKE_ECHO_ENV")"; fi
+    if [ -n "${DOCKER_FAKE_FAIL_UP:-}" ]; then echo "container failed" >&2; exit 1; fi
     echo "Container fake-web-1 Started"; exit 0 ;;
   stop) echo "Container fake-web-1 Stopped"; exit 0 ;;
   down) echo "Container fake-web-1 Removed"; exit 0 ;;

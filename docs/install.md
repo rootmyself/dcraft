@@ -74,8 +74,10 @@ cd ~/my-stack
   `--help`와 `--version`만은 Docker 없이 동작합니다.
 - **로컬 Docker Engine만 지원합니다.** `tcp://`, `ssh://`, `http(s)://` 원격 엔드포인트는 거부합니다.
   Docker Desktop의 로컬 VM 소켓은 로컬로 취급합니다.
-- **Git/AWS CLI는 아직 구현되지 않은 스크립트 생성 기능에서만 필요합니다.** 현재 버전에는 Git/S3 배포
-  스크립트 생성 기능이 없으므로 지금은 필요하지 않습니다.
+- **AWS Secrets Manager 원본을 쓰려면 AWS CLI v2와 기존 AWS 인증이 필요합니다.** `aws secretsmanager
+  get-secret-value`가 동작해야 하며, dcraft는 자격 증명을 저장하거나 `aws configure`를 대신 실행하지 않습니다.
+  AWS 원본을 쓰지 않으면 AWS CLI는 필요하지 않습니다. Git은 아직 구현되지 않은 스크립트 생성 기능에서만
+  필요합니다.
 - dcraft는 Docker를 자동 설치하지 않고, 스스로 자동 업데이트하지 않습니다. 새 파일은 직접 내려받아 교체하세요.
 - 도우미 상태는 `DCRAFT_STATE_DIR` 또는 macOS `~/Library/Application Support/dcraft`,
   Linux `~/.config/dcraft` 아래에 저장됩니다. 상태 조회는 프로젝트의 Compose 파일을 수정하지 않습니다.

@@ -66,6 +66,9 @@ func (m *Model) beginWizardSteps(res core.Result) {
 	}
 	m.wizardSpec = spec
 	m.wizardStep = 0
+	if first := m.firstVisibleStep(0); first >= 0 {
+		m.wizardStep = first
+	}
 	m.phase = phaseWizardStep
 	m.initWizardStep()
 }
@@ -143,7 +146,7 @@ func (m *Model) updateWizard(msg tea.KeyMsg) tea.Cmd {
 		switch msg.String() {
 		case "enter":
 			value := strings.TrimSpace(m.wizardInput)
-			if value == "" {
+			if value == "" && !step.Optional {
 				m.notice = msgWizardNeedValue
 				return nil
 			}
@@ -172,8 +175,8 @@ func (m *Model) updateWizard(msg tea.KeyMsg) tea.Cmd {
 				return m.applyWizard()
 			}
 		case "left":
-			if len(m.wizardSpec.Steps) > 0 {
-				m.wizardStep = len(m.wizardSpec.Steps) - 1
+			if prev := m.previousVisibleStep(len(m.wizardSpec.Steps) - 1); prev >= 0 {
+				m.wizardStep = prev
 				m.phase = phaseWizardStep
 				m.initWizardStep()
 			}
@@ -182,17 +185,64 @@ func (m *Model) updateWizard(msg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
+// wizardStepVisible evaluates a step's single dependency against the answers
+// collected so far. A hidden step never contributes an answer.
+func wizardStepVisible(answers map[string]string, step core.WizardStep) bool {
+	if step.DependsOn == "" {
+		return true
+	}
+	return answers[step.DependsOn] == step.DependsValue
+}
+
+func (m *Model) firstVisibleStep(from int) int {
+	for i := from; i < len(m.wizardSpec.Steps); i++ {
+		if wizardStepVisible(m.wizardAnswers, m.wizardSpec.Steps[i]) {
+			return i
+		}
+	}
+	return -1
+}
+
+func (m *Model) previousVisibleStep(from int) int {
+	for i := from; i >= 0 && i < len(m.wizardSpec.Steps); i-- {
+		if wizardStepVisible(m.wizardAnswers, m.wizardSpec.Steps[i]) {
+			return i
+		}
+	}
+	return -1
+}
+
+func (m *Model) wizardProgress() (int, int) {
+	ordinal, total := 0, 0
+	for i, step := range m.wizardSpec.Steps {
+		if !wizardStepVisible(m.wizardAnswers, step) {
+			continue
+		}
+		total++
+		if i <= m.wizardStep {
+			ordinal = total
+		}
+	}
+	if ordinal == 0 {
+		ordinal = 1
+	}
+	if total == 0 {
+		total = 1
+	}
+	return ordinal, total
+}
+
 func (m *Model) previousWizardStep() {
-	if m.wizardStep > 0 {
-		m.wizardStep--
+	if prev := m.previousVisibleStep(m.wizardStep - 1); prev >= 0 {
+		m.wizardStep = prev
 		m.phase = phaseWizardStep
 		m.initWizardStep()
 	}
 }
 
 func (m *Model) advanceWizard() {
-	if m.wizardStep+1 < len(m.wizardSpec.Steps) {
-		m.wizardStep++
+	if next := m.firstVisibleStep(m.wizardStep + 1); next >= 0 {
+		m.wizardStep = next
 		m.initWizardStep()
 		return
 	}
@@ -270,7 +320,8 @@ func (m *Model) wizardView() string {
 			return b.String()
 		}
 		step := m.wizardSpec.Steps[m.wizardStep]
-		fmt.Fprintf(&b, "%s %d/%d\n", msgWizardProgress, m.wizardStep+1, len(m.wizardSpec.Steps))
+		ordinal, total := m.wizardProgress()
+		fmt.Fprintf(&b, "%s %d/%d\n", msgWizardProgress, ordinal, total)
 		b.WriteString(titleStyle.Render(step.Title))
 		b.WriteString("\n\n")
 		b.WriteString(step.Prompt)
@@ -310,6 +361,10 @@ func (m *Model) wizardHints() string {
 	switch m.phase {
 	case phaseWizardStep:
 		if m.wizardTextInput() {
+			step := m.wizardSpec.Steps[m.wizardStep]
+			if step.Optional {
+				return msgHintWizardOptional
+			}
 			return msgHintWizardInput
 		}
 		return msgHintWizardChoice

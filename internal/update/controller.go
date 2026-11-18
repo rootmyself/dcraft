@@ -792,6 +792,9 @@ func goodVersionSecretRefs(target core.Target) ([]state.SecretReference, error) 
 			Delivery: string(ref.Delivery),
 			Source:   string(ref.Source),
 			Name:     ref.Ref,
+			Field:    ref.Field,
+			Region:   ref.Region,
+			Profile:  ref.Profile,
 		})
 	}
 	return refs, nil
