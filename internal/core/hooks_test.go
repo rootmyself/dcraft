@@ -519,3 +519,36 @@ func (c *cancelingHooks) Execute(ctx context.Context, req core.HookRequest) (cor
 	<-ctx.Done()
 	return core.HookExecution{}, ctx.Err()
 }
+
+// Cancellation after the feature has produced a payload but while a post hook
+// is running must not leak that payload into a canceled result.
+func TestEngineCancellationDuringPostHookOmitsData(t *testing.T) {
+	started := make(chan struct{})
+	feature := &testFeature{
+		desc: hookDescriptor("up"),
+		run:  func(context.Context, core.Invocation) (any, error) { return "payload", nil },
+	}
+	h := newHarness(t, feature)
+	hooks := &cancelingHooks{
+		plan: hookPlan(core.HookEntry{
+			Path: "scripts/post.sh", Stage: core.HookStagePost, SHA256: "bbb", Trusted: true,
+		}),
+		started: started,
+	}
+	h.engine.Hooks = hooks
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan core.Result, 1)
+	go func() { done <- h.engine.Run(ctx, core.Request{Feature: "up"}, nil) }()
+	<-started
+	cancel()
+	res := <-done
+	if res.Outcome != core.OutcomeCanceled {
+		t.Fatalf("outcome = %q, want canceled", res.Outcome)
+	}
+	if res.Data != nil {
+		t.Fatalf("data = %#v on cancellation, want omitted", res.Data)
+	}
+	if st := stageByName(t, res, "hooks_post"); st.Status != core.StageCanceled {
+		t.Fatalf("hooks_post = %q, want canceled", st.Status)
+	}
+}

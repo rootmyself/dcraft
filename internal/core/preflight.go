@@ -53,14 +53,17 @@ var DefaultRequirements = Requirements{
 	RequirementCompose,
 }
 
-// NormalizeRequirements replaces an empty declaration with the full default.
-// A future feature that needs no Docker capability extends this contract with
-// an explicit "none" value; an empty slice never means "check nothing".
+// NormalizeRequirements replaces an empty declaration with the full default
+// and makes the implicit Docker CLI dependency explicit. An engine or Compose
+// check cannot run without the CLI, so declaring only one of them must never
+// disable the CLI lookup (and therefore every later check). A future feature
+// that needs no Docker capability extends this contract with an explicit
+// "none" value; an empty slice never means "check nothing".
 func NormalizeRequirements(reqs Requirements) Requirements {
 	if len(reqs) == 0 {
 		return DefaultRequirements
 	}
-	out := make(Requirements, 0, len(reqs))
+	out := make(Requirements, 0, len(reqs)+1)
 	seen := map[Requirement]bool{}
 	for _, r := range reqs {
 		if seen[r] {
@@ -68,6 +71,9 @@ func NormalizeRequirements(reqs Requirements) Requirements {
 		}
 		seen[r] = true
 		out = append(out, r)
+	}
+	if (seen[RequirementEngine] || seen[RequirementCompose]) && !seen[RequirementDockerCLI] {
+		out = append(Requirements{RequirementDockerCLI}, out...)
 	}
 	return out
 }
