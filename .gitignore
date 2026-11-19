@@ -3,3 +3,6 @@
 
 # Local IDE settings
 .idea/
+
+# Distribution build output
+/dist/
