@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/rootmyself/dcraft/internal/core"
@@ -167,9 +166,6 @@ func (f *Feature) payload(gen gitgen.Generated, created bool) Payload {
 	}
 	if !created {
 		report.Notices = append([]string{msgPlanReplaceFile}, report.Notices...)
-	}
-	if !gen.Layout.ScriptInsideProject || !strings.HasPrefix(filepath.Clean(gen.Layout.Destination), filepath.Clean(gen.Layout.ProjectDir)+string(filepath.Separator)) {
-
 	}
 	return Payload{Generator: report}
 }
