@@ -35,21 +35,34 @@ const (
 	CategoryComposeInstallPermission  Category = "compose_install_permission"
 	CategoryComposeInstallFailed      Category = "compose_install_failed"
 	CategoryComposeRecheckFailed      Category = "compose_recheck_failed"
-	CategoryNoConfiguration           Category = "no_configuration"
-	CategoryInvalidConfiguration      Category = "invalid_configuration"
-	CategoryTargetInvalid             Category = "target_invalid"
-	CategoryMultipleConfigFiles       Category = "multiple_configuration_files"
-	CategoryApprovalRequired          Category = "approval_required"
-	CategoryEnvironmentRequired       Category = "environment_required"
-	CategoryEnvironmentUnknown        Category = "environment_unknown"
-	CategoryEnvironmentInvalid        Category = "environment_invalid"
-	CategoryEnvironmentConflict       Category = "environment_input_conflict"
-	CategoryEnvironmentLimits         Category = "environment_isolation_limits"
-	CategoryEnvironmentOverlap        Category = "environment_overlap"
-	CategoryProjectNameShared         Category = "project_name_shared"
-	CategoryProjectNameConflict       Category = "project_name_conflict"
-	CategoryIdentityUnreadable        Category = "identity_unreadable"
-	CategoryServiceUnknown            Category = "service_unknown"
+	// First-run Compose generation (ticket #5). init_input_invalid is missing
+	// or invalid explicit input (exit 2); init_existing_configuration refuses
+	// to replace an existing stack without an explicit destination and the
+	// file_overwrite approval; init_invalid means Compose rejected the
+	// generated content before it was saved; init_failed is a save failure.
+	CategoryInitInputInvalid          Category = "init_input_invalid"
+	CategoryInitExistingConfiguration Category = "init_existing_configuration"
+	CategoryInitInvalid               Category = "init_invalid"
+	// CategoryInitDestinationChanged is the save-time recheck: the destination
+	// was absent when approval was inspected (or changed after the preview) and
+	// now exists, so dcraft refuses to overwrite it without a fresh preview.
+	CategoryInitDestinationChanged Category = "init_destination_changed"
+	CategoryInitFailed             Category = "init_failed"
+	CategoryNoConfiguration        Category = "no_configuration"
+	CategoryInvalidConfiguration   Category = "invalid_configuration"
+	CategoryTargetInvalid          Category = "target_invalid"
+	CategoryMultipleConfigFiles    Category = "multiple_configuration_files"
+	CategoryApprovalRequired       Category = "approval_required"
+	CategoryEnvironmentRequired    Category = "environment_required"
+	CategoryEnvironmentUnknown     Category = "environment_unknown"
+	CategoryEnvironmentInvalid     Category = "environment_invalid"
+	CategoryEnvironmentConflict    Category = "environment_input_conflict"
+	CategoryEnvironmentLimits      Category = "environment_isolation_limits"
+	CategoryEnvironmentOverlap     Category = "environment_overlap"
+	CategoryProjectNameShared      Category = "project_name_shared"
+	CategoryProjectNameConflict    Category = "project_name_conflict"
+	CategoryIdentityUnreadable     Category = "identity_unreadable"
+	CategoryServiceUnknown         Category = "service_unknown"
 	// Data backup (ticket #16). The three *_required/*_unknown values are
 	// missing or invalid caller input and map to exit code 2.
 	CategoryBackupOutputRequired     Category = "backup_output_required"

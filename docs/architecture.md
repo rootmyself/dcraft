@@ -5,19 +5,20 @@ fork these types or recreate these rules in a feature or UI package. Shared
 interface changes go to the integration owner as a change request (see the end
 of this file).
 
-Scope of this version: one working binary, seventeen registered features
+Scope of this version: one working binary, eighteen registered features
 (`status`, `install-compose`, `up`, `stop`, `down`, `restart`, `update`,
 `secrets`, `hooks`, `logs`, `exec`, `backup`, `restore`, `rollback`,
-`generate-git-hook`, `generate-s3-hook`, `environments`), the common operation
-seam, target resolution, named environments with explicit CLI/TUI creation,
-automatic project-name allocation, same-stack coordination,
+`generate-git-hook`, `generate-s3-hook`, `environments`, `init`), the common
+operation seam, target resolution, named environments with explicit CLI/TUI
+creation, automatic project-name allocation, same-stack coordination,
 runtime and build-time secret references, explicit host scripts with
 independent script trust, the guided Git and S3 host-script generators,
 service/instance selection, live terminal attach, versioned volume and declared
 bind-folder backup, safe volume and bind-folder restore, AWS Secrets Manager
-secret references, diagnostics, CLI/TUI assembly, state layout,
-machine-readable results, the approval/plan preview flow, explicit update with
-bounded readiness, the previous-good record, previous-good rollback, and tests.
+secret references, first-run Compose generation, diagnostics, CLI/TUI assembly,
+state layout, machine-readable results, the approval/plan preview flow, explicit
+update with bounded readiness, the previous-good record, previous-good rollback,
+and tests.
 
 ---
 
@@ -868,7 +869,7 @@ Approval flow (generic, engine-enforced):
 No feature action is selectable unless it is registered. The current build
 registers `status` (primary), `install-compose`, `up`, `stop`, `down`,
 `restart`, `update`, `secrets`, `hooks`, `logs`, `exec`, `backup`, `restore`,
-`rollback`, `generate-git-hook` and `generate-s3-hook`.
+`rollback`, `generate-git-hook`, `generate-s3-hook`, `environments` and `init`.
 
 ---
 
@@ -2428,10 +2429,10 @@ as verified.
   ticket #10 and previous-good rollback by ticket #11.
 - Good-version history beyond the single record (rollback has no multi-version
   picker). The TUI plan/confirm component is generic; `install-compose`,
-  `update`, `backup`, `restore`, `rollback`, `generate-git-hook` and
-  `generate-s3-hook` are planners in this build, and
+  `update`, `backup`, `restore`, `rollback`, `generate-git-hook`,
+  `generate-s3-hook` and `init` are planners in this build, and
   `secrets`/`backup`/`restore`/`generate-git-hook`/`generate-s3-hook`/
-  `environments` use the generic wizard. An ordinary update shows its plan
+  `environments`/`init` use the generic wizard. An ordinary update shows its plan
   and requires one `enter` to run, not an approval; rollback shows the same plan
   screen and collects only `previous_version`. `up` also goes through the
   generic plan because it declares the hook scope; with no hooks the plan text
@@ -2619,6 +2620,17 @@ functions (`Service`, `Instance`, `Selection`, `Services`, `Select`,
 `Diagnostic.ExitCode`, the `select_instance`/`stream`/`attach`/`inputs` stage
 names, the `logs`/`exec` payloads under `data.logs`/`data.exec`, and the new
 diagnostic categories/exit mapping.
+
+Published by issue #6 (consume, do not fork): `core.ConditionalApproval`
+(read-only, pre-preflight approval inspection; wizard `steps` runs are exempt),
+`WizardSpec.RequiredApprovals`, `WizardStep.Optional`, the string
+`WizardStep.DependsOn`/`DependsValue` conditional fields (shared with the
+secrets AWS steps), additive `Invocation.Approvals` for save-time rechecks,
+`internal/initconfig` (`Controller`, `ComposeValidator`, `FileSaver`,
+`Payload`/`Report`), the `init` feature and registration, the
+`collect`/`preview`/`validate`/`write` init stage names, and the
+`init_input_invalid`/`init_existing_configuration`/`init_destination_changed`/
+`init_invalid`/`init_failed` categories.
 
 Published by ticket #9 (consume, do not fork): `internal/secretref` types
 (`Phase`, `Delivery`, `SourceType`, `Reference`, `Catalog`, `Runtime`,
@@ -2978,3 +2990,91 @@ history record for a `RecordsHistory` feature's steps run; only the
 `wizard=apply` run (and the ordinary CLI run) is an operation. Both runs still
 use the same target resolution, preflight and feature `Run` path. A canceled
 wizard leaves no history and no stack change.
+
+---
+
+## 15. First-run Compose generation (ticket 05 / issue #6)
+
+Flat feature `init`, `TargetOptional: true`, `Wizard: true`, no static
+descriptor approval and no history. It requires only `docker_cli`: generation
+and `docker compose config` validation do not need a reachable engine. The
+default destination is `<project>/compose.yaml`; the target folder is still
+resolved by the shared resolver and discovery never walks to a parent.
+
+Inputs are exactly what the user supplies. Dockerfile mode asks for the service
+name, build context (default `.`), Dockerfile (default `Dockerfile`), and the
+optional runtime fields (`--port`, `--volume`, `--env-var`, `--command`,
+`--restart`, all `--output`). Image mode asks for the service name, image
+reference, and the same runtime fields. Ports, data paths, commands, restart
+policies and secrets are never inferred from the image or Dockerfile. `EXPOSE`
+and `CMD` are not read; the preview says so. Environment values are written as
+plain Compose `environment:` and are disclosed as plaintext; they are
+user-provided configuration, not secret references.
+
+Existing configuration:
+
+- A standard Compose file in the folder (or an explicit `-f` file) is never
+  replaced by default. A different destination is refused with
+  `init_existing_configuration` and the existing path(s). A standard override
+  file without a base is not modified but is reported because creating a base
+  activates it through normal Compose discovery.
+- Overwriting requires both the file to be named with `--output <existing>` and
+  the independent `file_overwrite` approval. Without an explicit destination a
+  matching default file is refused (`init_input_invalid`), even with the
+  approval. The CLI supplies the approval with `--approve file_overwrite`; the
+  TUI collects it on the wizard preview and, when an approval is required,
+  routes the apply through the generic plan + confirmation screen. Dockerfiles
+  and other user files are never modified.
+- The save decision is bound to the inspected state. The engine's
+  `ConditionalApproval` inspection and any wizard/CLI preview run before the
+  write; `Invocation.Approvals` carries the same explicit approvals into the
+  feature. If the destination was absent at inspection/preview and a file now
+  exists, a run without `file_overwrite` fails `init_destination_changed`
+  (exit 2) and leaves the new file untouched. A destination that existed when
+  the approval was inspected and was approved still overwrites normally. The
+  no-replace hard link is the final race guard for a file that appears after
+  the save-time check.
+
+`core.ConditionalApproval` is the additive engine capability used here: after
+target resolution and before preflight the feature inspects the resolved
+destination without writing and returns `file_overwrite` only when it is
+needed. The engine enforces it exactly like `Descriptor.Approval`, sets
+`Result.RequiredApproval` and includes it in `PlanReport.RequiredApprovals`.
+A wizard `steps` run is exempt; the TUI calls the feature's `WizardPreview`,
+shows the required approvals from `WizardSpec.RequiredApprovals`, and routes
+an apply that needs any approval through the generic plan + confirmation
+screen (the answers stay in the request, and the engine passes the collected
+approvals in `Invocation.Approvals`). `WizardStep.Optional`
+allows empty free-form answers, and `WizardStep.DependsOn`/`DependsValue`
+skips mode-irrelevant questions (for example image reference in Dockerfile
+mode). Existing wizard features keep their behavior.
+
+Validation and save:
+
+- The exact content is validated with
+  `docker compose -f - config --format json` with the destination directory as
+  the working directory and the content on stdin. Compose resolves relative
+  paths and derives the project name from that directory, so the check matches
+  the file that will be saved; no temporary Compose file is written and a
+  stopped engine is fine. A non-zero exit, malformed JSON, missing project name
+  or a missing requested service is `init_invalid` and nothing is saved.
+- The generated content is ordinary Compose. Relative build contexts and bind
+  sources are rendered relative to the destination directory (a relative bind
+  keeps its `./` prefix); named volumes are declared at the top level. No
+  `--project-directory` assumption and no dcraft-only key is added.
+- Save is atomic: a temp file in the destination directory, fsync, then a
+  no-replace hard link for a new file or rename for an approved overwrite.
+  Directory or symlink destinations are refused. A failure or cancellation
+  leaves the previous file byte-identical and removes the temp file.
+- Stages: `collect` (입력 확인), `preview` (생성 미리보기), `validate`
+  (Compose 검증), `write` (파일 저장). Payload `data.init`: mode, service,
+  path, derived project name, exact content, changed/overwritten, validation
+  metadata, resources (file, named volumes, binds, default network), Korean
+  notices and `next_command` (`dcraft up`, or `cd <dir> && dcraft up -f <file>`
+  for a custom destination, plus `-p` when an explicit project name was given).
+  Saving never runs `up`; the result states that the file was not executed and
+  prints the next command.
+
+Cancellation uses the shared canceled/exit-130 contract with an
+init-specific message about the atomic save window. The feature never writes
+history, because creating a configuration file is not a stack change.

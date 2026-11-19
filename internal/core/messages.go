@@ -70,11 +70,18 @@ func approvalRequiredMessage(kind ApprovalKind) string {
 }
 
 func approvalRequiredActions(kind ApprovalKind) []string {
-	if kind == ApprovalInstall {
+	switch kind {
+	case ApprovalInstall:
 		return []string{
 			msgApprovalInstallActionOne,
 			msgApprovalInstallActionTwo,
 			msgApprovalInstallActionThree,
+		}
+	case ApprovalFileOverwrite:
+		return []string{
+			"기존 파일을 덮어쓰려면 --output <기존 파일>과 --approve file_overwrite를 함께 지정하세요.",
+			"미리보기 후 대상 파일이 생기거나 바뀌었다면 다시 미리보기하세요. 승인 없이는 덮어쓰지 않습니다.",
+			"기존 파일은 변경하지 않았습니다.",
 		}
 	}
 	return []string{msgApprovalRequiredActionOne, msgApprovalRequiredActionTwo}

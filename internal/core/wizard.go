@@ -21,8 +21,16 @@ type Wizard interface {
 type WizardSpec struct {
 	// Title is Korean guidance for the whole flow.
 	Title string `json:"title"`
-	// Steps are answered in order.
+	// Steps are answered in order. A step may be conditional on an earlier
+	// answer.
 	Steps []WizardStep `json:"steps"`
+	// RequiredApprovals are the independent approvals the final apply run
+	// needs in addition to Descriptor.Approval. The TUI shows them on the
+	// preview screen and, when non-empty, routes the apply through the generic
+	// plan + confirmation screen so the engine collects exactly these kinds;
+	// the feature must implement core.Planner. The engine still enforces them.
+	// Empty means none.
+	RequiredApprovals []ApprovalKind `json:"required_approvals,omitempty"`
 }
 
 // WizardStep is one question. Options are rendered as a keyboard-selectable
@@ -47,7 +55,7 @@ type WizardStep struct {
 	Default string `json:"default,omitempty"`
 	// Optional allows an empty custom answer. The answer is stored as an
 	// empty string and the flow advances; it is used for optional selectors
-	// such as an AWS field/region/profile.
+	// such as an AWS field/region/profile or init runtime fields.
 	Optional bool `json:"optional,omitempty"`
 	// DependsOn and DependsValue hide the step until another answered step
 	// has the exact value. Empty DependsOn always shows the step. Hidden

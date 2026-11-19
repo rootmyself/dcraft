@@ -310,7 +310,7 @@ func (m *Model) applyWizard() tea.Cmd {
 	// The wizard preview is not an approval. An approval-gated feature goes
 	// through the same generic plan + confirmation screen as any other
 	// approval operation; the collected answers stay in the request.
-	if feature.Descriptor().Approval != core.ApprovalNone {
+	if feature.Descriptor().Approval != core.ApprovalNone || len(m.wizardSpec.RequiredApprovals) > 0 {
 		m.wizardApplying = false
 		m.wizardAwaiting = false
 		m.wizardFeature = nil
@@ -331,7 +331,10 @@ func (m *Model) applyWizard() tea.Cmd {
 }
 
 func (m *Model) cancelWizard() {
-	if m.phase == phaseWizardLoading {
+	// Canceling the read-only steps run has no effect to report. Canceling the
+	// apply run must let the engine's canceled result (with partial-effect
+	// guidance) reach the screen instead of claiming nothing happened.
+	if m.phase == phaseWizardLoading && m.wizardAwaiting {
 		m.wizardCanceled = true
 	}
 	if m.runCancel != nil {
@@ -357,6 +360,19 @@ func (m *Model) cancelWizard() {
 	m.currentStage = nil
 	m.phase = phaseReady
 	m.notice = msgWizardCanceled
+}
+
+// previewApprovals lists every independent approval the apply will need: a
+// descriptor approval and any approvals the feature declared in the spec.
+func (m *Model) previewApprovals() []core.ApprovalKind {
+	var kinds []core.ApprovalKind
+	if m.wizardFeature != nil {
+		if kind := m.wizardFeature.Descriptor().Approval; kind != core.ApprovalNone {
+			kinds = append(kinds, kind)
+		}
+	}
+	kinds = append(kinds, m.wizardSpec.RequiredApprovals...)
+	return uniqueApprovalKinds(kinds)
 }
 
 func (m *Model) wizardView() string {
@@ -403,17 +419,24 @@ func (m *Model) wizardView() string {
 				input = " "
 			}
 			fmt.Fprintf(&b, "%s%s_\n", msgWizardInputLabel, input)
-			if step.CustomHint != "" {
-				b.WriteString(hintStyle.Render(step.CustomHint))
+			hint := step.CustomHint
+			if step.Optional {
+				if hint != "" {
+					hint += " · "
+				}
+				hint += msgWizardOptionalHint
+			}
+			if hint != "" {
+				b.WriteString(hintStyle.Render(hint))
 				b.WriteString("\n")
 			}
 		}
 	case phaseWizardPreview:
-		if m.wizardFeature != nil {
-			if kind := m.wizardFeature.Descriptor().Approval; kind != core.ApprovalNone {
-				fmt.Fprintf(&b, "필요 승인: %s (%s)\n", kind.KoreanLabel(), kind)
-				b.WriteString("enter 계획 확인 · left 이전 단계 · esc 취소\n\n")
+		if approvals := m.previewApprovals(); len(approvals) > 0 {
+			for _, kind := range approvals {
+				fmt.Fprintf(&b, "%s: %s (%s)\n", msgWizardRequiredApprovals, kind.KoreanLabel(), kind)
 			}
+			b.WriteString("enter 계획 확인 · left 이전 단계 · esc 취소\n\n")
 		}
 		b.WriteString(m.wizardPreview)
 		b.WriteString("\n")
@@ -465,7 +488,11 @@ func wizardSpecFrom(data any) (core.WizardSpec, bool) {
 func wizardErrorText(err error) string {
 	var ce *core.Error
 	if errorsAs(err, &ce) && len(ce.Diagnostics) > 0 {
-		return ce.Diagnostics[0].Message
+		d := ce.Diagnostics[0]
+		if strings.TrimSpace(d.Detail) != "" {
+			return d.Message + "\n" + d.Detail
+		}
+		return d.Message
 	}
 	return err.Error()
 }
