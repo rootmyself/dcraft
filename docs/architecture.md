@@ -5,19 +5,20 @@ fork these types or recreate these rules in a feature or UI package. Shared
 interface changes go to the integration owner as a change request (see the end
 of this file).
 
-Scope of this version: one working binary, seventeen registered features
+Scope of this version: one working binary, eighteen registered features
 (`status`, `install-compose`, `up`, `stop`, `down`, `restart`, `update`,
 `secrets`, `hooks`, `logs`, `exec`, `backup`, `restore`, `rollback`,
-`generate-git-hook`, `generate-s3-hook`, `init`), the common operation seam,
-target resolution, named environments, automatic project-name allocation,
-same-stack coordination, runtime and build-time secret references, explicit
-host scripts with independent script trust, the guided Git and S3 host-script
-generators, service/instance selection, live terminal attach, versioned volume
-and declared bind-folder backup, safe volume and bind-folder restore, AWS
-Secrets Manager secret references, first-run Compose generation, diagnostics,
-CLI/TUI assembly, state layout, machine-readable results, the approval/plan
-preview flow, explicit update with bounded readiness, the previous-good record,
-previous-good rollback, and tests.
+`generate-git-hook`, `generate-s3-hook`, `environments`, `init`), the common
+operation seam, target resolution, named environments with explicit CLI/TUI
+creation, automatic project-name allocation, same-stack coordination,
+runtime and build-time secret references, explicit host scripts with
+independent script trust, the guided Git and S3 host-script generators,
+service/instance selection, live terminal attach, versioned volume and declared
+bind-folder backup, safe volume and bind-folder restore, AWS Secrets Manager
+secret references, first-run Compose generation, diagnostics, CLI/TUI assembly,
+state layout, machine-readable results, the approval/plan preview flow, explicit
+update with bounded readiness, the previous-good record, previous-good rollback,
+and tests.
 
 ---
 
@@ -244,6 +245,11 @@ type core.InputProvider interface {
     Inputs(ctx context.Context, in core.Invocation) ([]core.InputField, error)
     WithInputs(req core.Request, values map[string]string) (core.Request, error)
 }
+// ServiceCatalog: a read-only feature (status) publishes the current stack
+// services for the generic TUI scope screen.
+type core.ServiceCatalog interface {
+    Services(ctx context.Context, in core.Invocation) ([]core.ServiceStatus, error)
+}
 // CanceledReporter: a feature-specific cancellation effect, normalized by the
 // engine to the canceled/warning/exit-130 contract.
 type core.CanceledReporter interface {
@@ -260,6 +266,18 @@ preflight requirements as `Run`, then calls the feature's `InputProvider`
 implementation. It never checks an approval, never runs the feature and never
 writes history, so the TUI can show the service, instance and command before
 attaching. The CLI never calls it and never prompts.
+
+`Engine.Services(ctx, req, sink) core.ServicesReport` resolves the same target
+and preflight requirements as `Run` for a `SupportsServices` feature, then asks
+the first registered read-only `core.ServiceCatalog` (status) for the current
+services. It adds the stable `service_catalog` stage, never checks an approval,
+never runs the requested feature and never writes history. `ServiceStatus`
+carries the Compose service name, machine `state`/`health` values, instance
+count and whether the service is in the active configuration. This is a query,
+not a second execution path: the selection still travels through
+`Request.Services` into `Plan`/confirm/`Run`, and the CLI does not use it. The
+TUI never contacts Docker directly; `status` implements the catalog on its
+existing `stack.Backend.Inspect` path.
 
 `Engine.Plan(ctx, req, sink) core.PlanReport` resolves the same target and
 preflight requirements as `Run`, then calls the feature's `Plan`. It never
@@ -435,9 +453,35 @@ Rules:
   relative binds, resolve symlinks, compare IPv6 bracket port syntax, or follow
   what external scripts/users do. The Compose CLI remains the authority for
   merge, validation, paths and profiles.
-- Alias creation in this version is direct editing of `.dcraft.yaml`. There is
-  no TUI alias editor and no generated config file; adding one is a later
-  ticket, not a hidden write from this one.
+- Alias creation, listing and removal are available from both interfaces; they
+  are not hidden hand edits. CLI: `dcraft environments --add --name <alias>
+  [--file ...] [--env-file ...] [--profile ...]`, `--list`, and
+  `--remove --name <alias>`. The ordinary persistent `--path` selects the
+  project folder; `--file`/`--env-file`/`--profile` describe the new alias.
+  TUI: the `environments` feature's generic wizard collects name, Compose files
+  (defaulted from the current discovery), env files and profiles and shows the
+  resulting `.dcraft.yaml` section before one `enter` saves. Nothing is
+  preselected and `esc` saves nothing.
+- Creation writes only `.dcraft.yaml`. It edits YAML nodes, so unknown
+  top-level keys, the `secrets:`/`hooks:` sections and attached comments are
+  preserved where the YAML library can attach them; the file mode is kept and
+  the replacement is an atomic temp-file + fsync + rename. Writers take the
+  same project-local `.dcraft.lock` flock as the hooks registration writer, so
+  concurrent additions (and concurrent hooks edits) cannot lose updates.
+  Removing an alias edits only the config: running stacks, volumes and
+  per-environment state are not stopped or deleted.
+- Alias input is rejected as usage input (exit 2) when the name is missing or
+  invalid, the alias already exists, a list entry is empty/duplicated, a
+  profile contains whitespace, or no Compose/env/profile input is supplied.
+  Referenced Compose/env files must exist as regular files; a broken config
+  remains `environment_invalid` (exit 1). `--env` cannot be combined with
+  `-f`/`--env-file`/`--profile` on a target-optional feature because that
+  would give an alias-management action two different input answers. JSON
+  `data.environments` lists alias configuration only (name, resolved
+  files/env_files/profiles); env-file values are never read or printed.
+  Selection rules are unchanged: this feature never auto-selects an alias and
+  a newly created alias must still be selected explicitly with `--env` or the
+  TUI screen for every stack operation.
 
 ### 3.2 Read-only project identity (ticket #3 follow-up)
 
@@ -667,12 +711,20 @@ is in the payload and in every Compose call.
 
 - The menu lists every registered feature in Korean. Selecting a mutating
   feature first shows a confirmation screen with the requested target
-  (path/files/profiles/project name), the whole-stack scope and the effect.
-  `enter` runs the same engine path, `esc` cancels, `q` quits without running.
-  Lifecycle screens still operate on the whole stack; service selection for
-  those mutations stays the CLI `-s/--service`. The ticket-05 logs/exec screens
-  select a service/instance through the published selector and a generic
-  `core.InputProvider` form, without a feature-specific branch in the TUI.
+  (path/files/profiles/project name), the exact scope and the effect. `enter`
+  runs the same engine path, `esc` cancels, `q` quits without running.
+  The TUI is not whole-stack-only: any feature whose descriptor declares
+  `SupportsServices` (up/stop/restart/update/logs at minimum) first shows a
+  read-only service list from the current stack (state, health and instance
+  count). The first row `전체 (스택 전체)` is selected by default; `space`
+  toggles individual services, `enter` confirms, and `esc`/`q` runs nothing.
+  The choice feeds `Request.Services` into the same plan/confirm/run path as
+  `-s/--service`, and the plan/confirm screen states the exact scope
+  (`스택 전체` or the service names), so an explicit selection never silently
+  widens back to the whole stack. A list that cannot be read is shown as a
+  failure and blocks the operation. Features that collect their own service
+  input keep it: the exec form and wizard steps are unchanged. Instance-level
+  selection remains specific to logs/exec.
 - During an in-flight mutating operation, `q` explains that the operation is
   running and that quitting can leave partial effects (it does not orphan the
   Compose process). `ctrl+c` requests safe cancellation: the per-run context is
@@ -705,6 +757,16 @@ Persistent flags on every command:
 
 Feature-owned flags and `--service/-s` are added from the descriptor. Help and
 usage templates are Korean; command/flag names and machine values stay English.
+
+`dcraft environments` uses the persistent target flags directly:
+`--add --name <alias>` with `--file`, `--env-file` and `--profile` describing
+the new alias, `--list`, or `--remove --name <alias>`, plus `--path` for the
+project folder and `--json` for the one result object. Alias management is a
+target-optional command: registered aliases never require `--env` for it, and
+`--env` combined with `--file`/`--env-file`/`--profile` is rejected as an
+ambiguous-input usage error (exit 2) instead of being silently ignored. Missing
+explicit input (`--add`/`--list`/`--remove` not chosen, name absent or invalid,
+duplicate alias) also exits 2 without a prompt.
 
 Without a command:
 
@@ -751,8 +813,14 @@ It derives everything from the registry:
   a feature. An explicit `--env` skips the screen. A broken alias file is not
   hidden: running the feature surfaces the same `resolve_target` failure.
 - selecting a mutating feature that has no independent approval shows the small
-  confirmation screen (requested target and environment, whole-stack scope,
+  confirmation screen (requested target and environment, exact service scope,
   effect); `esc` returns to the menu;
+- for a `SupportsServices` feature the TUI first loads the current service list
+  through `core.Engine.Services` (the registered read-only `core.ServiceCatalog`,
+  implemented by `status` on its existing inspect path) and collects an explicit
+  scope. TUI selection is a convenience over the same engine rules: the selected
+  names travel in `Request.Services` and the feature validates them again. No
+  Docker call is made by the TUI package itself;
 - a feature that implements `core.Planner` starts the read-only plan screen
   instead of the generic confirmation. For an approval-gated feature the plan is
   the approval confirmation (flow below); for an ordinary `update` the same plan
@@ -763,7 +831,12 @@ It derives everything from the registry:
   a mixed volume/bind selection and an output directory and to show
   affected/running services before anything is stopped. The source step is the
   published generic `Multi` step; the TUI adds no safety rule; the feature
-  rechecks selection, paths and consumers on the apply run;
+  rechecks selection, paths and consumers on the apply run. `environments`
+  uses the same flow to create an alias: it asks for a name, Compose files
+  (defaulted from discovery), env files and profiles, renders the exact
+  `.dcraft.yaml` section, and writes only after `enter` on the preview. The
+  preview states that aliases group Compose inputs only and do not isolate
+  external volumes, binds, networks or fixed host ports;
 - `r` re-runs read-only features directly, re-plans every Planner and asks for
   confirmation again for other mutating features. The selected environment is
   reused; `q` and `ctrl+c` quit outside an operation;
@@ -796,7 +869,7 @@ Approval flow (generic, engine-enforced):
 No feature action is selectable unless it is registered. The current build
 registers `status` (primary), `install-compose`, `up`, `stop`, `down`,
 `restart`, `update`, `secrets`, `hooks`, `logs`, `exec`, `backup`, `restore`,
-`rollback`, `generate-git-hook` and `generate-s3-hook`.
+`rollback`, `generate-git-hook`, `generate-s3-hook`, `environments` and `init`.
 
 ---
 
@@ -1584,7 +1657,7 @@ Desktop's VM-backed unix socket is **local**, not remote.
 | `update_failed` | a build, pull or detached apply failed; the stage and observed state are reported | error |
 | `readiness_failed` | post-update state was unhealthy, exited, restarting, not started/created or timed out | error |
 | `image_missing` | `--no-pull` found a required local image absent; nothing changed | error |
-| `invalid_option` | an explicit feature option is invalid (for example `--timeout`) or conflicts with the recorded rollback target | error (exit 2) |
+| `invalid_option` | an explicit feature option is invalid or missing (for example `--timeout`, `dcraft environments --add --name`) or conflicts with the recorded rollback target | error (exit 2) |
 | `rollback_unavailable` | no previous-good record for this stack and environment; nothing inferred | error |
 | `rollback_record_invalid` | stored record is malformed, belongs elsewhere or no longer matches the recorded configuration | error |
 | `rollback_input_missing` | a recorded Compose/env file or folder is missing; nothing changed | error |
@@ -2220,7 +2293,9 @@ Tested seams:
 - pty process tests: TUI enter+quit, environment selection screen and keyboard
   choice, quit-from-selection runs nothing, no mutating Docker command,
   mutating confirmation before running, up through the same engine, install plan
-  shown, decline changes nothing, approval installs and re-checks;
+  shown, decline changes nothing, approval installs and re-checks; generic
+  service scope screen selecting one service, whole stack and cancel, with the
+  logs screen targeting the chosen service and stopping nothing;
 - guarded real install (`DCRAFT_COMPOSE_REAL_INSTALL=1`): official download,
   published checksum, temp plugin directory, independent `docker compose
   version`, real home Compose untouched;
@@ -2237,7 +2312,9 @@ Tested seams:
   from `-p`/`name:`/`.env`/exported `COMPOSE_PROJECT_NAME`, suffixed-folder
   status reporting `hello-world-1` and the same container IDs with unchanged
   state files, another stack's container IDs/data unchanged, TUI quit leaving
-  services running, cleanup with its own projects only.
+  services running, TUI service-scope stop/restart/update selecting one service
+  while the other service's container ID and Created stay unchanged, cleanup
+  with its own projects only.
 - runtime secret references: config parse/validation/persistence (no values),
   unknown service, duplicate target, unsupported build phase, AWS shape
   validation (name/ARN, field path, region, profile, credentials-like fields),
@@ -2338,8 +2415,9 @@ as verified.
 
 ## 12. Not implemented here (owned by later tickets)
 
-- TUI alias creation/editing: aliases are created by editing `.dcraft.yaml` in
-  this version (selection is provided by both interfaces).
+- Editing an existing alias in place (create/list/remove are available from
+  both interfaces; change an alias by removing and adding it with the same
+  explicit inputs).
 - AWS Secrets Manager sources are implemented by ticket #10 below; generated
   Compose/Dockerfile files, Kubernetes, remote engines and the resident
   daemon/web UI are not implemented. Runtime environment/file references are
@@ -2351,16 +2429,18 @@ as verified.
   ticket #10 and previous-good rollback by ticket #11.
 - Good-version history beyond the single record (rollback has no multi-version
   picker). The TUI plan/confirm component is generic; `install-compose`,
-  `update`, `backup`, `restore`, `rollback`, `generate-git-hook` and
-  `generate-s3-hook` are planners in this build, and
-  `secrets`/`backup`/`restore`/`generate-git-hook`/`generate-s3-hook` use the
-  generic wizard. An ordinary update shows its plan
+  `update`, `backup`, `restore`, `rollback`, `generate-git-hook`,
+  `generate-s3-hook` and `init` are planners in this build, and
+  `secrets`/`backup`/`restore`/`generate-git-hook`/`generate-s3-hook`/
+  `environments`/`init` use the generic wizard. An ordinary update shows its plan
   and requires one `enter` to run, not an approval; rollback shows the same plan
   screen and collects only `previous_version`. `up` also goes through the
   generic plan because it declares the hook scope; with no hooks the plan text
-  is empty and only the ordinary confirmation remains. TUI service/instance
-  selection exists for the ticket-05 live screens through `core.InputProvider`;
-  lifecycle mutations still use the CLI `-s/--service`.
+  is empty and only the ordinary confirmation remains. TUI service selection
+  is generic for every `SupportsServices` feature that does not collect its own
+  input; it is a convenience over the same engine rules and the selected scope
+  is shown on the plan/confirm screen. Instance-level selection remains
+  logs/exec-specific.
 - Docker itself (installation, repair, replacement), administrator escalation,
   Docker Desktop/WSL integration changes.
 
@@ -2381,8 +2461,9 @@ CLI (version/JSON probes), so a heavily patched Compose may pass probes and fail
 later; diagnostic details are tool output and could contain user-provided file
 content, though dcraft never fetches or prints secret values; status parses a
 subset of Compose/ps output, so unknown future fields are ignored by design; the
-TUI renders long status text without a scroll viewport. Environment alias files
-are hand-edited (no TUI editor); the host-resource conflict scan is static and
+TUI renders long status text without a scroll viewport. Environment aliases are
+created/listed/removed through the wizard or `dcraft environments` (in-place
+editing is remove + add); the host-resource conflict scan is static and
 best-effort (no interpolation/merge evaluation), so undetected sharing is
 possible and complete isolation is never claimed. Environment aliases and
 lifecycle names are separate: aliases partition state, files and profiles; the
@@ -2492,6 +2573,17 @@ Before changing a shared type/interface, send the integration owner:
    a UI;
 4. documentation updates to this file.
 
+Published by the named-environment creation gap (consume, do not fork):
+`internal/environments.Add`/`Remove`/`RenderAdd`/`InputError`, the
+`.dcraft.yaml` `environments:` writer rules (node-level preservation, file
+mode, atomic replacement, `.dcraft.lock`), the `dcraft environments`
+`--add`/`--list`/`--remove`/`--name` flags, and the `data.environments`
+payload shape (`action`, `config_file`, `aliases[]` with
+`name`/`files`/`env_files`/`profiles`). Invalid creation input uses the
+existing `invalid_option` category (exit 2); a malformed config or failed
+write stays `environment_invalid` (exit 1); removing an unknown alias uses
+`environment_unknown` (exit 2).
+
 Published by ticket #16 (consume, do not fork): `internal/data` `Backend`,
 `DataSource`, `Kind`, `ServiceRuntime`, `ContainerConsumer`, `OpResult`,
 `VolumeHelperImage`, `ArchiveDataFile`; `internal/backup` `Schema`,
@@ -2570,6 +2662,15 @@ Published by ticket #3 (consume, do not fork): `stack.Lifecycle`,
 `internal/identity.New`/`Reader.ReadProjectName`, the `names.json`/`.lock` state
 layout, the lifecycle stage names and the new diagnostic categories/exit-code
 mapping.
+
+Published by ticket #3 follow-up (consume, do not fork): `core.ServiceStatus`,
+`core.ServiceCatalog`, `core.Engine.Services`/`ServicesReport`, the
+`service_catalog` stage, and the generic TUI service-scope screen. The catalog
+capability is read-only and optional; `Engine.Services` resolves target and
+preflight exactly as `Run` and never checks an approval, runs the feature or
+writes history. The selection is a `Request.Services` value on the unchanged
+plan/confirm/run path, so no feature may assume a UI-supplied scope was
+validated earlier.
 
 Published by ticket #7 (consume, do not fork): `stack.Updater` (`UpdateModel`,
 `Containers`, `Build`, `Pull`, `Apply`, `ImageID`, `TagImage`), `stack.UpdateModel`,

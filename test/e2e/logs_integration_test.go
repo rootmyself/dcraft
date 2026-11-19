@@ -235,6 +235,8 @@ func TestIntegrationLogsExecScaledService(t *testing.T) {
 	s := startPTY(t, dir, ptyEnv, "--path", dir, "-p", name)
 	s.waitFor("스택 상태 (status)", 30*time.Second)
 	s.pressMenuDown(menuDownPresses(t, "logs"))
+	s.waitFor("서비스 선택", 30*time.Second)
+	s.press("\r")
 	s.waitFor("로그 보기 (logs)", 30*time.Second)
 	s.waitFor("line-", 30*time.Second)
 	s.press("q")

@@ -34,13 +34,13 @@ func TestRegistrationWiresStatusIntoBothInterfaces(t *testing.T) {
 	for _, f := range features {
 		byName[f.Descriptor().Name] = f
 	}
-	for _, name := range []string{"status", "install-compose", "up", "stop", "down", "restart", "update", "secrets", "hooks", "logs", "exec", "backup", "restore", "rollback", "generate-git-hook", "generate-s3-hook", "init"} {
+	for _, name := range []string{"status", "install-compose", "up", "stop", "down", "restart", "update", "secrets", "hooks", "logs", "exec", "backup", "restore", "rollback", "generate-git-hook", "generate-s3-hook", "environments", "init"} {
 		if _, ok := byName[name]; !ok {
 			t.Fatalf("registered features = %v, missing %q", features, name)
 		}
 	}
-	if len(features) != 17 {
-		t.Fatalf("registered features = %d, want 17", len(features))
+	if len(features) != 18 {
+		t.Fatalf("registered features = %d, want 18", len(features))
 	}
 	for _, name := range []string{"up", "stop", "restart", "update"} {
 		if !byName[name].Descriptor().SupportsServices {
@@ -71,7 +71,7 @@ func TestRegistrationWiresStatusIntoBothInterfaces(t *testing.T) {
 	for _, cmd := range root.Commands() {
 		commands[cmd.Name()] = true
 	}
-	for _, name := range []string{"status", "install-compose", "up", "stop", "down", "restart", "update", "secrets", "hooks", "logs", "exec", "backup", "restore", "rollback", "generate-git-hook", "generate-s3-hook", "init"} {
+	for _, name := range []string{"status", "install-compose", "up", "stop", "down", "restart", "update", "secrets", "hooks", "logs", "exec", "backup", "restore", "rollback", "generate-git-hook", "generate-s3-hook", "environments", "init"} {
 		if !commands[name] {
 			t.Fatalf("command %q was not derived from the real registry", name)
 		}

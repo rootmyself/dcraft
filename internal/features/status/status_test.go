@@ -297,3 +297,38 @@ func TestPresentWrapsAtRequestedWidth(t *testing.T) {
 		}
 	}
 }
+
+func TestServicesPublishesTheReadOnlyCatalogFromTheSameInspectPath(t *testing.T) {
+	backend := &fakeBackend{snap: sampleSnapshot()}
+	f := status.New(backend)
+	services, err := f.Services(context.Background(), core.Invocation{
+		Target: core.Target{ProjectDir: "/work/hello-world"},
+	})
+	if err != nil {
+		t.Fatalf("Services: %v", err)
+	}
+	if len(services) != 3 {
+		t.Fatalf("services = %+v", services)
+	}
+	if services[0].Name != "web" || services[0].State != "running" || services[0].Health != "none" || services[0].Instances != 1 || !services[0].Configured {
+		t.Fatalf("web fact = %+v", services[0])
+	}
+	if services[2].Name != "db" || services[2].State != "not_created" || services[2].Instances != 0 {
+		t.Fatalf("db fact = %+v", services[2])
+	}
+	if !backend.called || backend.target.ProjectDir != "/work/hello-world" {
+		t.Fatalf("inspect path not used: called=%v target=%+v", backend.called, backend.target)
+	}
+}
+
+func TestServicesPropagatesInspectFailureAndReturnsNoFacts(t *testing.T) {
+	backend := &fakeBackend{err: errors.New("engine unreachable")}
+	f := status.New(backend)
+	services, err := f.Services(context.Background(), core.Invocation{})
+	if err == nil {
+		t.Fatal("inspect failure was hidden")
+	}
+	if len(services) != 0 {
+		t.Fatalf("services invented on failure: %+v", services)
+	}
+}

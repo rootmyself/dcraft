@@ -279,8 +279,8 @@ func TestTUILogsScreenStreamsAndReturnsToTheManagementView(t *testing.T) {
 }
 
 func TestTUIAttachForwardsKeysAndDetachesWithCtrlBracket(t *testing.T) {
-	attachedDesc := inputDescriptor("attach")
-	attachedDesc.Primary = true
+	attachedDesc := descriptor("attach", true)
+	attachedDesc.AcceptsArgs = true
 	attached := &fakeLiveFeature{
 		desc: attachedDesc,
 		mode: core.LiveAttach,

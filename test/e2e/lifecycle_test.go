@@ -576,6 +576,7 @@ func TestLifecycleTUIMenuSelectsStopAndQuitsWithoutChangingServices(t *testing.T
 		{wait: "상태를 새로 고치려면", send: ""},
 		{wait: "> 스택 상태 (status)", send: "down"},
 		{wait: "> 스택 중지 (stop)", send: "\r"},
+		{wait: "서비스 선택", send: "\r"},
 		{wait: "다음 작업을 실행할까요?", send: ""},
 	})
 	if code != 0 {
@@ -598,6 +599,7 @@ func TestLifecycleTUIRunsUpThroughTheSameEngine(t *testing.T) {
 		{wait: "> 스택 상태 (status)", send: "down"},
 		{wait: "> 스택 중지 (stop)", send: "down"},
 		{wait: "> 스택 시작 (up)", send: "\r"},
+		{wait: "서비스 선택", send: "\r"},
 		{wait: "다음 작업을 실행할까요?", send: "\r"},
 		{wait: "스택을 시작했습니다.", send: ""},
 	})
