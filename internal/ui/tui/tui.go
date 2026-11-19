@@ -38,6 +38,8 @@ const (
 	phaseNoPrimary phase = iota
 	phaseLoadingEnvironments
 	phaseSelectingEnvironment
+	phaseLoadingServices
+	phaseSelectingServices
 	phaseLoading
 	phasePlanning
 	phaseConfirm
@@ -90,6 +92,14 @@ type Model struct {
 	// feature that implements core.InputProvider fills it before running; the
 	// CLI never uses this path.
 	req core.Request
+	// Service scope selection is generic: any feature whose descriptor
+	// declares SupportsServices and that does not collect its own input sees
+	// the same read-only list before its normal plan/confirm/run path.
+	serviceFeature core.Feature
+	serviceOptions []core.ServiceStatus
+	serviceCursor  int
+	serviceChecked []bool
+	serviceWhole   bool
 	// live is non-nil while a feature attaches to a running process. The TUI
 	// renders its output and forwards keys for core.LiveAttach.
 	live   *liveState
@@ -98,7 +108,6 @@ type Model struct {
 	// still shows what the process printed after the screen closes.
 	lastLive []string
 	form     *formState
-
 	// Wizard state is generic: the feature supplies the steps and the effect
 	// preview, the TUI only collects answers with the keyboard.
 	wizardFeature    core.Feature
@@ -168,12 +177,17 @@ type environmentListMsg struct {
 	err  error
 }
 
+type servicesMsg struct {
+	feature core.Feature
+	report  core.ServicesReport
+}
+
 func (m *Model) Init() tea.Cmd {
 	switch m.phase {
 	case phaseLoadingEnvironments:
 		return m.listEnvironmentsCmd()
 	case phaseLoading:
-		return m.begin(m.active)
+		return m.start(m.active)
 	default:
 		return nil
 	}
@@ -228,11 +242,34 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// through the engine produces the same resolve_target failure with
 		// Korean guidance and no Docker contact.
 		if msg.err != nil || len(msg.envs) == 0 {
-			return m, m.begin(m.primary)
+			return m, m.start(m.primary)
 		}
 		m.envs = msg.envs
 		m.envSelected = -1
 		m.phase = phaseSelectingEnvironment
+		return m, nil
+	case servicesMsg:
+		if m.phase != phaseLoadingServices || m.serviceFeature == nil {
+			return m, nil
+		}
+		if msg.feature == nil || msg.feature.Descriptor().Name != m.serviceFeature.Descriptor().Name {
+			return m, nil
+		}
+		if msg.report.Failed() {
+			// A service list that cannot be read is a failure, not an empty
+			// stack. Nothing runs and no confirmation is offered.
+			res := msg.report.Result()
+			m.active = msg.feature
+			m.result = &res
+			m.phase = phaseReady
+			m.resetServiceSelection()
+			return m, nil
+		}
+		m.serviceOptions = append([]core.ServiceStatus{}, msg.report.Services...)
+		m.serviceChecked = make([]bool, len(m.serviceOptions))
+		m.serviceCursor = 0
+		m.serviceWhole = true
+		m.phase = phaseSelectingServices
 		return m, nil
 	case inputsMsg:
 		if m.phase != phaseLoadingInputs {
@@ -304,6 +341,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.live != nil {
 			return m.updateLiveKey(msg)
+		}
+		if m.phase == phaseSelectingServices {
+			return m.updateServiceKey(msg)
 		}
 		if m.phase == phaseConfirm {
 			switch msg.String() {
@@ -397,7 +437,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "enter":
 				if m.envSelected >= 0 && m.envSelected < len(m.envs) && m.primary != nil {
 					m.target.Environment = m.envs[m.envSelected].Name
-					return m, m.begin(m.primary)
+					return m, m.start(m.primary)
 				}
 			}
 			return m, nil
@@ -407,16 +447,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.active == nil || m.phase != phaseReady {
 				return m, nil
 			}
-			if m.active.Descriptor().Wizard {
-				return m, m.beginWizard(m.active)
-			}
-			if m.active.Descriptor().ReadOnly || plansBeforeRun(m.active) {
-				return m, m.start(m.active)
-			}
-			m.pending = m.active
-			m.phase = phaseConfirm
-			m.notice = ""
-			return m, nil
+			return m, m.start(m.active)
 		case "up", "k":
 			if len(m.features) > 1 && m.phase == phaseReady {
 				m.selected = (m.selected - 1 + len(m.features)) % len(m.features)
@@ -429,16 +460,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "enter":
 			if m.phase == phaseReady && len(m.features) > 0 {
-				f := m.features[m.selected]
-				if f.Descriptor().Wizard {
-					return m, m.beginWizard(f)
-				}
-				if f.Descriptor().ReadOnly || plansBeforeRun(f) {
-					return m, m.start(f)
-				}
-				m.pending = f
-				m.phase = phaseConfirm
-				m.notice = ""
+				return m, m.start(m.features[m.selected])
 			}
 			return m, nil
 		}
@@ -487,11 +509,32 @@ func uniqueApprovalKinds(kinds []core.ApprovalKind) []core.ApprovalKind {
 	return out
 }
 
-// start begins a feature from the menu or refresh, collecting interactive
-// inputs first when the feature implements core.InputProvider.
+// start begins a user-selected feature. Nothing runs until a supporting
+// feature has first offered the current stack's service scope and the user
+// has confirmed or narrowed it. The confirmation/plan path stays the same:
+// this only fills Request.Services before it.
 func (m *Model) start(f core.Feature) tea.Cmd {
 	if f == nil {
 		return nil
+	}
+	m.ensureRequest(f)
+	m.pending = nil
+	if m.wantsServiceSelection(f) {
+		return m.beginServiceSelection(f)
+	}
+	return m.startRunPath(f)
+}
+
+// startRunPath is the existing menu/refresh decision without another service
+// screen: guided features collect their own answers, input-provider features
+// open their form, planned/read-only features go to the plan, and every other
+// mutating feature asks for confirmation first.
+func (m *Model) startRunPath(f core.Feature) tea.Cmd {
+	if f == nil {
+		return nil
+	}
+	if f.Descriptor().Wizard {
+		return m.beginWizard(f)
 	}
 	if _, ok := f.(core.InputProvider); ok && m.engine != nil {
 		m.active = f
@@ -506,7 +549,123 @@ func (m *Model) start(f core.Feature) tea.Cmd {
 			return inputsMsg{feature: f, report: engine.Inputs(m.ctx, req, nil)}
 		}
 	}
-	return m.begin(f)
+	if f.Descriptor().ReadOnly || plansBeforeRun(f) {
+		return m.begin(f)
+	}
+	m.pending = f
+	m.phase = phaseConfirm
+	m.notice = ""
+	return nil
+}
+
+// wantsServiceSelection reports whether the generic scope screen applies. A
+// feature that collects its own service input (the exec form or a wizard's
+// steps) keeps that existing interaction; no feature name is checked.
+func (m *Model) wantsServiceSelection(f core.Feature) bool {
+	if f == nil || m.engine == nil {
+		return false
+	}
+	d := f.Descriptor()
+	if !d.SupportsServices || d.Wizard {
+		return false
+	}
+	_, hasOwnInput := f.(core.InputProvider)
+	return !hasOwnInput
+}
+
+func (m *Model) beginServiceSelection(f core.Feature) tea.Cmd {
+	m.serviceFeature = f
+	m.serviceOptions = nil
+	m.serviceCursor = 0
+	m.serviceChecked = nil
+	m.serviceWhole = true
+	m.req.Feature = f.Descriptor().Name
+	m.req.Target = m.target
+	// Never let a previous run's scope leak into this one before the user
+	// chooses again.
+	m.req.Services = nil
+	m.notice = ""
+	m.phase = phaseLoadingServices
+	engine := m.engine
+	ctx := m.ctx
+	req := m.req
+	return func() tea.Msg {
+		return servicesMsg{feature: f, report: engine.Services(ctx, req, nil)}
+	}
+}
+
+func (m *Model) resetServiceSelection() {
+	m.serviceFeature = nil
+	m.serviceOptions = nil
+	m.serviceCursor = 0
+	m.serviceChecked = nil
+	m.serviceWhole = true
+}
+
+// updateServiceKey drives the scope screen. The first row is the whole stack
+// and is selected until an individual service is checked; space on the whole
+// row clears every individual choice. Enter feeds Request.Services, esc
+// returns to the menu, and q/ctrl+c quit without running anything.
+func (m *Model) updateServiceKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	total := len(m.serviceOptions) + 1
+	switch msg.String() {
+	case "up", "k":
+		m.serviceCursor = (m.serviceCursor - 1 + total) % total
+		return m, nil
+	case "down", "j":
+		m.serviceCursor = (m.serviceCursor + 1) % total
+		return m, nil
+	case " ":
+		if m.serviceCursor == 0 {
+			m.serviceWhole = true
+			for i := range m.serviceChecked {
+				m.serviceChecked[i] = false
+			}
+			return m, nil
+		}
+		index := m.serviceCursor - 1
+		if index < 0 || index >= len(m.serviceOptions) || !m.serviceOptions[index].Configured {
+			return m, nil
+		}
+		m.serviceChecked[index] = !m.serviceChecked[index]
+		m.serviceWhole = !anyChecked(m.serviceChecked)
+		return m, nil
+	case "enter":
+		feature := m.serviceFeature
+		if feature == nil {
+			return m, nil
+		}
+		var services []string
+		if !m.serviceWhole {
+			for i, svc := range m.serviceOptions {
+				if i < len(m.serviceChecked) && m.serviceChecked[i] {
+					services = append(services, svc.Name)
+				}
+			}
+		}
+		m.resetServiceSelection()
+		m.req.Feature = feature.Descriptor().Name
+		m.req.Target = m.target
+		m.req.Services = services
+		return m, m.startRunPath(feature)
+	case "esc":
+		m.resetServiceSelection()
+		m.phase = phaseReady
+		m.notice = msgServiceCanceled
+		return m, nil
+	case "q", "ctrl+c":
+		return m, tea.Quit
+	}
+	return m, nil
+}
+
+func anyChecked(checked []bool) bool {
+	for _, ok := range checked {
+		if ok {
+			return true
+		}
+	}
+	return false
 }
 
 // begin starts a feature. Features that can describe their planned work go
@@ -764,6 +923,9 @@ func (m *Model) View() string {
 	var b strings.Builder
 	title := msgApp
 	shown := m.active
+	if (m.phase == phaseLoadingServices || m.phase == phaseSelectingServices) && m.serviceFeature != nil {
+		shown = m.serviceFeature
+	}
 	if m.phase == phaseConfirm && m.pending != nil {
 		shown = m.pending
 	}
@@ -792,6 +954,7 @@ func (m *Model) View() string {
 				d := m.active.Descriptor()
 				fmt.Fprintf(&b, "작업: %s (%s)\n", d.Title, d.Name)
 			}
+			fmt.Fprintf(&b, "%s: %s\n", msgConfirmScopeLabel, serviceScopeText(m.req.Services))
 			fmt.Fprintf(&b, "승인: %s (%s)\n", m.pendingApproval.KoreanLabel(), m.pendingApproval)
 			for _, kind := range m.pendingApprovals {
 				if kind == m.pendingApproval {
@@ -825,6 +988,12 @@ func (m *Model) View() string {
 		}
 		b.WriteString("\n")
 		b.WriteString(hintStyle.Render(msgEnvIsolationNote))
+		b.WriteString("\n")
+	case phaseLoadingServices:
+		b.WriteString(msgServiceLoading)
+		b.WriteString("\n")
+	case phaseSelectingServices:
+		b.WriteString(m.serviceView())
 		b.WriteString("\n")
 	case phaseLoadingInputs:
 		b.WriteString(msgLoadingInputs)
@@ -989,7 +1158,7 @@ func (m *Model) confirmView() string {
 	} else {
 		fmt.Fprintf(&b, "%s: %s\n", msgConfirmProject, msgConfirmProjectAuto)
 	}
-	fmt.Fprintf(&b, "%s: %s\n", msgConfirmScopeLabel, msgConfirmScope)
+	fmt.Fprintf(&b, "%s: %s\n", msgConfirmScopeLabel, serviceScopeText(m.req.Services))
 	fmt.Fprintf(&b, "%s: %s\n", msgConfirmEffectLabel, d.Summary)
 	if strings.TrimSpace(m.planText) != "" {
 		b.WriteString("\n")
@@ -998,6 +1167,131 @@ func (m *Model) confirmView() string {
 	}
 	b.WriteString(msgConfirmRisk)
 	return strings.TrimRight(b.String(), "\n")
+}
+
+// serviceWindow bounds the visible rows so a large stack cannot push the list
+// off the terminal. The cursor-centered window keeps every row reachable.
+const serviceWindow = 10
+
+func (m *Model) serviceView() string {
+	var b strings.Builder
+	b.WriteString(titleStyle.Render(msgServiceSelectTitle))
+	b.WriteString("\n\n")
+	dir := m.target.Path
+	if dir == "" {
+		dir = msgConfirmTargetNow
+	}
+	fmt.Fprintf(&b, "%s: %s\n", msgConfirmTargetLabel, dir)
+	if m.target.Environment != "" {
+		fmt.Fprintf(&b, "%s: %s\n", msgConfirmEnvironment, m.target.Environment)
+	}
+	b.WriteString("\n")
+	b.WriteString(msgServiceSelectIntro)
+	b.WriteString("\n\n")
+
+	rows := len(m.serviceOptions) + 1
+	start, end := 0, rows
+	if rows > serviceWindow {
+		start = m.serviceCursor - serviceWindow/2
+		if start < 0 {
+			start = 0
+		}
+		if start+serviceWindow > rows {
+			start = rows - serviceWindow
+		}
+		end = start + serviceWindow
+	}
+	if start > 0 {
+		b.WriteString(hintStyle.Render(msgMenuMoreAbove))
+		b.WriteString("\n")
+	}
+	for i := start; i < end; i++ {
+		marker := "  "
+		if i == m.serviceCursor {
+			marker = "> "
+		}
+		checked := " "
+		if i == 0 {
+			if m.serviceWhole {
+				checked = "x"
+			}
+			fmt.Fprintf(&b, "%s[%s] %s\n", marker, checked, msgServiceWhole)
+			continue
+		}
+		svc := m.serviceOptions[i-1]
+		if i-1 < len(m.serviceChecked) && m.serviceChecked[i-1] {
+			checked = "x"
+		}
+		fmt.Fprintf(&b, "%s[%s] %s · %s\n", marker, checked, svc.Name, serviceSummary(svc))
+	}
+	if end < rows {
+		b.WriteString(hintStyle.Render(msgMenuMoreBelow))
+		b.WriteString("\n")
+	}
+	b.WriteString("\n")
+	b.WriteString(hintStyle.Render(msgServiceSelectionNote))
+	return strings.TrimRight(b.String(), "\n")
+}
+
+func serviceSummary(svc core.ServiceStatus) string {
+	parts := []string{serviceStateLabel(svc.State)}
+	if health := serviceHealthLabel(svc.Health); health != "" {
+		parts = append(parts, health)
+	}
+	if svc.Instances == 0 {
+		parts = append(parts, msgServiceNoInstances)
+	} else {
+		parts = append(parts, fmt.Sprintf(msgServiceInstances, svc.Instances))
+	}
+	if !svc.Configured {
+		parts = append(parts, msgServiceNotConfigured)
+	}
+	return strings.Join(parts, " · ")
+}
+
+func serviceStateLabel(state string) string {
+	switch state {
+	case "running":
+		return msgServiceStateRunning
+	case "exited":
+		return msgServiceStateExited
+	case "paused":
+		return msgServiceStatePaused
+	case "restarting":
+		return msgServiceStateRestarting
+	case "created":
+		return msgServiceStateCreated
+	case "not_created":
+		return msgServiceStateNotCreated
+	case "":
+		return msgServiceStateUnknown
+	default:
+		return state
+	}
+}
+
+func serviceHealthLabel(health string) string {
+	switch health {
+	case "", "none":
+		return msgServiceHealthNone
+	case "healthy":
+		return msgServiceHealthy
+	case "starting":
+		return msgServiceHealthStarting
+	case "unhealthy":
+		return msgServiceUnhealthy
+	default:
+		return health
+	}
+}
+
+// serviceScopeText is the exact scope shown on the plan/confirm screen. It
+// never silently turns a prior explicit selection back into the whole stack.
+func serviceScopeText(services []string) string {
+	if len(services) == 0 {
+		return msgConfirmScope
+	}
+	return strings.Join(services, ", ")
 }
 
 func (m *Model) contentWidth() int {
@@ -1035,6 +1329,9 @@ func (m *Model) hints() string {
 	}
 	if m.phase == phaseSelectingEnvironment {
 		return msgHintEnvSelect
+	}
+	if m.phase == phaseSelectingServices {
+		return msgHintServiceSelect
 	}
 	if m.phase == phaseLoading && m.active != nil && !m.active.Descriptor().ReadOnly {
 		return msgHintBusy
