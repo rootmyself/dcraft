@@ -12,14 +12,6 @@ import (
 	"strings"
 )
 
-// Options controls the one decision a generator may relax: whether paths
-// outside the project folder were explicitly confirmed.
-type Options struct {
-	// AllowOutside is set only by an explicit user input. It never permits
-	// the project folder itself as the destination.
-	AllowOutside bool
-}
-
 // Layout is the resolved, validated location pair for one generated script.
 // All paths are absolute and cleaned. Relative fields are project-relative
 // when the path lives inside the project; otherwise they keep the absolute
@@ -63,14 +55,14 @@ func inputError(field, message, detail string) *InputError {
 // Rules (both paths):
 //   - empty, control characters and a `.git` component are rejected;
 //   - relative paths are resolved against the project folder;
-//   - outside the project is rejected unless Options.AllowOutside is set;
+//   - paths outside the project are always rejected;
 //   - existing symlinks are resolved before the containment check, so a
 //     symlinked ancestor cannot redirect the write outside the project.
 //
 // Destination-specific rules: not the project root, must not exist as a
 // non-directory. Output-specific rules: not an existing symlink or directory,
 // and not inside the destination (a checkout must never overwrite the script).
-func ResolveLayout(projectDir, destination, scriptPath string, opts Options) (Layout, error) {
+func ResolveLayout(projectDir, destination, scriptPath string) (Layout, error) {
 	project, err := canonicalProject(projectDir)
 	if err != nil {
 		return Layout{}, inputError("project", "프로젝트 폴더를 확인하지 못했습니다.", err.Error())
@@ -108,13 +100,11 @@ func ResolveLayout(projectDir, destination, scriptPath string, opts Options) (La
 		return Layout{}, inputError("output", "스크립트 경로를 확인하지 못했습니다.", err.Error())
 	}
 
-	if !opts.AllowOutside {
-		if !inside(project, destResolved) {
-			return Layout{}, inputError("dest", "받을 폴더는 프로젝트 폴더 안이어야 합니다. 바깥 경로는 명시적 확인이 필요합니다.", dest)
-		}
-		if !inside(project, scriptResolved) {
-			return Layout{}, inputError("output", "스크립트 경로는 프로젝트 폴더 안이어야 합니다. 바깥 경로는 명시적 확인이 필요합니다.", script)
-		}
+	if !inside(project, destResolved) {
+		return Layout{}, inputError("dest", "받을 폴더는 프로젝트 폴더 안이어야 합니다.", dest)
+	}
+	if !inside(project, scriptResolved) {
+		return Layout{}, inputError("output", "스크립트 경로는 프로젝트 폴더 안이어야 합니다.", script)
 	}
 	if destResolved == project {
 		return Layout{}, inputError("dest", "프로젝트 폴더 자체를 받을 폴더로 사용할 수 없습니다.", dest)

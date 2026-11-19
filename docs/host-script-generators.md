@@ -17,7 +17,6 @@ approval. It has a TUI wizard and the same CLI inputs:
 | `--dest` | project-scoped destination folder for the checked-out source. |
 | `--output` | project-scoped script path. Parents are created; the file is written `0755`. |
 | `--stage` | `pre` (default) or `post`; both apply to `up` and `update`. |
-| `--allow-outside` | explicit confirmation for paths outside the project folder. It never permits the project root as `--dest`. |
 
 Non-interactive runs never prompt. Missing or unsafe input is
 `generator_input_invalid` (exit 2). The file write uses the independent
@@ -59,8 +58,8 @@ Generation:
   destinations;
 - symlink-aware containment: existing ancestors are resolved before deciding
   whether a path is inside the project;
-- `Options{AllowOutside: true}` only when the caller explicitly confirmed the
-  outside path.
+- rejection of every destination or script path outside the project folder;
+  there is no override flag.
 
 `internal/generators.WriteScript` publishes atomically: a new file uses a
 no-replace hard link, an existing regular file uses a same-folder rename, and
@@ -134,7 +133,7 @@ automatic trust.
 |---|---|
 | `--source` | `s3://bucket/prefix` for `sync`, or one concrete `s3://bucket/path/artifact.tar.gz` for `tar`. A bucket-only URL is a valid whole-bucket sync. Userinfo, query strings/pre-signed URLs, wildcards, empty/`.`/`..` path components and a `.tar.gz` object in `sync` mode are refused. |
 | `--mode` | `sync` or `tar`, required. It must match the object shape: `tar` needs one `.tar.gz` object, `sync` needs a prefix. |
-| `--dest` | project-scoped destination folder; the project root, the script's own folder, the script path itself and any path containing the script are refused. No `--allow-outside` escape is published for S3. |
+| `--dest` | project-scoped destination folder; the project root, the script's own folder, the script path itself, any path containing the script and every path outside the project are refused. |
 | `--output` | project-scoped script path, written atomically with mode `0755`. |
 | `--aws-profile` | optional existing AWS CLI profile name (not a secret). It is embedded only when explicitly supplied. |
 

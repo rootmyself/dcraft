@@ -92,7 +92,7 @@ func (f *Feature) Run(ctx context.Context, in core.Invocation) (any, error) {
 }
 
 func (f *Feature) build(in core.Invocation) (s3gen.Generated, error) {
-	layout, err := generators.ResolveLayout(in.Target.ProjectDir, in.Option("dest"), in.Option("output"), generators.Options{})
+	layout, err := generators.ResolveLayout(in.Target.ProjectDir, in.Option("dest"), in.Option("output"))
 	if err != nil {
 		return s3gen.Generated{}, inputError(err)
 	}
@@ -210,7 +210,7 @@ func (f *Feature) WizardPreview(answers map[string]string) (string, error) {
 		}
 		project = cwd
 	}
-	layout, err := generators.ResolveLayout(project, answers["dest"], answers["output"], generators.Options{})
+	layout, err := generators.ResolveLayout(project, answers["dest"], answers["output"])
 	if err != nil {
 		return "", inputError(err)
 	}

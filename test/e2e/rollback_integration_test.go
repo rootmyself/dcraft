@@ -95,13 +95,27 @@ volumes:
 	imagesCleanup.register(t)
 	t.Cleanup(func() { cleanupUpdateProject(t, env, dir, project, composePath) })
 
+	// v1 must be running and healthy before an update can capture it as the
+	// previous-good deployment. No extra build may run between up and that
+	// update, or the Compose build tag could move away from the running image.
+	up := runProcess(t, dir, dcraftEnv, strings.NewReader(""), "up", "--path", dir, "--json")
+	if up.code != 0 {
+		t.Fatalf("up v1 exit=%d stderr=%q", up.code, up.stderr)
+	}
+	waitForContainerHealthy(t, env, composeInspect(t, env, project, composePath, "app"))
+
 	first, res := updateJSONFor(t, dir, dcraftEnv)
 	requireSuccessUpdate(t, first, res)
 	imagesCleanup.track(first)
 	appV1 := recordedServices(first)["app"]
 	tag := recordedTags(first)["app"]
 	if appV1 == "" || tag == "" {
-		t.Fatalf("v1 record = %+v", first.Data.Update.GoodVersion)
+		t.Fatalf("v1 record = %+v (status=%s detail=%q notices=%v)", first.Data.Update.GoodVersion,
+			first.Data.Update.RecordStatus, first.Data.Update.RecordDetail, first.Data.Update.Notices)
+	}
+	v1Container := composeInspect(t, env, project, composePath, "app")
+	if got := containerImageID(t, v1Container); got != appV1 {
+		t.Fatalf("recorded image %q is not the pre-update running image %q", appV1, got)
 	}
 	recordPath := stateFileFor(t, stateDir)
 	record, err := os.ReadFile(recordPath)
@@ -275,25 +289,6 @@ func TestIntegrationRollbackPrecheckAbortsBeforeChange(t *testing.T) {
 		}
 	}
 
-	// A referenced secret source that is missing aborts before the stack
-	// changes.
-	if err := os.WriteFile(filepath.Join(s.dir, ".dcraft.yaml"), []byte(`secrets:
-  - service: app
-    phase: runtime
-    delivery: environment
-    source: env
-    ref: RB_APP_TOKEN
-    target: APP_TOKEN
-`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	withoutSecret := buildEnv(map[string]string{"DCRAFT_STATE_DIR": s.stateDir, "RB_APP_TOKEN": ""})
-	parsed, res := rollbackJSONFor(t, s.dir, withoutSecret)
-	if res.code != 1 || !hasRollbackCategory(parsed, core.CategoryRollbackSecretUnavailable) {
-		t.Fatalf("missing secret source: exit=%d diagnostics=%+v", res.code, parsed.Diagnostics)
-	}
-	assertUnchanged("missing secret source")
-
 	// The retention tag disappears while the image ID still exists. A
 	// temporary extra tag keeps the image after the dcraft tag is removed;
 	// otherwise Docker would delete the now-unreferenced image as well.
@@ -308,7 +303,7 @@ func TestIntegrationRollbackPrecheckAbortsBeforeChange(t *testing.T) {
 	if got := imageID(t, s.appV1Image); got != s.appV1Image {
 		t.Fatalf("image ID disappeared with the tag: %s", got)
 	}
-	parsed, res = rollbackJSONFor(t, s.dir, s.dcraftEnv)
+	parsed, res := rollbackJSONFor(t, s.dir, s.dcraftEnv)
 	if res.code != 1 || !hasRollbackCategory(parsed, core.CategoryRollbackImageMissing) {
 		t.Fatalf("missing tag: exit=%d diagnostics=%+v", res.code, parsed.Diagnostics)
 	}
@@ -397,5 +392,155 @@ func TestIntegrationRollbackWithoutRecordFailsCleanly(t *testing.T) {
 	out, _ := cmd.CombinedOutput()
 	if strings.TrimSpace(string(out)) != "" {
 		t.Fatalf("rollback without a record created containers: %s", out)
+	}
+}
+
+// Rollback re-resolves exactly the secret references stored in the record, not
+// the current .dcraft.yaml. After the current reference is changed from A to B,
+// rollback still delivers A; a missing A aborts before any change.
+func TestIntegrationRollbackUsesRecordedSecretReferences(t *testing.T) {
+	env := requireIntegration(t)
+	project := "dcraft-test-rbsec-" + randomHex(t, 6)
+	dir := filepath.Join(t.TempDir(), project)
+	if err := os.MkdirAll(filepath.Join(dir, "app"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stateDir := t.TempDir()
+	composePath := filepath.Join(dir, "compose.yaml")
+	secretA := "sentinel-rb-secret-a-" + randomHex(t, 8)
+	secretB := "sentinel-rb-secret-b-" + randomHex(t, 8)
+	dcraftEnv := func(extra map[string]string) []string {
+		values := map[string]string{"DCRAFT_STATE_DIR": stateDir}
+		for k, v := range extra {
+			values[k] = v
+		}
+		return buildEnv(values)
+	}
+	envA := dcraftEnv(map[string]string{"DCRAFT_RB_SECRET": secretA})
+	envB := dcraftEnv(map[string]string{"DCRAFT_RB_SECRET_B": secretB})
+	envNoA := dcraftEnv(map[string]string{"DCRAFT_RB_SECRET_B": secretB})
+
+	compose := fmt.Sprintf(`name: %s
+services:
+  app:
+    build:
+      context: ./app
+    command: ["sh", "-c", "sleep 600"]
+    environment:
+      APP_SECRET: ${APP_SECRET:-missing}
+      APP_MARKER: v1
+    healthcheck:
+      test: ["CMD", "true"]
+      interval: 1s
+      timeout: 1s
+      retries: 5
+`, project)
+	if err := os.WriteFile(composePath, []byte(compose), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dockerfile := "FROM busybox:1.36\nCOPY marker /marker\nCMD [\"sh\", \"-c\", \"sleep 600\"]\n"
+	if err := os.WriteFile(filepath.Join(dir, "app", "Dockerfile"), []byte(dockerfile), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	markerPath := filepath.Join(dir, "app", "marker")
+	if err := os.WriteFile(markerPath, []byte("v1-image"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(dir, ".dcraft.yaml")
+	writeSecret := func(ref string) {
+		t.Helper()
+		config := fmt.Sprintf(`secrets:
+  - service: app
+    phase: runtime
+    delivery: environment
+    source: env
+    ref: %s
+    target: APP_SECRET
+`, ref)
+		if err := os.WriteFile(configPath, []byte(config), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeSecret("DCRAFT_RB_SECRET")
+
+	imagesCleanup := &updateImageCleanup{}
+	imagesCleanup.addRef(project + "-app")
+	imagesCleanup.register(t)
+	t.Cleanup(func() { cleanupUpdateProject(t, env, dir, project, composePath) })
+
+	if up := runProcess(t, dir, envA, strings.NewReader(""), "up", "--path", dir, "--json"); up.code != 0 {
+		t.Fatalf("up v1 exit=%d stderr=%q", up.code, up.stderr)
+	}
+	v1ID := composeInspect(t, env, project, composePath, "app")
+	if v1ID == "" {
+		t.Fatal("v1 container missing")
+	}
+	waitForContainerHealthy(t, env, v1ID)
+
+	first, res := updateJSONFor(t, dir, envA)
+	requireSuccessUpdate(t, first, res)
+	imagesCleanup.track(first)
+	if got := dockerExec(t, env, v1ID, `printf %s "$APP_SECRET"`); got != secretA {
+		t.Fatalf("v1 secret = %q", got)
+	}
+	recordPath := stateFileFor(t, stateDir)
+	recordBefore, err := os.ReadFile(recordPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The current configuration now names B and the source changes to v2.
+	writeSecret("DCRAFT_RB_SECRET_B")
+	if err := os.WriteFile(markerPath, []byte("v2-image"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	second, res := updateJSONFor(t, dir, envB)
+	requireSuccessUpdate(t, second, res)
+	imagesCleanup.track(second)
+	v2ID := composeInspect(t, env, project, composePath, "app")
+	if v2ID == "" || v2ID == v1ID {
+		t.Fatalf("v2 update did not replace the container: %s", v2ID)
+	}
+	if got := dockerExec(t, env, v2ID, `printf %s "$APP_SECRET"`); got != secretB {
+		t.Fatalf("v2 secret = %q, want the current source", got)
+	}
+	recordAfterUpdate, err := os.ReadFile(recordPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(recordAfterUpdate) == string(recordBefore) {
+		t.Fatal("v2 update did not publish the captured pre-update record")
+	}
+
+	// Without A, the recorded source is unavailable: abort before any change.
+	failed, res := rollbackJSONFor(t, dir, envNoA)
+	if res.code != 1 || !hasRollbackCategory(failed, core.CategoryRollbackSecretUnavailable) {
+		t.Fatalf("rollback without A exit=%d diagnostics=%+v", res.code, failed.Diagnostics)
+	}
+	if got := composeInspect(t, env, project, composePath, "app"); got != v2ID {
+		t.Fatalf("aborted rollback changed the container: %s -> %s", v2ID, got)
+	}
+	afterAbort, err := os.ReadFile(recordPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(afterAbort) != string(recordAfterUpdate) {
+		t.Fatal("aborted rollback changed the record")
+	}
+
+	// With A present, rollback restores v1 and delivers the recorded A, not B.
+	restored, res := rollbackJSONFor(t, dir, envA)
+	if res.code != 0 || restored.Outcome != "success" {
+		t.Fatalf("rollback exit=%d stderr=%q diagnostics=%+v", res.code, res.stderr, restored.Diagnostics)
+	}
+	restoredID := composeInspect(t, env, project, composePath, "app")
+	if restoredID == "" || restoredID == v2ID {
+		t.Fatalf("rollback did not restore v1: v2=%s now=%s", v2ID, restoredID)
+	}
+	if got := containerImageID(t, restoredID); got != recordedServices(first)["app"] {
+		t.Fatalf("restored image = %q, want v1", got)
+	}
+	if got := dockerExec(t, env, restoredID, `printf %s "$APP_SECRET"`); got != secretA {
+		t.Fatalf("restored secret = %q, want the recorded A (not current B %q)", got, secretB)
 	}
 }

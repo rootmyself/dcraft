@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	"go.yaml.in/yaml/v3"
+
+	"github.com/rootmyself/dcraft/internal/projectconfig"
 )
 
 // Declarations is the small, static subset of Compose declarations used to warn
@@ -145,11 +147,11 @@ var (
 // externalScopeName understands both `external: true` plus `name:` and the
 // older `external: {name: ...}` form. It never guesses a scope as external.
 func externalScopeName(scope scanScope, key string) (string, bool) {
-	external := resolveAlias(&scope.External)
+	external := projectconfig.ResolveAlias(&scope.External)
 	if external == nil {
 		return "", false
 	}
-	name := strings.TrimSpace(resolveAlias(&scope.Name).Value)
+	name := strings.TrimSpace(projectconfig.ResolveAlias(&scope.Name).Value)
 	switch external.Kind {
 	case yaml.ScalarNode:
 		if !strings.EqualFold(external.Value, "true") {
@@ -160,7 +162,7 @@ func externalScopeName(scope scanScope, key string) (string, bool) {
 		if err := external.Decode(&legacy); err != nil {
 			return "", false
 		}
-		if legacyName := strings.TrimSpace(resolveAlias(&legacy.Name).Value); legacyName != "" {
+		if legacyName := strings.TrimSpace(projectconfig.ResolveAlias(&legacy.Name).Value); legacyName != "" {
 			name = legacyName
 		}
 	default:
@@ -173,7 +175,7 @@ func externalScopeName(scope scanScope, key string) (string, bool) {
 }
 
 func parsePort(service string, node *yaml.Node) (Port, bool) {
-	node = resolveAlias(node)
+	node = projectconfig.ResolveAlias(node)
 	if node == nil {
 		return Port{}, false
 	}
@@ -243,7 +245,7 @@ func parseShortPort(service, raw string) (Port, bool) {
 }
 
 func parseBindSource(node *yaml.Node) (string, bool) {
-	node = resolveAlias(node)
+	node = projectconfig.ResolveAlias(node)
 	if node == nil {
 		return "", false
 	}
@@ -287,13 +289,6 @@ func hostBindSource(source string) (string, bool) {
 		return filepath.Clean(source), true
 	}
 	return "", false
-}
-
-func resolveAlias(node *yaml.Node) *yaml.Node {
-	for i := 0; node != nil && node.Kind == yaml.AliasNode && i < 8; i++ {
-		node = node.Alias
-	}
-	return node
 }
 
 // Compare returns the host resources both sides declare. It is deliberately

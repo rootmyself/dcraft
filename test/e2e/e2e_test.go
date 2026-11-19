@@ -772,7 +772,7 @@ func TestTUIShowsDiagnosticsAndQuitsInEmptyFolder(t *testing.T) {
 	}
 }
 
-func TestTUIHasNoUnimplementedActions(t *testing.T) {
+func TestTUIHasNoStaleUnavailableActionClaim(t *testing.T) {
 	fake := newFakeDocker(t)
 	project := t.TempDir()
 	writeProject(t, project)
@@ -780,9 +780,9 @@ func TestTUIHasNoUnimplementedActions(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("TUI exit = %d\n%s", code, output)
 	}
-	for _, forbidden := range []string{"dcraft backup", "dcraft restore", "dcraft rollback"} {
-		if strings.Contains(output, forbidden) {
-			t.Fatalf("TUI exposes unimplemented action %q:\n%s", forbidden, output)
+	for _, stale := range []string{"아직 제공되지 않습니다", "아직 구현되지 않았습니다"} {
+		if strings.Contains(output, stale) {
+			t.Fatalf("TUI still claims a registered feature is unavailable (%q):\n%s", stale, output)
 		}
 	}
 }

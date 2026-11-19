@@ -217,10 +217,13 @@ func TestPresentShowsStackServicesInstancesConnectionsAndVerification(t *testing
 			t.Fatalf("output missing %q:\n%s", want, out)
 		}
 	}
-	for _, forbidden := range []string{"dcraft backup", "dcraft restore", "dcraft rollback"} {
-		if strings.Contains(out, forbidden) {
-			t.Fatalf("output advertises unimplemented command %q:\n%s", forbidden, out)
+	for _, want := range []string{"dcraft backup", "dcraft restore"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("status does not advertise the available %q action:\n%s", want, out)
 		}
+	}
+	if strings.Contains(out, "아직 제공되지 않습니다") || strings.Contains(out, "아직 구현되지 않았습니다") {
+		t.Fatalf("status still claims a registered feature is unavailable:\n%s", out)
 	}
 }
 

@@ -201,27 +201,19 @@ func (e *Engine) Run(ctx context.Context, req Request, sink Sink) (res Result) {
 	res.Diagnostics = append(res.Diagnostics, pf.Diagnostics...)
 
 	// Read-only features must identify the same stack as stack-changing
-	// features. Resolve the recorded/declared project name without writing or
-	// locking anything; no stage is added because the target is already known.
-	if desc.ReadOnly && e.Identity != nil && strings.TrimSpace(target.ProjectName) == "" {
-		name, identErr := e.Identity.ReadProjectName(ctx, target)
-		if ctxErr := ctx.Err(); ctxErr != nil {
+	// features. The shared helper only reads the recorded name; stack-changing
+	// features resolve their own name through the lifecycle allocation path.
+	if desc.ReadOnly {
+		warning, identErr := e.resolveReadOnlyIdentity(ctx, &target)
+		if identErr != nil {
 			res.Outcome = OutcomeCanceled
 			addCanceledDiagnostic(&res)
 			return res
 		}
-		if identErr != nil {
-			res.Diagnostics = append(res.Diagnostics, Diagnostic{
-				Category:    CategoryIdentityUnreadable,
-				Severity:    SeverityWarning,
-				Message:     msgIdentityUnreadable,
-				Detail:      errDetail(identErr),
-				NextActions: []string{msgIdentityUnreadableActionOne, msgIdentityUnreadableActionTwo},
-			})
-		} else if name != "" {
-			target.ProjectName = name
-			res.Target.ProjectName = name
+		if warning != nil {
+			res.Diagnostics = append(res.Diagnostics, *warning)
 		}
+		res.Target.ProjectName = target.ProjectName
 	}
 
 	// An approved plan is bound to the exact inputs it previewed. A change on
@@ -551,25 +543,17 @@ func (e *Engine) Plan(ctx context.Context, req Request, sink Sink) (report PlanR
 	report.Diagnostics = append(report.Diagnostics, pf.Diagnostics...)
 
 	// The preview shows the same read-only identity Run will use.
-	if desc.ReadOnly && e.Identity != nil && strings.TrimSpace(target.ProjectName) == "" {
-		name, identErr := e.Identity.ReadProjectName(ctx, target)
-		if ctxErr := ctx.Err(); ctxErr != nil {
+	if desc.ReadOnly {
+		warning, identErr := e.resolveReadOnlyIdentity(ctx, &target)
+		if identErr != nil {
 			report.Outcome = OutcomeCanceled
 			addCanceledDiagnosticTo(&report.Diagnostics)
 			return report
 		}
-		if identErr != nil {
-			report.Diagnostics = append(report.Diagnostics, Diagnostic{
-				Category:    CategoryIdentityUnreadable,
-				Severity:    SeverityWarning,
-				Message:     msgIdentityUnreadable,
-				Detail:      errDetail(identErr),
-				NextActions: []string{msgIdentityUnreadableActionOne, msgIdentityUnreadableActionTwo},
-			})
-		} else if name != "" {
-			target.ProjectName = name
-			report.Target.ProjectName = name
+		if warning != nil {
+			report.Diagnostics = append(report.Diagnostics, *warning)
 		}
+		report.Target.ProjectName = target.ProjectName
 	}
 
 	var hookText string
@@ -761,28 +745,19 @@ func (e *Engine) Inputs(ctx context.Context, req Request, sink Sink) (report Inp
 	}
 	report.Diagnostics = append(report.Diagnostics, pf.Diagnostics...)
 
-	// The form must see the same stack as Run. Read-only features resolve the
-	// recorded/declared project identity here exactly as Run does, before the
-	// feature lists services and instances.
-	if desc.ReadOnly && e.Identity != nil && strings.TrimSpace(target.ProjectName) == "" {
-		name, identErr := e.Identity.ReadProjectName(ctx, target)
-		if ctxErr := ctx.Err(); ctxErr != nil {
+	// The form must see the same stack as Run. The shared read-only helper
+	// resolves the recorded project identity before the feature lists services.
+	if desc.ReadOnly {
+		warning, identErr := e.resolveReadOnlyIdentity(ctx, &target)
+		if identErr != nil {
 			report.Outcome = OutcomeCanceled
 			addCanceledDiagnosticTo(&report.Diagnostics)
 			return report
 		}
-		if identErr != nil {
-			report.Diagnostics = append(report.Diagnostics, Diagnostic{
-				Category:    CategoryIdentityUnreadable,
-				Severity:    SeverityWarning,
-				Message:     msgIdentityUnreadable,
-				Detail:      errDetail(identErr),
-				NextActions: []string{msgIdentityUnreadableActionOne, msgIdentityUnreadableActionTwo},
-			})
-		} else if name != "" {
-			target.ProjectName = name
-			report.Target.ProjectName = name
+		if warning != nil {
+			report.Diagnostics = append(report.Diagnostics, *warning)
 		}
+		report.Target.ProjectName = target.ProjectName
 	}
 
 	inv := Invocation{

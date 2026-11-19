@@ -155,7 +155,7 @@ func TestSecretsCLIAWSRoundTripIsValueFree(t *testing.T) {
 	}
 }
 
-func TestUpAWSFetchesOnlySelectedSecretsOnceAndRestartRefetchesFiles(t *testing.T) {
+func TestUpAWSFetchesOnlySelectedSecretsOnceAndRestartDoesNotRefetchFiles(t *testing.T) {
 	fake := newFakeDocker(t)
 	fake.writeConfig(t, `{"name":"fake-project","services":{"web":{"image":"nginx:alpine"},"api":{"image":"api:local"},"worker":{"image":"busybox"}}}`)
 	shimDir, logPath := writeAWSShim(t)
@@ -236,20 +236,17 @@ func TestUpAWSFetchesOnlySelectedSecretsOnceAndRestartRefetchesFiles(t *testing.
 	}
 	scanSecretMetadata(t, state, project, envSentinel, userSentinel, fileSentinel)
 
-	// Restart only rewrites live file-delivery mounts. The environment value
-	// is already in the container and must not be fetched again; the AWS file
-	// source is a live bind mount and is re-fetched for the restart.
+	// Restart is not a configuration update: it reuses the already
+	// materialized files and never re-fetches a source, so a rotated AWS value
+	// cannot reach a restarting container.
 	restart := runProcess(t, project, env, strings.NewReader(""), "restart", "-s", "api", "--json")
 	if restart.code != 0 {
 		t.Fatalf("restart exit = %d\n%s\n%s", restart.code, restart.stdout, restart.stderr)
 	}
 	assertNoSentinelIn(t, "restart stdout", restart.stdout, envSentinel, userSentinel, fileSentinel)
 	after := awsCalls(t, logPath)
-	if len(after) != 3 {
-		t.Fatalf("aws calls after restart = %v, want one extra file-delivery fetch", after)
-	}
-	if !strings.Contains(after[2], "--secret-id prod/token") {
-		t.Fatalf("restart fetched %q, want only the file-delivery secret", after[2])
+	if len(after) != 2 {
+		t.Fatalf("aws calls after restart = %v, want no additional fetch", after)
 	}
 	scanSecretMetadata(t, state, project, envSentinel, userSentinel, fileSentinel)
 }

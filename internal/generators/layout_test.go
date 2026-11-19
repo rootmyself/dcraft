@@ -23,7 +23,7 @@ func canonical(t *testing.T, dir string) string {
 
 func TestResolveLayoutAcceptsProjectRelativePaths(t *testing.T) {
 	project := canonical(t, t.TempDir())
-	layout, err := ResolveLayout(project, "src", "scripts/git-sync.sh", Options{})
+	layout, err := ResolveLayout(project, "src", "scripts/git-sync.sh")
 	if err != nil {
 		t.Fatalf("ResolveLayout: %v", err)
 	}
@@ -44,7 +44,7 @@ func TestResolveLayoutRejectsEmptyInputs(t *testing.T) {
 		{"", "scripts/a.sh"},
 		{"src", ""},
 	} {
-		if _, err := ResolveLayout(project, tc.dest, tc.output, Options{}); err == nil {
+		if _, err := ResolveLayout(project, tc.dest, tc.output); err == nil {
 			t.Fatalf("empty input accepted: %+v", tc)
 		}
 	}
@@ -52,15 +52,15 @@ func TestResolveLayoutRejectsEmptyInputs(t *testing.T) {
 
 func TestResolveLayoutRejectsTraversalOutsideTheProject(t *testing.T) {
 	project := t.TempDir()
-	if _, err := ResolveLayout(project, "../elsewhere", "scripts/a.sh", Options{}); err == nil {
+	if _, err := ResolveLayout(project, "../elsewhere", "scripts/a.sh"); err == nil {
 		t.Fatal("destination traversal accepted")
 	}
-	if _, err := ResolveLayout(project, "src", "../outside.sh", Options{}); err == nil {
+	if _, err := ResolveLayout(project, "src", "../outside.sh"); err == nil {
 		t.Fatal("script traversal accepted")
 	}
 	// An absolute path outside the project is the same decision.
 	outside := t.TempDir()
-	if _, err := ResolveLayout(project, outside, "scripts/a.sh", Options{}); err == nil {
+	if _, err := ResolveLayout(project, outside, "scripts/a.sh"); err == nil {
 		t.Fatal("absolute outside destination accepted")
 	}
 }
@@ -68,7 +68,7 @@ func TestResolveLayoutRejectsTraversalOutsideTheProject(t *testing.T) {
 func TestResolveLayoutRejectsProjectRootAsDestination(t *testing.T) {
 	project := t.TempDir()
 	for _, dest := range []string{".", "./", project} {
-		if _, err := ResolveLayout(project, dest, "scripts/a.sh", Options{}); err == nil {
+		if _, err := ResolveLayout(project, dest, "scripts/a.sh"); err == nil {
 			t.Fatalf("project root destination accepted: %q", dest)
 		}
 	}
@@ -76,14 +76,14 @@ func TestResolveLayoutRejectsProjectRootAsDestination(t *testing.T) {
 
 func TestResolveLayoutRejectsScriptDirectoryAsDestination(t *testing.T) {
 	project := t.TempDir()
-	if _, err := ResolveLayout(project, "scripts", "scripts/a.sh", Options{}); err == nil {
+	if _, err := ResolveLayout(project, "scripts", "scripts/a.sh"); err == nil {
 		t.Fatal("destination equal to the script directory accepted")
 	}
 }
 
 func TestResolveLayoutRejectsScriptInsideDestination(t *testing.T) {
 	project := t.TempDir()
-	if _, err := ResolveLayout(project, "src", "src/a.sh", Options{}); err == nil {
+	if _, err := ResolveLayout(project, "src", "src/a.sh"); err == nil {
 		t.Fatal("script inside the synced destination accepted")
 	}
 }
@@ -94,25 +94,23 @@ func TestResolveLayoutRejectsDotGitComponents(t *testing.T) {
 		{".git/hooks", "scripts/a.sh"},
 		{"src", ".git/a.sh"},
 	} {
-		if _, err := ResolveLayout(project, tc.dest, tc.output, Options{}); err == nil {
+		if _, err := ResolveLayout(project, tc.dest, tc.output); err == nil {
 			t.Fatalf("dot-git path accepted: %+v", tc)
 		}
 	}
 }
 
-func TestResolveLayoutRequiresExplicitConfirmationForOutsidePaths(t *testing.T) {
+func TestResolveLayoutAlwaysRejectsPathsOutsideTheProject(t *testing.T) {
 	project := canonical(t, t.TempDir())
 	outside := canonical(t, t.TempDir())
-	layout, err := ResolveLayout(project, filepath.Join(outside, "data"), filepath.Join(outside, "scripts", "a.sh"), Options{AllowOutside: true})
-	if err != nil {
-		t.Fatalf("confirmed outside paths rejected: %v", err)
+	if _, err := ResolveLayout(project, filepath.Join(outside, "data"), filepath.Join(outside, "scripts", "a.sh")); err == nil {
+		t.Fatal("outside destination accepted; the removed --allow-outside flag left a bypass")
 	}
-	if layout.Destination != filepath.Join(outside, "data") {
-		t.Fatalf("destination = %q", layout.Destination)
+	if _, err := ResolveLayout(project, "data", filepath.Join(outside, "scripts", "a.sh")); err == nil {
+		t.Fatal("outside script path accepted")
 	}
-	// The project root is still forbidden even with confirmation.
-	if _, err := ResolveLayout(project, project, filepath.Join(outside, "scripts", "a.sh"), Options{AllowOutside: true}); err == nil {
-		t.Fatal("project root accepted with AllowOutside")
+	if _, err := ResolveLayout(project, project, filepath.Join(project, "scripts", "a.sh")); err == nil {
+		t.Fatal("project root accepted as the destination")
 	}
 }
 
@@ -129,7 +127,7 @@ func TestResolveLayoutRejectsSymlinkScriptAndNonDirectoryDestination(t *testing.
 	if err := os.Symlink(target, link); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ResolveLayout(project, "src", "scripts/link.sh", Options{}); err == nil {
+	if _, err := ResolveLayout(project, "src", "scripts/link.sh"); err == nil {
 		t.Fatal("symlink script accepted")
 	}
 
@@ -137,24 +135,24 @@ func TestResolveLayoutRejectsSymlinkScriptAndNonDirectoryDestination(t *testing.
 	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ResolveLayout(project, "srcfile", "scripts/a.sh", Options{}); err == nil {
+	if _, err := ResolveLayout(project, "srcfile", "scripts/a.sh"); err == nil {
 		t.Fatal("regular file accepted as destination")
 	}
 }
 
 func TestResolveLayoutRejectsControlCharacters(t *testing.T) {
 	project := t.TempDir()
-	if _, err := ResolveLayout(project, "src\nnext", "scripts/a.sh", Options{}); err == nil {
+	if _, err := ResolveLayout(project, "src\nnext", "scripts/a.sh"); err == nil {
 		t.Fatal("control character in destination accepted")
 	}
-	if _, err := ResolveLayout(project, "src", "scripts/a\x7f.sh", Options{}); err == nil {
+	if _, err := ResolveLayout(project, "src", "scripts/a\x7f.sh"); err == nil {
 		t.Fatal("control character in script path accepted")
 	}
 }
 
 func TestResolveLayoutRecordsHowFarTheProjectIsFromTheScript(t *testing.T) {
 	project := canonical(t, t.TempDir())
-	layout, err := ResolveLayout(project, "src", "scripts/nested/git.sh", Options{})
+	layout, err := ResolveLayout(project, "src", "scripts/nested/git.sh")
 	if err != nil {
 		t.Fatal(err)
 	}

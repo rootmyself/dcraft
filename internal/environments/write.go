@@ -13,6 +13,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/rootmyself/dcraft/internal/core"
+	"github.com/rootmyself/dcraft/internal/projectconfig"
 )
 
 // InputError is invalid caller input for alias creation or removal. It is not
@@ -41,12 +42,6 @@ var processConfigMu sync.Mutex
 // serialized with the project config lock and replaced atomically, preserving
 // the file mode.
 func Add(projectDir string, env core.Environment) (Catalog, error) {
-	release, err := acquireConfigLock(projectDir)
-	if err != nil {
-		return Catalog{}, err
-	}
-	defer release()
-
 	prepared, err := prepareEnvironment(projectDir, env)
 	if err != nil {
 		return Catalog{}, err
@@ -58,8 +53,16 @@ func Add(projectDir string, env core.Environment) (Catalog, error) {
 	if _, exists := cat.Find(prepared.Name); exists {
 		return cat, &InputError{Message: fmt.Sprintf(msgWriteDuplicateAlias, prepared.Name)}
 	}
-	if err := mutateConfig(projectDir, func(root *yaml.Node) error {
-		node := mappingValue(root, "environments")
+	err = projectconfig.Update(projectDir, func(root *yaml.Node) error {
+		current, err := parseCatalogRoot(projectDir, root)
+		if err != nil {
+			return err
+		}
+		cat = current
+		if _, exists := current.Find(prepared.Name); exists {
+			return &InputError{Message: fmt.Sprintf(msgWriteDuplicateAlias, prepared.Name)}
+		}
+		node := projectconfig.MappingValue(root, "environments")
 		if node == nil || node.Tag == "!!null" {
 			value := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
 			if node != nil {
@@ -78,12 +81,13 @@ func Add(projectDir string, env core.Environment) (Catalog, error) {
 			node = value
 		}
 		if node.Kind != yaml.MappingNode {
-			return invalidConfig(msgConfigEnvironments, lineOf(node))
+			return invalidConfig(msgConfigEnvironments, projectconfig.LineOf(FileName, node))
 		}
 		node.Content = append(node.Content, scalarNode(prepared.Name), sectionNode(prepared))
 		return nil
-	}); err != nil {
-		return cat, err
+	})
+	if err != nil {
+		return cat, configWriteError(err)
 	}
 	return Load(projectDir)
 }
@@ -95,12 +99,6 @@ func Remove(projectDir, name string) (Catalog, error) {
 	if name == "" {
 		return Catalog{}, &InputError{Message: msgWriteNameMissing}
 	}
-	release, err := acquireConfigLock(projectDir)
-	if err != nil {
-		return Catalog{}, err
-	}
-	defer release()
-
 	cat, err := Load(projectDir)
 	if err != nil {
 		return cat, err
@@ -108,10 +106,15 @@ func Remove(projectDir, name string) (Catalog, error) {
 	if _, ok := cat.Find(name); !ok {
 		return cat, unknownEnvironment(name, cat.Names())
 	}
-	if err := mutateConfig(projectDir, func(root *yaml.Node) error {
-		node := mappingValue(root, "environments")
+	err = projectconfig.Update(projectDir, func(root *yaml.Node) error {
+		current, err := parseCatalogRoot(projectDir, root)
+		if err != nil {
+			return err
+		}
+		cat = current
+		node := projectconfig.MappingValue(root, "environments")
 		if node == nil || node.Kind != yaml.MappingNode {
-			return unknownEnvironment(name, cat.Names())
+			return unknownEnvironment(name, current.Names())
 		}
 		for i := 0; i+1 < len(node.Content); i += 2 {
 			if node.Content[i].Value == name {
@@ -119,9 +122,10 @@ func Remove(projectDir, name string) (Catalog, error) {
 				return nil
 			}
 		}
-		return unknownEnvironment(name, cat.Names())
-	}); err != nil {
-		return cat, err
+		return unknownEnvironment(name, current.Names())
+	})
+	if err != nil {
+		return cat, configWriteError(err)
 	}
 	return Load(projectDir)
 }
@@ -282,94 +286,39 @@ func stringSeq(values []string) *yaml.Node {
 	return node
 }
 
-func mutateConfig(projectDir string, mutate func(*yaml.Node) error) error {
-	path := filepath.Join(projectDir, FileName)
-	data, err := os.ReadFile(path)
-	var doc *yaml.Node
-	if err != nil {
-		if !errors.Is(err, fs.ErrNotExist) {
-			return invalidConfig(msgConfigUnreadable, err.Error())
-		}
-		doc = &yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{{Kind: yaml.MappingNode, Tag: "!!map"}}}
-	} else {
-		doc, err = decodeDoc(data)
-		if err != nil {
-			return invalidConfig(msgConfigMalformed, err.Error())
-		}
-		if doc == nil {
-			doc = &yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{{Kind: yaml.MappingNode, Tag: "!!map"}}}
-		}
+// configWriteError keeps the feature's diagnostic category while mapping the
+// shared writer's failure kinds onto the existing messages.
+func configWriteError(err error) error {
+	if err == nil {
+		return nil
 	}
-	root := doc.Content[0]
-	if root.Kind != yaml.MappingNode {
-		return invalidConfig(msgConfigRoot, lineOf(root))
-	}
-	if err := mutate(root); err != nil {
+	var ie *InputError
+	if errors.As(err, &ie) {
 		return err
 	}
-	var buf bytes.Buffer
-	enc := yaml.NewEncoder(&buf)
-	enc.SetIndent(2)
-	if err := enc.Encode(doc); err != nil {
-		return invalidConfig(msgConfigEncode, err.Error())
+	var ce *core.Error
+	if errors.As(err, &ce) {
+		return err
 	}
-	if err := enc.Close(); err != nil {
-		return invalidConfig(msgConfigEncode, err.Error())
+	var pe *projectconfig.Error
+	if errors.As(err, &pe) {
+		switch pe.Kind {
+		case projectconfig.KindUnreadable:
+			return invalidConfig(msgConfigUnreadable, pe.Detail)
+		case projectconfig.KindMalformed:
+			return invalidConfig(msgConfigMalformed, pe.Detail)
+		case projectconfig.KindRoot:
+			return invalidConfig(msgConfigRoot, pe.Detail)
+		case projectconfig.KindEncode:
+			return invalidConfig(msgConfigEncode, pe.Detail)
+		case projectconfig.KindLockBusy:
+			return configLockBusy(pe.Detail)
+		case projectconfig.KindLockFailed, projectconfig.KindUnsupported:
+			return configLockError(pe)
+		}
+		return invalidConfig(msgWriteFailed, pe.Detail)
 	}
-	return replaceFile(path, buf.Bytes())
-}
-
-func decodeDoc(data []byte) (*yaml.Node, error) {
-	var doc yaml.Node
-	if err := yaml.Unmarshal(data, &doc); err != nil {
-		return nil, err
-	}
-	if len(doc.Content) == 0 {
-		return nil, nil
-	}
-	if doc.Content[0].Tag == "!!null" {
-		return nil, nil
-	}
-	return &doc, nil
-}
-
-func replaceFile(path string, data []byte) error {
-	dir := filepath.Dir(path)
-	mode := os.FileMode(0o600)
-	if info, err := os.Stat(path); err == nil {
-		mode = info.Mode().Perm()
-	}
-	tmp, err := os.CreateTemp(dir, ".dcraft-environments-*.tmp")
-	if err != nil {
-		return invalidConfig(msgWriteFailed, err.Error())
-	}
-	tmpName := tmp.Name()
-	defer func() { _ = os.Remove(tmpName) }()
-	if err := tmp.Chmod(mode); err != nil {
-		_ = tmp.Close()
-		return invalidConfig(msgWriteFailed, err.Error())
-	}
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return invalidConfig(msgWriteFailed, err.Error())
-	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		return invalidConfig(msgWriteFailed, err.Error())
-	}
-	if err := tmp.Close(); err != nil {
-		return invalidConfig(msgWriteFailed, err.Error())
-	}
-	if err := os.Rename(tmpName, path); err != nil {
-		return invalidConfig(msgWriteFailed, err.Error())
-	}
-	// Best effort: make the rename durable without turning a completed
-	// replacement into a reported failure.
-	if handle, err := os.Open(dir); err == nil {
-		_ = handle.Sync()
-		_ = handle.Close()
-	}
-	return nil
+	return invalidConfig(msgWriteFailed, err.Error())
 }
 
 func unknownEnvironment(name string, available []string) *core.Error {
@@ -379,5 +328,25 @@ func unknownEnvironment(name string, available []string) *core.Error {
 		Message:     fmt.Sprintf(msgWriteRemoveUnknown, name),
 		Detail:      strings.Join(available, ", "),
 		NextActions: []string{msgWriteRemoveActionOne, msgWriteRemoveActionTwo},
+	})
+}
+
+func configLockError(err error) *core.Error {
+	return core.FailCause(err, core.Diagnostic{
+		Category:    core.CategoryEnvironmentInvalid,
+		Severity:    core.SeverityError,
+		Message:     msgWriteLockFailed,
+		Detail:      err.Error(),
+		NextActions: []string{msgWriteLockActionOne, msgWriteLockActionTwo},
+	})
+}
+
+func configLockBusy(path string) *core.Error {
+	return core.Fail(core.Diagnostic{
+		Category:    core.CategoryEnvironmentInvalid,
+		Severity:    core.SeverityError,
+		Message:     msgWriteLocked,
+		Detail:      path,
+		NextActions: []string{msgWriteLockActionOne, msgWriteLockActionTwo},
 	})
 }

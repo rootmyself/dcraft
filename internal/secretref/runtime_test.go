@@ -695,3 +695,42 @@ func TestCommitOnlyCleansStaleFilesOfSelectedServices(t *testing.T) {
 		t.Fatalf("unrelated worker file was removed: %v", err)
 	}
 }
+
+func TestPrepareReferencesUsesTheRecordedListNotCurrentConfig(t *testing.T) {
+	project := t.TempDir()
+	state := t.TempDir()
+	writeConfig(t, project, `secrets:
+  - service: web
+    phase: runtime
+    delivery: environment
+    source: env
+    ref: SECRET_B
+    target: APP_TOKEN
+`)
+	rt := newTestRuntime(t, project, state, map[string]string{
+		"SECRET_A": "value-a",
+		"SECRET_B": "value-b",
+	})
+	recorded := []Reference{{
+		Service: "web", Phase: PhaseRuntime,
+		Delivery: DeliveryEnvironment, Source: SourceEnv,
+		Ref: "SECRET_A", Target: "APP_TOKEN",
+	}}
+	session, err := rt.PrepareReferences(context.Background(), targetFor(project), recorded, []string{"web"}, ModeCreate)
+	if err != nil {
+		t.Fatalf("PrepareReferences: %v", err)
+	}
+	if session.Redact("value-a value-b") != "[redacted] value-b" {
+		t.Fatalf("redaction = %q; the recorded value was not the one delivered", session.Redact("value-a value-b"))
+	}
+	if len(session.Env) != 1 || !strings.HasPrefix(session.Env[0], "DCRAFT_SECRET_1=value-a") {
+		t.Fatalf("delivered environment = %v, want the recorded SECRET_A value", session.Env)
+	}
+	override, err := os.ReadFile(filepath.Join(state, "stacks", "demo", "compose.secrets.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(override), "APP_TOKEN") || strings.Contains(string(override), "value-b") {
+		t.Fatalf("override does not reflect the recorded reference:\n%s", override)
+	}
+}

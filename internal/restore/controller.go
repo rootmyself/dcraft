@@ -310,9 +310,11 @@ func (c *Controller) selectVolumeTarget(ctx context.Context, in core.Invocation,
 		if err != nil {
 			return err
 		}
-		explicit := in.BoolOption("allow-source-mismatch")
+		// Project/environment mismatch is always refused. Only the bind host
+		// path may be explicitly remapped, because host paths are machine
+		// specific.
 		dest := NewVolumeDestination(c.cfg.Backend, source, target, projectName)
-		warnings, err := dest.Match(artifact.Manifest, explicit)
+		warnings, err := dest.Match(artifact.Manifest, false)
 		if err != nil {
 			return targetError(err)
 		}
@@ -351,7 +353,7 @@ func (c *Controller) selectVolumeTarget(ctx context.Context, in core.Invocation,
 		sel.source = source
 		sel.dest = dest
 		sel.safetyDir = safetyDir
-		sel.explicit = explicit
+		sel.explicit = false
 		sel.warnings = append(sel.warnings, warnings...)
 		if err := c.checkSpace(ctx, sel.current, safetyDir); err != nil {
 			return err
@@ -385,11 +387,10 @@ func (c *Controller) selectBindTarget(ctx context.Context, in core.Invocation, t
 		if err != nil {
 			return err
 		}
-		explicit := in.BoolOption("allow-source-mismatch")
 		explicitPath := in.BoolOption("allow-path-mismatch")
 		dest := NewBindDestination(c.cfg.Backend, source, target, projectName)
 		dest.explicitPath = explicitPath
-		warnings, err := dest.Match(artifact.Manifest, explicit)
+		warnings, err := dest.Match(artifact.Manifest, false)
 		if err != nil {
 			return targetError(err)
 		}
@@ -445,7 +446,7 @@ func (c *Controller) selectBindTarget(ctx context.Context, in core.Invocation, t
 		sel.source = source
 		sel.dest = dest
 		sel.safetyDir = safetyDir
-		sel.explicit = explicit
+		sel.explicit = false
 		sel.explicitPath = explicitPath
 		sel.warnings = append(sel.warnings, warnings...)
 		if err := c.checkSpace(ctx, sel.current, safetyDir); err != nil {

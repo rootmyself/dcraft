@@ -14,15 +14,24 @@ import (
 )
 
 type fakeSecretPreparer struct {
-	session secretref.Session
-	aborted bool
-	mode    secretref.Mode
+	session    secretref.Session
+	aborted    bool
+	mode       secretref.Mode
+	references []secretref.Reference
 }
 
 func (f *fakeSecretPreparer) Prepare(_ context.Context, _ core.Target, _ []string, mode secretref.Mode) (secretref.Session, error) {
 	f.mode = mode
 	return f.session, nil
 }
+
+func (f *fakeSecretPreparer) PrepareReferences(_ context.Context, _ core.Target, refs []secretref.Reference, _ []string, mode secretref.Mode) (secretref.Session, error) {
+	f.mode = mode
+	f.references = refs
+	return f.session, nil
+}
+
+func (f *fakeSecretPreparer) CheckMaterialized(core.Target, []secretref.Reference) error { return nil }
 
 // PrepareBuild satisfies the build-secret boundary added by ticket #10.
 // Rollback never builds, so this fake reports an empty build session.
@@ -69,7 +78,7 @@ func TestApplyRollbackPinsExactImagesAndNeverPullsOrBuilds(t *testing.T) {
 		return execx.Result{Stdout: []byte("started")}, nil
 	}}
 	c := New(runner, nil)
-	res, err := c.ApplyRollback(context.Background(), updateTarget(), []string{"web", "db"}, rollbackPins())
+	res, err := c.ApplyRollback(context.Background(), updateTarget(), []string{"web", "db"}, rollbackPins(), nil)
 	if err != nil {
 		t.Fatalf("apply rollback: %v", err)
 	}
@@ -109,7 +118,7 @@ func TestApplyRollbackPinsExactImagesAndNeverPullsOrBuilds(t *testing.T) {
 	}
 }
 
-func TestApplyRollbackIncludesCurrentSecretDelivery(t *testing.T) {
+func TestApplyRollbackUsesOnlyRecordedSecretReferences(t *testing.T) {
 	prep := &fakeSecretPreparer{session: secretref.Session{
 		Files:   []string{"/state/stacks/app/compose.secrets.yaml"},
 		Env:     []string{"DCRAFT_SECRET_1=value"},
@@ -121,12 +130,20 @@ func TestApplyRollbackIncludesCurrentSecretDelivery(t *testing.T) {
 	c := New(runner, nil)
 	c.SetSecretRuntime(prep)
 
-	res, err := c.ApplyRollback(context.Background(), updateTarget(), []string{"web"}, rollbackPins())
+	recorded := []secretref.Reference{{
+		Service: "web", Phase: secretref.PhaseRuntime,
+		Delivery: secretref.DeliveryEnvironment, Source: secretref.SourceEnv,
+		Ref: "DB_PASSWORD", Target: "DB_PASSWORD",
+	}}
+	res, err := c.ApplyRollback(context.Background(), updateTarget(), []string{"web"}, rollbackPins(), recorded)
 	if err != nil {
 		t.Fatalf("apply rollback: %v", err)
 	}
 	if prep.mode != secretref.ModeCreate {
 		t.Fatalf("secret mode = %v, want create", prep.mode)
+	}
+	if len(prep.references) != 1 || prep.references[0].Ref != "DB_PASSWORD" {
+		t.Fatalf("prepared references = %+v, want the recorded list", prep.references)
 	}
 	if len(res.Notices) == 0 {
 		t.Fatal("secret delivery notices were dropped")
@@ -144,7 +161,7 @@ func TestApplyRollbackFailureReturnsToolOutput(t *testing.T) {
 		return execx.Result{Stderr: []byte("pull access denied for x"), ExitCode: 1}, nil
 	}}
 	c := New(runner, nil)
-	_, err := c.ApplyRollback(context.Background(), updateTarget(), []string{"web"}, rollbackPins())
+	_, err := c.ApplyRollback(context.Background(), updateTarget(), []string{"web"}, rollbackPins(), nil)
 	if err == nil || !strings.Contains(err.Error(), "exited with status 1") {
 		t.Fatalf("error = %v", err)
 	}

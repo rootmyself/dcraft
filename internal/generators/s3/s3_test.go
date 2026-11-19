@@ -10,7 +10,7 @@ import (
 func testLayout(t *testing.T) generators.Layout {
 	t.Helper()
 	project := t.TempDir()
-	layout, err := generators.ResolveLayout(project, "deploy", "scripts/s3-sync.sh", generators.Options{})
+	layout, err := generators.ResolveLayout(project, "deploy", "scripts/s3-sync.sh")
 	if err != nil {
 		t.Fatal(err)
 	}

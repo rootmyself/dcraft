@@ -6,7 +6,7 @@ package restore
 const (
 	MsgTitle   = "데이터 복원"
 	MsgSummary = "검증한 백업으로 지정한 데이터 볼륨 또는 현재 스택이 선언한 연결 폴더를 안전 백업 후 교체합니다."
-	MsgUsage   = `dcraft restore --backup <백업 폴더> [--volume <볼륨 키> | --bind <연결 폴더>] [--safety-output <폴더>] [--allow-source-mismatch] [--allow-path-mismatch] [--approve data_restore] [--path <스택 폴더>]
+	MsgUsage   = `dcraft restore --backup <백업 폴더> [--volume <볼륨 키> | --bind <연결 폴더>] [--safety-output <폴더>] [--allow-path-mismatch] [--approve data_restore] [--path <스택 폴더>]
 
 완료된 dcraft 백업 v1만 복원합니다. 덮어쓰기 전에 백업 형식·완료·무결성·원본/대상
 대응·경로를 검사하고, 대상 서비스를 잠시 중지한 뒤 현재 데이터의 별도 안전 백업을
@@ -47,7 +47,7 @@ const (
 	msgTargetUnsupportedAction = "백업은 이름 있는 볼륨 또는 연결 폴더 중 하나입니다. 종류에 맞게 --volume 또는 --bind를 사용하세요."
 
 	msgTargetMismatch       = "백업의 원본과 복원 대상이 일치하지 않습니다."
-	msgTargetMismatchAction = "같은 프로젝트·실행환경·볼륨/폴더의 백업을 선택하거나, 의도한 매핑이면 --allow-source-mismatch(프로젝트·환경)와 --allow-path-mismatch(연결 폴더 경로)를 각각 명시하세요. dcraft는 기본적으로 다른 대상을 덮어쓰지 않습니다."
+	msgTargetMismatchAction = "같은 프로젝트·실행환경·볼륨/폴더의 백업을 선택하거나, 프로젝트·실행환경이 다르면 복원할 수 없습니다. 연결 폴더 경로만 --bind와 --allow-path-mismatch로 명시적으로 매핑할 수 있습니다. dcraft는 다른 대상을 덮어쓰지 않습니다."
 
 	msgBindUnknown       = "복원 대상 연결 폴더가 현재 스택에 선언되어 있지 않습니다."
 	msgBindUnknownAction = "docker compose config --format json의 bind source에 있는 폴더나 마운트 대상 경로를 --bind로 지정하세요. dcraft는 임의의 호스트 폴더를 복원 대상으로 추가하지 않습니다."
@@ -124,7 +124,7 @@ const (
 	msgWizardArtifactIn  = "복원할 백업 폴더 경로를 입력하세요."
 	msgWizardArtifactDef = "./dcraft-backups"
 	msgWizardTarget      = "복원 대상 선택"
-	msgWizardTargetWhy   = "백업에 기록된 대상(볼륨 또는 현재 스택이 선언한 연결 폴더)을 기본으로 사용합니다. 다른 대상에 명시적으로 매핑하려면 대상 항목을 고르세요. 연결 폴더 경로가 다르면 CLI에서 --bind와 --allow-path-mismatch를 사용해야 합니다."
+	msgWizardTargetWhy   = "백업에 기록된 대상(볼륨 또는 현재 스택이 선언한 연결 폴더)을 기본으로 사용합니다. 다른 대상에 명시적으로 매핑하려면 대상 항목을 고르세요. 프로젝트·실행환경은 항상 같아야 하며, 연결 폴더 경로가 다르면 CLI에서 --bind와 --allow-path-mismatch를 사용해야 합니다."
 	msgWizardTargetAuto  = "백업에 기록된 대상 사용 (권장)"
 	msgWizardSafety      = "안전 백업 폴더"
 	msgWizardSafetyWhy   = "현재 볼륨 데이터를 복원 전에 백업할 별도 호스트 폴더입니다. 대상 볼륨 안은 사용할 수 없습니다."

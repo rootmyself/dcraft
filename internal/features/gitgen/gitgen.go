@@ -77,7 +77,6 @@ func (f *Feature) Descriptor() core.Descriptor {
 			{Name: "dest", Kind: core.FlagString, Required: true, Usage: msgFlagDest},
 			{Name: "output", Kind: core.FlagString, Required: true, Usage: msgFlagOut},
 			{Name: "stage", Kind: core.FlagString, Default: "pre", Usage: msgFlagStage},
-			{Name: "allow-outside", Kind: core.FlagBool, Usage: msgFlagOutside},
 		},
 	}
 }
@@ -100,7 +99,6 @@ func (f *Feature) build(in core.Invocation) (gitgen.Generated, error) {
 		in.Target.ProjectDir,
 		in.Option("dest"),
 		in.Option("output"),
-		generators.Options{AllowOutside: in.BoolOption("allow-outside")},
 	)
 	if err != nil {
 		return gitgen.Generated{}, inputError(err)
@@ -171,7 +169,7 @@ func (f *Feature) payload(gen gitgen.Generated, created bool) Payload {
 		report.Notices = append([]string{msgPlanReplaceFile}, report.Notices...)
 	}
 	if !gen.Layout.ScriptInsideProject || !strings.HasPrefix(filepath.Clean(gen.Layout.Destination), filepath.Clean(gen.Layout.ProjectDir)+string(filepath.Separator)) {
-		report.Notices = append(report.Notices, "프로젝트 밖 경로가 명시적 확인(--allow-outside)으로 포함되었습니다. 이동·백업 시 경로를 직접 확인하세요.")
+
 	}
 	return Payload{Generator: report}
 }
@@ -216,7 +214,7 @@ func (f *Feature) WizardPreview(answers map[string]string) (string, error) {
 		}
 		project = cwd
 	}
-	layout, err := generators.ResolveLayout(project, answers["dest"], answers["output"], generators.Options{})
+	layout, err := generators.ResolveLayout(project, answers["dest"], answers["output"])
 	if err != nil {
 		return "", inputError(err)
 	}

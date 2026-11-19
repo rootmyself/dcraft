@@ -5,7 +5,6 @@
 package hooks
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -17,6 +16,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/rootmyself/dcraft/internal/core"
+	"github.com/rootmyself/dcraft/internal/projectconfig"
 )
 
 // FileName is the optional project-local dcraft config that carries the hooks
@@ -64,7 +64,7 @@ func Load(projectDir string) (Catalog, error) {
 		}
 		return cat, invalid(msgConfigUnreadable, err.Error())
 	}
-	doc, err := decodeDoc(data)
+	doc, err := projectconfig.Decode(data)
 	if err != nil {
 		return cat, invalid(msgConfigMalformed, err.Error())
 	}
@@ -73,14 +73,25 @@ func Load(projectDir string) (Catalog, error) {
 	}
 	root := doc.Content[0]
 	if root.Kind != yaml.MappingNode {
-		return cat, invalid(msgConfigRoot, lineOf(root))
+		return cat, invalid(msgConfigRoot, projectconfig.LineOf(FileName, root))
 	}
-	node := mappingValue(root, "hooks")
+	return parseCatalogRoot(projectDir, root)
+}
+
+// parseCatalogRoot reads only the hooks section from an already decoded
+// document, so the locked writer never reads the file twice.
+func parseCatalogRoot(projectDir string, root *yaml.Node) (Catalog, error) {
+	cat := Catalog{
+		Path:          filepath.Join(projectDir, FileName),
+		ProjectDir:    projectDir,
+		Registrations: []Registration{},
+	}
+	node := projectconfig.MappingValue(root, "hooks")
 	if node == nil || node.Tag == "!!null" {
 		return cat, nil
 	}
 	if node.Kind != yaml.SequenceNode {
-		return cat, invalid(msgConfigHooksList, lineOf(node))
+		return cat, invalid(msgConfigHooksList, projectconfig.LineOf(FileName, node))
 	}
 	regs, err := parseRegistrations(projectDir, node)
 	if err != nil {
@@ -95,11 +106,6 @@ func Load(projectDir string) (Catalog, error) {
 // never grants script trust. A bounded project-config lock serializes
 // concurrent registrations so no update is lost.
 func Add(projectDir string, reg Registration) (Catalog, error) {
-	release, err := acquireConfigLock(projectDir)
-	if err != nil {
-		return Catalog{}, err
-	}
-	defer release()
 	cat, err := Load(projectDir)
 	if err != nil {
 		return cat, err
@@ -109,17 +115,28 @@ func Add(projectDir string, reg Registration) (Catalog, error) {
 	}
 	resolved, _ := ResolvePath(projectDir, reg.Path)
 	reg.Path = strings.TrimSpace(reg.Path)
-	for _, existing := range cat.Registrations {
-		existingPath, _ := ResolvePath(projectDir, existing.Path)
-		if existingPath == resolved && existing.Stage == reg.Stage {
-			return cat, nil
+	err = projectconfig.Update(projectDir, func(root *yaml.Node) error {
+		current, err := parseCatalogRoot(projectDir, root)
+		if err != nil {
+			return err
 		}
+		cat = current
+		for _, existing := range current.Registrations {
+			existingPath, _ := ResolvePath(projectDir, existing.Path)
+			if existingPath == resolved && existing.Stage == reg.Stage {
+				return projectconfig.ErrNoChange
+			}
+		}
+		regs := append(append([]Registration{}, current.Registrations...), reg)
+		if err := setHooks(root, regs); err != nil {
+			return err
+		}
+		cat.Registrations = regs
+		return nil
+	})
+	if err != nil {
+		return cat, configWriteError(err)
 	}
-	regs := append(append([]Registration{}, cat.Registrations...), reg)
-	if err := writeCatalog(projectDir, regs); err != nil {
-		return cat, err
-	}
-	cat.Registrations = regs
 	return cat, nil
 }
 
@@ -127,11 +144,6 @@ func Add(projectDir string, reg Registration) (Catalog, error) {
 // missing registration is a hook_invalid error. It takes the same bounded
 // project-config lock as Add.
 func Remove(projectDir, scriptPath string, stage Stage) (Catalog, error) {
-	release, err := acquireConfigLock(projectDir)
-	if err != nil {
-		return Catalog{}, err
-	}
-	defer release()
 	cat, err := Load(projectDir)
 	if err != nil {
 		return cat, err
@@ -140,23 +152,34 @@ func Remove(projectDir, scriptPath string, stage Stage) (Catalog, error) {
 	if err != nil {
 		return cat, err
 	}
-	regs := make([]Registration, 0, len(cat.Registrations))
-	removed := false
-	for _, existing := range cat.Registrations {
-		existingPath, _ := ResolvePath(projectDir, existing.Path)
-		if existingPath == resolved && existing.Stage == stage {
-			removed = true
-			continue
+	err = projectconfig.Update(projectDir, func(root *yaml.Node) error {
+		current, err := parseCatalogRoot(projectDir, root)
+		if err != nil {
+			return err
 		}
-		regs = append(regs, existing)
+		cat = current
+		regs := make([]Registration, 0, len(current.Registrations))
+		removed := false
+		for _, existing := range current.Registrations {
+			existingPath, _ := ResolvePath(projectDir, existing.Path)
+			if existingPath == resolved && existing.Stage == stage {
+				removed = true
+				continue
+			}
+			regs = append(regs, existing)
+		}
+		if !removed {
+			return invalid(fmt.Sprintf(msgRemoveNotFound, scriptPath, stage), "")
+		}
+		if err := setHooks(root, regs); err != nil {
+			return err
+		}
+		cat.Registrations = regs
+		return nil
+	})
+	if err != nil {
+		return cat, configWriteError(err)
 	}
-	if !removed {
-		return cat, invalid(fmt.Sprintf(msgRemoveNotFound, scriptPath, stage), "")
-	}
-	if err := writeCatalog(projectDir, regs); err != nil {
-		return cat, err
-	}
-	cat.Registrations = regs
 	return cat, nil
 }
 
@@ -237,28 +260,28 @@ func parseRegistrations(projectDir string, node *yaml.Node) ([]Registration, err
 	regs := make([]Registration, 0, len(node.Content))
 	seen := map[string]string{}
 	for _, item := range node.Content {
-		item := resolveAlias(item)
+		item := projectconfig.ResolveAlias(item)
 		if item == nil || item.Kind != yaml.MappingNode {
-			return nil, invalid(msgRegistrationMapping, lineOf(item))
+			return nil, invalid(msgRegistrationMapping, projectconfig.LineOf(FileName, item))
 		}
 		values := map[string]string{}
 		lines := map[string]int{}
 		for i := 0; i+1 < len(item.Content); i += 2 {
 			keyNode, valueNode := item.Content[i], item.Content[i+1]
 			if keyNode.Kind != yaml.ScalarNode || keyNode.Tag != "!!str" {
-				return nil, invalid(msgRegistrationFieldKey, lineOf(keyNode))
+				return nil, invalid(msgRegistrationFieldKey, projectconfig.LineOf(FileName, keyNode))
 			}
 			field := keyNode.Value
 			if field != "path" && field != "stage" {
-				return nil, invalid(fmt.Sprintf(msgUnknownField, field), lineOf(keyNode))
+				return nil, invalid(fmt.Sprintf(msgUnknownField, field), projectconfig.LineOf(FileName, keyNode))
 			}
 			if prev, dup := lines[field]; dup {
 				return nil, invalid(fmt.Sprintf(msgDuplicateField, field), fmt.Sprintf("%s:%d and %s:%d", FileName, prev, FileName, keyNode.Line))
 			}
 			lines[field] = keyNode.Line
-			valueNode = resolveAlias(valueNode)
+			valueNode = projectconfig.ResolveAlias(valueNode)
 			if valueNode == nil || valueNode.Kind != yaml.ScalarNode || valueNode.Tag != "!!str" {
-				return nil, invalid(fmt.Sprintf(msgFieldString, field), lineOf(valueNode))
+				return nil, invalid(fmt.Sprintf(msgFieldString, field), projectconfig.LineOf(FileName, valueNode))
 			}
 			values[field] = valueNode.Value
 		}
@@ -280,143 +303,58 @@ func parseRegistrations(projectDir string, node *yaml.Node) ([]Registration, err
 	return regs, nil
 }
 
-func writeCatalog(projectDir string, regs []Registration) error {
-	path := filepath.Join(projectDir, FileName)
-	data, err := os.ReadFile(path)
-	var doc *yaml.Node
-	if err != nil {
-		if !errors.Is(err, fs.ErrNotExist) {
-			return invalid(msgConfigUnreadable, err.Error())
-		}
-		doc = &yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{{Kind: yaml.MappingNode, Tag: "!!map"}}}
-	} else {
-		doc, err = decodeDoc(data)
-		if err != nil {
-			return invalid(msgConfigMalformed, err.Error())
-		}
-		if doc == nil {
-			doc = &yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{{Kind: yaml.MappingNode, Tag: "!!map"}}}
-		}
-	}
-	root := doc.Content[0]
-	if root.Kind != yaml.MappingNode {
-		return invalid(msgConfigRoot, lineOf(root))
-	}
-	key := mappingKey(root, "hooks")
+func setHooks(root *yaml.Node, regs []Registration) error {
+	key := projectconfig.MappingKey(root, "hooks")
 	if len(regs) == 0 {
 		if key >= 0 {
 			root.Content = append(root.Content[:key], root.Content[key+2:]...)
 		}
-	} else {
-		value := &yaml.Node{}
-		if err := value.Encode(regs); err != nil {
-			return invalid(msgConfigEncode, err.Error())
-		}
-		if key >= 0 {
-			root.Content[key+1] = value
-		} else {
-			root.Content = append(root.Content,
-				&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "hooks"},
-				value,
-			)
-		}
-	}
-
-	var buf bytes.Buffer
-	enc := yaml.NewEncoder(&buf)
-	enc.SetIndent(2)
-	if err := enc.Encode(doc); err != nil {
-		return invalid(msgConfigEncode, err.Error())
-	}
-	if err := enc.Close(); err != nil {
-		return invalid(msgConfigEncode, err.Error())
-	}
-	return replaceFile(path, buf.Bytes())
-}
-
-func replaceFile(path string, data []byte) error {
-	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, ".dcraft-hooks-*.tmp")
-	if err != nil {
-		return invalid(msgConfigWrite, err.Error())
-	}
-	tmpName := tmp.Name()
-	defer func() { _ = os.Remove(tmpName) }()
-	mode := os.FileMode(0o600)
-	if info, statErr := os.Stat(path); statErr == nil {
-		mode = info.Mode().Perm()
-	}
-	if err := tmp.Chmod(mode); err != nil {
-		_ = tmp.Close()
-		return invalid(msgConfigWrite, err.Error())
-	}
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return invalid(msgConfigWrite, err.Error())
-	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		return invalid(msgConfigWrite, err.Error())
-	}
-	if err := tmp.Close(); err != nil {
-		return invalid(msgConfigWrite, err.Error())
-	}
-	if err := os.Rename(tmpName, path); err != nil {
-		return invalid(msgConfigWrite, err.Error())
-	}
-	return nil
-}
-
-func decodeDoc(data []byte) (*yaml.Node, error) {
-	var doc yaml.Node
-	if err := yaml.Unmarshal(data, &doc); err != nil {
-		return nil, err
-	}
-	if len(doc.Content) == 0 {
-		return nil, nil
-	}
-	if doc.Content[0].Tag == "!!null" {
-		return nil, nil
-	}
-	return &doc, nil
-}
-
-func mappingValue(node *yaml.Node, key string) *yaml.Node {
-	if node == nil || node.Kind != yaml.MappingNode {
 		return nil
 	}
-	for i := 0; i+1 < len(node.Content); i += 2 {
-		if node.Content[i].Value == key {
-			return node.Content[i+1]
-		}
+	value := &yaml.Node{}
+	if err := value.Encode(regs); err != nil {
+		return invalid(msgConfigEncode, err.Error())
+	}
+	if key >= 0 {
+		root.Content[key+1] = value
+	} else {
+		root.Content = append(root.Content,
+			&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "hooks"},
+			value,
+		)
 	}
 	return nil
 }
 
-func mappingKey(node *yaml.Node, key string) int {
-	if node == nil || node.Kind != yaml.MappingNode {
-		return -1
+// configWriteError keeps the feature's diagnostic category while mapping the
+// shared writer's failure kinds onto the existing messages.
+func configWriteError(err error) error {
+	if err == nil {
+		return nil
 	}
-	for i := 0; i+1 < len(node.Content); i += 2 {
-		if node.Content[i].Value == key {
-			return i
+	var ce *core.Error
+	if errors.As(err, &ce) {
+		return err
+	}
+	var pe *projectconfig.Error
+	if errors.As(err, &pe) {
+		switch pe.Kind {
+		case projectconfig.KindUnreadable:
+			return invalid(msgConfigUnreadable, pe.Detail)
+		case projectconfig.KindMalformed:
+			return invalid(msgConfigMalformed, pe.Detail)
+		case projectconfig.KindRoot:
+			return invalid(msgConfigRoot, pe.Detail)
+		case projectconfig.KindEncode:
+			return invalid(msgConfigEncode, pe.Detail)
+		case projectconfig.KindLockBusy:
+			return configLockBusy(pe.Detail)
+		case projectconfig.KindLockFailed, projectconfig.KindUnsupported:
+			return configLockError(pe)
 		}
+		return invalid(msgConfigWrite, pe.Detail)
 	}
-	return -1
-}
-
-func lineOf(node *yaml.Node) string {
-	if node == nil {
-		return FileName
-	}
-	return fmt.Sprintf("%s:%d", FileName, node.Line)
-}
-
-func resolveAlias(node *yaml.Node) *yaml.Node {
-	for i := 0; node != nil && node.Kind == yaml.AliasNode && i < 8; i++ {
-		node = node.Alias
-	}
-	return node
+	return invalid(msgConfigWrite, err.Error())
 }
 
 func invalid(message, detail string) *core.Error {

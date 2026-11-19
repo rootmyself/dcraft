@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -61,6 +62,61 @@ func TestApprovedHumanCommandShowsThePlanBeforeRunning(t *testing.T) {
 		if !strings.Contains(h.stderr.String(), want) {
 			t.Fatalf("plan on stderr missing %q:\n%s", want, h.stderr.String())
 		}
+	}
+}
+
+func TestUnapprovedHumanCommandShowsThePlanThenExitsTwo(t *testing.T) {
+	feature := approvalFeature(&planningStub{
+		stubFeature: &stubFeature{},
+		planText:    "출처: https://example.test/v1\n버전: v1\n대상 경로: /plugins/docker-compose",
+	})
+	h := newHarness(t, feature)
+	err := h.run("install-compose")
+	if exitCode(err) != 2 {
+		t.Fatalf("exit = %d, want 2 (%v)", exitCode(err), err)
+	}
+	if feature.ran {
+		t.Fatal("unapproved feature ran")
+	}
+	if feature.plans != 1 {
+		t.Fatalf("plan calls = %d, want 1", feature.plans)
+	}
+	for _, want := range []string{"출처", "버전: v1", "/plugins/docker-compose"} {
+		if !strings.Contains(h.stderr.String(), want) {
+			t.Fatalf("plan on stderr missing %q:\n%s", want, h.stderr.String())
+		}
+	}
+	if strings.Contains(h.stdout.String(), "출처") {
+		t.Fatalf("plan leaked into stdout: %q", h.stdout.String())
+	}
+}
+
+func TestUnapprovedJSONModeStaysOnePureObjectAndSkipsThePlan(t *testing.T) {
+	feature := approvalFeature(&planningStub{
+		stubFeature: &stubFeature{},
+		planText:    "출처: https://example.test/v1",
+	})
+	h := newHarness(t, feature)
+	err := h.run("install-compose", "--json")
+	if exitCode(err) != 2 {
+		t.Fatalf("exit = %d, want 2 (%v)", exitCode(err), err)
+	}
+	if feature.plans != 0 || feature.ran {
+		t.Fatalf("JSON approval failure ran plan=%d run=%v", feature.plans, feature.ran)
+	}
+	out := strings.TrimSpace(h.stdout.String())
+	var decoded map[string]any
+	if err := json.Unmarshal([]byte(out), &decoded); err != nil {
+		t.Fatalf("stdout is not one JSON result: %v\n%s", err, out)
+	}
+	if decoded["outcome"] != "failure" || decoded["required_approval"] != "install" {
+		t.Fatalf("unexpected JSON result: %s", out)
+	}
+	if _, hasPlan := decoded["plan"]; hasPlan {
+		t.Fatalf("plan leaked into the JSON result: %s", out)
+	}
+	if h.stderr.Len() != 0 {
+		t.Fatalf("JSON approval failure wrote stderr: %q", h.stderr.String())
 	}
 }
 

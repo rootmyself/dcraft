@@ -355,3 +355,106 @@ services:
 	}
 	scanSecretMetadata(t, stateDir, projectDir)
 }
+
+// Restart is not a configuration update: it must reuse the materialized file
+// bytes instead of applying a rotated source. A missing required file fails
+// before the containers are touched and points to `up`.
+func TestIntegrationRestartReusesFileSecretAndFailsWhenMissing(t *testing.T) {
+	env := requireIntegration(t)
+	projectDir := t.TempDir()
+	name := "dcraft-test-restart-secret-" + randomHex(t, 6)
+	stateDir := t.TempDir()
+	fileSecretV1 := "sentinel-restart-v1-" + randomHex(t, 8)
+	fileSecretV2 := "sentinel-restart-v2-" + randomHex(t, 8)
+	composePath := filepath.Join(projectDir, "compose.yaml")
+	if err := os.WriteFile(composePath, []byte(fmt.Sprintf(`name: %s
+services:
+  web:
+    image: busybox:1.36
+    command: ["sh", "-c", "sleep 300"]
+`, name)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(projectDir, "secrets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sourcePath := filepath.Join(projectDir, "secrets", "token.txt")
+	if err := os.WriteFile(sourcePath, []byte(fileSecretV1+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dcraftEnv := buildEnv(map[string]string{"DCRAFT_STATE_DIR": stateDir})
+	sentinels := []string{fileSecretV1, fileSecretV2}
+	run := func(timeout time.Duration, args ...string) processResult {
+		t.Helper()
+		res := runDcraftProcess(t, projectDir, dcraftEnv, timeout, args...)
+		assertNoSentinelIn(t, "dcraft "+strings.Join(args, " ")+" stdout", res.stdout, sentinels...)
+		assertNoSentinelIn(t, "dcraft "+strings.Join(args, " ")+" stderr", res.stderr, sentinels...)
+		return res
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		defer cancel()
+		down := composeCommand(ctx, env, projectDir, name, []string{composePath}, "down", "-v", "--remove-orphans")
+		if out, err := down.CombinedOutput(); err != nil {
+			t.Logf("cleanup down for %s failed: %v\n%s", name, err, out)
+		}
+	})
+
+	addFile := run(30*time.Second, "secrets", "--add", "-s", "web",
+		"--delivery", "file", "--source", "file", "--ref", "secrets/token.txt",
+		"--target", "app_token", "-p", name, "--json")
+	if addFile.code != 0 {
+		t.Fatalf("add file exit = %d\n%s\n%s", addFile.code, addFile.stdout, addFile.stderr)
+	}
+	if up := run(180*time.Second, "up", "-p", name, "--json"); up.code != 0 {
+		t.Fatalf("up exit = %d\n%s\n%s", up.code, up.stdout, up.stderr)
+	}
+	ids := containerIDs(t, env, projectDir, name, []string{composePath})
+	if len(ids) != 1 {
+		t.Fatalf("containers = %v, want 1", ids)
+	}
+	container := ids[0]
+	if got := dockerExec(t, env, container, `cat /run/secrets/app_token`); got != fileSecretV1 {
+		t.Fatalf("file secret before restart = %q", got)
+	}
+
+	if err := os.WriteFile(sourcePath, []byte(fileSecretV2+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	restart := run(60*time.Second, "restart", "-p", name, "--json")
+	if restart.code != 0 {
+		t.Fatalf("restart exit = %d\n%s\n%s", restart.code, restart.stdout, restart.stderr)
+	}
+	if got := containerIDs(t, env, projectDir, name, []string{composePath}); len(got) != 1 || got[0] != container {
+		t.Fatalf("restart recreated containers: %v -> %v", ids, got)
+	}
+	if got := dockerExec(t, env, container, `cat /run/secrets/app_token`); got != fileSecretV1 {
+		t.Fatalf("restart applied the rotated source: %q, want %q", got, fileSecretV1)
+	}
+
+	// `up` is the configuration path and does apply the rotated value.
+	if up := run(120*time.Second, "up", "-p", name, "--json"); up.code != 0 {
+		t.Fatalf("second up exit = %d\n%s\n%s", up.code, up.stdout, up.stderr)
+	}
+	if got := dockerExec(t, env, container, `cat /run/secrets/app_token`); got != fileSecretV2 {
+		t.Fatalf("up did not apply the rotated source: %q", got)
+	}
+
+	files := materializedFiles(t, stateDir)
+	if len(files) != 1 {
+		t.Fatalf("materialized files = %v, want 1", files)
+	}
+	if err := os.Remove(files[0]); err != nil {
+		t.Fatal(err)
+	}
+	failed := run(60*time.Second, "restart", "-p", name, "--json")
+	if failed.code != 1 {
+		t.Fatalf("restart without the required file exit = %d, want 1\n%s\n%s", failed.code, failed.stdout, failed.stderr)
+	}
+	if !strings.Contains(failed.stdout, "dcraft up") && !strings.Contains(failed.stderr, "dcraft up") {
+		t.Fatalf("missing-file guidance does not point to up:\n%s\n%s", failed.stdout, failed.stderr)
+	}
+	if got := containerIDs(t, env, projectDir, name, []string{composePath}); len(got) != 1 || got[0] != container {
+		t.Fatalf("failed restart touched containers: %v -> %v", container, got)
+	}
+}

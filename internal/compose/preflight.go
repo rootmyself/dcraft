@@ -36,6 +36,12 @@ type Compose struct {
 // materialization. A nil preparer preserves the no-secrets behavior.
 type SecretPreparer interface {
 	Prepare(ctx context.Context, target core.Target, services []string, mode secretref.Mode) (secretref.Session, error)
+	// PrepareReferences prepares an explicit reference list (the previous-good
+	// record) instead of the project's current configuration.
+	PrepareReferences(ctx context.Context, target core.Target, refs []secretref.Reference, services []string, mode secretref.Mode) (secretref.Session, error)
+	// CheckMaterialized proves required file deliveries already exist without
+	// reading their sources. Restart uses it and never rewrites a value.
+	CheckMaterialized(target core.Target, refs []secretref.Reference) error
 	PrepareBuild(ctx context.Context, target core.Target, services []string, hints map[string]secretref.BuildServiceHint) (secretref.BuildSession, error)
 	CleanupStack(target core.Target) error
 	// RedactText removes referenced values from tool output. Ticket #16's

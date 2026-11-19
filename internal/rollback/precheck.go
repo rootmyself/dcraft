@@ -209,11 +209,12 @@ func (c *Controller) checkImages(ctx context.Context, pins []stack.RollbackPin) 
 	})
 }
 
-// checkSecrets re-resolves every recorded secret reference and every current
-// reference that this apply will deliver, for the recorded services and their
-// depends_on closure. Missing sources, unavailable AWS references and unknown
-// sources abort before any change. Values are read for availability only and
-// never stored or printed; for AWS, the runtime fetches and discards the value.
+// checkSecrets re-resolves exactly the secret references stored in the record.
+// The project's current .dcraft.yaml is never substituted: rollback restores
+// the deployment that was recorded, including its original sources and
+// targets. Missing sources, unavailable AWS references and unknown sources
+// abort before any change. Values are read for availability only and never
+// stored or printed; for AWS, the runtime fetches and discards the value.
 func (c *Controller) checkSecrets(ctx context.Context, target core.Target, rec state.GoodVersion, services []string) error {
 	var problems []string
 	for _, ref := range rec.Target.SecretRefs {
@@ -266,46 +267,6 @@ func (c *Controller) checkSecrets(ctx context.Context, target core.Target, rec s
 		}
 	}
 
-	cat, err := secretref.Load(target.ProjectDir)
-	if err != nil {
-		return err
-	}
-	cfg, err := c.identity.ConfigInfo(ctx, target)
-	if err != nil {
-		return err
-	}
-	if err := secretref.ValidateServices(cat, cfg.Services); err != nil {
-		return err
-	}
-	closure := serviceClosure(services, cfg.Dependencies)
-	for _, ref := range cat.ForServices(closure) {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		switch ref.Source {
-		case secretref.SourceEnv:
-			if strings.TrimSpace(c.getenv(ref.Ref)) == "" {
-				problems = append(problems, fmt.Sprintf("%s:%s 환경변수 원본이 없습니다: %s", ref.Service, ref.EffectiveTarget(), ref.Ref))
-			}
-		case secretref.SourceFile:
-			path := strings.TrimSpace(ref.Ref)
-			if !filepath.IsAbs(path) {
-				path = filepath.Join(target.ProjectDir, path)
-			}
-			if err := readableFile(path); err != nil {
-				problems = append(problems, fmt.Sprintf("%s:%s 파일 원본을 읽을 수 없습니다: %s", ref.Service, ref.EffectiveTarget(), ref.Ref))
-			}
-		case secretref.SourceAWS:
-			if err := c.checkAWSReference(ctx, ref); err != nil {
-				if ctxErr := ctx.Err(); ctxErr != nil {
-					return ctxErr
-				}
-				problems = append(problems, fmt.Sprintf("%s:%s AWS 원본을 확인할 수 없습니다: %s", ref.Service, ref.EffectiveTarget(), diagnosticMessage(err)))
-			}
-		default:
-			problems = append(problems, fmt.Sprintf("%s:%s 지원하지 않는 비밀값 원본입니다: %q", ref.Service, ref.EffectiveTarget(), ref.Source))
-		}
-	}
 	if len(problems) == 0 {
 		return nil
 	}
@@ -356,29 +317,6 @@ func readableFile(path string) error {
 	return nil
 }
 
-func serviceClosure(selected []string, dependencies map[string][]string) []string {
-	seen := map[string]bool{}
-	var visit func(string)
-	visit = func(name string) {
-		if seen[name] {
-			return
-		}
-		seen[name] = true
-		for _, dep := range dependencies[name] {
-			visit(dep)
-		}
-	}
-	for _, name := range selected {
-		visit(name)
-	}
-	out := make([]string, 0, len(seen))
-	for name := range seen {
-		out = append(out, name)
-	}
-	sort.Strings(out)
-	return out
-}
-
 func containsService(services []string, name string) bool {
 	for _, service := range services {
 		if service == name {
@@ -386,4 +324,25 @@ func containsService(services []string, name string) bool {
 		}
 	}
 	return false
+}
+
+// recordedSecretRefs converts the neutral record shape back to the shared
+// secret reference contract. Only the saved fields are used; no current
+// configuration is consulted.
+func recordedSecretRefs(rec state.GoodVersion) []secretref.Reference {
+	refs := make([]secretref.Reference, 0, len(rec.Target.SecretRefs))
+	for _, ref := range rec.Target.SecretRefs {
+		refs = append(refs, secretref.Reference{
+			Service:  ref.Service,
+			Phase:    secretref.Phase(ref.Phase),
+			Delivery: secretref.Delivery(ref.Delivery),
+			Source:   secretref.SourceType(ref.Source),
+			Ref:      ref.Name,
+			Target:   ref.Target,
+			Field:    ref.Field,
+			Region:   ref.Region,
+			Profile:  ref.Profile,
+		})
+	}
+	return refs
 }

@@ -136,9 +136,25 @@ func TestRestoreWithoutBackupOrApprovalFailsBeforeStoppingAnything(t *testing.T)
 	if !hasRestoreCategory(parsed.Diagnostics, core.CategoryApprovalRequired) {
 		t.Fatalf("missing approval diagnostics = %+v", parsed.Diagnostics)
 	}
+	// A human run shows the same plan before refusing the missing approval.
+	human := runProcess(t, project, env, strings.NewReader(""), "restore", "--path", project,
+		"--backup", artifact)
+	if human.code != 2 {
+		t.Fatalf("human missing approval exit = %d, want 2 (stderr=%q)", human.code, human.stderr)
+	}
+	if human.stdout != "" {
+		t.Fatalf("human failure wrote stdout: %q", human.stdout)
+	}
+	for _, want := range []string{"복원 계획", "안전 백업"} {
+		if !strings.Contains(human.stderr, want) {
+			t.Fatalf("human plan on stderr missing %q:\n%s", want, human.stderr)
+		}
+	}
+	// The plan may start a short-lived read-only helper to measure volume
+	// usage; it must never stop a service or replace data.
 	calls := strings.Join(fake.calls(t), "\n")
-	if strings.Contains(calls, " stop ") || strings.Contains(calls, "dcraft-restore-") {
-		t.Fatalf("missing input stopped or replaced data:\n%s", calls)
+	if strings.Contains(calls, " stop ") {
+		t.Fatalf("missing input stopped services:\n%s", calls)
 	}
 }
 
