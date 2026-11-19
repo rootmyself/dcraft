@@ -37,7 +37,7 @@ func (f *Feature) Descriptor() core.Descriptor {
 			{
 				Name:  "volume",
 				Kind:  core.FlagString,
-				Usage: "복원 대상 볼륨 키. 생략하면 백업에 기록된 볼륨을 사용하며, 다른 키는 --allow-source-mismatch가 필요합니다. 연결 폴더 백업에는 사용할 수 없습니다.",
+				Usage: "복원 대상 볼륨 키. 생략하면 백업에 기록된 볼륨을 사용합니다. 백업의 프로젝트·실행환경과 다른 대상은 항상 거부합니다. 연결 폴더 백업에는 사용할 수 없습니다.",
 			},
 			{
 				Name:  "bind",
@@ -48,11 +48,6 @@ func (f *Feature) Descriptor() core.Descriptor {
 				Name:  "safety-output",
 				Kind:  core.FlagString,
 				Usage: "현재 데이터의 안전 백업을 만들 별도 호스트 폴더. 기본은 백업 폴더 옆의 dcraft-safety입니다.",
-			},
-			{
-				Name:  "allow-source-mismatch",
-				Kind:  core.FlagBool,
-				Usage: "백업의 프로젝트·실행환경이 현재 대상과 달라도 명시적으로 매핑합니다. 경고를 표시하며 기본은 거부입니다. 연결 폴더 경로 매핑은 --allow-path-mismatch로 별도로 허용해야 합니다.",
 			},
 			{
 				Name:  "allow-path-mismatch",

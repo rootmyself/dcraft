@@ -324,9 +324,15 @@ func (c *Compose) ImageID(ctx context.Context, ref string) (string, error) {
 // verifies that the tag resolves to the recorded image ID, so a later moving
 // service tag cannot redirect the recovery target.
 func (c *Compose) TagImage(ctx context.Context, imageID, tag string) error {
+	return c.TagImageFrom(ctx, imageID, imageID, tag)
+}
+
+// TagImageFrom implements stack.Updater. The tag may be created from a local
+// reference, but its resolved identity must equal the recorded image ID.
+func (c *Compose) TagImageFrom(ctx context.Context, source, imageID, tag string) error {
 	res, err := c.run(ctx, execx.Command{
 		Name: "docker",
-		Args: []string{"tag", imageID, tag},
+		Args: []string{"tag", source, tag},
 	})
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return ctxErr

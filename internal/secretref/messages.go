@@ -121,3 +121,8 @@ const (
 )
 
 const msgBuildAWSLifetime = "AWS Secrets Manager 빌드 비밀값은 빌드 명령이 실행되는 동안에만 상태 폴더의 0600 파일로 존재하고, 빌드가 끝나면 삭제됩니다. 다음 빌드에서 기존 AWS 인증으로 다시 조회하며 이전 값을 저장하거나 비교하지 않습니다."
+
+const (
+	msgMaterializedMissing       = "재시작에 필요한 비밀값 전달 파일이 없습니다: %s:%s"
+	msgMaterializedMissingAction = "dcraft up으로 비밀값 전달 파일을 다시 준비한 뒤 restart를 실행하세요. restart는 회전된 원본을 다시 읽지 않습니다."
+)

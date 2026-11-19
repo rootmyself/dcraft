@@ -5,21 +5,20 @@ package gitgen
 const (
 	msgTitle   = "Git 호스트 스크립트 생성"
 	msgSummary = "저장소·ref·받을 폴더를 물어 보고 검토할 수 있는 Git 갱신 스크립트를 만듭니다. 생성은 등록·실행·신뢰 승인이 아니며 원격에 접속하지 않습니다."
-	msgUsage   = "dcraft generate-git-hook --repo <저장소> --ref <branch|tag|전체 SHA> --dest <받을 폴더> --output <스크립트 경로> [--stage pre|post] [--allow-outside] --approve file_overwrite\n\n" +
+	msgUsage   = "dcraft generate-git-hook --repo <저장소> --ref <branch|tag|전체 SHA> --dest <받을 폴더> --output <스크립트 경로> [--stage pre|post] --approve file_overwrite\n\n" +
 		"생성한 스크립트는 자동 등록·자동 실행되지 않습니다. 출력에 표시되는 dcraft hooks --add 명령으로 직접 등록하고, 첫 실행에는 별도의 script_trust 승인이 필요합니다."
 
-	msgFlagRepo    = "Git 저장소 URL 또는 로컬 경로. 인증 정보가 들어간 URL은 거부합니다."
-	msgFlagRef     = "branch, tag 또는 40/64자 전체 SHA. refs/heads/..., refs/tags/... 형식도 허용합니다."
-	msgFlagDest    = "받을 폴더. 프로젝트 폴더 안이어야 하며 프로젝트 루트·스크립트 폴더와 같을 수 없습니다."
-	msgFlagOut     = "생성할 스크립트 파일 경로. 부모 폴더가 없으면 만들고 0755로 저장합니다."
-	msgFlagStage   = "실행 시점: pre(up/update 전, 실패 시 본 작업 차단) 또는 post(본 작업 후, 실패는 경고)."
-	msgFlagOutside = "프로젝트 밖 경로를 명시적으로 확인합니다. 그래도 프로젝트 루트는 받을 폴더로 쓸 수 없습니다."
+	msgFlagRepo  = "Git 저장소 URL 또는 로컬 경로. 인증 정보가 들어간 URL은 거부합니다."
+	msgFlagRef   = "branch, tag 또는 40/64자 전체 SHA. refs/heads/..., refs/tags/... 형식도 허용합니다."
+	msgFlagDest  = "받을 폴더. 프로젝트 폴더 안이어야 하며 프로젝트 루트·스크립트 폴더와 같을 수 없습니다."
+	msgFlagOut   = "생성할 스크립트 파일 경로. 부모 폴더가 없으면 만들고 0755로 저장합니다."
+	msgFlagStage = "실행 시점: pre(up/update 전, 실패 시 본 작업 차단) 또는 post(본 작업 후, 실패는 경고)."
 
 	msgStageValidate = "입력 검증"
 	msgStageWrite    = "스크립트 저장"
 
 	msgInputActionOne = "저장소·ref·받을 폴더·스크립트 경로를 확인하세요."
-	msgInputActionTwo = "경로는 프로젝트 폴더 안을 권장하며, 바깥 경로는 --allow-outside로 명시해야 합니다."
+	msgInputActionTwo = "받을 폴더와 스크립트 경로는 프로젝트 폴더 안이어야 합니다."
 	msgWriteActionOne = "스크립트 상위 폴더의 쓰기 권한과 남은 공간을 확인하세요."
 	msgWriteActionTwo = "기존 경로가 심볼릭 링크나 폴더가 아닌 일반 파일인지 확인하세요."
 

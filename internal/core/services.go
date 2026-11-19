@@ -3,7 +3,6 @@ package core
 import (
 	"context"
 	"fmt"
-	"strings"
 )
 
 // ServiceStatus is one read-only fact about a Compose service in the current
@@ -185,29 +184,18 @@ func (e *Engine) Services(ctx context.Context, req Request, sink Sink) (report S
 	}
 	report.Diagnostics = append(report.Diagnostics, pf.Diagnostics...)
 
-	// The catalog reads the same stack as Run. Resolve the recorded/declared
-	// project identity without writing; a failure is a warning, never a
-	// reason to invent a name.
-	if e.Identity != nil && strings.TrimSpace(target.ProjectName) == "" {
-		name, identErr := e.Identity.ReadProjectName(ctx, target)
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			report.Outcome = OutcomeCanceled
-			addCanceledDiagnosticTo(&report.Diagnostics)
-			return report
-		}
-		if identErr != nil {
-			report.Diagnostics = append(report.Diagnostics, Diagnostic{
-				Category:    CategoryIdentityUnreadable,
-				Severity:    SeverityWarning,
-				Message:     msgIdentityUnreadable,
-				Detail:      errDetail(identErr),
-				NextActions: []string{msgIdentityUnreadableActionOne, msgIdentityUnreadableActionTwo},
-			})
-		} else if name != "" {
-			target.ProjectName = name
-			report.Target.ProjectName = name
-		}
+	// The catalog is a query path: it uses the same read-only identity helper
+	// as every other read-only feature, never the lifecycle allocation path.
+	warning, identErr := e.resolveReadOnlyIdentity(ctx, &target)
+	if identErr != nil {
+		report.Outcome = OutcomeCanceled
+		addCanceledDiagnosticTo(&report.Diagnostics)
+		return report
 	}
+	if warning != nil {
+		report.Diagnostics = append(report.Diagnostics, *warning)
+	}
+	report.Target.ProjectName = target.ProjectName
 
 	inv := Invocation{
 		Target:      target,

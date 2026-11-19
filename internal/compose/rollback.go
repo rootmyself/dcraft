@@ -14,12 +14,12 @@ import (
 )
 
 // ApplyRollback implements stack.Rollbacker. It writes a dcraft-managed
-// override that pins every recorded service to its exact image ID, prepares the
-// project's current runtime secret references for those services, and applies
-// detached with --pull never and --no-build. Compose therefore cannot pull or
+// override that pins every recorded service to its exact image ID, prepares
+// exactly the secret references stored in the record (never current project
+// configuration), and applies detached with --pull never and --no-build. Compose therefore cannot pull or
 // build a different version; a missing image fails the apply instead of being
 // replaced.
-func (c *Compose) ApplyRollback(ctx context.Context, t core.Target, services []string, pins []stack.RollbackPin) (stack.OpResult, error) {
+func (c *Compose) ApplyRollback(ctx context.Context, t core.Target, services []string, pins []stack.RollbackPin, refs []secretref.Reference) (stack.OpResult, error) {
 	if len(pins) == 0 {
 		return stack.OpResult{}, core.Fail(core.Diagnostic{
 			Category:    core.CategoryInternal,
@@ -29,9 +29,16 @@ func (c *Compose) ApplyRollback(ctx context.Context, t core.Target, services []s
 			NextActions: []string{msgRollbackNoPinsAct},
 		})
 	}
-	prep, err := c.prepareSecrets(ctx, t, services, secretref.ModeCreate)
-	if err != nil {
-		return stack.OpResult{}, err
+	var prep secretref.Session
+	if len(refs) > 0 {
+		if c.secrets == nil {
+			return stack.OpResult{}, secretref.Unavailable()
+		}
+		var err error
+		prep, err = c.secrets.PrepareReferences(ctx, t, refs, services, secretref.ModeCreate)
+		if err != nil {
+			return stack.OpResult{}, err
+		}
 	}
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		prep.Abort()

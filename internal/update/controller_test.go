@@ -76,6 +76,10 @@ func (f *fakeUpdater) ImageID(_ context.Context, ref string) (string, error) {
 	return "", &stack.ImageMissingError{Ref: ref}
 }
 
+func (f *fakeUpdater) TagImageFrom(_ context.Context, _, imageID, tag string) error {
+	return f.TagImage(context.Background(), imageID, tag)
+}
+
 func (f *fakeUpdater) TagImage(_ context.Context, imageID, tag string) error {
 	if f.tagErr != nil {
 		return f.tagErr
@@ -949,8 +953,13 @@ func TestCancellationDuringApplyIsNotSuccess(t *testing.T) {
 	if loadErr != nil || !ok || saved.OperationID != "op_old" {
 		t.Fatalf("cancellation replaced the previous good record: ok=%v err=%v %+v", ok, loadErr, saved)
 	}
-	if len(u.tags) != 0 {
-		t.Fatalf("cancellation created retention tags: %v", u.tags)
+	// Retention tags are created before apply so the pre-update images survive
+	// a failed or canceled run. They protect the recorded images; a canceled
+	// run never publishes a new record.
+	for _, tag := range u.tags {
+		if !strings.HasPrefix(tag, "dcraft-good/") {
+			t.Fatalf("unexpected tag created before a canceled apply: %v", u.tags)
+		}
 	}
 	probe, lockErr := store.AcquireStackLock(context.Background(), core.Target{ProjectDir: "/work/app"}, state.LockHolder{Action: "probe"})
 	if lockErr != nil {
@@ -1025,5 +1034,192 @@ func TestPayloadHasNoSecretValues(t *testing.T) {
 	raw, _ := os.ReadFile(path)
 	if strings.Contains(string(raw), secretValue) {
 		t.Fatalf("record contains a secret value:\n%s", raw)
+	}
+}
+
+// The record must describe the deployment that was running before the update,
+// not the result the update just applied.
+func TestUpdateRecordsThePreUpdateDeployment(t *testing.T) {
+	pre := healthyContainer("web", "sha256:v1", true, "healthy")
+	pre.ImageRef = "registry/app:v1"
+	post := healthyContainer("web", "sha256:v2", true, "healthy")
+	post.ImageRef = "registry/app:v2"
+	phase := "pre"
+	u := &fakeUpdater{
+		model: oneServiceModel(false, true),
+		containersFn: func() ([]stack.Container, error) {
+			if phase == "pre" {
+				return []stack.Container{pre}, nil
+			}
+			return []stack.Container{post}, nil
+		},
+		imageIDs:  map[string]string{"nginx:1.27": "sha256:v1"},
+		applyHook: func() { phase = "post" },
+	}
+	c, store, _ := newTestController(t, u, &fakeIdentity{cfg: stack.ConfigInfo{Services: []string{"web"}}, derived: "app"})
+	target := core.Target{ProjectDir: "/work/app"}
+	payload, err := c.Run(context.Background(), invocation(t, nil), Options{Pull: true, Timeout: 30 * time.Second})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if payload.Update.GoodVersion == nil {
+		t.Fatal("no previous-good record was published")
+	}
+	if got := payload.Update.GoodVersion.Services[0].ImageID; got != "sha256:v1" {
+		t.Fatalf("recorded image = %q, want the pre-update image", got)
+	}
+	saved, ok, err := store.LoadGoodVersion(target)
+	if err != nil || !ok {
+		t.Fatalf("load record: ok=%v err=%v", ok, err)
+	}
+	if saved.Services[0].ImageID != "sha256:v1" || saved.Services[0].ImageRef != "registry/app:v1" {
+		t.Fatalf("saved record = %+v, want the pre-update deployment", saved.Services[0])
+	}
+	for _, tag := range u.tags {
+		if u.imageIDs[tag] != "sha256:v1" {
+			t.Fatalf("retention tag %q does not keep the pre-update image: %v", tag, u.imageIDs[tag])
+		}
+	}
+}
+
+// When the pre-update deployment is not healthy, a successful update must not
+// fabricate a record and must leave the existing one byte-identical.
+func TestSuccessfulUpdateWithUnhealthyPreDeploymentKeepsTheRecord(t *testing.T) {
+	pre := healthyContainer("web", "sha256:v1", true, "unhealthy")
+	post := healthyContainer("web", "sha256:v2", true, "healthy")
+	phase := "pre"
+	u := &fakeUpdater{
+		model: oneServiceModel(false, true),
+		containersFn: func() ([]stack.Container, error) {
+			if phase == "pre" {
+				return []stack.Container{pre}, nil
+			}
+			return []stack.Container{post}, nil
+		},
+		imageIDs:  map[string]string{"nginx:1.27": "sha256:v2"},
+		applyHook: func() { phase = "post" },
+	}
+	c, store, _ := newTestController(t, u, &fakeIdentity{cfg: stack.ConfigInfo{Services: []string{"web"}}, derived: "app"})
+	target := core.Target{ProjectDir: "/work/app"}
+	old := state.GoodVersion{
+		Version: state.GoodVersionVersion, OperationID: "op_old",
+		Target: state.GoodTarget{ProjectDir: "/work/app", Files: []string{"/work/app/compose.yaml"}, ProjectName: "app"},
+		Services: []state.GoodService{{
+			Service: "web", ImageID: "sha256:old", RetentionTag: "dcraft-good/app-web:oldoldoldoldold",
+		}},
+	}
+	saveRecordForUpdateTest(t, store, target, old)
+	path, _ := store.GoodVersionPath(target)
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := c.Run(context.Background(), invocation(t, nil), Options{Pull: true, Timeout: 30 * time.Second})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if payload.Update.RecordStatus != RecordSkipped {
+		t.Fatalf("record status = %q, want skipped", payload.Update.RecordStatus)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Fatalf("unhealthy pre-update deployment replaced the record:\nbefore=%s\nafter=%s", before, after)
+	}
+}
+
+func TestSuccessfulUpdateWithNoPreDeploymentAndNoRecordDoesNotFabricateOne(t *testing.T) {
+	post := healthyContainer("web", "sha256:v2", true, "healthy")
+	phase := "pre"
+	u := &fakeUpdater{
+		model: oneServiceModel(false, true),
+		containersFn: func() ([]stack.Container, error) {
+			if phase == "pre" {
+				return []stack.Container{}, nil
+			}
+			return []stack.Container{post}, nil
+		},
+		imageIDs:  map[string]string{"nginx:1.27": "sha256:v2"},
+		applyHook: func() { phase = "post" },
+	}
+	c, store, _ := newTestController(t, u, &fakeIdentity{cfg: stack.ConfigInfo{Services: []string{"web"}}, derived: "app"})
+	_, err := c.Run(context.Background(), invocation(t, nil), Options{Pull: true, Timeout: 30 * time.Second})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if _, ok, err := store.LoadGoodVersion(core.Target{ProjectDir: "/work/app"}); err != nil || ok {
+		t.Fatalf("a record was fabricated without a pre-update deployment: ok=%v err=%v", ok, err)
+	}
+}
+
+func TestCapturedRecordKeepsThePreUpdateConfigAndSecretReferences(t *testing.T) {
+	project := t.TempDir()
+	if err := os.WriteFile(filepath.Join(project, ".dcraft.yaml"), []byte(`secrets:
+  - service: web
+    phase: runtime
+    delivery: environment
+    source: env
+    ref: CURRENT_SECRET
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	pre := healthyContainer("web", "sha256:v1", true, "healthy")
+	post := healthyContainer("web", "sha256:v2", true, "healthy")
+	phase := "pre"
+	u := &fakeUpdater{
+		model: oneServiceModel(false, true),
+		containersFn: func() ([]stack.Container, error) {
+			if phase == "pre" {
+				return []stack.Container{pre}, nil
+			}
+			return []stack.Container{post}, nil
+		},
+		imageIDs:  map[string]string{"nginx:1.27": "sha256:v1"},
+		applyHook: func() { phase = "post" },
+	}
+	c, store, _ := newTestController(t, u, &fakeIdentity{cfg: stack.ConfigInfo{Services: []string{"web"}}, derived: "app"})
+	target := core.Target{ProjectDir: project}
+	old := state.GoodVersion{
+		Version: state.GoodVersionVersion,
+		Target: state.GoodTarget{
+			ProjectDir:  project,
+			Files:       []string{filepath.Join(project, "compose.v1.yaml")},
+			EnvFiles:    []string{filepath.Join(project, ".env.v1")},
+			Profiles:    []string{"v1"},
+			ProjectName: "app",
+			SecretRefs: []state.SecretReference{{
+				Service: "web", Phase: "runtime", Delivery: "environment",
+				Source: "env", Name: "RECORDED_SECRET", Target: "APP_TOKEN",
+			}},
+		},
+		Services: []state.GoodService{{
+			Service: "web", ImageID: "sha256:v1", RetentionTag: "dcraft-good/app-web:" + shortID("sha256:v1"),
+		}},
+	}
+	saveRecordForUpdateTest(t, store, target, old)
+	in := invocation(t, nil)
+	in.Target.ProjectDir = project
+	in.Target.Files = []string{filepath.Join(project, "compose.v2.yaml")}
+	if _, err := c.Run(context.Background(), in, Options{Pull: true, Timeout: 30 * time.Second}); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	saved, ok, err := store.LoadGoodVersion(target)
+	if err != nil || !ok {
+		t.Fatalf("load: ok=%v err=%v", ok, err)
+	}
+	if len(saved.Target.Files) != 1 || saved.Target.Files[0] != filepath.Join(project, "compose.v1.yaml") {
+		t.Fatalf("recorded files = %v, want the pre-update list", saved.Target.Files)
+	}
+	if len(saved.Target.SecretRefs) != 1 || saved.Target.SecretRefs[0].Name != "RECORDED_SECRET" {
+		t.Fatalf("recorded refs = %+v, want the pre-update references", saved.Target.SecretRefs)
+	}
+}
+
+func saveRecordForUpdateTest(t *testing.T, store *state.Store, target core.Target, rec state.GoodVersion) {
+	t.Helper()
+	if err := store.SaveGoodVersion(context.Background(), target, rec); err != nil {
+		t.Fatal(err)
 	}
 }

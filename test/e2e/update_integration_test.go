@@ -52,6 +52,29 @@ func imageID(t *testing.T, ref string) string {
 	return dockerMust(t, "image", "inspect", ref, "--format", "{{.Id}}")
 }
 
+// waitForContainerHealthy blocks until the container leaves the healthcheck
+// "starting" state, so an update's pre-update capture sees the stable v1
+// deployment without running extra updates that would move the build tag.
+func waitForContainerHealthy(t *testing.T, env []string, container string) {
+	t.Helper()
+	deadline := time.Now().Add(60 * time.Second)
+	for {
+		out, err := dockerRun(t, env, "", "inspect", "--format", "{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}", container)
+		if err == nil {
+			switch strings.TrimSpace(out) {
+			case "healthy", "none":
+				return
+			case "unhealthy":
+				t.Fatalf("container %s is unhealthy before update", container)
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("container %s did not become healthy: %v %q", container, err, out)
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
 func updateJSONFor(t *testing.T, projectDir string, env []string, args ...string) (updateJSON, processResult) {
 	t.Helper()
 	full := append([]string{"update", "--path", projectDir, "--json"}, args...)
@@ -317,9 +340,17 @@ services:
 	imagesCleanup.register(t)
 	t.Cleanup(func() { cleanupUpdateProject(t, env, dir, project, composePath) })
 
+	// Start v1 first, then run one warming update. A record describes the
+	// deployment that ran *before* an update, so the first update needs a
+	// running pre-update deployment; the warm update also lets health settle.
+	up := runProcess(t, dir, dcraftEnv, strings.NewReader(""), "up", "--path", dir, "--json")
+	if up.code != 0 {
+		t.Fatalf("up v1 exit=%d stderr=%q", up.code, up.stderr)
+	}
+	waitForContainerHealthy(t, env, composeInspect(t, env, project, composePath, "app"))
+
 	first, res := updateJSONFor(t, dir, dcraftEnv)
 	requireSuccessUpdate(t, first, res)
-	imagesCleanup.track(first)
 	imagesCleanup.track(first)
 	if got := readinessByService(first)["app"]; got != "healthy" {
 		t.Fatalf("app readiness = %q", got)
@@ -416,8 +447,11 @@ services:
 	if got := composeInspect(t, env, project, composePath, "other"); got != otherID {
 		t.Fatalf("image move recreated an unrelated service: %s -> %s", otherID, got)
 	}
-	if recordedServices(fourth)["api"] != newAPIImage {
-		t.Fatalf("new image identity was not recorded: %+v", fourth.Data.Update.GoodVersion)
+	// The record describes the deployment that ran *before* this update, so
+	// the moved tag's new image is not recorded until it becomes the
+	// pre-update deployment of a later update.
+	if recordedServices(fourth)["api"] != recordedAPI {
+		t.Fatalf("record left the pre-update image: %+v", fourth.Data.Update.GoodVersion)
 	}
 
 	// The retained tag still resolves to the recorded image after the
@@ -434,6 +468,11 @@ services:
 	}
 	if got := imageID(t, oldTag); got != recordedAPI {
 		t.Fatalf("retention tag moved after recreation: %q != %q", got, recordedAPI)
+	}
+	// After the forced recreation the moved-tag image is the running
+	// pre-update deployment, so the next update records it.
+	if recordedServices(forced)["api"] != newAPIImage {
+		t.Fatalf("running image was not captured on the next update: %+v", forced.Data.Update.GoodVersion)
 	}
 
 	// A second stack stays untouched.
@@ -532,9 +571,16 @@ services:
 	imagesCleanup.register(t)
 	t.Cleanup(func() { cleanupUpdateProject(t, env, dir, project, composePath) })
 
+	// Start v1 first and let the healthcheck settle: the record describes the
+	// deployment that ran *before* an update.
+	up := runProcess(t, dir, dcraftEnv, strings.NewReader(""), "up", "--path", dir, "--json")
+	if up.code != 0 {
+		t.Fatalf("up v1 exit=%d stderr=%q", up.code, up.stderr)
+	}
+	waitForContainerHealthy(t, env, composeInspect(t, env, project, composePath, "healthy"))
+
 	first, res := updateJSONFor(t, dir, dcraftEnv)
 	requireSuccessUpdate(t, first, res)
-	imagesCleanup.track(first)
 	imagesCleanup.track(first)
 	if got := readinessByService(first)["healthy"]; got != "healthy" {
 		t.Fatalf("healthy = %q", got)
@@ -659,9 +705,15 @@ services:
 	imagesCleanup.register(t)
 	t.Cleanup(func() { cleanupUpdateProject(t, env, dir, project, composePath) })
 
+	// Start v1 first so the update has a pre-update deployment to capture.
+	up := runProcess(t, dir, dcraftEnv, strings.NewReader(""), "up", "--path", dir, "--json")
+	if up.code != 0 {
+		t.Fatalf("up v1 exit=%d stderr=%q", up.code, up.stderr)
+	}
+	waitForContainerHealthy(t, env, composeInspect(t, env, project, composePath, "slow"))
+
 	first, res := updateJSONFor(t, dir, dcraftEnv)
 	requireSuccessUpdate(t, first, res)
-	imagesCleanup.track(first)
 	imagesCleanup.track(first)
 	recordPath := stateFileFor(t, stateDir)
 	before, err := os.ReadFile(recordPath)

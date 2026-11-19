@@ -71,7 +71,7 @@ esac
 
 func (s *awsShim) script(t *testing.T, source string, mode Mode, dest, output string) string {
 	t.Helper()
-	layout, err := generators.ResolveLayout(s.proj, dest, output, generators.Options{})
+	layout, err := generators.ResolveLayout(s.proj, dest, output)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,7 +189,7 @@ func TestSyncScriptRefusesAnOutsideDestinationEvenIfTheScriptWasEdited(t *testin
 		t.Fatal(err)
 	}
 	shim.env = append(shim.env, "AWS_SHIM_SYNC_FIXTURE="+fixture)
-	layout, err := generators.ResolveLayout(shim.proj, "deploy", "scripts/s3-sync.sh", generators.Options{})
+	layout, err := generators.ResolveLayout(shim.proj, "deploy", "scripts/s3-sync.sh")
 	if err != nil {
 		t.Fatal(err)
 	}

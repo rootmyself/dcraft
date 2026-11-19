@@ -98,6 +98,21 @@ func TestRollbackRequiresItsOwnApproval(t *testing.T) {
 	stateDir := t.TempDir()
 	createGoodRecord(t, project, stateDir, fake)
 
+	// A human unapproved run shows the plan before exiting 2.
+	human := runProcess(t, project, fake.env(t, stateDir, nil), strings.NewReader(""),
+		"rollback", "--path", project)
+	if human.code != 2 {
+		t.Fatalf("human exit = %d, want 2 (stderr=%q)", human.code, human.stderr)
+	}
+	if human.stdout != "" {
+		t.Fatalf("human failure wrote stdout: %q", human.stdout)
+	}
+	for _, want := range []string{"이전 정상 버전 복원 계획", "복원 이미지"} {
+		if !strings.Contains(human.stderr, want) {
+			t.Fatalf("human plan on stderr missing %q:\n%s", want, human.stderr)
+		}
+	}
+
 	for _, args := range [][]string{
 		nil,
 		{"--approve", "install"},

@@ -97,6 +97,7 @@ type Session struct {
 	wroteOverride bool
 	hadOverride   bool
 	overwrote     bool
+	explicit      bool
 }
 
 // Prepare resolves the references needed for services and prepares the
@@ -104,6 +105,36 @@ type Session struct {
 // source before writing any file, so a missing or empty source leaves no
 // partial materialization.
 func (r *Runtime) Prepare(ctx context.Context, target core.Target, services []string, mode Mode) (Session, error) {
+	cat, err := Load(target.ProjectDir)
+	if err != nil {
+		return Session{}, err
+	}
+	return r.prepare(ctx, target, cat.ForPhaseServices(PhaseRuntime, services), services, cat.References, false, mode)
+}
+
+// PrepareReferences prepares the delivery from an explicit reference list
+// instead of the project's current .dcraft.yaml. Rollback uses exactly the
+// references stored in the previous-good record; current configuration is
+// never substituted. Only runtime-phase references are delivered.
+func (r *Runtime) PrepareReferences(ctx context.Context, target core.Target, refs []Reference, services []string, mode Mode) (Session, error) {
+	selected := map[string]bool{}
+	for _, name := range services {
+		selected[name] = true
+	}
+	runtimeRefs := make([]Reference, 0, len(refs))
+	for _, ref := range refs {
+		if ref.Phase != "" && ref.Phase != PhaseRuntime {
+			continue
+		}
+		if len(selected) > 0 && !selected[ref.Service] {
+			continue
+		}
+		runtimeRefs = append(runtimeRefs, ref)
+	}
+	return r.prepare(ctx, target, runtimeRefs, services, refs, true, mode)
+}
+
+func (r *Runtime) prepare(ctx context.Context, target core.Target, refs []Reference, services []string, allRefs []Reference, explicit bool, mode Mode) (Session, error) {
 	if err := ctx.Err(); err != nil {
 		return Session{}, err
 	}
@@ -113,11 +144,6 @@ func (r *Runtime) Prepare(ctx context.Context, target core.Target, services []st
 	if strings.TrimSpace(target.ProjectDir) == "" {
 		return Session{}, applyError("비밀값 전달 대상 폴더를 확인할 수 없습니다.", "target has no project folder")
 	}
-	cat, err := Load(target.ProjectDir)
-	if err != nil {
-		return Session{}, err
-	}
-	refs := cat.ForPhaseServices(PhaseRuntime, services)
 	stackDir, err := r.dirs.StackDir(target)
 	if err != nil {
 		return Session{}, applyError("비밀값 전달 상태 폴더를 확인할 수 없습니다.", err.Error())
@@ -127,8 +153,9 @@ func (r *Runtime) Prepare(ctx context.Context, target core.Target, services []st
 		target:       target,
 		mode:         mode,
 		refs:         refs,
-		allRefs:      append([]Reference{}, cat.References...),
+		allRefs:      append([]Reference{}, allRefs...),
 		selected:     append([]string{}, services...),
+		explicit:     explicit,
 		secretsDir:   filepath.Join(stackDir, "secrets"),
 		overridePath: filepath.Join(stackDir, "compose.secrets.yaml"),
 		materialized: map[string]string{},
@@ -139,7 +166,7 @@ func (r *Runtime) Prepare(ctx context.Context, target core.Target, services []st
 		// configuration. If other services still have runtime references,
 		// keep the on-disk override for the stack; it is regenerated below on
 		// success. Build-phase references are never runtime delivery.
-		if mode == ModeCreate && !cat.HasPhase(PhaseRuntime) {
+		if !explicit && mode == ModeCreate {
 			if err := os.Remove(session.overridePath); err != nil && !errors.Is(err, fs.ErrNotExist) {
 				return Session{}, applyError("dcraft 관리 Compose override를 정리하지 못했습니다.", err.Error())
 			}
@@ -282,7 +309,7 @@ func (s *Session) abortError(err error) error {
 // in the meantime. The on-disk override is regenerated from the full catalog
 // (references only) so the effective inputs stay complete and reproducible.
 func (s *Session) Commit() {
-	if s.mode != ModeCreate {
+	if s.mode != ModeCreate || s.explicit {
 		return
 	}
 	current := map[string]bool{}
@@ -843,4 +870,38 @@ func awsSourceCount(items []resolvedItem) int {
 		}
 	}
 	return count
+}
+
+// CheckMaterialized proves that every required file-delivery materialization
+// already exists, without reading its source or rewriting the file. Restart
+// reuses the bytes the running container already mounts; it must not apply a
+// rotated value. A missing file fails before the containers are touched with
+// guidance to run `up`, the configuration path.
+func (r *Runtime) CheckMaterialized(target core.Target, refs []Reference) error {
+	if r == nil || r.dirs == nil {
+		if len(refs) == 0 {
+			return nil
+		}
+		return Unavailable()
+	}
+	for _, ref := range refs {
+		if ref.Delivery != DeliveryFile {
+			continue
+		}
+		path, err := r.MaterializedPath(target, ref)
+		if err != nil {
+			return err
+		}
+		info, statErr := os.Stat(path)
+		if statErr != nil || !info.Mode().IsRegular() {
+			return core.Fail(core.Diagnostic{
+				Category:    core.CategorySecretApplyFailed,
+				Severity:    core.SeverityError,
+				Message:     fmt.Sprintf(msgMaterializedMissing, ref.Service, ref.EffectiveTarget()),
+				Detail:      path,
+				NextActions: []string{msgMaterializedMissingAction},
+			})
+		}
+	}
+	return nil
 }

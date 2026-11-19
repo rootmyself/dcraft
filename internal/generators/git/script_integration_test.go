@@ -94,7 +94,7 @@ func (f *gitFixture) project() string {
 
 func (f *gitFixture) createScript(project, ref, dest, output string) string {
 	f.t.Helper()
-	layout, err := generators.ResolveLayout(project, dest, output, generators.Options{})
+	layout, err := generators.ResolveLayout(project, dest, output)
 	if err != nil {
 		f.t.Fatal(err)
 	}

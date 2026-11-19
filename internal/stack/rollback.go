@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/rootmyself/dcraft/internal/core"
+	"github.com/rootmyself/dcraft/internal/secretref"
 )
 
 // RollbackPin is one recorded service image the previous-good rollback must
@@ -24,10 +25,10 @@ type RollbackPin struct {
 // deliberately refreshes image references and builds local services.
 //
 // The Compose adapter implements it. Services are Compose service names; the
-// caller passes exactly the recorded services. The implementation reads the
-// project's current runtime secret references for those services, regenerates
-// the managed delivery, and keeps materialized files on a partial apply
-// because a later restart may still need them.
+// caller passes exactly the recorded services and the exact secret references
+// stored in the record. The implementation never substitutes the project's
+// current configuration for those references, and it keeps materialized files
+// on a partial apply because a later restart may still need them.
 type Rollbacker interface {
-	ApplyRollback(ctx context.Context, target core.Target, services []string, pins []RollbackPin) (OpResult, error)
+	ApplyRollback(ctx context.Context, target core.Target, services []string, pins []RollbackPin, refs []secretref.Reference) (OpResult, error)
 }

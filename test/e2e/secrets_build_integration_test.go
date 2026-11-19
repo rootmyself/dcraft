@@ -178,6 +178,13 @@ services:
 	if got := dockerRunFile(t, env, image, "/baked.txt"); got != v1 {
 		t.Fatalf("baked value after first build = %q, want v1", got)
 	}
+	// A record describes the deployment that ran before an update, so the
+	// first update on an empty stack records nothing. The second update
+	// captures the v1 deployment and its build reference.
+	second := run(300*time.Second, "update", "-p", name, "--timeout", "30", "--json")
+	if second.code != 0 {
+		t.Fatalf("second update exit = %d\n%s\n%s", second.code, second.stdout, second.stderr)
+	}
 	buildSecretsDir := filepath.Join(filepath.Dir(secretsReport.BuildOverrideFile), "build-secrets")
 	var materialized []string
 	_ = filepath.Walk(buildSecretsDir, func(path string, info os.FileInfo, err error) error {

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/rootmyself/dcraft/internal/core"
+	"github.com/rootmyself/dcraft/internal/readiness"
 	"github.com/rootmyself/dcraft/internal/secretref"
 	"github.com/rootmyself/dcraft/internal/stack"
 	"github.com/rootmyself/dcraft/internal/state"
@@ -174,7 +175,7 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation, opts Options) 
 	if in.Reporter != nil {
 		in.Reporter.Begin(StageApply, msgStageApply)
 	}
-	applyResult, applyErr := c.applier.ApplyRollback(ctx, p.target, p.services, p.pins)
+	applyResult, applyErr := c.applier.ApplyRollback(ctx, p.target, p.services, p.pins, recordedSecretRefs(rec))
 	if applyErr != nil {
 		if ctx.Err() != nil || errors.Is(applyErr, context.Canceled) || errors.Is(applyErr, context.DeadlineExceeded) {
 			detail := c.observedStateAfterCancel(p.target)
@@ -210,7 +211,7 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation, opts Options) 
 		}
 		return Payload{}, ctxError(ctx, err)
 	}
-	if mismatches := imageMismatches(p.pins, outcome.services); len(mismatches) > 0 {
+	if mismatches := imageMismatches(p.pins, outcome.Services); len(mismatches) > 0 {
 		if in.Reporter != nil {
 			in.Reporter.End(StageVerify, core.StageFailed, strings.Join(mismatches, "; "))
 		}
@@ -222,14 +223,14 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation, opts Options) 
 			NextActions: []string{msgVerifyAct1, msgVerifyAct2},
 		})
 	}
-	if !allSatisfied(outcome.services) {
+	if !readiness.AllSatisfied(outcome.Services) {
 		if in.Reporter != nil {
-			in.Reporter.End(StageVerify, core.StageFailed, readinessSummary(outcome.services))
+			in.Reporter.End(StageVerify, core.StageFailed, readiness.Summary(outcome.Services))
 		}
 		return Payload{}, readinessFailure(outcome, opts.Timeout)
 	}
 	if in.Reporter != nil {
-		in.Reporter.End(StageVerify, core.StageSucceeded, readinessSummary(outcome.services))
+		in.Reporter.End(StageVerify, core.StageSucceeded, readiness.Summary(outcome.Services))
 	}
 
 	var payload Payload
@@ -247,10 +248,10 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation, opts Options) 
 			RecordedAt:       rec.RecordedAt,
 			Images:           append([]stack.RollbackPin{}, p.pins...),
 			Applied:          true,
-			Verified:         outcome.verified,
+			Verified:         outcome.Verified,
 			ImageIDsVerified: true,
 			AlreadyAtVersion: p.alreadyAtVersion,
-			Readiness:        outcome.services,
+			Readiness:        outcome.Services,
 			RecordStatus:     RecordUnchanged,
 			DataRestored:     false,
 			HooksRun:         false,

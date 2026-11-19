@@ -162,6 +162,23 @@ func TestEngineServicesUsesTheRecordedProjectNameWithoutWriting(t *testing.T) {
 	}
 }
 
+func TestEngineServicesShowsTheAllocatedProjectNameForAMutatingFeature(t *testing.T) {
+	catalog := &catalogFeature{testFeature: &testFeature{desc: readOnlyDescriptor("status")}}
+	engine, _ := newServiceCatalogHarness(t, catalog, serviceTargetFeature())
+	reader := &fakeIdentityReader{name: "base-1"}
+	engine.Identity = reader
+	report := engine.Services(context.Background(), core.Request{Feature: "stop"}, nil)
+	if report.Failed() {
+		t.Fatalf("services failed: %+v", report.Diagnostics)
+	}
+	if catalog.got.Target.ProjectName != "base-1" || report.Target.ProjectName != "base-1" {
+		t.Fatalf("query path did not use the recorded allocation: %q / %q", catalog.got.Target.ProjectName, report.Target.ProjectName)
+	}
+	if reader.calls != 1 {
+		t.Fatalf("identity reads = %d, want the single shared read-only path", reader.calls)
+	}
+}
+
 func stubResolverWithTarget() *fakeResolver {
 	return &fakeResolver{target: core.Target{
 		ProjectDir: "/project",

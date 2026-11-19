@@ -67,20 +67,26 @@ func (f *fakeUpdater) TagImage(context.Context, string, string) error {
 	return errors.New("rollback must not create tags")
 }
 
+func (f *fakeUpdater) TagImageFrom(context.Context, string, string, string) error {
+	return errors.New("rollback must not create tags")
+}
+
 type fakeApplier struct {
 	calls    int
 	targets  []core.Target
 	services [][]string
 	pins     [][]stack.RollbackPin
+	refs     [][]secretref.Reference
 	err      error
 	after    func()
 }
 
-func (f *fakeApplier) ApplyRollback(_ context.Context, target core.Target, services []string, pins []stack.RollbackPin) (stack.OpResult, error) {
+func (f *fakeApplier) ApplyRollback(_ context.Context, target core.Target, services []string, pins []stack.RollbackPin, refs []secretref.Reference) (stack.OpResult, error) {
 	f.calls++
 	f.targets = append(f.targets, target)
 	f.services = append(f.services, append([]string{}, services...))
 	f.pins = append(f.pins, append([]stack.RollbackPin{}, pins...))
+	f.refs = append(f.refs, append([]secretref.Reference{}, refs...))
 	if f.after != nil {
 		f.after()
 	}
@@ -617,8 +623,10 @@ func TestRunMissingSecretSourceAbortsBeforeApply(t *testing.T) {
 		}
 	})
 
-	t.Run("current env source missing", func(t *testing.T) {
+	t.Run("current configuration is never substituted", func(t *testing.T) {
 		target := newTestTarget(t)
+		// The current project has a reference whose source is missing. The
+		// record stores no reference, so rollback must not read this one.
 		if err := os.WriteFile(filepath.Join(target.ProjectDir, ".dcraft.yaml"), []byte(`secrets:
   - service: web
     phase: runtime
@@ -632,13 +640,21 @@ func TestRunMissingSecretSourceAbortsBeforeApply(t *testing.T) {
 		store := state.New(privateStateDir(t))
 		saveRecord(t, store, target, testRecord(target))
 		applier := &fakeApplier{}
-		u := &fakeUpdater{model: testModel(), images: map[string]string{testImage: testImage, testTag: testImage}}
+		u := &fakeUpdater{
+			model:      testModel(),
+			containers: []stack.Container{healthyContainer("web", testImage, true, "healthy")},
+			images:     map[string]string{testImage: testImage, testTag: testImage},
+		}
 		c := newController(u, applier, store)
 
-		_, err := c.Run(context.Background(), invocationFor(target), Options{Timeout: time.Second})
-		requireCategory(t, err, core.CategoryRollbackSecretUnavailable)
-		if applier.calls != 0 {
-			t.Fatalf("rollback applied with a missing current secret source: %d calls", applier.calls)
+		if _, err := c.Run(context.Background(), invocationFor(target), Options{Timeout: time.Second}); err != nil {
+			t.Fatalf("rollback read the current configuration: %v", err)
+		}
+		if applier.calls != 1 {
+			t.Fatalf("rollback applied %d times, want 1", applier.calls)
+		}
+		if len(applier.refs[0]) != 0 {
+			t.Fatalf("rollback passed current references: %+v", applier.refs[0])
 		}
 	})
 }
@@ -925,5 +941,58 @@ func TestRunRejectsUnknownSecretPhase(t *testing.T) {
 	requireCategory(t, err, core.CategoryRollbackSecretUnavailable)
 	if applier.calls != 0 {
 		t.Fatal("rollback applied with an unknown secret phase")
+	}
+}
+
+// Rollback re-resolves the references stored in the record, not the project's
+// current configuration. Changing or deleting the current reference after the
+// update must not change what the restored container receives.
+func TestRunUsesRecordedSecretReferencesNotCurrentConfig(t *testing.T) {
+	target := newTestTarget(t)
+	rec := testRecord(target)
+	rec.Target.SecretRefs = []state.SecretReference{{
+		Service: "web", Phase: "runtime", Delivery: "environment",
+		Source: "env", Name: "SECRET_A", Target: "APP_TOKEN",
+	}}
+	store := state.New(privateStateDir(t))
+	saveRecord(t, store, target, rec)
+	if err := os.WriteFile(filepath.Join(target.ProjectDir, ".dcraft.yaml"), []byte(`secrets:
+  - service: web
+    phase: runtime
+    delivery: environment
+    source: env
+    ref: SECRET_B
+    target: APP_TOKEN
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	applier := &fakeApplier{}
+	u := &fakeUpdater{
+		model:      testModel(),
+		containers: []stack.Container{healthyContainer("web", testImage, true, "healthy")},
+		images:     map[string]string{testImage: testImage, testTag: testImage},
+	}
+	c := New(u, applier, &fakeIdentity{cfg: stack.ConfigInfo{Services: []string{"web"}}},
+		func(name string) string {
+			if name == "SECRET_A" {
+				return "value-a"
+			}
+			return "value-b"
+		}, store, core.SystemClock{})
+	configureTestClock(c)
+	// A missing A would abort; B exists and must be irrelevant.
+	payload, err := c.Run(context.Background(), invocationFor(target), Options{Timeout: time.Second})
+	if err != nil {
+		t.Fatalf("rollback: %v", err)
+	}
+	if payload.Rollback.ProjectName != "project" {
+		t.Fatalf("payload = %+v", payload.Rollback)
+	}
+	if applier.calls != 1 {
+		t.Fatalf("apply calls = %d", applier.calls)
+	}
+	got := applier.refs[0]
+	if len(got) != 1 || got[0].Ref != "SECRET_A" || got[0].Source != secretref.SourceEnv {
+		t.Fatalf("rollback delivered %+v, want the recorded SECRET_A reference", got)
 	}
 }

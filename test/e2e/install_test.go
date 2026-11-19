@@ -106,14 +106,32 @@ func TestInstallWithoutApprovalExitsTwoWithoutChanges(t *testing.T) {
 		t.Fatalf("plugin was created without approval: %v", err)
 	}
 
-	human := runProcess(t, t.TempDir(), env, strings.NewReader(""), "install-compose")
+	// A human run computes and prints the plan before the approval check, so
+	// the user sees the target and effect that are being refused. The JSON
+	// run above still keeps stdout pure and makes no plan call.
+	server := newFakeReleaseServer(t, []byte("fake asset"))
+	defer server.Close()
+	binDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(binDir, "docker"), []byte("#!/bin/sh\necho 'Docker version 27.0.0'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	humanEnv := buildEnv(map[string]string{
+		"PATH":                       binDir + ":/usr/bin:/bin",
+		"DCRAFT_STATE_DIR":           t.TempDir(),
+		"DCRAFT_COMPOSE_PLUGIN_DIR":  pluginDir,
+		"DCRAFT_COMPOSE_RELEASE_API": server.URL,
+	})
+	human := runProcess(t, t.TempDir(), humanEnv, strings.NewReader(""), "install-compose")
 	if human.code != 2 {
-		t.Fatalf("human exit = %d, want 2", human.code)
+		t.Fatalf("human exit = %d, want 2 (stderr=%q)", human.code, human.stderr)
 	}
 	if human.stdout != "" {
 		t.Fatalf("human failure wrote stdout: %q", human.stdout)
 	}
-	for _, want := range []string{"승인", "Docker CLI·Engine·Desktop은 변경하지 않으며", "--approve install", "출처·버전·설치 경로"} {
+	for _, want := range []string{
+		"승인", "Docker CLI·Engine·Desktop은 변경하지 않으며", "--approve install",
+		"출처·버전·설치 경로", "Compose 설치 계획", "버전:", "대상 경로:", "변경 내용:",
+	} {
 		if !strings.Contains(human.stderr, want) {
 			t.Fatalf("human stderr missing %q:\n%s", want, human.stderr)
 		}

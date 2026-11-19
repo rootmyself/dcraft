@@ -18,6 +18,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/rootmyself/dcraft/internal/core"
+	"github.com/rootmyself/dcraft/internal/projectconfig"
 )
 
 // FileName is the optional project-local config file. It is a dcraft file, not
@@ -118,11 +119,11 @@ func Load(projectDir string) (Catalog, error) {
 		return cat, invalidConfig(msgConfigUnreadable, err.Error())
 	}
 
-	var doc yaml.Node
-	if err := yaml.Unmarshal(data, &doc); err != nil {
+	doc, err := projectconfig.Decode(data)
+	if err != nil {
 		return cat, invalidConfig(msgConfigMalformed, err.Error())
 	}
-	if len(doc.Content) == 0 {
+	if doc == nil {
 		return cat, nil
 	}
 	root := doc.Content[0]
@@ -130,22 +131,28 @@ func Load(projectDir string) (Catalog, error) {
 		return cat, nil
 	}
 	if root.Kind != yaml.MappingNode {
-		return cat, invalidConfig(msgConfigRoot, lineOf(root))
+		return cat, invalidConfig(msgConfigRoot, projectconfig.LineOf(FileName, root))
 	}
+	return parseCatalogRoot(projectDir, root)
+}
 
-	envNode := mappingValue(root, "environments")
+// parseCatalogRoot reads only the environments section from an already
+// decoded document, so the locked writer never reads the file twice.
+func parseCatalogRoot(projectDir string, root *yaml.Node) (Catalog, error) {
+	cat := Catalog{Path: filepath.Join(projectDir, FileName)}
+	envNode := projectconfig.MappingValue(root, "environments")
 	if envNode == nil || envNode.Tag == "!!null" {
 		return cat, nil
 	}
 	if envNode.Kind != yaml.MappingNode {
-		return cat, invalidConfig(msgConfigEnvironments, lineOf(envNode))
+		return cat, invalidConfig(msgConfigEnvironments, projectconfig.LineOf(FileName, envNode))
 	}
 
 	seen := map[string]int{}
 	for i := 0; i+1 < len(envNode.Content); i += 2 {
 		keyNode, valNode := envNode.Content[i], envNode.Content[i+1]
 		if keyNode.Kind != yaml.ScalarNode || keyNode.Tag != "!!str" {
-			return cat, invalidConfig(msgConfigAliasKey, lineOf(keyNode))
+			return cat, invalidConfig(msgConfigAliasKey, projectconfig.LineOf(FileName, keyNode))
 		}
 		name := keyNode.Value
 		if err := validateAlias(name); err != nil {
@@ -183,21 +190,21 @@ var allowedEnvironmentFields = map[string]bool{
 func parseEnvironment(projectDir, name string, node *yaml.Node) (core.Environment, error) {
 	env := core.Environment{Name: name, Files: []string{}, EnvFiles: []string{}, Profiles: []string{}}
 	if node.Kind == 0 || node.Tag == "!!null" {
-		return env, invalidConfig(fmt.Sprintf(msgEnvEmpty, name), lineOf(node))
+		return env, invalidConfig(fmt.Sprintf(msgEnvEmpty, name), projectconfig.LineOf(FileName, node))
 	}
 	if node.Kind != yaml.MappingNode {
-		return env, invalidConfig(fmt.Sprintf(msgEnvNotMapping, name), lineOf(node))
+		return env, invalidConfig(fmt.Sprintf(msgEnvNotMapping, name), projectconfig.LineOf(FileName, node))
 	}
 
 	seenFields := map[string]int{}
 	for i := 0; i+1 < len(node.Content); i += 2 {
 		fieldNode, valueNode := node.Content[i], node.Content[i+1]
 		if fieldNode.Kind != yaml.ScalarNode || fieldNode.Tag != "!!str" {
-			return env, invalidConfig(fmt.Sprintf(msgEnvUnknownField, name, fieldNode.Value), lineOf(fieldNode))
+			return env, invalidConfig(fmt.Sprintf(msgEnvUnknownField, name, fieldNode.Value), projectconfig.LineOf(FileName, fieldNode))
 		}
 		field := fieldNode.Value
 		if !allowedEnvironmentFields[field] {
-			return env, invalidConfig(fmt.Sprintf(msgEnvUnknownField, name, field), lineOf(fieldNode))
+			return env, invalidConfig(fmt.Sprintf(msgEnvUnknownField, name, field), projectconfig.LineOf(FileName, fieldNode))
 		}
 		if prev, dup := seenFields[field]; dup {
 			return env, invalidConfig(fmt.Sprintf(msgEnvDuplicateField, name, field), fmt.Sprintf("%s:%d and %s:%d", FileName, prev, FileName, fieldNode.Line))
@@ -228,7 +235,7 @@ func parseEnvironment(projectDir, name string, node *yaml.Node) (core.Environmen
 		}
 	}
 	if len(env.Files) == 0 && len(env.EnvFiles) == 0 && len(env.Profiles) == 0 {
-		return env, invalidConfig(fmt.Sprintf(msgEnvEmpty, name), lineOf(node))
+		return env, invalidConfig(fmt.Sprintf(msgEnvEmpty, name), projectconfig.LineOf(FileName, node))
 	}
 	return env, nil
 }
@@ -238,17 +245,17 @@ func stringList(projectDir, name, field string, node *yaml.Node) ([]string, erro
 		return []string{}, nil
 	}
 	if node.Kind != yaml.SequenceNode {
-		return nil, invalidConfig(fmt.Sprintf(msgEnvNotList, name, field), lineOf(node))
+		return nil, invalidConfig(fmt.Sprintf(msgEnvNotList, name, field), projectconfig.LineOf(FileName, node))
 	}
 	out := make([]string, 0, len(node.Content))
 	seen := map[string]bool{}
 	for _, item := range node.Content {
 		if item.Kind != yaml.ScalarNode || item.Tag != "!!str" {
-			return nil, invalidConfig(fmt.Sprintf(msgEnvListItem, name, field), lineOf(item))
+			return nil, invalidConfig(fmt.Sprintf(msgEnvListItem, name, field), projectconfig.LineOf(FileName, item))
 		}
 		raw := strings.TrimSpace(item.Value)
 		if raw == "" {
-			return nil, invalidConfig(fmt.Sprintf(msgEnvListEmpty, name, field), lineOf(item))
+			return nil, invalidConfig(fmt.Sprintf(msgEnvListEmpty, name, field), projectconfig.LineOf(FileName, item))
 		}
 		path := raw
 		if !filepath.IsAbs(path) {
@@ -256,7 +263,7 @@ func stringList(projectDir, name, field string, node *yaml.Node) ([]string, erro
 		}
 		path = filepath.Clean(path)
 		if seen[path] {
-			return nil, invalidConfig(fmt.Sprintf(msgEnvListDuplicate, name, field, raw), lineOf(item))
+			return nil, invalidConfig(fmt.Sprintf(msgEnvListDuplicate, name, field, raw), projectconfig.LineOf(FileName, item))
 		}
 		seen[path] = true
 		out = append(out, path)
@@ -269,47 +276,28 @@ func profileList(name string, node *yaml.Node) ([]string, error) {
 		return []string{}, nil
 	}
 	if node.Kind != yaml.SequenceNode {
-		return nil, invalidConfig(fmt.Sprintf(msgEnvNotList, name, "profiles"), lineOf(node))
+		return nil, invalidConfig(fmt.Sprintf(msgEnvNotList, name, "profiles"), projectconfig.LineOf(FileName, node))
 	}
 	out := make([]string, 0, len(node.Content))
 	seen := map[string]bool{}
 	for _, item := range node.Content {
 		if item.Kind != yaml.ScalarNode || item.Tag != "!!str" {
-			return nil, invalidConfig(fmt.Sprintf(msgEnvListItem, name, "profiles"), lineOf(item))
+			return nil, invalidConfig(fmt.Sprintf(msgEnvListItem, name, "profiles"), projectconfig.LineOf(FileName, item))
 		}
 		profile := strings.TrimSpace(item.Value)
 		if profile == "" {
-			return nil, invalidConfig(fmt.Sprintf(msgEnvListEmpty, name, "profiles"), lineOf(item))
+			return nil, invalidConfig(fmt.Sprintf(msgEnvListEmpty, name, "profiles"), projectconfig.LineOf(FileName, item))
 		}
 		if strings.ContainsAny(profile, " \t") {
-			return nil, invalidConfig(fmt.Sprintf(msgEnvProfileInvalid, name, profile), lineOf(item))
+			return nil, invalidConfig(fmt.Sprintf(msgEnvProfileInvalid, name, profile), projectconfig.LineOf(FileName, item))
 		}
 		if seen[profile] {
-			return nil, invalidConfig(fmt.Sprintf(msgEnvListDuplicate, name, "profiles", profile), lineOf(item))
+			return nil, invalidConfig(fmt.Sprintf(msgEnvListDuplicate, name, "profiles", profile), projectconfig.LineOf(FileName, item))
 		}
 		seen[profile] = true
 		out = append(out, profile)
 	}
 	return out, nil
-}
-
-func mappingValue(node *yaml.Node, key string) *yaml.Node {
-	if node.Kind != yaml.MappingNode {
-		return nil
-	}
-	for i := 0; i+1 < len(node.Content); i += 2 {
-		if node.Content[i].Value == key {
-			return node.Content[i+1]
-		}
-	}
-	return nil
-}
-
-func lineOf(node *yaml.Node) string {
-	if node == nil {
-		return FileName
-	}
-	return fmt.Sprintf("%s:%d", FileName, node.Line)
 }
 
 func requireFile(path string) error {

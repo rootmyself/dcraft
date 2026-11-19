@@ -87,6 +87,7 @@ const (
 	msgGoodMixedImages   = "서비스 %s의 인스턴스가 서로 다른 이미지로 실행 중이라 정상 버전을 기록하지 못했습니다."
 	msgGoodMultiNotice   = "서비스 선택 갱신입니다. 선택하지 않은 서비스는 변경하지 않았습니다."
 	msgGoodRetentionNote = "보존 태그는 이전 이미지를 보호하기 위한 dcraft 소유 태그이며 자동으로 삭제하지 않습니다."
+	msgGoodNotCaptured   = "갱신 전 실행 상태가 정상으로 확인되지 않아 직전 정상 버전 기록을 새로 만들지 않았습니다. 기존 기록은 변경하지 않았습니다."
 	msgGoodLateCancel    = "작업 중단 요청이 정상 버전 기록이 끝난 뒤 도착했습니다. 적용과 기록은 완료되었습니다."
 	msgSuccessHeader     = "갱신 완료"
 	msgSuccessUnverified = "갱신 완료(일부 앱 확인 안 됨)"

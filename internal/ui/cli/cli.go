@@ -215,15 +215,14 @@ func newFeatureCommand(opts Options, tf *targetFlags, feature core.Feature) *cob
 			fmt.Fprint(opts.Stderr, "오류: 작업 엔진이 준비되지 않았습니다.\n")
 			return &ExitError{Code: 1}
 		}
-		previewAllowed := d.Approval == core.ApprovalNone || core.HasApproval(approvals, d.Approval)
-		if !tf.json && previewAllowed {
+		if !tf.json {
 			_, isPlanner := feature.(core.Planner)
 			if isPlanner || d.Hooks != core.HookNone {
-				// This read-only preview uses the same plan path as the TUI so
-				// the human sees the target, planned work and registered host
-				// scripts before anything is built, pulled or changed. The
-				// engine still enforces any independent approval; an ordinary
-				// update needs none.
+				// Always show the read-only plan before the approval check, so
+				// an unapproved run still tells the user the target and effect
+				// it is refusing to perform. JSON keeps stdout pure and makes
+				// no separate plan call. The engine still enforces every
+				// independent approval; an ordinary update needs none.
 				plan := opts.Engine.Plan(cmd.Context(), req, nil)
 				if plan.Failed() {
 					res := plan.Result()

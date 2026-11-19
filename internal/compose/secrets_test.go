@@ -375,7 +375,7 @@ func errorText(err error) string {
 	return err.Error()
 }
 
-func TestRestartRecreatesMissingFileSecretWithoutEnvValues(t *testing.T) {
+func TestRestartReusesMaterializedFileWithoutApplyingRotation(t *testing.T) {
 	project, target := secretProject(t, `secrets:
   - service: web
     phase: runtime
@@ -383,24 +383,30 @@ func TestRestartRecreatesMissingFileSecretWithoutEnvValues(t *testing.T) {
     source: file
     ref: token.txt
 `)
-	if err := os.WriteFile(filepath.Join(project, "token.txt"), []byte("file-value"), 0o600); err != nil {
+	source := filepath.Join(project, "token.txt")
+	if err := os.WriteFile(source, []byte("v1"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	runner := secretRunner(t, "")
 	c, rt := secretCompose(t, project, runner, nil)
+	if _, err := c.Up(context.Background(), target, nil); err != nil {
+		t.Fatalf("Up: %v", err)
+	}
 	path, _ := rt.MaterializedPath(target, secretref.Reference{
 		Service: "web", Delivery: secretref.DeliveryFile, Target: "token",
 	})
-	_, err := c.Restart(context.Background(), target, []string{"web"})
-	if err != nil {
+	if err := os.WriteFile(source, []byte("v2"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Restart(context.Background(), target, []string{"web"}); err != nil {
 		t.Fatalf("Restart: %v", err)
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("materialized file missing after restart: %v", err)
 	}
-	if string(data) != "file-value" {
-		t.Fatalf("materialized content = %q", data)
+	if string(data) != "v1" {
+		t.Fatalf("restart applied a rotated file secret: %q", data)
 	}
 	var restart execx.Command
 	for _, call := range runner.Calls() {
@@ -416,6 +422,41 @@ func TestRestartRecreatesMissingFileSecretWithoutEnvValues(t *testing.T) {
 	}
 	if strings.Contains(strings.Join(restart.Args, " "), "compose.secrets.yaml") {
 		t.Fatal("restart passed the secrets override")
+	}
+}
+
+func TestRestartMissingMaterializedFileFailsBeforeTouchingContainers(t *testing.T) {
+	project, target := secretProject(t, `secrets:
+  - service: web
+    phase: runtime
+    delivery: file
+    source: file
+    ref: token.txt
+`)
+	if err := os.WriteFile(filepath.Join(project, "token.txt"), []byte("v1"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runner := secretRunner(t, "")
+	c, _ := secretCompose(t, project, runner, nil)
+	_, err := c.Restart(context.Background(), target, []string{"web"})
+	if err == nil {
+		t.Fatal("restart succeeded without a materialized file")
+	}
+	var ce *core.Error
+	if !errors.As(err, &ce) {
+		t.Fatalf("error is not a core diagnostic: %v", err)
+	}
+	guidance := ""
+	for _, d := range ce.Diagnostics {
+		guidance += d.Message + " " + strings.Join(d.NextActions, " ")
+	}
+	if !strings.Contains(guidance, "dcraft up") {
+		t.Fatalf("guidance missing: %v", err)
+	}
+	for _, call := range runner.Calls() {
+		if strings.Contains(strings.Join(call.Args, " "), " restart ") {
+			t.Fatalf("restart reached Docker without the required file: %v", call.Args)
+		}
 	}
 }
 

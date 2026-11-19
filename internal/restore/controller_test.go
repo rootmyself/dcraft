@@ -518,7 +518,8 @@ func TestRunMissingTargetAndExplicitMapping(t *testing.T) {
 		t.Fatalf("missing target touched data: %v", backend.events)
 	}
 
-	// Explicit mapping is allowed but must be reported as a warning.
+	// A project/environment mismatch is always refused: the removed
+	// --allow-source-mismatch flag must not leave a bypass behind.
 	backend = defaultBackend()
 	backend.projectName = "renamed"
 	backend.sources[0].Name = "renamed_data"
@@ -527,14 +528,13 @@ func TestRunMissingTargetAndExplicitMapping(t *testing.T) {
 	}
 	backend.exists["renamed_data"] = true
 	controller, _, _ = newRestoreController(t, backend, "renamed", &fakeSpace{available: 1 << 30})
-	payload, err := controller.Run(context.Background(), restoreInvocation(t, t.TempDir(), artifactDir,
+	_, err = controller.Run(context.Background(), restoreInvocation(t, t.TempDir(), artifactDir,
 		map[string]string{"allow-source-mismatch": "true"}))
-	if err != nil {
-		t.Fatalf("explicit mapping: %v", err)
+	if err == nil || !hasCategory(err, core.CategoryRestoreTargetMismatch) {
+		t.Fatalf("project mismatch was not refused: %v", err)
 	}
-	report := payload.(Payload).Restore
-	if !report.ExplicitMapping || len(report.Warnings) == 0 {
-		t.Fatalf("explicit mapping was not reported: %+v", report)
+	if len(backend.events) != 0 {
+		t.Fatalf("refused mismatch touched data: %v", backend.events)
 	}
 }
 

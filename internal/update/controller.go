@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/rootmyself/dcraft/internal/core"
+	"github.com/rootmyself/dcraft/internal/readiness"
 	"github.com/rootmyself/dcraft/internal/secretref"
 	"github.com/rootmyself/dcraft/internal/stack"
 	"github.com/rootmyself/dcraft/internal/state"
@@ -276,6 +277,16 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation, opts Options) 
 	}
 	defs := targetDefinitions(model, services)
 
+	// Capture the deployment that is running *before* anything is built,
+	// pulled or recreated. A verified-good update publishes this captured
+	// deployment as the single previous-good record, so rollback restores the
+	// version that actually preceded the update. Tags are created here, before
+	// apply, so the images survive replacement even after a failed run.
+	capture, captureErr := c.capturePreUpdate(ctx, in, opTarget, allocation.Name, model)
+	if captureErr != nil && isCanceled(ctx, captureErr) {
+		return Payload{}, ctxError(ctx, captureErr)
+	}
+
 	built := []string{}
 	pulled := []string{}
 	if len(plan.BuildServices) == 0 {
@@ -362,11 +373,11 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation, opts Options) 
 		return Payload{}, err
 	}
 
-	var readiness readinessOutcome
+	var outcome readiness.Outcome
 	if in.Reporter != nil {
 		in.Reporter.Begin(StageVerify, msgStageVerify)
 	}
-	readiness, err = c.observe(ctx, opTarget, defs, baseline, opts.Timeout)
+	outcome, err = c.observe(ctx, opTarget, defs, baseline, opts.Timeout)
 	if err != nil {
 		if in.Reporter != nil {
 			status := core.StageFailed
@@ -377,14 +388,14 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation, opts Options) 
 		}
 		return Payload{}, ctxError(ctx, err)
 	}
-	if !allSatisfied(readiness.services) {
+	if !readiness.AllSatisfied(outcome.Services) {
 		if in.Reporter != nil {
-			in.Reporter.End(StageVerify, core.StageFailed, readinessSummary(readiness.services))
+			in.Reporter.End(StageVerify, core.StageFailed, readiness.Summary(outcome.Services))
 		}
-		return Payload{}, readinessFailure(readiness, opts.Timeout)
+		return Payload{}, readinessFailure(outcome, opts.Timeout)
 	}
 	if in.Reporter != nil {
-		in.Reporter.End(StageVerify, core.StageSucceeded, readinessSummary(readiness.services))
+		in.Reporter.End(StageVerify, core.StageSucceeded, readiness.Summary(outcome.Services))
 	}
 
 	payload := Payload{Update: Report{
@@ -403,8 +414,8 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation, opts Options) 
 		Built:        built,
 		Pulled:       pulled,
 		Applied:      true,
-		Verified:     readiness.verified,
-		Readiness:    readiness.services,
+		Verified:     outcome.Verified,
+		Readiness:    outcome.Services,
 		RecordStatus: RecordSkipped,
 		Notices:      notices,
 	}}
@@ -415,34 +426,47 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation, opts Options) 
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return Payload{}, ctxErr
 	}
-	var recorded *state.GoodVersion
-	recordErr := core.RunStage(in.Reporter, StageRecord, msgStageRecord, func() error {
-		rec, err := c.recordGoodVersion(ctx, in, opTarget, allocation.Name, model)
-		if err != nil {
-			return err
-		}
-		recorded = &rec
-		return nil
-	})
-	if recordErr != nil {
-		if isCanceled(ctx, recordErr) {
-			return Payload{}, ctxError(ctx, recordErr)
-		}
+	if captureErr != nil {
 		payload.Update.RecordStatus = RecordFailed
-		payload.Update.RecordDetail = recordErr.Error()
+		payload.Update.RecordDetail = recordErrorDetail(captureErr)
 		payload.Update.Notices = append(payload.Update.Notices, msgGoodRecordFailed)
+		skipStage(in.Reporter, StageRecord, msgStageRecord, msgGoodRecordFailed)
+	} else if capture.record == nil {
+		// There was no healthy running pre-update deployment. dcraft does not
+		// invent a record and never overwrites an existing one.
+		payload.Update.RecordStatus = RecordSkipped
+		payload.Update.Notices = append(payload.Update.Notices, msgGoodNotCaptured)
+		skipStage(in.Reporter, StageRecord, msgStageRecord, msgGoodNotCaptured)
 	} else {
-		// SaveGoodVersion checks cancellation immediately before publishing.
-		// A cancellation that arrives after the rename means the record is
-		// already complete; don't roll back a completed commit, and don't
-		// report the whole verified update as canceled. Report success with a
-		// notice instead.
-		if ctx.Err() != nil {
-			payload.Update.Notices = append(payload.Update.Notices, msgGoodLateCancel)
+		var recorded *state.GoodVersion
+		recordErr := core.RunStage(in.Reporter, StageRecord, msgStageRecord, func() error {
+			rec, err := c.publishCaptured(ctx, in, *capture.record)
+			if err != nil {
+				return err
+			}
+			recorded = &rec
+			return nil
+		})
+		if recordErr != nil {
+			if isCanceled(ctx, recordErr) {
+				return Payload{}, ctxError(ctx, recordErr)
+			}
+			payload.Update.RecordStatus = RecordFailed
+			payload.Update.RecordDetail = recordErrorDetail(recordErr)
+			payload.Update.Notices = append(payload.Update.Notices, msgGoodRecordFailed)
+		} else {
+			// SaveGoodVersion checks cancellation immediately before publishing.
+			// A cancellation that arrives after the rename means the record is
+			// already complete; don't roll back a completed commit, and don't
+			// report the whole verified update as canceled. Report success with a
+			// notice instead.
+			if ctx.Err() != nil {
+				payload.Update.Notices = append(payload.Update.Notices, msgGoodLateCancel)
+			}
+			payload.Update.RecordStatus = RecordRecorded
+			payload.Update.GoodVersion = recorded
+			payload.Update.Notices = append(payload.Update.Notices, msgGoodRecorded, msgGoodRetentionNote)
 		}
-		payload.Update.RecordStatus = RecordRecorded
-		payload.Update.GoodVersion = recorded
-		payload.Update.Notices = append(payload.Update.Notices, msgGoodRecorded, msgGoodRetentionNote)
 	}
 	payload.Update.Notices = nonNil(payload.Update.Notices)
 	return payload, nil
@@ -591,103 +615,234 @@ func (c *Controller) observedState(ctx context.Context, target core.Target) stri
 	return fmt.Sprintf("컨테이너 %d개 중 실행 %d개 · 재시작 합계 %d회 · 종료 %d개", len(containers), running, restarts, exited)
 }
 
-// recordGoodVersion tags and records the verified deployment. It is only called
-// after verification succeeded, while the per-stack lock is held.
-func (c *Controller) recordGoodVersion(ctx context.Context, in core.Invocation, target core.Target, projectName string, model stack.UpdateModel) (state.GoodVersion, error) {
+// preUpdateCapture is the deployment observed immediately before an update.
+// A nil record with fresh=false means the pre-update deployment was not fully
+// running and healthy, so no record may be published or replaced.
+type preUpdateCapture struct {
+	record *state.GoodVersion
+}
+
+// capturePreUpdate reads the currently running deployment and retains its
+// images with dcraft-owned retention tags. It uses the existing record's
+// execution configuration and secret references when that record still
+// describes the running images; otherwise it records the current target and
+// saved references. It never resolves or stores a secret value.
+func (c *Controller) capturePreUpdate(ctx context.Context, in core.Invocation, target core.Target, projectName string, model stack.UpdateModel) (preUpdateCapture, error) {
 	containers, err := c.updater.Containers(ctx, target)
 	if err != nil {
-		return state.GoodVersion{}, err
+		return preUpdateCapture{}, err
+	}
+	if len(containers) == 0 {
+		return preUpdateCapture{}, nil
 	}
 	byService := map[string][]stack.Container{}
 	for _, container := range containers {
 		byService[container.Service] = append(byService[container.Service], container)
 	}
+
+	ls := c.store.(lockStore)
+	capturedTarget := in.Target
+	capturedTarget.ProjectDir = target.ProjectDir
+	capturedTarget.ProjectName = projectName
+	var secretRefs []state.SecretReference
+	existing, found, loadErr := ls.LoadGoodVersion(target)
+	if loadErr == nil && found && sameDeployment(existing, model, byService) {
+		// The record describes exactly the images that are running now, so
+		// its file list and references are the pre-update configuration even
+		// if .dcraft.yaml already changed for the upcoming update.
+		capturedTarget.Files = append([]string{}, existing.Target.Files...)
+		capturedTarget.EnvFiles = append([]string{}, existing.Target.EnvFiles...)
+		capturedTarget.Profiles = append([]string{}, existing.Target.Profiles...)
+		capturedTarget.DefaultEnvFile = existing.Target.DefaultEnvFile
+		capturedTarget.Environment = in.Target.Environment
+		secretRefs = append([]state.SecretReference{}, existing.Target.SecretRefs...)
+	} else {
+		secretRefs, err = goodVersionSecretRefs(target)
+		if err != nil {
+			return preUpdateCapture{}, err
+		}
+	}
+
 	services := make([]state.GoodService, 0, len(model.Services))
 	for _, def := range model.Services {
 		records := byService[def.Name]
 		if len(records) == 0 {
-			continue
+			return preUpdateCapture{}, nil
 		}
 		imageID := records[0].ImageID
-		for _, other := range records[1:] {
-			if other.ImageID != imageID {
-				return state.GoodVersion{}, fmt.Errorf(msgGoodMixedImages, def.Name)
+		for _, record := range records {
+			if err := ctx.Err(); err != nil {
+				return preUpdateCapture{}, err
+			}
+			if !record.Running || !strings.EqualFold(record.State, "running") {
+				return preUpdateCapture{}, nil
+			}
+			if def.Healthcheck && !strings.EqualFold(record.Health, "healthy") {
+				return preUpdateCapture{}, nil
+			}
+			if record.ImageID == "" || record.ImageID != imageID {
+				return preUpdateCapture{}, nil
 			}
 		}
 		if imageID == "" {
-			return state.GoodVersion{}, errors.New(msgGoodNoImages)
+			return preUpdateCapture{}, nil
 		}
 		if err := ctx.Err(); err != nil {
-			return state.GoodVersion{}, err
+			return preUpdateCapture{}, err
+		}
+		imageRef := records[0].ImageRef
+		if imageRef == "" {
+			imageRef = def.Image
 		}
 		tag := retentionTag(projectName, def.Name, imageID)
-		if err := c.updater.TagImage(ctx, imageID, tag); err != nil {
-			return state.GoodVersion{}, err
+		if err := c.tagPreUpdateImage(ctx, imageID, imageRef, tag); err != nil {
+			return preUpdateCapture{}, err
 		}
 		services = append(services, state.GoodService{
 			Service:      def.Name,
 			ImageID:      imageID,
-			ImageRef:     def.Image,
+			ImageRef:     imageRef,
 			RetentionTag: tag,
 			Build:        def.Build,
 			Healthcheck:  def.Healthcheck,
 		})
 	}
 	if len(services) == 0 {
-		return state.GoodVersion{}, errors.New(msgGoodNoImages)
+		return preUpdateCapture{}, nil
 	}
 	sort.Slice(services, func(i, j int) bool { return services[i].Service < services[j].Service })
-	// Store the saved references, never a resolved value. Rollback re-resolves
-	// them through their original sources and checks availability before it
-	// changes anything. Both runtime and build phases are recorded so a
-	// rollback can precheck build-time delivery too.
-	secretRefs, err := goodVersionSecretRefs(target)
-	if err != nil {
-		return state.GoodVersion{}, err
+	return preUpdateCapture{record: &state.GoodVersion{
+		Version: state.GoodVersionVersion,
+		Target: state.GoodTarget{
+			ProjectDir:     capturedTarget.ProjectDir,
+			Files:          append([]string{}, capturedTarget.Files...),
+			EnvFiles:       append([]string{}, capturedTarget.EnvFiles...),
+			Profiles:       append([]string{}, capturedTarget.Profiles...),
+			ProjectName:    projectName,
+			Environment:    in.Target.Environment,
+			DefaultEnvFile: capturedTarget.DefaultEnvFile,
+			SecretRefs:     secretRefs,
+		},
+		Services: services,
+	}}, nil
+}
+
+// tagPreUpdateImage retains the pre-update image. The full image ID is the
+// authoritative identity, but some container image stores briefly refuse
+// `docker tag` on a just-started container's ID while the Compose tag already
+// resolves to the same image. Both spellings are bounded retries; the tag is
+// verified afterwards by TagImage, so the recorded image ID never changes.
+func (c *Controller) tagPreUpdateImage(ctx context.Context, imageID, imageRef, tag string) error {
+	refs := []string{imageID}
+	if imageRef != "" && imageRef != imageID {
+		refs = append(refs, imageRef)
 	}
+	var last error
+	for attempt := 0; attempt < 4; attempt++ {
+		if attempt > 0 {
+			timer := time.NewTimer(500 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return ctx.Err()
+			case <-timer.C:
+			}
+		}
+		for _, ref := range refs {
+			if err := c.updater.TagImageFrom(ctx, ref, imageID, tag); err != nil {
+				if isCanceled(ctx, err) {
+					return err
+				}
+				last = err
+				continue
+			}
+			return nil
+		}
+	}
+	return last
+}
+
+// sameDeployment reports whether an existing record still describes every
+// running container of the current model. It is the guard that keeps a stale
+// record's references from being attributed to a different deployment.
+func sameDeployment(existing state.GoodVersion, model stack.UpdateModel, byService map[string][]stack.Container) bool {
+	if len(existing.Services) != len(model.Services) || len(existing.Target.Files) == 0 {
+		return false
+	}
+	recorded := make(map[string]string, len(existing.Services))
+	for _, svc := range existing.Services {
+		recorded[svc.Service] = svc.ImageID
+	}
+	for _, def := range model.Services {
+		wantID, ok := recorded[def.Name]
+		if !ok {
+			return false
+		}
+		records := byService[def.Name]
+		if len(records) == 0 {
+			return false
+		}
+		for _, record := range records {
+			if record.ImageID != wantID {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// publishCaptured stores the pre-update deployment captured before apply. It
+// is only called after readiness verified the update and while the stack lock
+// is held. Cancellation is checked immediately before the atomic publish.
+func (c *Controller) publishCaptured(ctx context.Context, in core.Invocation, rec state.GoodVersion) (state.GoodVersion, error) {
 	recordedAt := c.clock.Now()
 	if in.Clock != nil {
 		recordedAt = in.Clock.Now()
 	}
-	rec := state.GoodVersion{
-		Version:    state.GoodVersionVersion,
-		RecordedAt: recordedAt,
-		Target: state.GoodTarget{
-			ProjectDir:     target.ProjectDir,
-			Files:          append([]string{}, in.Target.Files...),
-			EnvFiles:       append([]string{}, in.Target.EnvFiles...),
-			Profiles:       append([]string{}, in.Target.Profiles...),
-			ProjectName:    projectName,
-			Environment:    in.Target.Environment,
-			DefaultEnvFile: in.Target.DefaultEnvFile,
-			// Secret references are the saved sources and targets only.
-			SecretRefs: secretRefs,
-		},
-		Services: services,
-	}
-	// A canceled operation must not overwrite the escape route even if the
-	// verification had already passed.
+	rec.RecordedAt = recordedAt
+	rec.Version = state.GoodVersionVersion
 	if err := ctx.Err(); err != nil {
 		return state.GoodVersion{}, err
 	}
 	ls := c.store.(lockStore)
-	if err := ls.SaveGoodVersion(ctx, target, rec); err != nil {
+	if err := ls.SaveGoodVersion(ctx, in.Target, rec); err != nil {
 		return state.GoodVersion{}, err
 	}
 	return rec, nil
 }
 
-func readinessFailure(outcome readinessOutcome, timeout time.Duration) error {
-	summary := readinessSummary(outcome.services)
+// recordErrorDetail keeps the diagnostic detail (never a secret value) so a
+// failed record write is actionable instead of only its category.
+func recordErrorDetail(err error) string {
+	if err == nil {
+		return ""
+	}
+	var ce *core.Error
+	if errors.As(err, &ce) && len(ce.Diagnostics) > 0 {
+		parts := make([]string, 0, len(ce.Diagnostics))
+		for _, d := range ce.Diagnostics {
+			line := string(d.Category) + ": " + d.Message
+			if strings.TrimSpace(d.Detail) != "" {
+				line += " (" + truncate(d.Detail, 300) + ")"
+			}
+			parts = append(parts, line)
+		}
+		return strings.Join(parts, "; ")
+	}
+	return err.Error()
+}
+
+func readinessFailure(outcome readiness.Outcome, timeout time.Duration) error {
+	summary := readiness.Summary(outcome.Services)
 	message := fmt.Sprintf(msgReadinessFailed, summary)
-	if outcome.timedOut {
+	if outcome.TimedOut {
 		message = fmt.Sprintf(msgReadinessTimeout, formatTimeout(timeout), summary)
 	}
 	return core.Fail(core.Diagnostic{
 		Category:    core.CategoryReadinessFailed,
 		Severity:    core.SeverityError,
 		Message:     message,
-		Detail:      readinessInstanceSummary(outcome.services),
+		Detail:      readiness.InstanceSummary(outcome.Services, msgReadinessNoState, false),
 		NextActions: []string{msgReadinessFailedOne, msgReadinessFailedTwo, msgReadinessFailed3, msgReadinessFailed4},
 	})
 }

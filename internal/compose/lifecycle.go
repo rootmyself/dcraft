@@ -125,15 +125,24 @@ func (c *Compose) Down(ctx context.Context, t core.Target) (stack.OpResult, erro
 // Restart implements stack.Lifecycle. Compose restart does not recreate
 // containers, so it never applies new configuration or images. An explicit
 // service selection is isolated with --no-deps. File-delivery secrets are
-// live bind mounts, so their materialized files are rewritten from the
-// current source before restarting; environment values are not read.
+// live bind mounts: restart reuses the existing materialized files and never
+// re-reads their sources, so a rotated value is not applied. If a required
+// file is missing, the run fails before any container is touched and points to
+// `dcraft up`, which is the configuration path.
 func (c *Compose) Restart(ctx context.Context, t core.Target, services []string) (stack.OpResult, error) {
-	prep, err := c.prepareSecrets(ctx, t, services, secretref.ModeFiles)
+	refs, err := c.restartFileRefs(t, services)
 	if err != nil {
 		return stack.OpResult{}, err
 	}
+	if len(refs) > 0 {
+		if c.secrets == nil {
+			return stack.OpResult{}, secretref.Unavailable()
+		}
+		if err := c.secrets.CheckMaterialized(t, refs); err != nil {
+			return stack.OpResult{}, err
+		}
+	}
 	if ctxErr := ctx.Err(); ctxErr != nil {
-		prep.Abort()
 		return stack.OpResult{}, ctxErr
 	}
 	args := append(t.ComposeArgs(), "restart")
@@ -141,19 +150,35 @@ func (c *Compose) Restart(ctx context.Context, t core.Target, services []string)
 		args = append(args, "--no-deps")
 	}
 	args = append(args, services...)
-	res, err := c.run(ctx, execx.Command{Name: "docker", Args: args, Dir: t.ProjectDir, Env: composeEnv(prep.Env)})
+	res, err := c.run(ctx, execx.Command{Name: "docker", Args: args, Dir: t.ProjectDir})
 	if ctxErr := ctx.Err(); ctxErr != nil {
-		return stack.OpResult{Output: prep.Redact(summarize(res.Combined())), Notices: prep.Notices}, ctxErr
+		return stack.OpResult{Output: c.Redact(ctx, t, summarize(res.Combined()))}, ctxErr
 	}
 	if err != nil {
-		prep.Abort()
 		return stack.OpResult{}, err
 	}
-	out := stack.OpResult{Output: prep.Redact(summarize(res.Combined())), Notices: prep.Notices}
+	out := stack.OpResult{Output: c.Redact(ctx, t, summarize(res.Combined()))}
 	if !res.Succeeded() {
 		return out, fmt.Errorf("docker compose restart exited with status %d", res.ExitCode)
 	}
 	return out, nil
+}
+
+// restartFileRefs selects the current runtime file-delivery references for the
+// services restart will touch. Their source is never read: a removed or
+// rotated source must not change what a restarting container sees.
+func (c *Compose) restartFileRefs(t core.Target, services []string) ([]secretref.Reference, error) {
+	cat, err := secretref.Load(t.ProjectDir)
+	if err != nil {
+		return nil, err
+	}
+	refs := make([]secretref.Reference, 0, len(cat.References))
+	for _, ref := range cat.ForPhaseServices(secretref.PhaseRuntime, services) {
+		if ref.Delivery == secretref.DeliveryFile {
+			refs = append(refs, ref)
+		}
+	}
+	return refs, nil
 }
 
 func (c *Compose) lifecycleRun(ctx context.Context, t core.Target, action string, args []string) (stack.OpResult, error) {

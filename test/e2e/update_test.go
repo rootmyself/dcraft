@@ -212,6 +212,7 @@ type updateJSON struct {
 			Verified     bool                     `json:"verified"`
 			Readiness    []stack.ServiceReadiness `json:"readiness"`
 			RecordStatus string                   `json:"record_status"`
+			RecordDetail string                   `json:"record_detail"`
 			GoodVersion  *struct {
 				Target   map[string]any `json:"target"`
 				Services []struct {
@@ -264,20 +265,22 @@ func TestUpdateCLIReportsPlanFlagsAndReadiness(t *testing.T) {
 		t.Fatalf("update exit=%d stderr=%q", res.code, res.stderr)
 	}
 	for _, want := range []string{
-		"갱신 대상", "예정 작업", "캐시 사용 안 함", "강제 재생성",
-		"정확한 미래 상태 diff가 아닙니다", "healthcheck 통과", "앱 확인 안 됨",
-		"정상 버전 기록", "dcraft-good/",
+		"갱신 완료", "healthcheck 통과", "앱 확인 안 됨", "정상 버전 기록",
 	} {
 		if !strings.Contains(res.stdout, want) {
 			t.Fatalf("human output misses %q:\n%s", want, res.stdout)
 		}
 	}
-	// The ordinary CLI shows the same target/planned work before running, on
-	// stderr, without asking for another approval.
-	for _, want := range []string{"갱신 대상", "예정 작업", "정확한 미래 상태 diff가 아닙니다"} {
+	// The ordinary CLI shows the target/planned work once, before running, on
+	// stderr, without asking for another approval. The success output does not
+	// repeat the plan.
+	for _, want := range []string{"갱신 대상", "예정 작업", "캐시 사용 안 함", "강제 재생성", "정확한 미래 상태 diff가 아닙니다"} {
 		if !strings.Contains(res.stderr, want) {
 			t.Fatalf("pre-run preview misses %q on stderr:\n%s", want, res.stderr)
 		}
+	}
+	if strings.Contains(res.stdout, "예정 작업") || strings.Contains(res.stdout, "정확한 미래 상태 diff가 아닙니다") {
+		t.Fatalf("the plan was printed twice (success output repeats it):\n%s", res.stdout)
 	}
 
 	calls := fake.calls(t)

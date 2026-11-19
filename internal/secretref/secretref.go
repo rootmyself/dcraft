@@ -4,7 +4,6 @@
 package secretref
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -16,6 +15,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/rootmyself/dcraft/internal/core"
+	"github.com/rootmyself/dcraft/internal/projectconfig"
 )
 
 // Phase is the delivery phase of a reference. Only runtime is implemented in
@@ -433,7 +433,7 @@ func Load(projectDir string) (Catalog, error) {
 		}
 		return cat, configError(msgConfigUnreadable, err.Error())
 	}
-	doc, err := decodeDoc(data)
+	doc, err := projectconfig.Decode(data)
 	if err != nil {
 		return cat, configError(msgConfigMalformed, err.Error())
 	}
@@ -442,14 +442,25 @@ func Load(projectDir string) (Catalog, error) {
 	}
 	root := doc.Content[0]
 	if root.Kind != yaml.MappingNode {
-		return cat, configError(msgConfigRoot, lineOf(root))
+		return cat, configError(msgConfigRoot, projectconfig.LineOf(projectconfig.FileName, root))
 	}
-	node := mappingValue(root, "secrets")
+	return parseCatalogRoot(projectDir, root)
+}
+
+// parseCatalogRoot reads only the secrets section from an already decoded
+// document, so the locked writer never reads the file twice.
+func parseCatalogRoot(projectDir string, root *yaml.Node) (Catalog, error) {
+	cat := Catalog{
+		Path:       filepath.Join(projectDir, projectconfig.FileName),
+		ProjectDir: projectDir,
+		References: []Reference{},
+	}
+	node := projectconfig.MappingValue(root, "secrets")
 	if node == nil || node.Tag == "!!null" {
 		return cat, nil
 	}
 	if node.Kind != yaml.SequenceNode {
-		return cat, configError(msgSecretsNotList, lineOf(node))
+		return cat, configError(msgSecretsNotList, projectconfig.LineOf(projectconfig.FileName, node))
 	}
 	refs, err := parseReferences(node)
 	if err != nil {
@@ -466,7 +477,8 @@ func Load(projectDir string) (Catalog, error) {
 }
 
 // Add validates and appends one reference, then writes the secrets section
-// back to .dcraft.yaml. It returns the updated catalog.
+// back to .dcraft.yaml under the shared project-config lock. It returns the
+// updated catalog.
 func Add(projectDir string, ref Reference) (Catalog, error) {
 	cat, err := Load(projectDir)
 	if err != nil {
@@ -476,22 +488,33 @@ func Add(projectDir string, ref Reference) (Catalog, error) {
 		return cat, inputError(err)
 	}
 	ref.Target = ref.EffectiveTarget()
-	// Re-adding the same saved connection is idempotent: it must not create a
-	// duplicate or change the stored reference.
-	for _, existing := range cat.References {
-		if sameReference(existing, ref) {
-			return cat, nil
+	err = projectconfig.Update(projectDir, func(root *yaml.Node) error {
+		current, err := parseCatalogRoot(projectDir, root)
+		if err != nil {
+			return err
 		}
+		cat = current
+		// Re-adding the same saved connection is idempotent: it must not
+		// create a duplicate or change the stored reference.
+		for _, existing := range current.References {
+			if sameReference(existing, ref) {
+				return projectconfig.ErrNoChange
+			}
+		}
+		refs := append([]Reference{}, current.References...)
+		refs = append(refs, ref)
+		if err := validateCatalog(refs, core.CategorySecretInputInvalid); err != nil {
+			return err
+		}
+		if err := setSecrets(root, refs); err != nil {
+			return err
+		}
+		cat.References = refs
+		return nil
+	})
+	if err != nil {
+		return cat, configWriteError(err)
 	}
-	refs := append([]Reference{}, cat.References...)
-	refs = append(refs, ref)
-	if err := validateCatalog(refs, core.CategorySecretInputInvalid); err != nil {
-		return cat, err
-	}
-	if err := writeCatalog(projectDir, refs); err != nil {
-		return cat, err
-	}
-	cat.References = refs
 	return cat, nil
 }
 
@@ -505,27 +528,38 @@ func Remove(projectDir, service string, delivery Delivery, target string) (Catal
 	}
 	service = strings.TrimSpace(service)
 	target = strings.TrimSpace(target)
-	refs := make([]Reference, 0, len(cat.References))
-	removed := false
-	for _, ref := range cat.References {
-		if ref.Service == service && ref.Delivery == delivery && ref.EffectiveTarget() == target {
-			removed = true
-			continue
+	err = projectconfig.Update(projectDir, func(root *yaml.Node) error {
+		current, err := parseCatalogRoot(projectDir, root)
+		if err != nil {
+			return err
 		}
-		refs = append(refs, ref)
+		cat = current
+		refs := make([]Reference, 0, len(current.References))
+		removed := false
+		for _, ref := range current.References {
+			if ref.Service == service && ref.Delivery == delivery && ref.EffectiveTarget() == target {
+				removed = true
+				continue
+			}
+			refs = append(refs, ref)
+		}
+		if !removed {
+			return core.Fail(core.Diagnostic{
+				Category:    core.CategorySecretInputInvalid,
+				Severity:    core.SeverityError,
+				Message:     fmt.Sprintf(msgRemoveNotFound, service, string(delivery), target),
+				NextActions: []string{msgListAction},
+			})
+		}
+		if err := setSecrets(root, refs); err != nil {
+			return err
+		}
+		cat.References = refs
+		return nil
+	})
+	if err != nil {
+		return cat, configWriteError(err)
 	}
-	if !removed {
-		return cat, core.Fail(core.Diagnostic{
-			Category:    core.CategorySecretInputInvalid,
-			Severity:    core.SeverityError,
-			Message:     fmt.Sprintf(msgRemoveNotFound, service, string(delivery), target),
-			NextActions: []string{msgListAction},
-		})
-	}
-	if err := writeCatalog(projectDir, refs); err != nil {
-		return cat, err
-	}
-	cat.References = refs
 	return cat, nil
 }
 
@@ -538,7 +572,10 @@ func Write(projectDir string, refs []Reference) error {
 	for i := range refs {
 		refs[i].Target = refs[i].EffectiveTarget()
 	}
-	return writeCatalog(projectDir, refs)
+	err := projectconfig.Update(projectDir, func(root *yaml.Node) error {
+		return setSecrets(root, refs)
+	})
+	return configWriteError(err)
 }
 
 func validateCatalog(refs []Reference, category core.Category) error {
@@ -577,37 +614,37 @@ func validateCatalog(refs []Reference, category core.Category) error {
 func parseReferences(node *yaml.Node) ([]Reference, error) {
 	refs := make([]Reference, 0, len(node.Content))
 	for _, item := range node.Content {
-		item := resolveAlias(item)
+		item := projectconfig.ResolveAlias(item)
 		if item == nil || item.Kind != yaml.MappingNode {
-			return nil, configError(msgSecretNotMapping, lineOf(item))
+			return nil, configError(msgSecretNotMapping, projectconfig.LineOf(projectconfig.FileName, item))
 		}
 		values := map[string]string{}
 		seen := map[string]int{}
 		for i := 0; i+1 < len(item.Content); i += 2 {
 			keyNode, valueNode := item.Content[i], item.Content[i+1]
 			if keyNode.Kind != yaml.ScalarNode || keyNode.Tag != "!!str" {
-				return nil, configError(msgSecretFieldKey, lineOf(keyNode))
+				return nil, configError(msgSecretFieldKey, projectconfig.LineOf(projectconfig.FileName, keyNode))
 			}
 			field := keyNode.Value
 			if credentialFieldRe.MatchString(field) {
-				return nil, configError(fmt.Sprintf(msgSecretCredentialField, field), lineOf(keyNode))
+				return nil, configError(fmt.Sprintf(msgSecretCredentialField, field), projectconfig.LineOf(projectconfig.FileName, keyNode))
 			}
 			if !allowedReferenceFields[field] {
-				return nil, configError(fmt.Sprintf(msgSecretUnknownField, field), lineOf(keyNode))
+				return nil, configError(fmt.Sprintf(msgSecretUnknownField, field), projectconfig.LineOf(projectconfig.FileName, keyNode))
 			}
 			if prev, dup := seen[field]; dup {
-				return nil, configError(fmt.Sprintf(msgSecretDuplicateField, field), fmt.Sprintf("%s and %s", lineOf(keyNode), fmt.Sprintf("%s:%d", ".dcraft.yaml", prev)))
+				return nil, configError(fmt.Sprintf(msgSecretDuplicateField, field), fmt.Sprintf("%s and %s", projectconfig.LineOf(projectconfig.FileName, keyNode), fmt.Sprintf("%s:%d", ".dcraft.yaml", prev)))
 			}
 			seen[field] = keyNode.Line
-			valueNode = resolveAlias(valueNode)
+			valueNode = projectconfig.ResolveAlias(valueNode)
 			if valueNode == nil || valueNode.Kind != yaml.ScalarNode || valueNode.Tag != "!!str" {
-				return nil, configError(fmt.Sprintf(msgSecretFieldString, field), lineOf(valueNode))
+				return nil, configError(fmt.Sprintf(msgSecretFieldString, field), projectconfig.LineOf(projectconfig.FileName, valueNode))
 			}
 			values[field] = valueNode.Value
 		}
 		for _, required := range requiredReferenceFields {
 			if _, ok := values[required]; !ok {
-				return nil, configError(fmt.Sprintf(msgSecretFieldMissing, required), lineOf(item))
+				return nil, configError(fmt.Sprintf(msgSecretFieldMissing, required), projectconfig.LineOf(projectconfig.FileName, item))
 			}
 		}
 		ref := Reference{
@@ -635,146 +672,54 @@ var (
 	requiredReferenceFields = []string{"service", "phase", "delivery", "source", "ref"}
 )
 
-func writeCatalog(projectDir string, refs []Reference) error {
-	path := filepath.Join(projectDir, ".dcraft.yaml")
-	data, err := os.ReadFile(path)
-	var doc *yaml.Node
-	if err != nil {
-		if !errors.Is(err, fs.ErrNotExist) {
-			return configError(msgConfigUnreadable, err.Error())
-		}
-		doc = &yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{{Kind: yaml.MappingNode, Tag: "!!map"}}}
-	} else {
-		doc, err = decodeDoc(data)
-		if err != nil {
-			return configError(msgConfigMalformed, err.Error())
-		}
-		if doc == nil {
-			doc = &yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{{Kind: yaml.MappingNode, Tag: "!!map"}}}
-		}
-	}
-	root := doc.Content[0]
-	if root.Kind != yaml.MappingNode {
-		return configError(msgConfigRoot, lineOf(root))
-	}
-
-	key := mappingKey(root, "secrets")
+func setSecrets(root *yaml.Node, refs []Reference) error {
+	key := projectconfig.MappingKey(root, "secrets")
 	if len(refs) == 0 {
 		if key >= 0 {
 			root.Content = append(root.Content[:key], root.Content[key+2:]...)
 		}
-	} else {
-		value := &yaml.Node{}
-		if err := value.Encode(refs); err != nil {
-			return configError(msgConfigEncode, err.Error())
-		}
-		if key >= 0 {
-			root.Content[key+1] = value
-		} else {
-			root.Content = append(root.Content,
-				&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "secrets"},
-				value,
-			)
-		}
-	}
-
-	var buf bytes.Buffer
-	enc := yaml.NewEncoder(&buf)
-	enc.SetIndent(2)
-	if err := enc.Encode(doc); err != nil {
-		return configError(msgConfigEncode, err.Error())
-	}
-	if err := enc.Close(); err != nil {
-		return configError(msgConfigEncode, err.Error())
-	}
-	return replaceFile(path, buf.Bytes())
-}
-
-func replaceFile(path string, data []byte) error {
-	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, ".dcraft-*.tmp")
-	if err != nil {
-		return configError(msgConfigWrite, err.Error())
-	}
-	tmpName := tmp.Name()
-	defer func() { _ = os.Remove(tmpName) }()
-	mode := os.FileMode(0o600)
-	if info, statErr := os.Stat(path); statErr == nil {
-		// Preserve the project's existing file mode. The config contains
-		// references only, so a team-shared 0644 file is normal.
-		mode = info.Mode().Perm()
-	}
-	if err := tmp.Chmod(mode); err != nil {
-		_ = tmp.Close()
-		return configError(msgConfigWrite, err.Error())
-	}
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return configError(msgConfigWrite, err.Error())
-	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		return configError(msgConfigWrite, err.Error())
-	}
-	if err := tmp.Close(); err != nil {
-		return configError(msgConfigWrite, err.Error())
-	}
-	if err := os.Rename(tmpName, path); err != nil {
-		return configError(msgConfigWrite, err.Error())
-	}
-	return nil
-}
-
-func decodeDoc(data []byte) (*yaml.Node, error) {
-	var doc yaml.Node
-	if err := yaml.Unmarshal(data, &doc); err != nil {
-		return nil, err
-	}
-	if len(doc.Content) == 0 {
-		return nil, nil
-	}
-	if doc.Content[0].Tag == "!!null" {
-		return nil, nil
-	}
-	return &doc, nil
-}
-
-func mappingValue(node *yaml.Node, key string) *yaml.Node {
-	if node == nil || node.Kind != yaml.MappingNode {
 		return nil
 	}
-	for i := 0; i+1 < len(node.Content); i += 2 {
-		if node.Content[i].Value == key {
-			return node.Content[i+1]
-		}
+	value := &yaml.Node{}
+	if err := value.Encode(refs); err != nil {
+		return configError(msgConfigEncode, err.Error())
+	}
+	if key >= 0 {
+		root.Content[key+1] = value
+	} else {
+		root.Content = append(root.Content,
+			&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "secrets"},
+			value,
+		)
 	}
 	return nil
 }
 
-func mappingKey(node *yaml.Node, key string) int {
-	if node == nil || node.Kind != yaml.MappingNode {
-		return -1
+// configWriteError keeps the feature's diagnostic category while mapping the
+// shared writer's failure kinds onto the existing messages.
+func configWriteError(err error) error {
+	if err == nil {
+		return nil
 	}
-	for i := 0; i+1 < len(node.Content); i += 2 {
-		if node.Content[i].Value == key {
-			return i
+	var ce *core.Error
+	if errors.As(err, &ce) {
+		return err
+	}
+	var pe *projectconfig.Error
+	if errors.As(err, &pe) {
+		switch pe.Kind {
+		case projectconfig.KindUnreadable:
+			return configError(msgConfigUnreadable, pe.Detail)
+		case projectconfig.KindMalformed:
+			return configError(msgConfigMalformed, pe.Detail)
+		case projectconfig.KindRoot:
+			return configError(msgConfigRoot, pe.Detail)
+		case projectconfig.KindEncode:
+			return configError(msgConfigEncode, pe.Detail)
 		}
+		return configError(msgConfigWrite, pe.Detail)
 	}
-	return -1
-}
-
-func lineOf(node *yaml.Node) string {
-	if node == nil {
-		return ".dcraft.yaml"
-	}
-	return fmt.Sprintf(".dcraft.yaml:%d", node.Line)
-}
-
-func resolveAlias(node *yaml.Node) *yaml.Node {
-	for i := 0; node != nil && node.Kind == yaml.AliasNode && i < 8; i++ {
-		node = node.Alias
-	}
-	return node
+	return configError(msgConfigWrite, err.Error())
 }
 
 func configError(message, detail string) *core.Error {

@@ -39,6 +39,11 @@ type Updater interface {
 	// TagImage adds the dcraft-owned retention tag to an image and verifies
 	// that the tag resolves to the same image.
 	TagImage(ctx context.Context, imageID, tag string) error
+	// TagImageFrom adds the retention tag using source (an image ID or a
+	// locally resolvable reference), then verifies the tag resolves to the
+	// recorded immutable imageID. Some container image stores refuse a tag on
+	// a just-started container's ID while its Compose reference works.
+	TagImageFrom(ctx context.Context, source, imageID, tag string) error
 }
 
 // UpdateModel is the resolved Compose configuration an update acts on.

@@ -144,15 +144,15 @@ services:
 		t.Fatal("up modified the user Compose file")
 	}
 
-	// The file delivery is a live bind mount; restart re-fetches it. The
-	// environment value is already in the container and is not fetched again.
+	// Restart is not a configuration update: both deliveries keep the values
+	// already in the container/materialized file and no source is fetched.
 	restart := run(120*time.Second, "restart", "-p", name, "-s", "filesvc", "--json")
 	if restart.code != 0 {
 		t.Fatalf("restart exit = %d\n%s\n%s", restart.code, restart.stdout, restart.stderr)
 	}
 	after := awsCalls(t, awsLog)
-	if len(after) != 3 || !strings.Contains(after[2], "--secret-id prod/token") {
-		t.Fatalf("aws calls after restart = %v, want only the file-delivery secret", after)
+	if len(after) != 2 {
+		t.Fatalf("aws calls after restart = %v, want no additional fetch", after)
 	}
 	if got := dockerExec(t, env, name+"-filesvc-1", "cat /run/secrets/token"); got != fileSentinel {
 		t.Fatalf("file value after restart = %q", got)

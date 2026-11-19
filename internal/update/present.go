@@ -20,10 +20,8 @@ func Present(res core.Result, width int) string {
 	var b strings.Builder
 	writeTarget(&b, res, payload.Update)
 	b.WriteString("\n")
-	if strings.TrimSpace(payload.Update.Plan.Text) != "" {
-		b.WriteString(payload.Update.Plan.Text)
-		b.WriteString("\n\n")
-	}
+	// The plan is shown once, before the run (CLI preview / TUI plan screen).
+	// Repeating it in the success output would print it twice per operation.
 	b.WriteString(renderSuccess(payload, width))
 	return strings.TrimRight(b.String(), "\n")
 }
