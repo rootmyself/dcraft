@@ -4,17 +4,27 @@ import (
 	"github.com/rootmyself/dcraft/internal/ui/tui/visual"
 )
 
-// composeFrame lays out the screen and pins the lines that must never be the
-// part that gets cut. The wide layout adds the persistent sidebar as a left
-// pane; header and footer still span the whole terminal.
+// composeFrame lays out the screen: the header, the body, the keycap footer and
+// the wide layout's persistent sidebar. Header and footer still span the whole
+// terminal.
+//
+// With a panel open the same frame becomes the background and the panel is
+// composed over its body: Bubble Tea v1 has no overlay API, so the screen is
+// composed by hand. There is no frame-level pinned row: the one pinned statement
+// in the TUI (the confirmation risk) lives inside the panel, where it cannot be
+// scrolled away and cannot be drawn twice.
 func (m *Model) composeFrame(body []string) []string {
-	return visual.Compose(m.theme, m.width, m.height, visual.Frame{
+	frame := visual.Compose(m.theme, m.width, m.height, visual.Frame{
 		Header: visual.Header(m.theme, m.width, m.facts),
 		Left:   m.sidebar(),
 		Body:   body,
-		Pinned: m.pinnedLines(),
 		Footer: visual.Row(m.theme, m.footerItems(), m.width),
 	})
+	spec, ok := m.overlaySpec()
+	if !ok {
+		return frame
+	}
+	return visual.ComposeModal(m.theme, m.width, m.height, frame, spec)
 }
 
 // sidebar is the persistent navigation pane for the wide layout. It is empty
@@ -28,14 +38,4 @@ func (m *Model) sidebar() []string {
 	width := visual.SidebarWidth(m.width)
 	height := visual.BodyRows(m.height)
 	return visual.Sidebar(m.theme, width, height, m.nav())
-}
-
-// pinnedLines are the rows the shell keeps directly above the footer, outside
-// the scrolling body. The confirmation risk sentence is the approved pinned
-// line: the fields may scroll out of view, the risk statement may not.
-func (m *Model) pinnedLines() []string {
-	if m.phase != phaseConfirm || m.pending == nil {
-		return nil
-	}
-	return []string{m.noticeText(msgConfirmRisk)}
 }

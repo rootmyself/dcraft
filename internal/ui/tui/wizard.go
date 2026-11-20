@@ -126,6 +126,12 @@ func (m *Model) initWizardStep() {
 }
 
 func (m *Model) updateWizard(msg tea.KeyMsg) tea.Cmd {
+	if msg.String() == "?" && m.helpAvailable() && !m.wizardTextInput() {
+		// "?" is a typed character in a free-text answer; only a step with a
+		// fixed choice list treats it as the help key.
+		m.openHelp()
+		return nil
+	}
 	switch m.phase {
 	case phaseWizardStep:
 		if m.wizardStep < 0 || m.wizardStep >= len(m.wizardSpec.Steps) {

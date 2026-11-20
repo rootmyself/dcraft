@@ -46,8 +46,14 @@ const (
 	msgConfirmScope       = "스택 전체"
 	msgConfirmEffectLabel = "효과"
 	msgConfirmRisk        = "이 작업은 스택을 변경합니다. 중단하면 일부 변경이 남을 수 있습니다."
-	msgBusyQuit           = "작업이 진행 중입니다. 지금 화면을 닫으면 일부 변경이 남을 수 있습니다. 완료된 뒤 종료하거나, 중단하려면 ctrl+c를 누르세요."
-	msgCanceling          = "중단을 요청했습니다. 진행 중인 작업이 안전하게 끝날 때까지 기다리세요. 일부 변경이 남을 수 있습니다."
+	// The panel's non-color warning channel and the section heading for the
+	// independent approvals. Both are labels, not new instructions.
+	msgConfirmRiskLabel = "위험"
+	msgApprovalsSection = "필요한 승인"
+	msgHelpTitle        = "도움말"
+	msgHelpClose        = "닫기"
+	msgBusyQuit         = "작업이 진행 중입니다. 지금 화면을 닫으면 일부 변경이 남을 수 있습니다. 완료된 뒤 종료하거나, 중단하려면 ctrl+c를 누르세요."
+	msgCanceling        = "중단을 요청했습니다. 진행 중인 작업이 안전하게 끝날 때까지 기다리세요. 일부 변경이 남을 수 있습니다."
 
 	// Interactive inputs are collected only where a feature declares them
 	// (exec). The TUI renders labels and choices; the feature owns validation.
@@ -104,5 +110,5 @@ const (
 	msgWizardUnavailable       = "이 기능은 대화형 설정을 지원하지 않습니다."
 	msgWizardCanceled          = "대화형 설정을 취소했습니다. 저장된 내용은 없습니다."
 	msgWizardOptionalHint      = "비우려면 enter"
-	msgWizardRequiredApprovals = "필요한 승인"
+	msgWizardRequiredApprovals = msgApprovalsSection
 )

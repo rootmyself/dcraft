@@ -186,7 +186,9 @@ func TestServiceSelectionTogglesAndRunsOnlySelectedServices(t *testing.T) {
 		t.Fatalf("phase = %v, want confirmation; view:\n%s", m.phase, m.View())
 	}
 	view := m.View()
-	for _, want := range []string{"범위: api, web", "다음 작업"} {
+	// The confirmation is now a panel; the scope row and the title are its
+	// fields, so the same facts are asserted on the panel.
+	for _, want := range []string{"범위:", "api, web", msgConfirmTitle} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("confirmation missing %q:\n%s", want, view)
 		}
@@ -211,7 +213,7 @@ func TestServiceSelectionWholeStackKeepsPreviousBehavior(t *testing.T) {
 	chooseFeature(t, m, "stop")
 
 	feedCmd(t, m, press(m, tea.KeyMsg{Type: tea.KeyEnter}))
-	if !strings.Contains(m.View(), "범위: 스택 전체") {
+	if !strings.Contains(m.View(), "스택 전체") || !strings.Contains(m.View(), "범위:") {
 		t.Fatalf("whole-stack scope not shown:\n%s", m.View())
 	}
 	feedCmd(t, m, press(m, tea.KeyMsg{Type: tea.KeyEnter}))
@@ -341,7 +343,7 @@ func TestServiceSelectionFeedsTheUpdatePlan(t *testing.T) {
 		t.Fatalf("plan services = %q, want api", got)
 	}
 	view := m.View()
-	for _, want := range []string{"계획: api 이미지 취득 후 적용", "범위: api"} {
+	for _, want := range []string{"계획: api 이미지 취득 후 적용", "범위:", "api"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("plan confirmation missing %q:\n%s", want, view)
 		}

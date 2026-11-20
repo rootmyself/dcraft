@@ -39,12 +39,27 @@ func newFormState(feature core.Feature, fields []core.InputField, base core.Requ
 	return form
 }
 
+// formFocusIsText reports whether the focused field accepts typed text, which
+// means "?" is a character there and not the help key.
+func (m *Model) formFocusIsText() bool {
+	if m.form == nil || m.form.focus < 0 || m.form.focus >= len(m.form.fields) {
+		return false
+	}
+	return m.form.fields[m.form.focus].Kind == core.InputText
+}
+
 func (m *Model) updateFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	form := m.form
 	if form == nil {
 		return m, nil
 	}
 	field := form.fields[form.focus]
+	if msg.String() == "?" && m.helpAvailable() && field.Kind != core.InputText {
+		// A text field accepts "?" as input; only choice fields let it open
+		// the keymap.
+		m.openHelp()
+		return m, nil
+	}
 	switch msg.String() {
 	case "esc", "ctrl+c":
 		m.form = nil

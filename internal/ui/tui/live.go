@@ -139,6 +139,12 @@ func waitLiveCmd(ch chan string) tea.Cmd {
 }
 
 func (m *Model) updateLiveKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if msg.String() == "?" && m.helpAvailable() {
+		// The live row advertises help; the overlay opens over the output
+		// instead of being forwarded to the attached process.
+		m.openHelp()
+		return m, nil
+	}
 	if m.live.mode == core.LiveAttach {
 		if msg.String() == "ctrl+]" {
 			return m.stopLive(), nil

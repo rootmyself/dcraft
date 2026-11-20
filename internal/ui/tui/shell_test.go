@@ -86,7 +86,7 @@ func TestCompact48x18KeepsTargetStageAndRisk(t *testing.T) {
 		t.Fatalf("phase = %v, want confirm", m.phase)
 	}
 	view := m.View()
-	for _, want := range []string{"다음 작업", "대상", "스택 전체", "스택을 변경합니다", "[enter] 실행", "[esc] 취소"} {
+	for _, want := range []string{msgConfirmTitle, "대상", "스택 전체", "스택을 변경합니다", "[enter] 실행", "[esc] 취소"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("48x18 confirmation missing %q:\n%s", want, view)
 		}
@@ -362,9 +362,10 @@ func TestASCIIThemeInTheFrame(t *testing.T) {
 }
 
 // A long plan must not push the risk sentence out of a short frame: the risk
-// is pinned above the footer and the plan scrolls under it. The old truncation
-// notice is gone: the screen states the position instead of apologising.
-func TestCompactConfirmPinsRiskAboveTheFooter(t *testing.T) {
+// is pinned inside the panel, above its bottom border, and the plan scrolls
+// under it. The old truncation notice is gone: the screen states the position
+// instead of apologising.
+func TestCompactConfirmPinsRiskAboveThePanelBorder(t *testing.T) {
 	status := &stubFeature{desc: descriptor("status", true), body: "상태 본문"}
 	up := &stubFeature{desc: mutatingDescriptor("up"), body: "시작 본문"}
 	m := newTestModel(t, status, up)
@@ -383,8 +384,18 @@ func TestCompactConfirmPinsRiskAboveTheFooter(t *testing.T) {
 	if len(lines) != 18 {
 		t.Fatalf("rows = %d", len(lines))
 	}
-	if !strings.Contains(lines[16], "스택을 변경합니다") {
-		t.Fatalf("risk is not pinned directly above the footer: %q", lines[16])
+	bottom := -1
+	for i, line := range lines {
+		if strings.Contains(line, m.theme.Glyphs.BL) && strings.Contains(line, m.theme.Glyphs.BR) {
+			bottom = i
+			break
+		}
+	}
+	if bottom < 1 {
+		t.Fatalf("panel border missing:\n%s", strings.Join(lines, "\n"))
+	}
+	if !strings.Contains(lines[bottom-1], "스택을 변경합니다") {
+		t.Fatalf("risk is not the last row inside the panel: %q", lines[bottom-1])
 	}
 	if !strings.Contains(lines[17], "[enter] 실행") {
 		t.Fatalf("footer missing: %q", lines[17])
@@ -396,19 +407,17 @@ func TestCompactConfirmPinsRiskAboveTheFooter(t *testing.T) {
 	if !strings.Contains(joined, "PgUp/PgDn") {
 		t.Fatalf("overflow is not navigable:\n%s", joined)
 	}
-	// The whole plan is reachable: G shows its last line.
+	// The whole plan is reachable: G scrolls to its last line.
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("G")})
 	m = nm.(*Model)
-	_ = lines
-	for _, line := range strings.Split(m.View(), "\n") {
-		if strings.Contains(line, "이미지 취득") {
-			break
-		}
-	}
+	reached := m.View()
 	for i, line := range viewLines(t, m) {
 		if visual.Width(line) > 48 {
 			t.Fatalf("row %d too wide: %q", i, line)
 		}
+	}
+	if !strings.Contains(reached, "이미지 취득") {
+		t.Fatalf("the end of the plan is unreachable:\n%s", reached)
 	}
 }
 
