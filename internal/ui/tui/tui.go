@@ -148,6 +148,12 @@ type Model struct {
 	// renders its output and forwards keys for core.LiveAttach.
 	live   *liveState
 	liveCh chan string
+	// liveTop is the first visible output row and liveFollow keeps the window
+	// on the tail. The header above the output is fixed and never scrolls, so
+	// the service, instance, command and the "still running" state stay
+	// readable while the reader walks back through the log.
+	liveTop    int
+	liveFollow bool
 	// lastLive keeps the tail of the last live output so the management view
 	// still shows what the process printed after the screen closes.
 	lastLive []string

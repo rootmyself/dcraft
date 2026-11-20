@@ -280,7 +280,14 @@ func Panel(th Theme, title string, body []string, width int, decorated bool) []s
 		topTitle = Truncate(title, inner, th.Ellipsis())
 		top += topTitle
 	}
-	top = Fit(top+strings.Repeat(th.Glyphs.H, max(width-Width(top), 0)), width, th.Ellipsis())
+	// The rule fills up to the corner, so the top row is closed exactly like
+	// the bottom one. Filling the whole remaining width would push the corner
+	// off the row.
+	fill := width - Width(top) - Width(th.Glyphs.TR)
+	if fill < 0 {
+		fill = 0
+	}
+	top = Fit(top+strings.Repeat(th.Glyphs.H, fill)+th.Glyphs.TR, width, th.Ellipsis())
 
 	out := []string{top}
 	for _, line := range body {

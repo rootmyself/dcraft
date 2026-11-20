@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"io"
 	"strings"
 	"sync"
@@ -8,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/rootmyself/dcraft/internal/core"
+	"github.com/rootmyself/dcraft/internal/ui/tui/visual"
 )
 
 // liveState is the TUI side of an attached process: the child writes to a
@@ -20,6 +22,7 @@ type liveState struct {
 	keys     *keyReader
 	ch       chan string
 	lines    []string
+	dropped  int
 	notice   string
 	stopping bool
 	once     sync.Once
@@ -27,10 +30,19 @@ type liveState struct {
 
 const liveLineLimit = 400
 
+// liveChannelCapacity is the buffered delivery channel between the child and the
+// render loop. It absorbs a burst without blocking the child; a longer burst
+// drops lines, which the indicator then states.
+const liveChannelCapacity = 512
+
+// append adds one output line and keeps the tail bounded. Dropped lines are
+// counted so the position indicator can say that older output is no longer
+// reachable instead of pretending the stream started at the cap.
 func (l *liveState) append(line string) {
 	l.lines = append(l.lines, line)
-	if len(l.lines) > liveLineLimit {
-		l.lines = l.lines[len(l.lines)-liveLineLimit:]
+	if over := len(l.lines) - liveLineLimit; over > 0 {
+		l.lines = l.lines[over:]
+		l.dropped += over
 	}
 }
 
@@ -52,10 +64,14 @@ func (m *Model) setupLive(f core.Feature) {
 		m.req.IO = core.IO{}
 		return
 	}
-	ch := make(chan string, 512)
+	ch := make(chan string, liveChannelCapacity)
 	writer := &liveWriter{ch: ch}
 	m.liveCh = ch
 	m.live = &liveState{mode: live.LiveMode(), writer: writer, ch: ch, lines: []string{}}
+	// A live screen starts at the tail: the newest output is what the reader
+	// came to see. Scrolling up stops following until the bottom is reached.
+	m.liveTop = 0
+	m.liveFollow = true
 	m.req.IO = core.IO{
 		Stdout: writer,
 		Stderr: writer,
@@ -149,10 +165,46 @@ func (m *Model) updateLiveKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	switch msg.String() {
+	case "pgup", "pgdown", "home", "end", "g", "G":
+		// The log screen owns these keys: they move the output window and
+		// never reach the child (logs has no input stream). A short log that
+		// fits ignores them, so q/esc keep their single meaning.
+		if m.liveScrolls() {
+			m.liveScroll(msg.String())
+			return m, nil
+		}
 	case "q", "esc", "ctrl+c":
 		return m.stopLive(), nil
 	}
 	return m, nil
+}
+
+// liveScrolls reports whether the output band overflows the window. It is the
+// same computation the frame draws, so a key is never advertised by accident.
+func (m *Model) liveScrolls() bool {
+	if m.live == nil {
+		return false
+	}
+	return m.liveViewport().Overflow()
+}
+
+// liveScroll moves the output window and records whether the reader is still
+// following the tail. Following resumes at the bottom; scrolling up stops it so
+// arriving lines do not drag the reader away from what they were reading.
+func (m *Model) liveScroll(key string) {
+	v := m.liveViewport()
+	switch key {
+	case "pgup":
+		v.PgUp()
+	case "pgdown":
+		v.PgDn()
+	case "home", "g":
+		v.Home()
+	case "end", "G":
+		v.End()
+	}
+	m.liveTop = v.Top
+	m.liveFollow = v.Top == v.MaxTop()
 }
 
 // stopLive requests cancellation. The engine reports the canceled outcome and
@@ -173,40 +225,228 @@ func (m *Model) stopLive() *Model {
 	return m
 }
 
-func (m *Model) liveView() string {
-	live := m.live
-	var b strings.Builder
-	if live.mode == core.LiveAttach {
-		b.WriteString(msgLiveAttached)
+// liveHeaderLines is the fixed block above the output. It states the screen
+// kind and the promise that the service keeps running, then the service, the
+// instance and the command. None of these scroll: the context of what is being
+// watched stays on screen while the output moves.
+func (m *Model) liveHeaderLines() []string {
+	var state []string
+	if m.live.mode == core.LiveAttach {
+		// msgLiveAttached is the existing attach text; the running-state line
+		// repeats the promise the stream sentence carries in one line.
+		state = append(state, m.title(msgLiveAttached), m.hintText(msgLiveKeepsRunning))
 	} else {
-		b.WriteString(msgLiveStreaming)
+		state = append(state, m.title(msgLiveStreaming))
 	}
-	b.WriteString("\n")
-	if len(m.req.Services) > 0 {
-		b.WriteString(msgLiveService + ": " + strings.Join(m.req.Services, ", ") + "\n")
+	instance := msgLiveAllInstances
+	if index := strings.TrimSpace(m.req.Options["index"]); index != "" {
+		instance = "#" + index
 	}
+	return append(state,
+		msgLiveService+": "+serviceScopeText(m.req.Services),
+		msgLiveInstance+": "+instance,
+		msgLiveCommand+": "+m.liveCommandText(),
+	)
+}
+
+// liveCommandText names what is running: the attached argv when the screen
+// forwards keys, otherwise the feature's own command name. It never invents a
+// flag the caller did not ask for.
+func (m *Model) liveCommandText() string {
 	if len(m.req.Args) > 0 {
-		b.WriteString(msgLiveCommand + ": " + strings.Join(m.req.Args, " ") + "\n")
+		return strings.Join(m.req.Args, " ")
 	}
-	b.WriteString("\n")
-	limit := m.height - 12
-	if limit < 5 {
-		limit = 20
+	if m.active != nil {
+		return m.active.Descriptor().Name
 	}
-	start := 0
-	if len(live.lines) > limit {
-		start = len(live.lines) - limit
+	return m.req.Feature
+}
+
+// liveNoticeLines is the stopping message below the output. It is part of the
+// layout budget so it can never push the band past the frame.
+func (m *Model) liveNoticeLines() []string {
+	if m.live == nil || m.live.notice == "" {
+		return nil
 	}
-	for _, line := range live.lines[start:] {
-		b.WriteString(line)
-		b.WriteString("\n")
+	return []string{"", m.noticeText(m.live.notice)}
+}
+
+// liveFixedRows is how many body rows the live screen spends before the output
+// band: the optional navigation row, the title block, the header block and its
+// blank separator.
+func (m *Model) liveFixedRows() int {
+	rows := 0
+	if m.navLine() != "" {
+		rows++
 	}
-	if live.notice != "" {
-		b.WriteString("\n")
-		b.WriteString(m.noticeText(live.notice))
-		b.WriteString("\n")
+	rows += m.titleRows()
+	rows += len(m.liveHeaderLines()) + 1
+	return rows
+}
+
+// liveBandRows is how many rows are available for the output, the position row
+// and the notice together: everything the body has left after the fixed header.
+// A zero result means no WindowSizeMsg has arrived yet.
+func (m *Model) liveBandRows() int {
+	budget := m.bodyBudget()
+	if budget <= 0 {
+		return 0
 	}
-	return strings.TrimRight(b.String(), "\n")
+	available := budget - m.liveFixedRows() - len(m.liveNoticeLines())
+	if available < 1 {
+		available = 1
+	}
+	return available
+}
+
+// liveNeedsPositionRow reports whether the position row is shown. It appears
+// when the output overflows or when the tail cap dropped older lines, because
+// both are facts the reader cannot see in the band alone.
+func (m *Model) liveNeedsPositionRow() bool {
+	if m.live == nil {
+		return false
+	}
+	return m.liveDropped() > 0 || len(m.live.lines) > m.liveBandRows()
+}
+
+// liveViewport is the output window: the band, minus the position row when it is
+// shown. Following is applied last so the window reaches the final line instead
+// of stopping one short.
+func (m *Model) liveViewport() visual.Viewport {
+	if m.live == nil {
+		return visual.Viewport{}
+	}
+	total := len(m.live.lines)
+	height := m.liveBandRows()
+	if height <= 0 {
+		// Unknown size: nothing is off screen yet, and the next WindowSizeMsg
+		// reflows it.
+		return visual.Viewport{Height: total, Total: total}
+	}
+	if m.liveNeedsPositionRow() {
+		// The indicator gets its own row instead of covering the last output
+		// line: a covered line would be unreachable at the bottom.
+		height--
+	}
+	if height < 1 {
+		height = 1
+	}
+	v := visual.Viewport{Top: m.liveTop, Height: height, Total: total}.Clamp()
+	if m.liveFollow {
+		v.End()
+	}
+	return v
+}
+
+// liveCounter is the position statement: the visible range, the reachable
+// total, and an explicit note when the tail cap forced older lines out. Dropped
+// output is stated rather than silently missing.
+func (m *Model) liveCounter(v visual.Viewport) string {
+	counter := v.Counter()
+	if counter == "" {
+		return ""
+	}
+	if dropped := m.liveDropped(); dropped > 0 {
+		counter += " · " + fmt.Sprintf(msgLiveDropped, dropped)
+	}
+	return counter
+}
+
+// liveDropped is how many produced lines the window can no longer reach: the
+// ones the tail cap evicted plus the ones a full delivery channel skipped. Both
+// are output the reader could have seen, so the indicator states their sum
+// instead of implying the stream started at the cap.
+func (m *Model) liveDropped() int {
+	if m.live == nil {
+		return 0
+	}
+	dropped := m.live.dropped
+	if m.live.writer != nil {
+		dropped += m.live.writer.droppedLines()
+	}
+	return dropped
+}
+
+// livePositionRow is the one-row position indicator directly above the keycap
+// footer: `46-59/60` on the left and the keys that move it on the right. It is
+// empty when everything fits and nothing was dropped, so a short log costs no
+// row.
+func (m *Model) livePositionRow(v visual.Viewport) string {
+	if !m.liveNeedsPositionRow() {
+		return ""
+	}
+	left := m.liveCounter(v)
+	if left == "" {
+		// Only the dropped-lines note remains, which is still a fact worth
+		// stating even when the retained lines fit.
+		left = fmt.Sprintf(msgLiveDropped, m.liveDropped())
+	}
+	right := msgLiveScrollKeys
+	if m.live.mode == core.LiveAttach {
+		// Every key belongs to the child here; naming the TUI's scroll keys
+		// would promise something the screen does not do.
+		right = ""
+	}
+	width := m.bodyWidth()
+	if width <= 0 {
+		if right == "" {
+			return left
+		}
+		return left + "  " + right
+	}
+	if right == "" {
+		return m.hintText(left)
+	}
+	gap := width - visual.Width(left) - visual.Width(right)
+	if gap < 1 {
+		gap = 1
+	}
+	return m.hintText(left) + strings.Repeat(" ", gap) + m.hintText(right)
+}
+
+// liveLayout is the live screen: fixed header, scrolling output band, position
+// row and the stopping notice. It is one layout pass; the keys and the
+// indicator use liveViewport too, so what is drawn and what PgUp moves cannot
+// disagree.
+//
+// The position row sits flush above the keycap footer, not directly under the
+// output: it is the last thing before the keys, where a status line belongs, and
+// a short log leaves it in the same place instead of floating mid-screen.
+func (m *Model) liveLayout() bodyLayout {
+	vp := m.liveViewport()
+	header := m.liveHeaderLines()
+	notice := m.liveNoticeLines()
+	position := m.livePositionRow(vp)
+
+	lines := make([]string, 0, m.liveFixedRows()+vp.Visible()+len(notice)+2)
+	if nav := m.navLine(); nav != "" {
+		lines = append(lines, nav)
+	}
+	if title := m.screenTitle(); title != "" {
+		// The position lives on its own row above the footer, so the title
+		// stays a title instead of also being a counter.
+		lines = append(lines, m.titleRow(title, ""), "")
+	}
+	lines = append(lines, header...)
+	lines = append(lines, "")
+	start, end := vp.Window()
+	lines = append(lines, m.live.lines[start:end]...)
+
+	if position != "" {
+		// Pad the gap so the position and the notice are the final body rows.
+		// The frame fills leftover rows with blanks anyway; doing it here puts
+		// the indicator where the reader looks for it.
+		if budget := m.bodyBudget(); budget > 0 {
+			for len(lines)+len(notice)+1 < budget {
+				lines = append(lines, "")
+			}
+		}
+		lines = append(lines, position)
+	}
+	lines = append(lines, notice...)
+
+	m.liveTop = vp.Top
+	return bodyLayout{lines: lines, viewport: vp, scrolls: m.liveNeedsPositionRow()}
 }
 
 // keyBytes converts a Bubble Tea key to the bytes a terminal would send. It
@@ -263,6 +503,9 @@ type liveWriter struct {
 	closed  bool
 	ch      chan string
 	tail    []string
+	// dropped counts lines the delivery channel skipped because the renderer
+	// fell behind. They are real output, so the indicator states them.
+	dropped int
 }
 
 func (w *liveWriter) Write(p []byte) (int, error) {
@@ -301,7 +544,17 @@ func (w *liveWriter) emit(line string) {
 	select {
 	case w.ch <- line:
 	default:
+		// The renderer is behind. Dropping is what keeps the child from
+		// blocking, and the count makes the loss visible.
+		w.dropped++
 	}
+}
+
+// droppedLines reports how many lines the delivery channel skipped.
+func (w *liveWriter) droppedLines() int {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.dropped
 }
 
 func (w *liveWriter) tailLines() []string {
