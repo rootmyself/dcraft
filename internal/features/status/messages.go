@@ -32,4 +32,29 @@ const (
 	msgGuideRefreshInteractive = "상태를 새로 고치려면: dcraft status · 대화형 화면을 열려면: dcraft"
 	msgGuidePending            = "관리 작업: 갱신은 dcraft update, 로그는 dcraft logs, 실행·중지·제거·재시작은 dcraft up/stop/down/restart, 데이터 백업은 dcraft backup, 데이터 복원은 dcraft restore를 사용하세요."
 	msgGuideSecrets            = "기존 Compose/.env의 민감값은 자동 제거되지 않습니다. dcraft secrets로 참조를 등록하세요."
+
+	// The TUI document is a different surface from the CLI text. Health is
+	// Korean here only; Present keeps its own sentences byte-for-byte.
+	msgHealthHealthyTUI   = "정상"
+	msgHealthUnhealthyTUI = "비정상"
+	msgHealthStartingTUI  = "확인 중"
+	msgHealthNoneTUI      = "없음"
+
+	msgPairObserved    = "마지막 조회"
+	msgPairComposeFile = "Compose 파일"
+	msgPairProject     = "프로젝트"
+	msgColumnService   = "서비스"
+	msgColumnState     = "상태"
+	msgColumnInstances = "인스턴스"
+	msgColumnHealth    = "health"
+	msgColumnImage     = "이미지"
+	msgColumnPort      = "포트"
+	msgEmptyStack      = "서비스가 없습니다. Compose 파일에 services 항목이 있는지 확인하세요."
+	msgNoPort          = "-"
+
+	msgEmptyBadge        = "서비스 없음"
+	msgCalloutEmptyStack = "Compose 파일에 services 항목을 정의한 뒤 r로 다시 읽으세요."
+	msgCalloutRefresh    = "상태를 새로 고치려면 r을 누르세요."
+	msgCalloutLogs       = "비정상·중지 서비스의 로그를 먼저 확인하세요."
+	msgCalloutStart      = "컨테이너가 없는 서비스는 스택 시작으로 생성됩니다."
 )

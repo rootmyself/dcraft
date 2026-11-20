@@ -1,8 +1,6 @@
 package tui
 
 import (
-	"fmt"
-
 	"github.com/rootmyself/dcraft/internal/ui/tui/visual"
 )
 
@@ -10,11 +8,10 @@ import (
 // part that gets cut.
 func (m *Model) composeFrame(body []string) []string {
 	return visual.Compose(m.theme, m.width, m.height, visual.Frame{
-		Header:   visual.Header(m.theme, m.width, m.facts),
-		Body:     body,
-		Pinned:   m.pinnedLines(),
-		Footer:   visual.Row(m.theme, m.footerItems(), m.width),
-		Overflow: fmt.Sprintf(msgViewTruncated, m.theme.Glyphs.Ell),
+		Header: visual.Header(m.theme, m.width, m.facts),
+		Body:   body,
+		Pinned: m.pinnedLines(),
+		Footer: visual.Row(m.theme, m.footerItems(), m.width),
 	})
 }
 

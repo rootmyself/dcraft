@@ -37,13 +37,16 @@ func Truncate(s string, w int, ell string) string {
 }
 
 // Fit makes s occupy exactly w cells: truncating with an explicit ellipsis when
-// it is wider and padding with spaces when it is narrower.
+// it is wider and padding with spaces when it is narrower. A wide rune that
+// would straddle the boundary is dropped instead of split, so the truncated
+// result may be one cell short; the padding makes up that cell rather than
+// leaving a ragged row.
 func Fit(s string, w int, ell string) string {
 	if w <= 0 {
 		return ""
 	}
 	if Width(s) > w {
-		return Truncate(s, w, ell)
+		return Pad(Truncate(s, w, ell), w)
 	}
 	return Pad(s, w)
 }

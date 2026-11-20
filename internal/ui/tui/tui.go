@@ -86,6 +86,17 @@ type Model struct {
 	theme visual.Theme
 	facts visual.Facts
 
+	// The body scrolls: body is the viewport over the scrollable rows, and
+	// detailOpen switches the result body to the full-value view. The detail's
+	// own position is kept separately so closing it returns to the table.
+	body         visual.Viewport
+	detailOpen   bool
+	detailScroll visual.Viewport
+	// resultDismissed hides a result sheet so the menu is reachable again. A
+	// long result owns the screen while it scrolls; esc puts it away without
+	// discarding the value (r re-reads, any feature reruns).
+	resultDismissed bool
+
 	// pendingApproval and planText hold the generic confirmation state. Any
 	// approval-gated feature that implements core.Planner reuses this screen;
 	// no feature-specific branch is added here. pendingApprovals carries every
@@ -344,6 +355,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.result = &res
 		m.phase = phaseReady
 		m.notice = ""
+		m.resultDismissed = false
+		m.resetScrollState()
 		if m.live != nil {
 			m.live.writer.flush()
 			m.drainLive()
@@ -362,6 +375,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.live != nil {
 			return m.updateLiveKey(msg)
+		}
+		// Body scrolling runs before the phase handlers: PgUp/PgDn, Home/End
+		// and g/G have no other meaning on a result screen. The detail view
+		// owns every key while it is open, so esc/d close it instead of
+		// clearing the screen.
+		if m.detailOpen {
+			return m, m.detailKey(msg)
+		}
+		if handled, cmd := m.scrollKey(msg); handled {
+			return m, cmd
 		}
 		if m.phase == phaseSelectingServices {
 			return m.updateServiceKey(msg)
@@ -436,6 +459,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.isWizardPhase() {
 				m.cancelWizard()
 			}
+			// A result sheet that covers the menu is put away, not acted on:
+			// nothing was selected, so nothing must run. A short result that
+			// leaves the menu visible keeps its previous behaviour (esc is a
+			// no-op), so an accidental key does not blank the screen.
+			if m.phase == phaseReady && m.result != nil && !m.resultDismissed && m.resultScrolls() {
+				m.resultDismissed = true
+				m.body = visual.Viewport{}
+			}
 			return m, nil
 		}
 		if m.isWizardPhase() {
@@ -464,6 +495,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		switch msg.String() {
+		case "d":
+			if m.phase == phaseReady && m.hasDetail() {
+				m.openDetail()
+				return m, nil
+			}
+			return m, nil
 		case "r":
 			if m.active == nil || m.phase != phaseReady {
 				return m, nil
@@ -480,7 +517,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "enter":
-			if m.phase == phaseReady && len(m.features) > 0 {
+			// While the result sheet covers the menu the highlighted feature
+			// is not visible; running it would act on an unseen selection.
+			if m.phase == phaseReady && len(m.features) > 0 && !m.menuHidden() {
 				return m, m.start(m.features[m.selected])
 			}
 			return m, nil
@@ -779,6 +818,8 @@ func (m *Model) ensureRequest(f core.Feature) {
 // Collected feature inputs in m.req are preserved unless the feature changes.
 func (m *Model) resetRunState() {
 	m.result = nil
+	m.resultDismissed = false
+	m.resetScrollState()
 	m.currentStage = nil
 	m.pending = nil
 	m.pendingApproval = ""
@@ -939,7 +980,10 @@ func waitStageCmd(events chan core.Stage) tea.Cmd {
 // reflows immediately and never leaves the frame ragged.
 func (m *Model) View() string {
 	lines := m.composeFrame(m.renderBody())
-	return strings.Join(lines, "\n") + "\n"
+	// No trailing newline: the frame already occupies exactly the terminal
+	// height, and Bubble Tea drops the top line of a view taller than the
+	// window. One extra newline would scroll the header off screen.
+	return strings.Join(lines, "\n")
 }
 
 // menuWindow bounds how many feature rows the screen shows so a growing
