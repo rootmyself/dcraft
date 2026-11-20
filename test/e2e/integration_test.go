@@ -204,8 +204,8 @@ services:
 	if code != 0 {
 		t.Fatalf("TUI exit = %d\n%s", code, output)
 	}
-	for _, want := range []string{"dcraft", "스택 상태", "web", "worker", "extra", "probe", "q 종료"} {
-		if !strings.Contains(output, want) {
+	for _, want := range []string{"dcraft", "스택 상태", "web", "worker", "extra", "probe", "[q] 종료"} {
+		if !screenContains(output, want) {
 			t.Fatalf("TUI output missing %q:\n%s", want, output)
 		}
 	}

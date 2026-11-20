@@ -130,7 +130,7 @@ func TestPrimaryFeatureRendersKoreanStatusScreen(t *testing.T) {
 	m := newTestModel(t, status)
 	initModel(t, m)
 	view := m.View()
-	for _, want := range []string{"dcraft", "제목 status", "서비스 상태 본문", "r 새로고침", "q 종료"} {
+	for _, want := range []string{"dcraft", "제목 status", "서비스 상태 본문", "[r] 새로고침", "[q] 종료"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("view missing %q:\n%s", want, view)
 		}
@@ -164,7 +164,7 @@ func TestMenuAndExecutionAreDerivedFromRegistry(t *testing.T) {
 	m := newTestModel(t, status, logs)
 	initModel(t, m)
 	view := m.View()
-	for _, want := range []string{"작업", "제목 status", "제목 logs", "enter 실행"} {
+	for _, want := range []string{"작업", "제목 status", "제목 logs", "[enter] 실행"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("menu missing %q:\n%s", want, view)
 		}
@@ -205,7 +205,7 @@ func TestNoPrimaryScreenExplainsAndOnlyQuits(t *testing.T) {
 	if !strings.Contains(view, "기본 화면이 없습니다") {
 		t.Fatalf("view = %s", view)
 	}
-	if !strings.Contains(view, "q 종료") {
+	if !strings.Contains(view, "[q] 종료") {
 		t.Fatalf("view missing quit hint: %s", view)
 	}
 }
@@ -331,7 +331,7 @@ func TestEnvironmentSelectionIsRequiredWhenAliasesExist(t *testing.T) {
 	m := newEnvTestModel(t, resolver, core.TargetRequest{}, status)
 	initModel(t, m)
 	view := m.View()
-	for _, want := range []string{"실행환경 선택", "dev", "prod", "직접 선택", "q 종료"} {
+	for _, want := range []string{"실행환경 선택", "dev", "prod", "직접 선택", "[q] 종료"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("selection view missing %q:\n%s", want, view)
 		}
@@ -461,7 +461,7 @@ func TestMutatingFeatureConfirmsTargetAndEffectBeforeRunning(t *testing.T) {
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = nm.(*Model)
 	view := m.View()
-	for _, want := range []string{"다음 작업", "제목 up", "대상", "범위", "스택 전체", "효과", "요약 up", "변경", "enter 실행", "esc 취소"} {
+	for _, want := range []string{"다음 작업", "제목 up", "대상", "범위", "스택 전체", "효과", "요약 up", "변경", "[enter] 실행", "[esc] 취소"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("confirmation missing %q:\n%s", want, view)
 		}

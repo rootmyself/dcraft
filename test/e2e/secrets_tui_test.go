@@ -92,7 +92,7 @@ func TestSecretsTUIWizardBuildPhaseFixesDeliveryToBuildKit(t *testing.T) {
 		"빌드 시점", "BuildKit", "--no-cache", "자동으로 수정하지 않습니다",
 		"비밀값 참조를 저장했습니다",
 	} {
-		if !strings.Contains(output, want) {
+		if !screenContains(output, want) {
 			t.Fatalf("TUI output missing %q:\n%s", want, output)
 		}
 	}

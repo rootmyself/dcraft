@@ -149,7 +149,7 @@ func TestServiceFeatureShowsTheCurrentStackBeforeRunning(t *testing.T) {
 		"서비스 선택", "전체 (스택 전체)", "[x] 전체",
 		"api", "실행 중", "healthy", "인스턴스 1개",
 		"web", "중지됨", "인스턴스 2개",
-		"space", "enter", "esc", "q 종료",
+		"space", "[enter] 실행", "[esc] 취소", "[q] 종료",
 	} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("service screen missing %q:\n%s", want, view)

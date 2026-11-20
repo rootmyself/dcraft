@@ -442,7 +442,7 @@ func TestSecretsTUIWizardOffersAWSAndSavesTheShape(t *testing.T) {
 	for _, want := range []string{
 		"AWS Secrets Manager", "database.password", "ap-northeast-2", "자격 증명", "비밀값 참조를 저장했습니다",
 	} {
-		if !strings.Contains(output, want) {
+		if !screenContains(output, want) {
 			t.Fatalf("TUI output missing %q:\n%s", want, output)
 		}
 	}

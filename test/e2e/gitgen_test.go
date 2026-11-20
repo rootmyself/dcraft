@@ -185,7 +185,7 @@ func TestGenerateGitHookTUIWizardShowsThePreviewAndDeclineWritesNothing(t *testi
 		t.Fatalf("TUI exit = %d\n%s", code, output)
 	}
 	for _, want := range []string{"Git 호스트 스크립트 생성", "원격 저장소에 접속하지 않습니다", "file_overwrite", "script_trust"} {
-		if !strings.Contains(output, want) {
+		if !screenContains(output, want) {
 			t.Fatalf("TUI output missing %q:\n%s", want, output)
 		}
 	}

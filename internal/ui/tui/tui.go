@@ -8,10 +8,9 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/rootmyself/dcraft/internal/core"
-	"github.com/rootmyself/dcraft/internal/ui/view"
+	"github.com/rootmyself/dcraft/internal/ui/tui/visual"
 )
 
 // Options are the shared TUI dependencies.
@@ -19,6 +18,10 @@ type Options struct {
 	Engine   *core.Engine
 	Registry *core.Registry
 	Target   core.TargetRequest
+	// Theme overrides theme detection. It exists for tests and for a future
+	// caller that has already resolved the terminal profile; nil means the
+	// TUI resolves it once from the environment.
+	Theme *visual.Theme
 }
 
 // Run starts the interactive program. Normal quit (q or ctrl+c) does not touch
@@ -77,6 +80,12 @@ type Model struct {
 	width        int
 	height       int
 
+	// theme is resolved once in NewModel and injected into every renderer.
+	// facts holds the last observed header values; neither is a global and
+	// nothing re-reads the environment during a redraw.
+	theme visual.Theme
+	facts visual.Facts
+
 	// pendingApproval and planText hold the generic confirmation state. Any
 	// approval-gated feature that implements core.Planner reuses this screen;
 	// no feature-specific branch is added here. pendingApprovals carries every
@@ -131,7 +140,11 @@ func NewModel(ctx context.Context, opts Options) *Model {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	m := &Model{ctx: ctx, engine: opts.Engine, registry: opts.Registry, target: opts.Target, envSelected: -1}
+	m := &Model{
+		ctx: ctx, engine: opts.Engine, registry: opts.Registry, target: opts.Target, envSelected: -1,
+		theme: resolveTheme(nil, opts.Theme),
+		facts: initialFacts(opts.Target),
+	}
 	m.req = core.Request{Target: opts.Target}
 	if opts.Registry != nil {
 		m.features = opts.Registry.All()
@@ -214,6 +227,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.phase = phaseReady
 			return m, nil
 		}
+		m.observeTarget(msg.report.Target)
+		m.observeTools(msg.report.Tools)
 		m.planText = msg.report.Text
 		m.planFingerprint = msg.report.Fingerprint
 		m.approvedHooks = append([]core.HookEntry{}, msg.report.Hooks...)
@@ -265,6 +280,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.resetServiceSelection()
 			return m, nil
 		}
+		m.observeTarget(msg.report.Target)
+		m.observeTools(msg.report.Tools)
 		m.serviceOptions = append([]core.ServiceStatus{}, msg.report.Services...)
 		m.serviceChecked = make([]bool, len(m.serviceOptions))
 		m.serviceCursor = 0
@@ -281,6 +298,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.phase = phaseReady
 			return m, nil
 		}
+		m.observeTarget(msg.report.Target)
+		m.observeTools(msg.report.Tools)
 		if len(msg.report.Fields) == 0 {
 			return m, m.begin(msg.feature)
 		}
@@ -302,6 +321,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		res := msg.res
 		m.currentStage = nil
+		m.observeTarget(res.Target)
+		m.observeTools(res.Tools)
 		if m.runCancel != nil {
 			m.runCancel()
 			m.runCancel = nil
@@ -913,154 +934,12 @@ func waitStageCmd(events chan core.Stage) tea.Cmd {
 	}
 }
 
-var (
-	titleStyle  = lipgloss.NewStyle().Bold(true)
-	hintStyle   = lipgloss.NewStyle().Faint(true)
-	noticeStyle = lipgloss.NewStyle().Bold(true)
-)
-
+// View composes the three fixed bands: the header, the phase body and the
+// keycap footer. Every line fits the terminal width exactly, so a resize
+// reflows immediately and never leaves the frame ragged.
 func (m *Model) View() string {
-	var b strings.Builder
-	title := msgApp
-	shown := m.active
-	if (m.phase == phaseLoadingServices || m.phase == phaseSelectingServices) && m.serviceFeature != nil {
-		shown = m.serviceFeature
-	}
-	if m.phase == phaseConfirm && m.pending != nil {
-		shown = m.pending
-	}
-	if shown != nil {
-		title += " · " + shown.Descriptor().Title
-	}
-	b.WriteString(titleStyle.Render(title))
-	b.WriteString("\n\n")
-
-	switch m.phase {
-	case phaseNoPrimary:
-		b.WriteString(msgNoPrimary)
-		b.WriteString("\n")
-	case phasePlanning:
-		b.WriteString(msgPlanning)
-		b.WriteString("\n")
-		if m.currentStage != nil {
-			b.WriteString(view.StageList([]core.Stage{*m.currentStage}))
-			b.WriteString("\n")
-		}
-	case phaseConfirm:
-		if m.pendingApproval != core.ApprovalNone {
-			b.WriteString(titleStyle.Render(msgApprovalConfirmTitle))
-			b.WriteString("\n\n")
-			if m.active != nil {
-				d := m.active.Descriptor()
-				fmt.Fprintf(&b, "작업: %s (%s)\n", d.Title, d.Name)
-			}
-			fmt.Fprintf(&b, "%s: %s\n", msgConfirmScopeLabel, serviceScopeText(m.req.Services))
-			fmt.Fprintf(&b, "승인: %s (%s)\n", m.pendingApproval.KoreanLabel(), m.pendingApproval)
-			for _, kind := range m.pendingApprovals {
-				if kind == m.pendingApproval {
-					continue
-				}
-				fmt.Fprintf(&b, "승인: %s (%s)\n", kind.KoreanLabel(), kind)
-			}
-			b.WriteString("\n")
-			b.WriteString(m.planText)
-			b.WriteString("\n\n")
-			b.WriteString(hintStyle.Render(msgHintConfirm))
-			b.WriteString("\n")
-		} else {
-			b.WriteString(m.confirmView())
-			b.WriteString("\n")
-		}
-	case phaseLoadingEnvironments:
-		b.WriteString(msgEnvChecking)
-		b.WriteString("\n")
-	case phaseSelectingEnvironment:
-		b.WriteString(titleStyle.Render(msgEnvSelectTitle))
-		b.WriteString("\n\n")
-		b.WriteString(msgEnvSelectIntro)
-		b.WriteString("\n\n")
-		for i, env := range m.envs {
-			marker := "  "
-			if i == m.envSelected {
-				marker = "> "
-			}
-			fmt.Fprintf(&b, "%s%s — %s\n", marker, env.Name, environmentSummary(env))
-		}
-		b.WriteString("\n")
-		b.WriteString(hintStyle.Render(msgEnvIsolationNote))
-		b.WriteString("\n")
-	case phaseLoadingServices:
-		b.WriteString(msgServiceLoading)
-		b.WriteString("\n")
-	case phaseSelectingServices:
-		b.WriteString(m.serviceView())
-		b.WriteString("\n")
-	case phaseLoadingInputs:
-		b.WriteString(msgLoadingInputs)
-		b.WriteString("\n")
-	case phaseForm:
-		b.WriteString(m.formView())
-	case phaseWizardLoading, phaseWizardStep, phaseWizardPreview:
-		b.WriteString(m.wizardView())
-		b.WriteString("\n")
-	case phaseLoading:
-		if m.live != nil {
-			b.WriteString(m.liveView())
-			b.WriteString("\n")
-			break
-		}
-		b.WriteString(msgWorking)
-		b.WriteString("\n")
-		if m.currentStage != nil {
-			b.WriteString(view.StageList([]core.Stage{*m.currentStage}))
-			b.WriteString("\n")
-		}
-	default:
-		if len(m.lastLive) > 0 {
-			b.WriteString(titleStyle.Render(msgLastOutput))
-			b.WriteString("\n")
-			for _, line := range m.lastLive {
-				b.WriteString(line)
-				b.WriteString("\n")
-			}
-			b.WriteString("\n")
-		}
-		if m.result != nil {
-			if m.result.Outcome == core.OutcomeSuccess {
-				if p, ok := m.active.(core.Presenter); ok {
-					b.WriteString(p.Present(*m.result, m.contentWidth()))
-				} else {
-					b.WriteString(view.SuccessFallback(*m.result))
-				}
-				if warnings := view.Warnings(m.result.Diagnostics); len(warnings) > 0 {
-					b.WriteString("\n\n")
-					b.WriteString(view.Diagnostics(warnings))
-				}
-			} else {
-				b.WriteString(view.Failure(*m.result))
-			}
-			b.WriteString("\n")
-		}
-	}
-
-	body := b.String()
-	var footer strings.Builder
-	if len(m.features) > 1 && m.phase == phaseReady {
-		footer.WriteString("\n")
-		footer.WriteString(msgMenu)
-		footer.WriteString("\n")
-		footer.WriteString(m.menuView())
-	}
-
-	if m.notice != "" {
-		footer.WriteString("\n")
-		footer.WriteString(noticeStyle.Render(m.notice))
-		footer.WriteString("\n")
-	}
-
-	footer.WriteString("\n")
-	footer.WriteString(hintStyle.Render(m.hints()))
-	return m.fitView(body, footer.String())
+	lines := m.composeFrame(m.renderBody())
+	return strings.Join(lines, "\n") + "\n"
 }
 
 // menuWindow bounds how many feature rows the screen shows so a growing
@@ -1082,7 +961,7 @@ func (m *Model) menuView() string {
 		end = start + menuWindow
 	}
 	if start > 0 {
-		b.WriteString(hintStyle.Render(msgMenuMoreAbove))
+		b.WriteString(m.hintText(fmt.Sprintf(msgMenuMoreAbove, m.theme.Glyphs.Ell)))
 		b.WriteString("\n")
 	}
 	for i := start; i < end; i++ {
@@ -1091,40 +970,19 @@ func (m *Model) menuView() string {
 		if i == m.selected {
 			marker = "> "
 		}
+		// Compact drops the secondary column (the machine name) and keeps the
+		// Korean title; the wide and medium layouts show both.
+		if m.compact() {
+			b.WriteString(marker + d.Title + "\n")
+			continue
+		}
 		b.WriteString(marker + d.Title + " (" + d.Name + ")\n")
 	}
 	if end < len(m.features) {
-		b.WriteString(hintStyle.Render(msgMenuMoreBelow))
+		b.WriteString(m.hintText(fmt.Sprintf(msgMenuMoreBelow, m.theme.Glyphs.Ell)))
 		b.WriteString("\n")
 	}
 	return b.String()
-}
-
-// fitView keeps the rendered screen within the terminal height. The footer
-// (menu, notice, hints) is always kept; the body is shortened with an explicit
-// notice instead of letting the terminal silently clip the top.
-func (m *Model) fitView(body, footer string) string {
-	body = strings.TrimRight(body, "\n")
-	footer = strings.TrimRight(footer, "\n")
-	if m.height <= 0 {
-		return body + "\n" + footer + "\n"
-	}
-	bodyLines := strings.Split(body, "\n")
-	footerLines := strings.Split(footer, "\n")
-	if len(bodyLines)+len(footerLines) <= m.height {
-		return body + "\n" + footer + "\n"
-	}
-	maxBody := m.height - len(footerLines)
-	if maxBody < 2 {
-		return footer + "\n"
-	}
-	keep := maxBody - 1
-	if keep > len(bodyLines) {
-		keep = len(bodyLines)
-	}
-	truncated := append([]string{}, bodyLines[:keep]...)
-	truncated = append(truncated, hintStyle.Render(msgViewTruncated))
-	return strings.Join(truncated, "\n") + "\n" + footer + "\n"
 }
 
 // confirmView explains the requested target and effect before a mutating
@@ -1165,7 +1023,6 @@ func (m *Model) confirmView() string {
 		b.WriteString(m.planText)
 		b.WriteString("\n")
 	}
-	b.WriteString(msgConfirmRisk)
 	return strings.TrimRight(b.String(), "\n")
 }
 
@@ -1175,7 +1032,7 @@ const serviceWindow = 10
 
 func (m *Model) serviceView() string {
 	var b strings.Builder
-	b.WriteString(titleStyle.Render(msgServiceSelectTitle))
+	b.WriteString(m.title(msgServiceSelectTitle))
 	b.WriteString("\n\n")
 	dir := m.target.Path
 	if dir == "" {
@@ -1202,7 +1059,7 @@ func (m *Model) serviceView() string {
 		end = start + serviceWindow
 	}
 	if start > 0 {
-		b.WriteString(hintStyle.Render(msgMenuMoreAbove))
+		b.WriteString(m.hintText(fmt.Sprintf(msgMenuMoreAbove, m.theme.Glyphs.Ell)))
 		b.WriteString("\n")
 	}
 	for i := start; i < end; i++ {
@@ -1225,11 +1082,11 @@ func (m *Model) serviceView() string {
 		fmt.Fprintf(&b, "%s[%s] %s · %s\n", marker, checked, svc.Name, serviceSummary(svc))
 	}
 	if end < rows {
-		b.WriteString(hintStyle.Render(msgMenuMoreBelow))
+		b.WriteString(m.hintText(fmt.Sprintf(msgMenuMoreBelow, m.theme.Glyphs.Ell)))
 		b.WriteString("\n")
 	}
 	b.WriteString("\n")
-	b.WriteString(hintStyle.Render(msgServiceSelectionNote))
+	b.WriteString(m.hintText(msgServiceSelectionNote))
 	return strings.TrimRight(b.String(), "\n")
 }
 
@@ -1294,55 +1151,10 @@ func serviceScopeText(services []string) string {
 	return strings.Join(services, ", ")
 }
 
+// contentWidth is the body width for presenter calls. It is kept for the
+// existing call sites; bodyWidth is the shell-aware equivalent.
 func (m *Model) contentWidth() int {
-	if m.width <= 0 {
-		return 0
-	}
-	const padding = 2
-	if m.width <= padding*2 {
-		return m.width
-	}
-	return m.width - padding*2
-}
-
-func (m *Model) hints() string {
-	if m.form != nil {
-		return msgHintForm
-	}
-	if m.live != nil {
-		if m.live.mode == core.LiveAttach {
-			return msgHintAttach
-		}
-		return msgHintLive
-	}
-	if m.isWizardPhase() {
-		return m.wizardHints()
-	}
-	if m.phase == phaseConfirm {
-		if m.pendingApproval != core.ApprovalNone {
-			return msgHintConfirm
-		}
-		return msgConfirmHints
-	}
-	if m.phase == phaseNoPrimary {
-		return msgHintQuit
-	}
-	if m.phase == phaseSelectingEnvironment {
-		return msgHintEnvSelect
-	}
-	if m.phase == phaseSelectingServices {
-		return msgHintServiceSelect
-	}
-	if m.phase == phaseLoading && m.active != nil && !m.active.Descriptor().ReadOnly {
-		return msgHintBusy
-	}
-	if m.phase != phaseReady {
-		return msgHintQuit
-	}
-	if len(m.features) > 1 {
-		return msgHintMenu
-	}
-	return msgHintSingle
+	return m.bodyWidth()
 }
 
 func environmentSummary(env core.Environment) string {

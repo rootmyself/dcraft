@@ -709,7 +709,7 @@ func runPTY(t *testing.T, dir string, env []string, waitText string) (string, in
 	}()
 
 	deadline := time.Now().Add(15 * time.Second)
-	for !strings.Contains(out.String(), waitText) {
+	for !screenContains(out.String(), waitText) {
 		if time.Now().After(deadline) {
 			t.Fatalf("TUI did not render %q within timeout; output:\n%s", waitText, out.String())
 		}
@@ -747,8 +747,8 @@ func TestTUIEnterAndQuitDoesNotChangeServices(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("TUI exit = %d\n%s", code, output)
 	}
-	for _, want := range []string{"dcraft", "스택 상태", "새로고침", "종료"} {
-		if !strings.Contains(output, want) {
+	for _, want := range []string{"dcraft", "스택 상태", "[r] 새로고침", "[q] 종료"} {
+		if !screenContains(output, want) {
 			t.Fatalf("TUI output missing %q:\n%s", want, output)
 		}
 	}
@@ -762,8 +762,8 @@ func TestTUIShowsDiagnosticsAndQuitsInEmptyFolder(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("TUI exit = %d\n%s", code, output)
 	}
-	for _, want := range []string{"작업 실패", "다음 행동", "q 종료"} {
-		if !strings.Contains(output, want) {
+	for _, want := range []string{"작업 실패", "다음 행동", "[q] 종료"} {
+		if !screenContains(output, want) {
 			t.Fatalf("failure screen missing %q:\n%s", want, output)
 		}
 	}

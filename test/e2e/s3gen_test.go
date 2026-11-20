@@ -218,7 +218,7 @@ func TestGenerateS3HookTUIWizardShowsThePreviewAndDeclineWritesNothing(t *testin
 		"S3 호스트 스크립트 생성", "S3에 접속하지 않습니다", "aws s3 cp",
 		"gzip -t", "file_overwrite", "script_trust", "취소",
 	} {
-		if !strings.Contains(output, want) {
+		if !screenContains(output, want) {
 			t.Fatalf("TUI output missing %q:\n%s", want, output)
 		}
 	}

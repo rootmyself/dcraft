@@ -180,7 +180,7 @@ func TestEnvironmentTUIWizardPreviewDeclineThenAccept(t *testing.T) {
 	// Decline at the preview: esc must leave the folder untouched.
 	output, code := runPTYSteps(t, project, env, []ptyStep{
 		{waitText: "스택 상태 (status)"},
-		{waitText: "↑/↓ 선택"},
+		{waitText: "[↑↓] 이동"},
 		{send: down},
 		{waitText: "실행환경 별칭 (environments)", send: "\r"},
 		{waitText: "별칭 이름", send: "dev\r"},
@@ -197,7 +197,7 @@ func TestEnvironmentTUIWizardPreviewDeclineThenAccept(t *testing.T) {
 		t.Fatalf("decline TUI exit = %d\n%s", code, output)
 	}
 	for _, want := range []string{"다음 실행환경 별칭을 저장할까요?", "compose.yaml", ".env.dev", "저장된 내용은 없습니다"} {
-		if !strings.Contains(output, want) {
+		if !screenContains(output, want) {
 			t.Fatalf("decline TUI output missing %q:\n%s", want, output)
 		}
 	}
@@ -212,7 +212,7 @@ func TestEnvironmentTUIWizardPreviewDeclineThenAccept(t *testing.T) {
 	// Accept the same flow: enter saves, then the presenter confirms.
 	output, code = runPTYSteps(t, project, env, []ptyStep{
 		{waitText: "스택 상태 (status)"},
-		{waitText: "↑/↓ 선택"},
+		{waitText: "[↑↓] 이동"},
 		{send: down},
 		{waitText: "실행환경 별칭 (environments)", send: "\r"},
 		{waitText: "별칭 이름", send: "dev\r"},

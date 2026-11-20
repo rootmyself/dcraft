@@ -203,7 +203,7 @@ func (m *Model) liveView() string {
 	}
 	if live.notice != "" {
 		b.WriteString("\n")
-		b.WriteString(noticeStyle.Render(live.notice))
+		b.WriteString(m.noticeText(live.notice))
 		b.WriteString("\n")
 	}
 	return strings.TrimRight(b.String(), "\n")

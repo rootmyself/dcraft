@@ -534,3 +534,22 @@ func TestWarningsDoNotContaminateStdout(t *testing.T) {
 		t.Fatalf("warning missing from stderr: %q", h.stderr.String())
 	}
 }
+
+// The shared visual layer belongs to the TUI. CLI human output and --json must
+// stay free of escape sequences: the resolved theme is injected into the TUI
+// model only, and the CLI never constructs it.
+func TestCLIOutputNeverContainsANSI(t *testing.T) {
+	status := &stubFeature{desc: descriptor("status")}
+	for _, args := range [][]string{{"status"}, {"status", "--json"}, {"--help"}} {
+		h := newHarness(t, status)
+		if err := h.run(args...); err != nil {
+			t.Fatalf("%v: %v", args, err)
+		}
+		if strings.Contains(h.stdout.String(), "\x1b") {
+			t.Fatalf("%v: stdout has ANSI: %q", args, h.stdout.String())
+		}
+		if strings.Contains(h.stderr.String(), "\x1b") {
+			t.Fatalf("%v: stderr has ANSI: %q", args, h.stderr.String())
+		}
+	}
+}
