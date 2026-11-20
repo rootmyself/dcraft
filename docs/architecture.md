@@ -530,6 +530,7 @@ type core.Feature interface {
 |---|---|
 | `Name` | English command/machine name, `^[a-z][a-z0-9-]*$`, globally unique |
 | `Title`, `Summary`, `Usage` | Korean user-facing text |
+| `Section` | TUI navigation group: `inspect`, `operate`, `data`, `config`; required, the TUI derives the menu from it |
 | `ReadOnly` | no stack change; cannot require approval |
 | `Approval` | required `core.ApprovalKind` |
 | `RecordsHistory` | stack-changing feature whose success is written to history |
@@ -541,15 +542,22 @@ type core.Feature interface {
 | `Wizard` | TUI entry uses the generic guided flow (`core.Wizard`) instead of the generic confirmation screen; the CLI path is unchanged |
 | `Flags []core.Flag` | feature-owned flags parsed by the shared CLI |
 | `Hooks` | registered host-script scope; `HookUpUpdate` only on `up`/`update`, rejected on read-only features |
+| `Destructive` | irreversibly destroys or replaces user data or a running stack; independent of `Approval`, rejected on read-only features |
 
 Registry validation rejects duplicate names, invalid names, missing Korean text,
-read-only+approval combinations, read-only+history combinations,
-read-only+hooks combinations, a mutating primary feature without an independent
-approval (the TUI would otherwise run it as soon as it opens), a second
-primary, unknown preflight requirements, reserved flag names (`path`, `file`,
-`env-file`, `profile`, `project-name`, `env`, `json`, `approve`, `help`,
+a missing or unknown section, read-only+approval combinations,
+read-only+history combinations, read-only+hooks combinations,
+read-only+destructive combinations, a mutating primary feature without an
+independent approval (the TUI would otherwise run it as soon as it opens), a
+second primary, unknown preflight requirements, reserved flag names (`path`,
+`file`, `env-file`, `profile`, `project-name`, `env`, `json`, `approve`, `help`,
 `service`), reserved shorthands (`f`, `p`, `s`, `h`, `v`), duplicate flags and
 invalid bool defaults.
+
+`Registry.All()` keeps registration order; `Registry.BySection()` groups the
+same features by `SectionOrder` (`inspect`, `operate`, `data`, `config`) while
+preserving registration order inside each section. The TUI is the only consumer
+of the grouping.
 
 ### Adding a feature (the only steps)
 
@@ -822,8 +830,21 @@ It derives everything from the registry:
 - the body is the feature presenter on success or `view.Failure` on
   failure/canceled, including warnings and stage list;
 - the stage sink shows the current stage while loading;
-- if more than one feature is registered, a Korean menu lists all features;
-  `↑/↓` select, `enter` runs the selected feature through the same engine;
+- if more than one feature is registered, the menu is grouped into the four
+  sections the descriptors declare (`조회`/`운영`/`데이터`/`설정`), in that fixed
+  order, and registration order inside each section. Every entry carries its
+  Korean title; the single-column menu (below 100 columns) also shows the
+  machine name and the one-line summary on the same row, and the sidebar shows
+  the focused entry's summary in a pinned band so no title is clipped for it. A
+  `Destructive` descriptor gets the danger glyph and the Korean label `위험`;
+  the TUI holds no feature-name list, so adding a feature never edits this
+  package. At ≥100 columns the grouped menu is the persistent left sidebar; at
+  60–99 columns it is a one-row summary under the header that `tab`/`shift+tab`
+  expands in place (the row count never changes, so content height is
+  preserved); below 60 columns the same grouped list is the body menu. `↑/↓`
+  select, `enter` runs the selected feature through the same engine, `/`
+  filters by title or summary and `esc` clears it. The cursor is an index into
+  registration order, so it survives a round trip to a result screen;
 - if the folder registers environment aliases and no `--env` was given, the TUI
   first lists them through `core.Engine.Environments` and requires an explicit
   `↑/↓` + `enter` selection. Nothing is preselected; `q` quits without running

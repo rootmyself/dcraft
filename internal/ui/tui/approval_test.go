@@ -27,6 +27,7 @@ func (f *stubPlanner) Plan(ctx context.Context, in core.Invocation) (core.Plan, 
 func approvalDescriptor(name string) core.Descriptor {
 	return core.Descriptor{
 		Name:     name,
+		Section:  core.SectionInspect,
 		Title:    "설치 " + name,
 		Summary:  "설치합니다.",
 		Usage:    "dcraft " + name,
@@ -145,7 +146,8 @@ func TestOrdinaryPlannerShowsPlanAndRunsWithoutApproval(t *testing.T) {
 		stubFeature: &stubFeature{
 			desc: core.Descriptor{
 				Name: "update", Title: "갱신", Summary: "현재 설정을 적용합니다.",
-				Usage: "dcraft update", RecordsHistory: true,
+				Section: core.SectionOperate,
+				Usage:   "dcraft update", RecordsHistory: true,
 			},
 			body: "갱신 결과 본문",
 		},
@@ -201,6 +203,7 @@ func TestPreviousVersionApprovalUsesTheGenericScreen(t *testing.T) {
 		stubFeature: &stubFeature{
 			desc: core.Descriptor{
 				Name: "rollback", Title: "이전 버전 복원", Summary: "직전 정상 버전으로 돌아갑니다.",
+				Section:  core.SectionData,
 				Usage:    "dcraft rollback --approve previous_version",
 				Approval: core.ApprovalPreviousGood, RecordsHistory: true, Primary: true,
 				Requires: core.Requirements{core.RequirementDockerCLI},

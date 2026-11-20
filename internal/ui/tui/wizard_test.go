@@ -189,7 +189,8 @@ func TestWizardShowsEffectBeforeSaveAndDeclineSavesNothing(t *testing.T) {
 	wizard := &wizardStub{
 		desc: core.Descriptor{
 			Name: "secrets", Title: "비밀값 연결", Summary: "요약", Usage: "dcraft secrets",
-			Wizard: true,
+			Section: core.SectionConfig,
+			Wizard:  true,
 		},
 		steps:   wizardSteps(),
 		preview: "저장할 비밀값 연결\n서비스: worker\n전달: 파일 /run/secrets/token\n효과: dcraft up 시 파일로 전달합니다.",
@@ -228,7 +229,8 @@ func TestWizardSavesThroughTheSameFeaturePathAfterConfirmation(t *testing.T) {
 	wizard := &wizardStub{
 		desc: core.Descriptor{
 			Name: "secrets", Title: "비밀값 연결", Summary: "요약", Usage: "dcraft secrets",
-			Wizard: true,
+			Section: core.SectionConfig,
+			Wizard:  true,
 		},
 		steps:   wizardSteps(),
 		preview: "저장할 비밀값 연결\n효과: 파일 /run/secrets/token",
@@ -254,7 +256,8 @@ func TestWizardTypingQDoesNotQuitAndInvalidPreviewBlocksSave(t *testing.T) {
 	wizard := &wizardStub{
 		desc: core.Descriptor{
 			Name: "secrets", Title: "비밀값 연결", Summary: "요약", Usage: "dcraft secrets",
-			Wizard: true,
+			Section: core.SectionConfig,
+			Wizard:  true,
 		},
 		steps:   wizardSteps(),
 		preview: "preview",
@@ -291,7 +294,8 @@ func TestWizardSpecFailureShowsFailureInsteadOfSaving(t *testing.T) {
 	wizard := &wizardStub{
 		desc: core.Descriptor{
 			Name: "secrets", Title: "비밀값 연결", Summary: "요약", Usage: "dcraft secrets",
-			Wizard: true,
+			Section: core.SectionConfig,
+			Wizard:  true,
 		},
 	}
 	// A nil spec cannot be produced by the stub; use a feature that fails.
@@ -338,7 +342,7 @@ func stringsContains(haystack, needle string) bool {
 
 func TestWizardMultiStepCollectsAMixedSelection(t *testing.T) {
 	wizard := &wizardStub{
-		desc: core.Descriptor{Name: "backup", Title: "백업", Summary: "백업합니다.", Usage: "dcraft backup", Wizard: true},
+		desc: core.Descriptor{Name: "backup", Title: "백업", Summary: "백업합니다.", Usage: "dcraft backup", Section: core.SectionData, Wizard: true},
 		steps: core.WizardSpec{
 			Title: "백업 설정",
 			Steps: []core.WizardStep{
@@ -380,7 +384,7 @@ func TestWizardMultiStepCollectsAMixedSelection(t *testing.T) {
 
 func TestWizardMultiEnterWithoutTogglesSelectsTheHighlightedValue(t *testing.T) {
 	wizard := &wizardStub{
-		desc: core.Descriptor{Name: "backup", Title: "백업", Summary: "백업합니다.", Usage: "dcraft backup", Wizard: true},
+		desc: core.Descriptor{Name: "backup", Title: "백업", Summary: "백업합니다.", Usage: "dcraft backup", Section: core.SectionData, Wizard: true},
 		steps: core.WizardSpec{Steps: []core.WizardStep{
 			{
 				Name: "sources", Title: "데이터 선택", Prompt: "고르세요.", Multi: true,

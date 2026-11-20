@@ -34,6 +34,7 @@ func hookUpFeature(ran *bool) *stubFeature {
 	return &stubFeature{
 		desc: core.Descriptor{
 			Name: "up", Title: "시작", Summary: "스택을 시작합니다.", Usage: "dcraft up",
+			Section:        core.SectionOperate,
 			RecordsHistory: true, Hooks: core.HookUpUpdate,
 		},
 		run: func(context.Context, core.Invocation) (any, error) {

@@ -57,6 +57,7 @@ func (f *Feature) Descriptor() core.Descriptor {
 		Title:   msgTitle,
 		Summary: msgSummary,
 		Usage:   msgUsage,
+		Section: core.SectionConfig,
 		// Alias editing is local project-config work. It needs no engine or
 		// Compose, so it declares the smallest published preflight set.
 		Requires:       core.Requirements{core.RequirementDockerCLI},

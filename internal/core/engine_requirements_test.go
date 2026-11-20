@@ -15,6 +15,7 @@ func TestEngineComposeRequirementFailsWhenDockerIsMissing(t *testing.T) {
 	feature := &testFeature{
 		desc: core.Descriptor{
 			Name: "sample", Title: "샘플", Summary: "샘플입니다.", Usage: "dcraft sample",
+			Section:  core.SectionInspect,
 			Requires: core.Requirements{core.RequirementCompose},
 		},
 		run: func(context.Context, core.Invocation) (any, error) { return "ran", nil },

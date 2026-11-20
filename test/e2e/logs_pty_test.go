@@ -111,12 +111,10 @@ func (s *ptySession) wait() int {
 	}
 }
 
-// assertRestored proves the terminal is not left in raw mode after a normal
-// exit or a failure.
-// menuDownPresses returns how many down-arrow presses move the menu cursor
-// from the primary status feature to the named feature. The menu order is the
-// registration order, so this stays correct when another ticket adds a feature.
-func menuDownPresses(t *testing.T, name string) int {
+// navOrder returns the real menu order the TUI renders: section order, then
+// registration order inside each section. It is derived from the registry so
+// it stays correct when a feature is added.
+func navOrder(t *testing.T) []core.Feature {
 	t.Helper()
 	reg := core.NewRegistry()
 	all.Register(reg, &deps.Deps{
@@ -125,7 +123,19 @@ func menuDownPresses(t *testing.T, name string) int {
 		Downloader: &noopDownloader{},
 		Installer:  &noopInstaller{},
 	})
-	features := reg.All()
+	var out []core.Feature
+	for _, group := range reg.BySection() {
+		out = append(out, group.Features...)
+	}
+	return out
+}
+
+// menuDownPresses returns how many down-arrow presses move the menu cursor
+// from the primary status feature to the named feature. The menu is grouped by
+// descriptor section, so this walks the same order the screen draws.
+func menuDownPresses(t *testing.T, name string) int {
+	t.Helper()
+	features := navOrder(t)
 	statusIdx, targetIdx := -1, -1
 	for i, f := range features {
 		switch f.Descriptor().Name {
@@ -151,6 +161,8 @@ func (s *ptySession) pressMenuDown(count int) {
 	s.press(keys...)
 }
 
+// assertRestored proves the terminal is not left in raw mode after a normal
+// exit or a failure.
 func (s *ptySession) assertRestored() {
 	s.t.Helper()
 	after, err := term.GetState(int(s.master.Fd()))
@@ -222,11 +234,11 @@ func TestPTYTUILogsScreenReturnsToTheMenuAndKeepsServices(t *testing.T) {
 	project := liveProject(t)
 	env := fake.env(t, t.TempDir(), map[string]string{"DOCKER_FAKE_LOG_FOLLOW_LINE": "followed line"})
 	s := startPTY(t, project, env)
-	s.waitFor("스택 상태 (status)", 15*time.Second)
+	s.waitFor("[↑↓] 이동", 15*time.Second)
 	s.pressMenuDown(menuDownPresses(t, "logs"))
 	s.waitFor("서비스 선택", 15*time.Second)
 	s.press("\r")
-	s.waitFor("로그 보기 (logs)", 15*time.Second)
+	s.waitFor("로그 보기", 15*time.Second)
 	s.waitFor("followed line", 15*time.Second)
 	s.send("q")
 	s.waitFor("마지막 실시간 출력", 15*time.Second)
@@ -245,7 +257,7 @@ func TestPTYTUIExecScreenShowsTargetRunsAndReturnsToTheMenu(t *testing.T) {
 	project := liveProject(t)
 	env := fake.env(t, t.TempDir(), map[string]string{"DOCKER_FAKE_EXEC_STDOUT": "remote-stdout"})
 	s := startPTY(t, project, env)
-	s.waitFor("스택 상태 (status)", 15*time.Second)
+	s.waitFor("[↑↓] 이동", 15*time.Second)
 	s.pressMenuDown(menuDownPresses(t, "exec"))
 	s.waitFor("실행 전 확인", 15*time.Second)
 	if !strings.Contains(s.out.String(), "서비스 인스턴스") || !strings.Contains(s.out.String(), "명령") {
@@ -266,4 +278,11 @@ func TestPTYTUIExecScreenShowsTargetRunsAndReturnsToTheMenu(t *testing.T) {
 	}
 	fake.assertNoSubcommand(t, "stop")
 	fake.assertNoSubcommand(t, "down")
+}
+
+// menuDown is the raw key sequence that moves the cursor from the primary
+// status feature to the named feature through the sectioned menu.
+func menuDown(t *testing.T, name string) string {
+	t.Helper()
+	return strings.Repeat("\x1b[B", menuDownPresses(t, name))
 }

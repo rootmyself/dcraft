@@ -108,7 +108,7 @@ func TestWizardSkipsStepsWhoseConditionIsNotMet(t *testing.T) {
 		},
 	}
 	wizard := &extendedWizard{
-		desc: core.Descriptor{Name: "init", Title: "최초 구성", Summary: "설정", Usage: "dcraft init", Wizard: true},
+		desc: core.Descriptor{Name: "init", Title: "최초 구성", Summary: "설정", Usage: "dcraft init", Section: core.SectionConfig, Wizard: true},
 		spec: spec, preview: "미리보기",
 	}
 	m := newExtendedWizardModel(t, wizard)
@@ -158,7 +158,7 @@ func TestWizardOptionalStepAcceptsEmptyAndRequiredStepDoesNot(t *testing.T) {
 		},
 	}
 	wizard := &extendedWizard{
-		desc: core.Descriptor{Name: "init", Title: "최초 구성", Summary: "설정", Usage: "dcraft init", Wizard: true},
+		desc: core.Descriptor{Name: "init", Title: "최초 구성", Summary: "설정", Usage: "dcraft init", Section: core.SectionConfig, Wizard: true},
 		spec: spec, preview: "미리보기",
 	}
 	m := newExtendedWizardModel(t, wizard)
@@ -187,7 +187,7 @@ func TestWizardOptionalStepAcceptsEmptyAndRequiredStepDoesNot(t *testing.T) {
 
 func TestWizardPreviewShowsAndPassesIndependentApprovals(t *testing.T) {
 	wizard := &extendedWizard{
-		desc: core.Descriptor{Name: "init", Title: "최초 구성", Summary: "설정", Usage: "dcraft init", Wizard: true},
+		desc: core.Descriptor{Name: "init", Title: "최초 구성", Summary: "설정", Usage: "dcraft init", Section: core.SectionConfig, Wizard: true},
 		spec: core.WizardSpec{
 			Title: "설정 저장",
 			Steps: []core.WizardStep{
@@ -239,7 +239,7 @@ func TestWizardPreviewShowsAndPassesIndependentApprovals(t *testing.T) {
 
 func TestWizardPreviewErrorShowsTheDetailedKoreanGuidance(t *testing.T) {
 	wizard := &extendedWizard{
-		desc: core.Descriptor{Name: "init", Title: "최초 구성", Summary: "설정", Usage: "dcraft init", Wizard: true},
+		desc: core.Descriptor{Name: "init", Title: "최초 구성", Summary: "설정", Usage: "dcraft init", Section: core.SectionConfig, Wizard: true},
 		spec: core.WizardSpec{
 			Title: "설정",
 			Steps: []core.WizardStep{
@@ -273,7 +273,7 @@ func TestWizardPreviewErrorShowsTheDetailedKoreanGuidance(t *testing.T) {
 
 func TestWizardCancelDuringApplyKeepsTheCanceledResultVisible(t *testing.T) {
 	wizard := &extendedWizard{
-		desc: core.Descriptor{Name: "init", Title: "최초 구성", Summary: "설정", Usage: "dcraft init", Wizard: true},
+		desc: core.Descriptor{Name: "init", Title: "최초 구성", Summary: "설정", Usage: "dcraft init", Section: core.SectionConfig, Wizard: true},
 		spec: core.WizardSpec{
 			Title: "설정",
 			Steps: []core.WizardStep{

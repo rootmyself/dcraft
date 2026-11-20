@@ -39,6 +39,7 @@ func (p *planningStub) Run(ctx context.Context, in core.Invocation) (any, error)
 func approvalFeature(stub *planningStub) *planningStub {
 	stub.desc = core.Descriptor{
 		Name: "install-compose", Title: "설치", Summary: "설치합니다.", Usage: "dcraft install-compose",
+		Section:  core.SectionConfig,
 		Approval: core.ApprovalInstall,
 	}
 	return stub

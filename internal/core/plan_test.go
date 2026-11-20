@@ -20,6 +20,7 @@ func (f *planningFeature) Plan(ctx context.Context, in core.Invocation) (core.Pl
 func installDescriptor() core.Descriptor {
 	return core.Descriptor{
 		Name:     "install-compose",
+		Section:  core.SectionConfig,
 		Title:    "Compose 설치",
 		Summary:  "누락된 Compose를 설치합니다.",
 		Usage:    "dcraft install-compose --approve install",

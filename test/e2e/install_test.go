@@ -325,7 +325,7 @@ func TestTUIConfirmationShowsPlanDeclinesAndInstallsAfterApproval(t *testing.T) 
 
 // installComposeMenuSteps computes how many menu-down presses are needed from
 // the primary feature to install-compose, so the test survives new registered
-// features from other tickets.
+// features from other tickets. The navigation is grouped by section.
 func installComposeMenuSteps(t *testing.T) int {
 	t.Helper()
 	reg := core.NewRegistry()
@@ -335,7 +335,10 @@ func installComposeMenuSteps(t *testing.T) int {
 		Downloader: &noopDownloader{},
 		Installer:  &noopInstaller{},
 	})
-	features := reg.All()
+	var features []core.Feature
+	for _, group := range reg.BySection() {
+		features = append(features, group.Features...)
+	}
 	statusIdx, installIdx := -1, -1
 	for i, f := range features {
 		switch f.Descriptor().Name {

@@ -72,6 +72,7 @@ func (f *Feature) Descriptor() core.Descriptor {
 		Title:            msgTitle,
 		Summary:          msgSummary,
 		Usage:            msgUsage,
+		Section:          core.SectionConfig,
 		SupportsServices: true,
 		Wizard:           true,
 		Flags: []core.Flag{

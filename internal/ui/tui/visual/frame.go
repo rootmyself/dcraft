@@ -11,7 +11,12 @@ import "strings"
 // approved contract pins the risk sentence of a confirmation; the shell keeps
 // it visible at every size instead of relying on each renderer.
 type Frame struct {
-	Header   string
+	Header string
+	// Left is a prepared pane (already exactly as tall and wide as it wants
+	// to be) shown to the left of the body. The body keeps the remaining
+	// width after the approved one-cell pane gap; header and footer still
+	// span the whole terminal.
+	Left     []string
 	Body     []string
 	Pinned   []string
 	Footer   string
@@ -77,12 +82,23 @@ func Compose(th Theme, width, height int, f Frame) []string {
 	}
 	bodyRows := rows - len(pinned)
 
+	// A left pane owns a fixed slice of every body row. The body is measured
+	// against what is left, so a content line can never cross the pane.
+	leftWidth := 0
+	if len(f.Left) > 0 {
+		leftWidth = Width(f.Left[0]) + 1
+	}
+	bodyWidth := width - leftWidth
+	if bodyWidth < 1 {
+		bodyWidth = 1
+	}
+
 	body := make([]string, 0, bodyRows)
 	for _, line := range f.Body {
 		if len(body) == bodyRows {
 			break
 		}
-		body = append(body, Truncate(line, width, ell))
+		body = append(body, Truncate(line, bodyWidth, ell))
 	}
 	if bodyRows > 0 && len(f.Body) > bodyRows {
 		// The note replaces the last body row so it is never hidden and the
@@ -94,13 +110,29 @@ func Compose(th Theme, width, height int, f Frame) []string {
 		if len(body) > keep {
 			body = body[:keep]
 		}
-		body = append(body, Truncate(f.Overflow, width, ell))
+		body = append(body, Truncate(f.Overflow, bodyWidth, ell))
 	}
 
 	blank := strings.Repeat(" ", width)
 	out := make([]string, 0, height)
 	out = append(out, Fit(f.Header, width, ell))
-	out = append(out, body...)
+	for i := 0; i < bodyRows; i++ {
+		line := ""
+		if i < len(body) {
+			line = body[i]
+		}
+		if leftWidth == 0 {
+			out = append(out, Fit(line, width, ell))
+			continue
+		}
+		pane := ""
+		if i < len(f.Left) {
+			pane = f.Left[i]
+		}
+		// The pane is padded to its own width and followed by exactly one
+		// gap cell; the content then fills the rest of the row.
+		out = append(out, Fit(pane, leftWidth-1, ell)+" "+Fit(line, bodyWidth, ell))
+	}
 	for len(out) < height-1-len(pinned) {
 		out = append(out, blank)
 	}

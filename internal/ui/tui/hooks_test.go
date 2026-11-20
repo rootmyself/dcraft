@@ -34,6 +34,7 @@ func (s *stubHooks) Execute(context.Context, core.HookRequest) (core.HookExecuti
 func hookUpDescriptor() core.Descriptor {
 	return core.Descriptor{
 		Name: "up", Title: "시작", Summary: "스택을 시작합니다.", Usage: "dcraft up",
+		Section:        core.SectionOperate,
 		RecordsHistory: true, Hooks: core.HookUpUpdate,
 	}
 }

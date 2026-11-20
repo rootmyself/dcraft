@@ -574,8 +574,8 @@ func TestLifecycleTUIMenuSelectsStopAndQuitsWithoutChangingServices(t *testing.T
 	env := fake.env(t, t.TempDir())
 	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
 		{wait: "상태를 새로 고치려면", send: ""},
-		{wait: "> 스택 상태 (status)", send: "down"},
-		{wait: "> 스택 중지 (stop)", send: "\r"},
+		{wait: "[↑↓] 이동", send: menuDown(t, "stop")},
+		{wait: "▸ 스택 중지", send: "\r"},
 		{wait: "서비스 선택", send: "\r"},
 		{wait: "다음 작업을 실행할까요?", send: ""},
 	})
@@ -596,9 +596,8 @@ func TestLifecycleTUIRunsUpThroughTheSameEngine(t *testing.T) {
 	env := fake.env(t, t.TempDir())
 	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
 		{wait: "상태를 새로 고치려면", send: ""},
-		{wait: "> 스택 상태 (status)", send: "down"},
-		{wait: "> 스택 중지 (stop)", send: "down"},
-		{wait: "> 스택 시작 (up)", send: "\r"},
+		{wait: "[↑↓] 이동", send: menuDown(t, "up")},
+		{wait: "▸ 스택 시작", send: "\r"},
 		{wait: "서비스 선택", send: "\r"},
 		{wait: "다음 작업을 실행할까요?", send: "\r"},
 		{wait: "스택을 시작했습니다.", send: ""},

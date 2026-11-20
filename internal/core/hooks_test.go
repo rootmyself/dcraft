@@ -91,6 +91,7 @@ func hookPlan(entries ...core.HookEntry) core.HookPlan {
 func hookDescriptor(name string) core.Descriptor {
 	return core.Descriptor{
 		Name: name, Title: "배포", Summary: "배포합니다.", Usage: "dcraft " + name,
+		Section:        core.SectionInspect,
 		RecordsHistory: true, Hooks: core.HookUpUpdate,
 	}
 }
@@ -221,6 +222,7 @@ func TestEngineScriptTrustIsNotTheFeatureApproval(t *testing.T) {
 	feature := &testFeature{
 		desc: core.Descriptor{
 			Name: "up", Title: "시작", Summary: "시작합니다.", Usage: "dcraft up",
+			Section:  core.SectionOperate,
 			Approval: core.ApprovalInstall, Hooks: core.HookUpUpdate, RecordsHistory: true,
 		},
 	}

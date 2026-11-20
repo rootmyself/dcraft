@@ -23,6 +23,8 @@ func (f *Feature) Descriptor() core.Descriptor {
 		Title:          msgTitle,
 		Summary:        msgSummary,
 		Usage:          msgUsage,
+		Section:        core.SectionData,
+		Destructive:    true,
 		Approval:       core.ApprovalPreviousGood,
 		RecordsHistory: true,
 		Flags: []core.Flag{

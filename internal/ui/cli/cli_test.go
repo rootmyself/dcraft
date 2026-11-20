@@ -76,7 +76,8 @@ func (f *stubFeature) Present(res core.Result, width int) string {
 func descriptor(name string) core.Descriptor {
 	return core.Descriptor{
 		Name: name, Title: "제목 " + name, Summary: "요약 " + name,
-		Usage: "dcraft " + name, ReadOnly: true,
+		Section: core.SectionInspect,
+		Usage:   "dcraft " + name, ReadOnly: true,
 	}
 }
 
@@ -259,6 +260,7 @@ func TestFeatureFlagsArgsAndServicesReachFeature(t *testing.T) {
 	var got core.Invocation
 	logs := &stubFeature{desc: core.Descriptor{
 		Name: "logs", Title: "로그", Summary: "로그를 봅니다.", Usage: "dcraft logs",
+		Section:  core.SectionInspect,
 		ReadOnly: true, AcceptsArgs: true, SupportsServices: true,
 		Flags: []core.Flag{
 			{Name: "follow", Shorthand: "l", Kind: core.FlagBool, Usage: "계속 출력"},
@@ -287,6 +289,7 @@ func TestRepeatableStringFlagReachesFeatureAsList(t *testing.T) {
 	var got core.Invocation
 	backup := &stubFeature{desc: core.Descriptor{
 		Name: "backup", Title: "백업", Summary: "데이터를 백업합니다.", Usage: "dcraft backup",
+		Section: core.SectionData,
 		Flags: []core.Flag{
 			{Name: "output", Shorthand: "o", Kind: core.FlagString, Usage: "출력 폴더"},
 			{Name: "volume", Kind: core.FlagList, Usage: "볼륨 키"},
@@ -310,6 +313,7 @@ func TestRepeatableStringFlagReachesFeatureAsList(t *testing.T) {
 func TestApprovalIsEnforcedByEngineAndExitCode(t *testing.T) {
 	install := &stubFeature{desc: core.Descriptor{
 		Name: "install", Title: "설치", Summary: "설치합니다.", Usage: "dcraft install",
+		Section:  core.SectionConfig,
 		Approval: core.ApprovalInstall,
 	}}
 	h := newHarness(t, install)
@@ -341,6 +345,7 @@ func TestApprovalIsEnforcedByEngineAndExitCode(t *testing.T) {
 func TestUnknownApprovalIsUsageError(t *testing.T) {
 	install := &stubFeature{desc: core.Descriptor{
 		Name: "install", Title: "설치", Summary: "설치합니다.", Usage: "dcraft install",
+		Section:  core.SectionConfig,
 		Approval: core.ApprovalInstall,
 	}}
 	h := newHarness(t, install)
@@ -398,6 +403,7 @@ func TestVerifierPanicExitsOneWithAResult(t *testing.T) {
 	feature := &panicVerifyFeature{stubFeature: &stubFeature{
 		desc: core.Descriptor{
 			Name: "update", Title: "갱신", Summary: "갱신합니다.", Usage: "dcraft update",
+			Section: core.SectionOperate,
 		},
 	}}
 	h := newHarness(t, feature)

@@ -86,6 +86,7 @@ func (f *verifyingFeature) Verify(ctx context.Context, in core.Invocation, paylo
 func readOnlyDescriptor(name string) core.Descriptor {
 	return core.Descriptor{
 		Name:     name,
+		Section:  core.SectionInspect,
 		Title:    "스택 상태",
 		Summary:  "현재 스택 상태를 확인합니다.",
 		Usage:    "dcraft " + name,
@@ -222,6 +223,7 @@ func TestEnginePassesSelectionAndFeatureOptions(t *testing.T) {
 	feature := &testFeature{
 		desc: core.Descriptor{
 			Name: "logs", Title: "로그", Summary: "로그를 봅니다.", Usage: "dcraft logs",
+			Section:  core.SectionInspect,
 			ReadOnly: true, SupportsServices: true, AcceptsArgs: true,
 		},
 		run: func(ctx context.Context, in core.Invocation) (any, error) {
@@ -339,6 +341,7 @@ func TestEngineRequiresExplicitApprovalEvenWhenInteractive(t *testing.T) {
 	feature := &testFeature{
 		desc: core.Descriptor{
 			Name: "install", Title: "설치", Summary: "Compose를 설치합니다.", Usage: "dcraft install",
+			Section:  core.SectionConfig,
 			Approval: core.ApprovalInstall,
 		},
 		run: func(context.Context, core.Invocation) (any, error) { ran = true; return nil, nil },
@@ -419,6 +422,7 @@ func TestEngineVerifierRunsBeforeSuccessAndHistory(t *testing.T) {
 	feature := &verifyingFeature{
 		testFeature: &testFeature{desc: core.Descriptor{
 			Name: "update", Title: "갱신", Summary: "갱신합니다.", Usage: "dcraft update", RecordsHistory: true,
+			Section: core.SectionOperate,
 		}},
 		verify: func(ctx context.Context, in core.Invocation, payload any) error { return nil },
 	}
@@ -443,6 +447,7 @@ func TestEngineVerificationFailureMarksFailureAndSkipsHistory(t *testing.T) {
 	feature := &verifyingFeature{
 		testFeature: &testFeature{desc: core.Descriptor{
 			Name: "update", Title: "갱신", Summary: "갱신합니다.", Usage: "dcraft update", RecordsHistory: true,
+			Section: core.SectionOperate,
 		}},
 		verify: func(ctx context.Context, in core.Invocation, payload any) error {
 			return errors.New("healthcheck timed out")
@@ -475,6 +480,7 @@ func TestEngineSkipsHistoryForReadOnlyFeatures(t *testing.T) {
 func TestEngineHistoryFailureIsWarningNotFalseFailure(t *testing.T) {
 	feature := &testFeature{desc: core.Descriptor{
 		Name: "update", Title: "갱신", Summary: "갱신합니다.", Usage: "dcraft update", RecordsHistory: true,
+		Section: core.SectionOperate,
 	}}
 	h := newHarness(t, feature)
 	h.state.err = errors.New("disk full")
@@ -493,7 +499,7 @@ func TestEngineHistoryFailureIsWarningNotFalseFailure(t *testing.T) {
 func TestEngineCancellationReportsCanceledStageAndEffects(t *testing.T) {
 	started := make(chan struct{})
 	feature := &testFeature{
-		desc: core.Descriptor{Name: "update", Title: "갱신", Summary: "갱신합니다.", Usage: "dcraft update"},
+		desc: core.Descriptor{Name: "update", Title: "갱신", Summary: "갱신합니다.", Usage: "dcraft update", Section: core.SectionOperate},
 		run: func(ctx context.Context, in core.Invocation) (any, error) {
 			close(started)
 			<-ctx.Done()
@@ -666,6 +672,7 @@ func TestReadOnlyFeaturesReceiveTheResolvedProjectIdentity(t *testing.T) {
 func TestMutatingFeaturesResolveIdentityThemselves(t *testing.T) {
 	feature := &testFeature{desc: core.Descriptor{
 		Name: "up", Title: "시작", Summary: "시작합니다.", Usage: "dcraft up",
+		Section: core.SectionOperate,
 	}}
 	h := newHarness(t, feature)
 	reader := &fakeIdentityReader{name: "hello-world-1"}
