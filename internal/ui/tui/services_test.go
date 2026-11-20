@@ -132,7 +132,9 @@ func TestServiceFeatureShowsTheCurrentStackBeforeRunning(t *testing.T) {
 	catalog := newCatalogStatus(defaultServiceCatalog())
 	stop := &serviceCaptureFeature{desc: serviceDescriptor("stop"), body: "중지 본문"}
 	m := newServiceModel(t, catalog, stop)
+	m.theme = *plainTheme()
 	initModel(t, m)
+	resize(t, m, 80, 24)
 
 	chooseFeature(t, m, "stop")
 	if m.phase != phaseSelectingServices {
@@ -146,9 +148,9 @@ func TestServiceFeatureShowsTheCurrentStackBeforeRunning(t *testing.T) {
 	}
 	view := m.View()
 	for _, want := range []string{
-		"서비스 선택", "전체 (스택 전체)", "[x] 전체",
-		"api", "실행 중", "healthy", "인스턴스 1개",
-		"web", "중지됨", "인스턴스 2개",
+		"서비스 선택", "전체 (스택 전체)", "▸[x] 전체",
+		"선택", "서비스", "상태", "인스턴스", "health", "이미지", "포트",
+		"api", "✓ 실행 중", "정상", "web", "■ 중지됨", "없음",
 		"space", "[enter] 실행", "[esc] 취소", "[q] 종료",
 	} {
 		if !strings.Contains(view, want) {
@@ -164,11 +166,13 @@ func TestServiceSelectionTogglesAndRunsOnlySelectedServices(t *testing.T) {
 	catalog := newCatalogStatus(defaultServiceCatalog())
 	stop := &serviceCaptureFeature{desc: serviceDescriptor("stop"), body: "중지 본문"}
 	m := newServiceModel(t, catalog, stop)
+	m.theme = *plainTheme()
 	initModel(t, m)
+	resize(t, m, 80, 24)
 	chooseFeature(t, m, "stop")
 
 	press(m, tea.KeyMsg{Type: tea.KeyDown}) // whole -> api
-	if view := m.View(); !strings.Contains(view, "> [ ] api") {
+	if view := m.View(); !strings.Contains(view, "▸[ ] api") {
 		t.Fatalf("cursor is not on api:\n%s", view)
 	}
 	pressSpace(m)
@@ -362,7 +366,9 @@ func TestUnconfiguredServiceFactsCannotBeSelected(t *testing.T) {
 	catalog := newCatalogStatus(services)
 	stop := &serviceCaptureFeature{desc: serviceDescriptor("stop"), body: "중지 본문"}
 	m := newServiceModel(t, catalog, stop)
+	m.theme = *plainTheme()
 	initModel(t, m)
+	resize(t, m, 80, 24)
 	chooseFeature(t, m, "stop")
 
 	// whole -> api -> web -> old

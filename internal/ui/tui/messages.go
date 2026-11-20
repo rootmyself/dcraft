@@ -60,17 +60,19 @@ const (
 	msgFormCanceled    = "입력을 취소했습니다. 아무것도 실행하지 않았습니다."
 	msgFormUnsupported = "이 작업은 대화형 입력을 지원하지 않습니다."
 
-	// Generic service scope selection. The list is read-only and comes from
-	// the same engine/status inspect path as the status screen.
+	// Generic service scope selection. The table is read-only and comes from
+	// the same engine/status inspect path as the status screen. Its columns are
+	// the status table's, prefixed with the selection column, in the approved
+	// order.
 	msgServiceLoading         = "서비스 목록을 확인하는 중…"
 	msgServiceSelectTitle     = "서비스 선택"
 	msgServiceSelectIntro     = "이 작업을 적용할 범위를 선택하세요. 전체를 선택하면 스택 전체에 적용합니다."
 	msgServiceSelectionNote   = "선택은 같은 엔진 규칙으로 다시 검증됩니다. 인스턴스 단위 선택은 로그·exec 화면에서만 제공합니다."
 	msgServiceWhole           = "전체 (스택 전체)"
 	msgServiceCanceled        = "서비스 선택을 취소했습니다. 아무것도 실행하지 않았습니다."
-	msgServiceNoInstances     = "인스턴스 없음"
-	msgServiceInstances       = "인스턴스 %d개"
 	msgServiceNotConfigured   = "현재 설정에 없음"
+	msgServiceNoServices      = "서비스가 없습니다. Compose 파일에 services 항목이 있는지 확인하세요."
+	msgServiceNoPort          = "-"
 	msgServiceStateRunning    = "실행 중"
 	msgServiceStateExited     = "중지됨"
 	msgServiceStatePaused     = "일시정지됨"
@@ -78,10 +80,21 @@ const (
 	msgServiceStateCreated    = "생성됨"
 	msgServiceStateNotCreated = "컨테이너 없음"
 	msgServiceStateUnknown    = "상태 알 수 없음"
-	msgServiceHealthy         = "healthy"
-	msgServiceHealthStarting  = "health 확인 중"
-	msgServiceUnhealthy       = "unhealthy"
-	msgServiceHealthNone      = "health 없음"
+	// Health is Korean on this screen only (T1 decision 5); the CLI keeps its
+	// own sentences. These mirror the status document's TUI labels.
+	msgServiceHealthOK       = "정상"
+	msgServiceHealthStarting = "확인 중"
+	msgServiceHealthNone     = "없음"
+	msgServiceUnhealthy      = "비정상"
+	// Table headers. The status document owns the same words on its own
+	// surface; the two screens must not drift.
+	msgServiceColumnSelect    = "선택"
+	msgServiceColumnService   = "서비스"
+	msgServiceColumnState     = "상태"
+	msgServiceColumnInstances = "인스턴스"
+	msgServiceColumnHealth    = "health"
+	msgServiceColumnImage     = "이미지"
+	msgServiceColumnPort      = "포트"
 
 	// Live screens. Closing a screen only detaches; it never stops services.
 	msgLiveStreaming     = "실시간 로그 (서비스는 계속 실행 중)"

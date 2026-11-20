@@ -116,6 +116,11 @@ func (m *Model) scrollKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	if m.detailOpen {
 		return true, m.detailKey(msg)
 	}
+	// The scope table follows its selection: PgUp/PgDn move the cursor there,
+	// and a second scroll position would let the two disagree.
+	if m.phase == phaseSelectingServices {
+		return false, nil
+	}
 	switch msg.String() {
 	case "pgup", "pgdown", "home", "end", "g", "G":
 		if !m.bodyScrolls() {

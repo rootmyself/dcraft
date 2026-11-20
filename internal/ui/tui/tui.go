@@ -728,6 +728,9 @@ func (m *Model) beginServiceSelection(f core.Feature) tea.Cmd {
 	m.serviceCursor = 0
 	m.serviceChecked = nil
 	m.serviceWhole = true
+	// The table starts at its first row, never at the previous screen's scroll
+	// position: the select screen measures different rows than a result body.
+	m.body = visual.Viewport{}
 	m.req.Feature = f.Descriptor().Name
 	m.req.Target = m.target
 	// Never let a previous run's scope leak into this one before the user
@@ -749,20 +752,42 @@ func (m *Model) resetServiceSelection() {
 	m.serviceCursor = 0
 	m.serviceChecked = nil
 	m.serviceWhole = true
+	// The table window is reset with the rows it measured: a later screen with
+	// a different service count must not start mid-list.
+	m.body = visual.Viewport{}
 }
 
-// updateServiceKey drives the scope screen. The first row is the whole stack
-// and is selected until an individual service is checked; space on the whole
-// row clears every individual choice. Enter feeds Request.Services, esc
-// returns to the menu, and q/ctrl+c quit without running anything.
+// updateServiceKey drives the scope table. The first row is the whole stack and
+// is selected until an individual service is checked; space on the whole row
+// clears every individual choice. Enter feeds Request.Services, esc returns to
+// the menu, and q/ctrl+c quit without running anything. The cursor window follows
+// the selection, so every row stays reachable on a large stack.
 func (m *Model) updateServiceKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	total := len(m.serviceOptions) + 1
 	switch msg.String() {
 	case "up", "k":
 		m.serviceCursor = (m.serviceCursor - 1 + total) % total
+		m.followServiceCursor()
 		return m, nil
 	case "down", "j":
 		m.serviceCursor = (m.serviceCursor + 1) % total
+		m.followServiceCursor()
+		return m, nil
+	case "pgup":
+		m.serviceCursor = max(m.serviceCursor-m.pageRows(), 0)
+		m.followServiceCursor()
+		return m, nil
+	case "pgdown":
+		m.serviceCursor = min(m.serviceCursor+m.pageRows(), total-1)
+		m.followServiceCursor()
+		return m, nil
+	case "home", "g":
+		m.serviceCursor = 0
+		m.followServiceCursor()
+		return m, nil
+	case "end", "G":
+		m.serviceCursor = total - 1
+		m.followServiceCursor()
 		return m, nil
 	case " ":
 		if m.serviceCursor == 0 {
@@ -806,6 +831,14 @@ func (m *Model) updateServiceKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 	return m, nil
+}
+
+// pageRows is how far PgUp/PgDn move on the scope table: one visible window.
+func (m *Model) pageRows() int {
+	if rows := m.serviceViewport().Visible(); rows > 0 {
+		return rows
+	}
+	return 1
 }
 
 func anyChecked(checked []bool) bool {
@@ -1176,84 +1209,259 @@ func (m *Model) confirmView() string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-// serviceWindow bounds the visible rows so a large stack cannot push the list
-// off the terminal. The cursor-centered window keeps every row reachable.
-const serviceWindow = 10
+// serviceCategoryColumnWidth is the exact width of the selection column. It is
+// four cells because the cursor glyph and the checkbox together are four
+// (`▸[x]`), which keeps every row's name starting in the same cell.
+const serviceSelectCellWidth = 4
 
-func (m *Model) serviceView() string {
-	var b strings.Builder
-	b.WriteString(m.title(msgServiceSelectTitle))
-	b.WriteString("\n\n")
+// serviceScopeColumns is the approved column contract for the scope table: the
+// status table's columns with the selection column first, in the amended order
+// 서비스 · 상태 · 인스턴스 · health · 이미지 · 포트.
+func serviceScopeColumns() []core.Column {
+	return []core.Column{
+		{Header: msgServiceColumnSelect, Fixed: serviceSelectCellWidth},
+		{Header: msgServiceColumnService, Weight: 30, Min: 12, Max: 24},
+		{Header: msgServiceColumnState, Fixed: 11},
+		{Header: msgServiceColumnInstances, Fixed: 8, Align: core.AlignRight},
+		{Header: msgServiceColumnHealth, Fixed: 8, DropPriority: 3},
+		{Header: msgServiceColumnImage, Weight: 45, Min: 16, Max: 34, DropPriority: 2},
+		{Header: msgServiceColumnPort, Fixed: 13, DropPriority: 1},
+	}
+}
+
+// serviceTable is the scope table for the current catalog. compact folds a
+// health problem into the state cell, because the health column is not drawn
+// there; the icon and the Korean label both survive the fold.
+func (m *Model) serviceTable(compact bool) core.Table {
+	table := core.Table{Columns: serviceScopeColumns(), EmptyText: msgServiceNoServices}
+	for i, svc := range m.serviceOptions {
+		checked := "[ ]"
+		if i < len(m.serviceChecked) && m.serviceChecked[i] {
+			checked = "[x]"
+		}
+		// The cursor is the gutter glyph next to the checkbox: the approved
+		// non-color position marker, and it keeps the checkbox itself aligned.
+		marker := " "
+		if m.serviceCursor == i+1 {
+			marker = m.theme.Glyphs.Sel
+		}
+		state := serviceStateLabel(svc.State)
+		stateBadge := serviceStateBadge(svc.State)
+		if compact {
+			if folded, ok := serviceFoldedHealth(svc.Health); ok {
+				state, stateBadge = folded, serviceHealthBadge(svc.Health)
+			}
+		}
+		table.Rows = append(table.Rows, core.Row{
+			Selectable: svc.Configured,
+			Cells: []core.Cell{
+				{Text: marker + checked},
+				{Text: svc.Name, Detail: svc.Name},
+				{Text: state, Badge: stateBadge},
+				{Text: fmt.Sprintf("%d", svc.Instances)},
+				{Text: serviceHealthLabel(svc.Health), Badge: serviceHealthBadge(svc.Health)},
+				{Text: serviceImageLabel(svc), Detail: svc.Image},
+				{Text: servicePortLabel(svc), Detail: svc.Ports},
+			},
+		})
+	}
+	return table
+}
+
+// serviceScreen splits the scope screen on the same terms as the result table:
+// the heading, target, whole-stack row and table header never scroll, the
+// service rows do, and the guidance below stays put. The whole-stack row is
+// pinned above the table rather than being one of its rows: it has no state,
+// image or port, and keeping it visible means a narrowed scope can always be
+// widened again without scrolling back to the first row.
+func (m *Model) serviceScreen() screenLines {
+	th := m.theme
+	width := m.bodyWidth()
+	compact := m.compact()
+
+	fixed := []string{th.Bold(visual.TokenAccent, msgServiceSelectTitle)}
 	dir := m.target.Path
 	if dir == "" {
 		dir = msgConfirmTargetNow
 	}
-	fmt.Fprintf(&b, "%s: %s\n", msgConfirmTargetLabel, dir)
+	fixed = append(fixed, msgConfirmTargetLabel+": "+dir)
 	if m.target.Environment != "" {
-		fmt.Fprintf(&b, "%s: %s\n", msgConfirmEnvironment, m.target.Environment)
+		fixed = append(fixed, msgConfirmEnvironment+": "+m.target.Environment)
 	}
-	b.WriteString("\n")
-	b.WriteString(msgServiceSelectIntro)
-	b.WriteString("\n\n")
+	if !compact {
+		fixed = append(fixed, "", m.hintText(msgServiceSelectIntro))
+	}
+	fixed = append(fixed, "", m.wholeStackRow())
 
-	rows := len(m.serviceOptions) + 1
-	start, end := 0, rows
-	if rows > serviceWindow {
-		start = m.serviceCursor - serviceWindow/2
-		if start < 0 {
-			start = 0
-		}
-		if start+serviceWindow > rows {
-			start = rows - serviceWindow
-		}
-		end = start + serviceWindow
+	table := m.serviceTable(compact)
+	tail := m.serviceTail(compact)
+	if width <= 0 {
+		// No size yet: render the cells complete instead of guessing widths.
+		// The next WindowSizeMsg reflows the same table.
+		rows := visual.RenderDocument(th, core.Document{
+			Blocks: []core.Block{{Kind: core.BlockTable, Table: &table}},
+		}, 0)
+		return screenLines{Fixed: fixed, Band: rows, Tail: tail}
 	}
-	if start > 0 {
-		b.WriteString(m.hintText(fmt.Sprintf(msgMenuMoreAbove, m.theme.Glyphs.Ell)))
-		b.WriteString("\n")
+	layout := visual.LayoutTableOptions(th, table, width, visual.TableOptions{
+		Compact:        compact,
+		CompactColumns: 3,
+		// The whole-stack row is pinned above the table, so the cursor is a
+		// table row only when it points at a service.
+		CursorRow: m.serviceCursor,
+	})
+	if layout.Header != "" {
+		fixed = append(fixed, layout.Header)
 	}
-	for i := start; i < end; i++ {
-		marker := "  "
-		if i == m.serviceCursor {
-			marker = "> "
-		}
-		checked := " "
-		if i == 0 {
-			if m.serviceWhole {
-				checked = "x"
-			}
-			fmt.Fprintf(&b, "%s[%s] %s\n", marker, checked, msgServiceWhole)
-			continue
-		}
-		svc := m.serviceOptions[i-1]
-		if i-1 < len(m.serviceChecked) && m.serviceChecked[i-1] {
-			checked = "x"
-		}
-		fmt.Fprintf(&b, "%s[%s] %s · %s\n", marker, checked, svc.Name, serviceSummary(svc))
-	}
-	if end < rows {
-		b.WriteString(m.hintText(fmt.Sprintf(msgMenuMoreBelow, m.theme.Glyphs.Ell)))
-		b.WriteString("\n")
-	}
-	b.WriteString("\n")
-	b.WriteString(m.hintText(msgServiceSelectionNote))
-	return strings.TrimRight(b.String(), "\n")
+	return screenLines{Fixed: fixed, Band: layout.Rows, Tail: tail}
 }
 
-func serviceSummary(svc core.ServiceStatus) string {
-	parts := []string{serviceStateLabel(svc.State)}
-	if health := serviceHealthLabel(svc.Health); health != "" {
-		parts = append(parts, health)
+// serviceTail is the guidance below the table. Compact keeps only the
+// unconfigured marker, because it states a fact about a visible row; the note
+// about engine revalidation can wait for a decorated screen.
+func (m *Model) serviceTail(compact bool) []string {
+	var tail []string
+	if flag := m.unconfiguredFlag(); flag != "" {
+		tail = append(tail, flag)
 	}
-	if svc.Instances == 0 {
-		parts = append(parts, msgServiceNoInstances)
-	} else {
-		parts = append(parts, fmt.Sprintf(msgServiceInstances, svc.Instances))
+	if !compact {
+		tail = append(tail, "", m.hintText(msgServiceSelectionNote))
 	}
-	if !svc.Configured {
-		parts = append(parts, msgServiceNotConfigured)
+	return tail
+}
+
+// wholeStackRow is the always-visible whole-stack choice. Its selection cell is
+// the same width as the table's, so the label starts under the service names.
+func (m *Model) wholeStackRow() string {
+	marker := " "
+	if m.serviceCursor == 0 {
+		marker = m.theme.Glyphs.Sel
 	}
-	return strings.Join(parts, " · ")
+	checked := "[ ]"
+	if m.serviceWhole {
+		checked = "[x]"
+	}
+	return marker + checked + " " + msgServiceWhole
+}
+
+// unconfiguredFlag names the services that are visible but cannot be selected,
+// so the muted row is not the only channel saying why.
+func (m *Model) unconfiguredFlag() string {
+	var names []string
+	for _, svc := range m.serviceOptions {
+		if !svc.Configured {
+			names = append(names, svc.Name)
+		}
+	}
+	if len(names) == 0 {
+		return ""
+	}
+	return m.hintText(msgServiceNotConfigured + ": " + strings.Join(names, ", "))
+}
+
+// serviceView is the flat rendering of the scope screen. The frame draws the
+// banded form so the header stays fixed; this exists for callers that want the
+// whole screen as text.
+func (m *Model) serviceView() string {
+	return strings.Join(m.serviceScreen().lines(), "\n")
+}
+
+// serviceScrolls reports whether the service rows have rows outside the window.
+func (m *Model) serviceScrolls() bool {
+	return m.serviceViewport().Overflow()
+}
+
+// serviceViewport is the scrolling window over the service rows, derived from
+// the model so the keys, the counter and the frame cannot disagree.
+func (m *Model) serviceViewport() visual.Viewport {
+	budget := m.bodyBudget()
+	if budget <= 0 {
+		return visual.Viewport{}
+	}
+	screen := m.serviceScreen()
+	available := budget - m.titleRows() - len(screen.Fixed) - len(screen.Tail)
+	if available <= 0 {
+		return visual.Viewport{}
+	}
+	return fitViewport(visual.Viewport{Top: m.body.Top, Height: available, Total: len(screen.Band)}, available)
+}
+
+// followServiceCursor scrolls the minimum distance that keeps the cursor row
+// visible, so a large stack can be walked without losing the selection. The
+// whole-stack row is pinned above the table, so choosing it returns the window
+// to the first service row instead of leaving the band at the bottom.
+func (m *Model) followServiceCursor() {
+	v := m.serviceViewport()
+	if m.serviceCursor <= 0 {
+		v.Home()
+		m.body.Top = v.Top
+		return
+	}
+	v.Follow(m.serviceCursor - 1)
+	m.body.Top = v.Top
+}
+
+// serviceStateBadge pairs a container state with its semantic icon. Paused has
+// no badge on purpose: `■ 일시정지됨` is one cell wider than the approved state
+// column, and the shorter fallback (`■ 중지`) would name the wrong state. The
+// Korean label alone fits and stays exact.
+func serviceStateBadge(state string) core.BadgeKind {
+	switch state {
+	case "running":
+		return core.BadgeRunning
+	case "exited":
+		return core.BadgeStopped
+	case "restarting":
+		return core.BadgeStarting
+	case "created", "not_created", "":
+		return core.BadgeNotCreated
+	default:
+		return ""
+	}
+}
+
+// serviceFoldedHealth is the compact state-cell wording for a health problem.
+// A healthy or absent healthcheck is not a problem, so the container state
+// stays: `실행 중` says more than `정상` when the column is already gone.
+func serviceFoldedHealth(health string) (string, bool) {
+	switch health {
+	case "unhealthy":
+		return msgServiceUnhealthy, true
+	case "starting":
+		return msgServiceHealthStarting, true
+	default:
+		return "", false
+	}
+}
+
+func serviceHealthBadge(health string) core.BadgeKind {
+	switch health {
+	case "unhealthy":
+		return core.BadgeUnhealthy
+	case "starting":
+		return core.BadgeStarting
+	default:
+		return BadgeNoneKind
+	}
+}
+
+// BadgeNoneKind is "no semantic badge"; the renderer draws the text alone.
+const BadgeNoneKind core.BadgeKind = ""
+
+// serviceImageLabel never leaves a cell empty: a catalog that cannot report the
+// image shows the approved dash, which is a fact ("unknown here"), not a blank.
+func serviceImageLabel(svc core.ServiceStatus) string {
+	if svc.Image == "" {
+		return msgServiceNoPort
+	}
+	return svc.Image
+}
+
+func servicePortLabel(svc core.ServiceStatus) string {
+	if svc.Ports == "" {
+		return msgServiceNoPort
+	}
+	return svc.Ports
 }
 
 func serviceStateLabel(state string) string {
@@ -1282,7 +1490,7 @@ func serviceHealthLabel(health string) string {
 	case "", "none":
 		return msgServiceHealthNone
 	case "healthy":
-		return msgServiceHealthy
+		return msgServiceHealthOK
 	case "starting":
 		return msgServiceHealthStarting
 	case "unhealthy":
