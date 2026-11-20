@@ -7,6 +7,40 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// The whole-stack row and the service rows start their names in the same cell,
+// so a reader compares the scope choice with the services without re-parsing
+// two different indents. The cursor glyph occupies the selection cell either
+// way, which is why the pinned row is not one column narrower.
+func TestScopeTableNamesShareOneColumn(t *testing.T) {
+	m := scopeModel(t, scopeServices())
+	resize(t, m, 120, 36)
+
+	nameColumn := func(row, name string) int {
+		t.Helper()
+		idx := strings.Index(row, name)
+		if idx < 0 {
+			t.Fatalf("row %q does not contain %q", row, name)
+		}
+		return visualWidth(row[:idx])
+	}
+
+	// With the cursor on the pinned whole-stack row, the table has no cursor
+	// glyph, so both kinds of row are measured in their resting alignment.
+	whole := rowWith(t, viewOf(m), msgServiceWhole)
+	api := rowWith(t, viewOf(m), "api")
+	if got, want := nameColumn(whole, msgServiceWhole), nameColumn(api, "api"); got != want {
+		t.Fatalf("whole-stack label starts at %d, service names at %d:\n%s\n%s", got, want, whole, api)
+	}
+
+	// With the cursor on a service row the glyph fills the selection cell, so
+	// the alignment is preserved rather than shifted by one cell.
+	pressDown(m)
+	api = rowWith(t, viewOf(m), "api")
+	if got, want := nameColumn(whole, msgServiceWhole), nameColumn(api, "api"); got != want {
+		t.Fatalf("cursor shifted the service name from %d to %d:\n%s\n%s", want, got, whole, api)
+	}
+}
+
 // The confirmed subset must reach the run unchanged: the exact names travel as
 // Request.Services, and the result's own scope line states the same set. A
 // scope that silently widened would change what the command targets.

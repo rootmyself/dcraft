@@ -1330,8 +1330,9 @@ func (m *Model) serviceTail(compact bool) []string {
 	return tail
 }
 
-// wholeStackRow is the always-visible whole-stack choice. Its selection cell is
-// the same width as the table's, so the label starts under the service names.
+// wholeStackRow is the always-visible whole-stack choice. It uses the hook
+// glyph rather than a checkbox: it is not a service row with state, and its
+// marker sits in the same cell as the table's cursor so the label lines up.
 func (m *Model) wholeStackRow() string {
 	marker := " "
 	if m.serviceCursor == 0 {
