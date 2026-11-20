@@ -12,6 +12,8 @@ const (
 	msgMenuMoreAbove        = "  %s 위에 더 있음"
 	msgMenuMoreBelow        = "  %s 아래에 더 있음"
 	msgViewTruncated        = "%s 화면 높이에 맞춰 일부 내용을 생략했습니다. 전체 내용은 dcraft status로 확인하세요."
+	msgStageTimeline        = "단계"
+	msgStagePending         = "예정"
 
 	msgApprovalDeclined       = "승인하지 않아 아무것도 실행하지 않았습니다. 변경된 내용은 없습니다."
 	msgApprovalDeclinedAction = "필요할 때 다시 실행해 계획을 확인하고 승인하세요."

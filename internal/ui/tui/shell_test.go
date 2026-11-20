@@ -466,17 +466,28 @@ func TestStageGlyphFollowsTheTheme(t *testing.T) {
 	}
 }
 
-// The stage line keeps the shared Korean status wording ("진행 중", "완료") so
-// the TUI and CLI never drift.
-func TestStageLineKeepsTheKoreanStatusWord(t *testing.T) {
+// Every timeline row keeps the shared Korean status wording ("진행 중", "완료",
+// "예정") so the TUI and CLI never drift.
+func TestTimelineRowsKeepTheKoreanStatusWords(t *testing.T) {
 	status := &stubFeature{desc: descriptor("status", true), body: "body"}
 	m := newTestModel(t, status)
 	m.theme = *plainTheme()
-	m.currentStage = &core.Stage{Name: "preflight", Title: "환경 확인", Status: core.StageSucceeded}
-	line := m.stageLine()
-	for _, want := range []string{"환경 확인", "완료"} {
-		if !strings.Contains(line, want) {
-			t.Fatalf("stage line missing %q: %q", want, line)
+	cases := []struct {
+		stage core.Stage
+		want  string
+	}{
+		{core.Stage{Name: "preflight", Title: "환경 확인", Status: core.StageSucceeded}, "완료"},
+		{core.Stage{Name: "preflight", Title: "환경 확인", Status: core.StageStarted}, "진행 중"},
+		{core.Stage{Name: "preflight", Title: "환경 확인", Status: core.StageFailed}, "실패"},
+		{core.Stage{Name: "preflight", Title: "환경 확인", Status: core.StageCanceled}, "중단"},
+		{core.Stage{Name: "preflight", Title: "환경 확인"}, msgStagePending},
+	}
+	for _, tc := range cases {
+		line := m.timelineRowLine(timelineRow{stage: tc.stage})
+		for _, want := range []string{"환경 확인", tc.want} {
+			if !strings.Contains(line, want) {
+				t.Fatalf("timeline row missing %q: %q", want, line)
+			}
 		}
 	}
 }

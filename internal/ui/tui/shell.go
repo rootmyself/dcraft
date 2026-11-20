@@ -175,13 +175,7 @@ func (m *Model) phaseBody() string {
 	case phaseNoPrimary:
 		return msgNoPrimary
 	case phasePlanning:
-		var b strings.Builder
-		b.WriteString(msgPlanning)
-		if m.currentStage != nil {
-			b.WriteString("\n")
-			b.WriteString(m.stageLine())
-		}
-		return b.String()
+		return m.workingBody(msgPlanning)
 	case phaseConfirm:
 		if m.pendingApproval != core.ApprovalNone {
 			return m.planView()
@@ -205,13 +199,7 @@ func (m *Model) phaseBody() string {
 		if m.live != nil {
 			return m.liveView()
 		}
-		var b strings.Builder
-		b.WriteString(msgWorking)
-		if m.currentStage != nil {
-			b.WriteString("\n")
-			b.WriteString(m.stageLine())
-		}
-		return b.String()
+		return m.workingBody(msgWorking)
 	default:
 		return m.resultView()
 	}
@@ -238,6 +226,10 @@ func (m *Model) planView() string {
 	}
 	b.WriteString("\n")
 	b.WriteString(m.planText)
+	if block := m.timelineBlock(m.stages, m.planStages); block != "" {
+		b.WriteString("\n\n")
+		b.WriteString(block)
+	}
 	return strings.TrimRight(b.String(), "\n")
 }
 
@@ -284,24 +276,21 @@ func (m *Model) resultView() string {
 				b.WriteString(view.Diagnostics(warnings))
 			}
 		} else {
-			b.WriteString(view.Failure(*m.result))
+			// The outcome, target, operation ID and diagnostics are the shared
+			// Korean text the CLI prints; the stage rows below them are the
+			// TUI's own timeline, so a failed stage stays next to the stages
+			// that never ran.
+			b.WriteString(view.FailureText(*m.result))
+			if stages := m.timelineView(m.result.Stages, m.planStages); len(stages) > 0 {
+				b.WriteString("\n\n")
+				b.WriteString(m.sectionLabel(msgStageTimeline))
+				b.WriteString("\n")
+				b.WriteString(strings.Join(stages, "\n"))
+			}
 		}
 		b.WriteString("\n")
 	}
 	return b.String()
-}
-
-// stageLine renders the current stage as `glyph title (Korean status)`. The
-// wording is view.StageStatusLabel's, so it matches the CLI exactly; only the
-// glyph comes from the injected theme, which is what makes a non-UTF-8 locale
-// fall back to ASCII. The full timeline is T6.
-func (m *Model) stageLine() string {
-	st := *m.currentStage
-	title := st.Title
-	if title == "" {
-		title = st.Name
-	}
-	return "  " + stageGlyph(m.theme, st.Status) + " " + title + " (" + view.StageStatusLabel(st.Status) + ")"
 }
 
 // stageGlyph is the themed status symbol for one stage. The Korean label is

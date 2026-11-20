@@ -54,6 +54,20 @@ func Warnings(diags []core.Diagnostic) []core.Diagnostic {
 // completed and failed stages. It never claims partial work succeeded.
 func Failure(res core.Result) string {
 	var b strings.Builder
+	b.WriteString(FailureText(res))
+	if stages := StageList(res.Stages); stages != "" {
+		b.WriteString("\n\n단계:\n")
+		b.WriteString(stages)
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+// FailureText is Failure without the stage list. The CLI appends StageList; the
+// TUI appends its own stage timeline, so both render the identical Korean
+// outcome, target, operation ID and diagnostics while the stage rows use each
+// interface's own glyphs and can show the stages that never ran.
+func FailureText(res core.Result) string {
+	var b strings.Builder
 	title := "작업 실패"
 	switch res.Outcome {
 	case core.OutcomeCanceled:
@@ -74,10 +88,6 @@ func Failure(res core.Result) string {
 		b.WriteString("\n")
 		b.WriteString(Diagnostics(res.Diagnostics))
 		b.WriteString("\n")
-	}
-	if stages := StageList(res.Stages); stages != "" {
-		b.WriteString("\n단계:\n")
-		b.WriteString(stages)
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
