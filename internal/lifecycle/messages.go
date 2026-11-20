@@ -90,3 +90,31 @@ const (
 	msgNextVolumesKept    = "데이터 볼륨은 자동으로 삭제되지 않았습니다."
 	msgNextObserveFailed  = "현재 상태를 보려면 dcraft status를 실행하세요."
 )
+
+// TUI document wording. The CLI Present output keeps its own sentences; these
+// are only used by the structured document the TUI renders.
+const (
+	msgTitle           = "스택 작업"
+	msgHealthHealthy   = "정상"
+	msgHealthUnhealthy = "비정상"
+	msgHealthStarting  = "확인 중"
+	msgHealthNone      = "없음"
+	msgColumnService   = "서비스"
+	msgColumnState     = "상태"
+	msgColumnInstances = "인스턴스"
+	msgColumnHealth    = "health"
+	msgColumnImage     = "이미지"
+	msgColumnPort      = "포트"
+	msgNoPort          = "-"
+	msgAllInterfaces   = "모든 인터페이스"
+	msgDynamicPort     = "동적 호스트 포트"
+	msgConfiguredPort  = " (설정값)"
+
+	msgStateRunning    = "실행 중"
+	msgStateExited     = "중지됨"
+	msgStatePaused     = "일시정지됨"
+	msgStateRestarting = "재시작 중"
+	msgStateCreated    = "생성됨"
+	msgStateNotCreated = "컨테이너 없음"
+	msgStateUnknown    = "상태 알 수 없음"
+)

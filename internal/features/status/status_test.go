@@ -289,14 +289,34 @@ func TestPresentHandlesMissingPayloadGracefully(t *testing.T) {
 	}
 }
 
+// The CLI presenter wraps its guidance prose at the requested width. Identity
+// and summary lines are single facts it leaves unwrapped on purpose (a pipe or
+// the terminal wraps them itself), so this covers the guidance block.
+//
+// The CLI measures the wrap in runes, not display cells: that is its existing
+// output contract and T4 must not change a single CLI byte, so the assertion is
+// the rune count. The TUI does not use this path at all — it renders the
+// document through the display-cell renderer, whose width contract is asserted
+// in internal/ui/tui/visual.
 func TestPresentWrapsAtRequestedWidth(t *testing.T) {
 	f := status.New(&fakeBackend{})
 	res := successResult(t, sampleSnapshot())
 	out := f.Present(res, 40)
-	for _, line := range strings.Split(out, "\n") {
-		// Guidance may wrap; allow up to the requested width plus margin.
-		if len([]rune(line)) > 80 {
-			t.Fatalf("line longer than expected at width 40: %q", line)
+
+	_, guidance, ok := strings.Cut(out, "다음 행동\n")
+	if !ok {
+		t.Fatalf("guidance block missing:\n%s", out)
+	}
+	if strings.TrimSpace(guidance) == "" {
+		t.Fatalf("guidance block is empty:\n%s", out)
+	}
+	lines := strings.Split(strings.TrimRight(guidance, "\n"), "\n")
+	if len(lines) < 2 {
+		t.Fatalf("guidance was not wrapped at width 40:\n%s", guidance)
+	}
+	for _, line := range lines {
+		if got := len([]rune(line)); got > 80 {
+			t.Fatalf("guidance line is %d runes at width 40: %q", got, line)
 		}
 	}
 }

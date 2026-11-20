@@ -330,13 +330,20 @@ func TestColorlessViewHasNoEscapes(t *testing.T) {
 	}
 }
 
-// An ASCII theme (non-UTF-8 locale) replaces the ellipsis and selection glyphs
-// everywhere in the frame.
+// An ASCII theme (non-UTF-8 locale) replaces the ellipsis and the selection
+// glyph everywhere in the frame. The marker proves that a cut value is visible
+// as a cut: a long path is truncated in its key-value row, never wrapped.
 func TestASCIIThemeInTheFrame(t *testing.T) {
 	ascii := visual.Resolve(visual.Inputs{ThemeSetting: "dark", NoColor: true,
 		Profile: visual.ProfileNone, DarkBackground: true, UTF8: false})
-	status := &stubFeature{desc: descriptor("status", true), body: strings.Repeat("아주 긴 한국어 본문 ", 10)}
-	m := newTestModel(t, status)
+	long := "/Users/npnl/Documents/work/an-extremely-long-project-folder-name/compose.yaml"
+	doc := &documentOnlyFeature{desc: descriptor("status", true), doc: core.Document{Blocks: []core.Block{
+		{Kind: core.BlockTable, Table: &core.Table{
+			Columns: []core.Column{{Header: "서비스", Weight: 30, Min: 12}, {Header: "이미지", Weight: 70, Min: 8}},
+			Rows:    []core.Row{{Selectable: true, Cells: []core.Cell{{Text: "api"}, {Text: long, Detail: long}}}},
+		}},
+	}}}
+	m := newTestModel(t, doc)
 	m.theme = ascii
 	initModel(t, m)
 	resize(t, m, 48, 18)
@@ -355,7 +362,8 @@ func TestASCIIThemeInTheFrame(t *testing.T) {
 }
 
 // A long plan must not push the risk sentence out of a short frame: the risk
-// is pinned above the footer, and the body states that it was shortened.
+// is pinned above the footer and the plan scrolls under it. The old truncation
+// notice is gone: the screen states the position instead of apologising.
 func TestCompactConfirmPinsRiskAboveTheFooter(t *testing.T) {
 	status := &stubFeature{desc: descriptor("status", true), body: "상태 본문"}
 	up := &stubFeature{desc: mutatingDescriptor("up"), body: "시작 본문"}
@@ -381,10 +389,23 @@ func TestCompactConfirmPinsRiskAboveTheFooter(t *testing.T) {
 	if !strings.Contains(lines[17], "[enter] 실행") {
 		t.Fatalf("footer missing: %q", lines[17])
 	}
-	if !strings.Contains(strings.Join(lines, "\n"), "생략했습니다") {
-		t.Fatalf("overflow was silent:\n%s", strings.Join(lines, "\n"))
+	joined := strings.Join(lines, "\n")
+	if strings.Contains(joined, "생략했습니다") {
+		t.Fatalf("the deleted truncation notice is still rendered:\n%s", joined)
 	}
-	for i, line := range lines {
+	if !strings.Contains(joined, "PgUp/PgDn") {
+		t.Fatalf("overflow is not navigable:\n%s", joined)
+	}
+	// The whole plan is reachable: G shows its last line.
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("G")})
+	m = nm.(*Model)
+	_ = lines
+	for _, line := range strings.Split(m.View(), "\n") {
+		if strings.Contains(line, "이미지 취득") {
+			break
+		}
+	}
+	for i, line := range viewLines(t, m) {
 		if visual.Width(line) > 48 {
 			t.Fatalf("row %d too wide: %q", i, line)
 		}

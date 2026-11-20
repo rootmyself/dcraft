@@ -121,3 +121,12 @@ const (
 	msgStateMissing      = "컨테이너 없음"
 	msgStateTimeout      = "시간 초과"
 )
+
+// TUI document wording. The CLI Present output keeps its own sentences; these
+// are only used by the structured document the TUI renders.
+const (
+	msgColumnService = "서비스"
+	msgColumnStatus  = "확인 결과"
+	msgColumnDetail  = "상세"
+	msgNoticesLabel  = "알림"
+)
