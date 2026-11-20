@@ -142,15 +142,15 @@ func TestScopeTableRendersStateHealthInstancesImageAndPort(t *testing.T) {
 	if !strings.Contains(apiRow, " 1 ") {
 		t.Fatalf("api row has no instance count: %q", apiRow)
 	}
-	// The cursor row is bold as well as glyph-marked, so a colorless frame
-	// still shows the position. The pinned whole-stack row owns the cursor
-	// first, so the table has no cursor until a service row is reached.
+	// The cursor is a gutter glyph plus bold (bold only on a colored theme).
+	// The glyph alone is the channel a plain frame keeps, so it is what the
+	// plain-theme assertion checks.
 	pressDown(m)
-	if apiRow := rowWith(t, viewOf(m), "api"); !strings.Contains(apiRow, "\x1b[1m") {
-		t.Fatalf("the cursor row is not bold: %q", apiRow)
+	if apiRow := rowWith(t, viewOf(m), "api"); !strings.Contains(apiRow, "▸[ ] api") {
+		t.Fatalf("the cursor is not on api: %q", apiRow)
 	}
 	pressDown(m)
-	if row := rowWith(t, viewOf(m), "worker"); !strings.Contains(row, "\x1b[1m") {
+	if row := rowWith(t, viewOf(m), "worker"); !strings.Contains(row, "▸[ ] worker") {
 		t.Fatalf("the cursor did not move to worker: %q", row)
 	}
 	assertFits(t, m, 120, 36)

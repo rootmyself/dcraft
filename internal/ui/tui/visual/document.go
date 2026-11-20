@@ -216,10 +216,13 @@ func LayoutTableOptions(th Theme, table core.Table, width int, opts TableOptions
 			line = th.Paint(TokenMuted, line)
 		}
 		if opts.CursorRow > 0 && rowIndex == opts.CursorRow-1 {
-			// The cursor is bold on top of whatever paint the row already
-			// carries: bold is an attribute, so a muted unconfigured row keeps
-			// both its muted text and the position marker.
-			line = boldText(line)
+			// The approved selection marker is the gutter glyph plus bold. Bold
+			// is an attribute rather than a color, but a colorless theme still
+			// promises no escape sequences at all, so it keeps only the glyph
+			// (drawn by the caller) and this row stays attribute-free.
+			if th.Color {
+				line = boldText(line)
+			}
 		}
 		layout.Rows = append(layout.Rows, Fit(line, width, ell))
 	}
