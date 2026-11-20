@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -22,6 +23,10 @@ type Options struct {
 	// caller that has already resolved the terminal profile; nil means the
 	// TUI resolves it once from the environment.
 	Theme *visual.Theme
+	// SpinnerInterval overrides the working animation cadence. Tests inject a
+	// short interval and drive the tick deterministically; production keeps the
+	// default.
+	SpinnerInterval time.Duration
 }
 
 // Run starts the interactive program. Normal quit (q or ctrl+c) does not touch
@@ -79,13 +84,25 @@ type Model struct {
 	phase        phase
 	result       *core.Result
 	currentStage *core.Stage
-	events       chan core.Stage
-	pending      core.Feature
-	notice       string
-	runCtx       context.Context
-	runCancel    context.CancelFunc
-	width        int
-	height       int
+	// stages is every stage the engine reported this run, in report order,
+	// with a repeated name replacing its earlier snapshot. planStages is the
+	// sequence the phase is expected to pass through, so the timeline can mark
+	// the stages that are still ahead. Both are cleared when a new run starts.
+	stages     []core.Stage
+	planStages []core.Stage
+	events     chan core.Stage
+	pending    core.Feature
+	notice     string
+	runCtx     context.Context
+	runCancel  context.CancelFunc
+	width      int
+	height     int
+
+	// spinnerFrame and spinnerInterval drive the working animation. The frame
+	// is an index into the theme's spin glyphs; the interval is injected so a
+	// test can advance the animation without waiting on a wall clock.
+	spinnerFrame    int
+	spinnerInterval time.Duration
 
 	// theme is resolved once in NewModel and injected into every renderer.
 	// facts holds the last observed header values; neither is a global and
@@ -151,6 +168,10 @@ func NewModel(ctx context.Context, opts Options) *Model {
 		ctx: ctx, engine: opts.Engine, registry: opts.Registry, target: opts.Target, envSelected: -1,
 		theme: resolveTheme(nil, opts.Theme),
 		facts: initialFacts(opts.Target),
+	}
+	m.spinnerInterval = opts.SpinnerInterval
+	if m.spinnerInterval <= 0 {
+		m.spinnerInterval = defaultSpinnerInterval
 	}
 	m.req = core.Request{Target: opts.Target}
 	if opts.Registry != nil {
@@ -222,17 +243,28 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case stageMsg:
 		st := msg.stage
 		m.currentStage = &st
+		m.observeStage(st)
 		if m.phase == phaseLoading || m.phase == phasePlanning {
 			return m, waitStageCmd(m.events)
 		}
 		return m, nil
+	case spinnerTickMsg:
+		return m, m.spinOneFrame()
 	case planMsg:
 		m.currentStage = nil
+		// The plan's own stages are what the confirmation screen continues
+		// from: the same timeline shape, with the run's remaining stages still
+		// marked as pending. A failed plan makes no promise about a run.
+		m.stages = append([]core.Stage{}, msg.report.Stages...)
+		m.planStages = nil
 		if msg.report.Failed() {
 			res := msg.report.Result()
 			m.result = &res
 			m.phase = phaseReady
 			return m, nil
+		}
+		if m.active != nil {
+			m.setPlan(runPending(core.PlannedStages(m.active), msg.report))
 		}
 		m.observeTarget(msg.report.Target)
 		m.observeTools(msg.report.Tools)
@@ -328,6 +360,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		res := msg.res
 		m.currentStage = nil
+		// A result ends the run, so the timeline stops animating. The reported
+		// stages come from the result itself; a failed or canceled run keeps
+		// the stages that never ran so their absence is visible next to the
+		// diagnostics.
+		m.stages = append([]core.Stage{}, res.Stages...)
+		if res.Outcome == core.OutcomeSuccess {
+			m.planStages = nil
+		}
 		m.observeTarget(res.Target)
 		m.observeTools(res.Tools)
 		if m.runCancel != nil {
@@ -612,6 +652,10 @@ func (m *Model) startRunPath(f core.Feature) tea.Cmd {
 		return m.begin(f)
 	}
 	m.pending = f
+	// The screen is a bare confirmation with no plan behind it, so no stage
+	// sequence is known; a previous run's timeline must not leak into it.
+	m.stages = nil
+	m.planStages = nil
 	m.phase = phaseConfirm
 	m.notice = ""
 	return nil
@@ -744,8 +788,12 @@ func (m *Model) begin(f core.Feature) tea.Cmd {
 	m.setupLive(f)
 	if plansBeforeRun(f) {
 		m.phase = phasePlanning
-		return tea.Batch(m.planCmd(f, m.events), waitStageCmd(m.events))
+		m.setPlan(core.PlannedPlanStages(f))
+		m.stages = nil
+		return tea.Batch(m.planCmd(f, m.events), waitStageCmd(m.events), m.spinnerCmd())
 	}
+	m.setPlan(core.PlannedStages(f))
+	m.stages = nil
 	return m.launchRun(f, nil, nil)
 }
 
@@ -768,7 +816,12 @@ func (m *Model) startRun(f core.Feature, options map[string]string) tea.Cmd {
 	// The confirmed plan is bound to its previewed inputs. It is copied into
 	// the request before resetRunState clears the screen state.
 	m.req.PlanFingerprint = m.planFingerprint
+	// The confirmed plan's observed stages and its remaining sequence are what
+	// the running screen continues from; both are copied before the reset.
+	planned, done := m.planStages, m.stages
 	m.resetRunState()
+	m.setPlan(planned)
+	m.stages = done
 	m.setupLive(f)
 	return m.launchRun(f, nil, options)
 }
@@ -776,7 +829,10 @@ func (m *Model) startRun(f core.Feature, options map[string]string) tea.Cmd {
 func (m *Model) runApproved(f core.Feature, approvals []core.ApprovalKind) tea.Cmd {
 	m.ensureRequest(f)
 	m.req.PlanFingerprint = m.planFingerprint
+	planned, done := m.planStages, m.stages
 	m.resetRunState()
+	m.setPlan(planned)
+	m.stages = done
 	m.setupLive(f)
 	return m.launchRun(f, approvals, nil)
 }
@@ -818,6 +874,8 @@ func (m *Model) ensureRequest(f core.Feature) {
 func (m *Model) resetRunState() {
 	m.result = nil
 	m.currentStage = nil
+	m.stages = nil
+	m.planStages = nil
 	m.pending = nil
 	m.pendingApproval = ""
 	m.pendingApprovals = nil
@@ -839,10 +897,16 @@ func (m *Model) resetRunState() {
 func (m *Model) launchRun(f core.Feature, approvals []core.ApprovalKind, options map[string]string) tea.Cmd {
 	m.active = f
 	m.phase = phaseLoading
+	if len(m.planStages) == 0 {
+		m.setPlan(core.PlannedStages(f))
+	}
 	m.runCtx, m.runCancel = context.WithCancel(m.ctx)
 	cmds := []tea.Cmd{m.runCmd(f, approvals, options, m.events, m.runCtx), waitStageCmd(m.events)}
 	if m.live != nil {
 		cmds = append(cmds, waitLiveCmd(m.liveCh))
+	}
+	if spin := m.spinnerCmd(); spin != nil {
+		cmds = append(cmds, spin)
 	}
 	return tea.Batch(cmds...)
 }
@@ -1051,6 +1115,11 @@ func (m *Model) confirmView() string {
 	if strings.TrimSpace(m.planText) != "" {
 		b.WriteString("\n")
 		b.WriteString(m.planText)
+		b.WriteString("\n")
+	}
+	if block := m.timelineBlock(m.stages, m.planStages); block != "" {
+		b.WriteString("\n")
+		b.WriteString(block)
 		b.WriteString("\n")
 	}
 	return strings.TrimRight(b.String(), "\n")
