@@ -84,12 +84,18 @@ const (
 	msgServiceHealthNone      = "health 없음"
 
 	// Live screens. Closing a screen only detaches; it never stops services.
-	msgLiveStreaming = "실시간 로그 (서비스는 계속 실행 중)"
-	msgLiveAttached  = "서비스에 접속했습니다."
-	msgLiveService   = "서비스"
-	msgLiveCommand   = "명령"
-	msgLiveStopped   = "실시간 화면을 닫았습니다. 서비스는 계속 실행 중입니다."
-	msgLastOutput    = "마지막 실시간 출력"
+	msgLiveStreaming     = "실시간 로그 (서비스는 계속 실행 중)"
+	msgLiveAttached      = "서비스에 접속했습니다."
+	msgLiveService       = "서비스"
+	msgLiveInstance      = "인스턴스"
+	msgLiveAllInstances  = "전체"
+	msgLiveCommand       = "명령"
+	msgLiveStopped       = "실시간 화면을 닫았습니다. 서비스는 계속 실행 중입니다."
+	msgLiveKeepsRunning  = "서비스는 계속 실행 중"
+	msgLiveDropped       = "오래된 줄 %d개 버림"
+	msgLiveScrollKeys    = "PgUp/PgDn · g/G"
+	msgLastOutput        = "마지막 실시간 출력"
+	msgLastOutputOmitted = "마지막 실시간 출력 (앞 %d줄 생략)"
 )
 
 const (
