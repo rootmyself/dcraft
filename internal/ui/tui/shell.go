@@ -208,7 +208,15 @@ func (m *Model) layoutBody() bodyLayout {
 	}
 
 	if m.phase != phaseReady {
-		add(m.phaseBody())
+		if m.phase == phaseSelectingServices {
+			// The scope table pins its heading, the whole-stack row and the
+			// table header; only the service rows scroll.
+			screen := m.serviceScreen()
+			lines = append(lines, screen.Fixed...)
+			lines = append(lines, m.fitBand(lines, screen)...)
+		} else {
+			add(m.phaseBody())
+		}
 		if m.notice != "" {
 			add("")
 			add(m.noticeText(m.notice))
@@ -367,6 +375,9 @@ func (m *Model) bodyScrolls() bool {
 	if m.phase == phaseReady {
 		return m.resultScrolls()
 	}
+	if m.phase == phaseSelectingServices {
+		return m.serviceScrolls()
+	}
 	total := len(strings.Split(strings.TrimRight(m.phaseBody(), "\n"), "\n"))
 	return total > budget
 }
@@ -382,6 +393,9 @@ func (m *Model) currentViewport() visual.Viewport {
 	budget := m.bodyBudget()
 	if budget <= 0 {
 		return visual.Viewport{}
+	}
+	if m.phase == phaseSelectingServices {
+		return m.serviceViewport()
 	}
 	if m.phase != phaseReady {
 		lines := strings.Split(strings.TrimRight(m.phaseBody(), "\n"), "\n")
@@ -400,6 +414,12 @@ func (m *Model) currentViewport() visual.Viewport {
 // from the same viewport the frame draws — including the row the hint costs, so
 // the counter can never describe a row that the hint pushed off screen.
 func (m *Model) scrollCounter() string {
+	if m.phase == phaseSelectingServices {
+		if !m.serviceScrolls() {
+			return ""
+		}
+		return m.serviceViewport().Counter()
+	}
 	if m.phase != phaseReady || !m.resultScrolls() {
 		return ""
 	}

@@ -22,6 +22,13 @@ type ServiceStatus struct {
 	// part of the active Compose configuration. Such a service cannot be
 	// selected for an operation.
 	Configured bool `json:"configured"`
+	// Image is the image reference, marked when the service builds locally.
+	// Empty when the catalog cannot report it; the screen then draws the
+	// approved dash instead of an empty cell.
+	Image string `json:"image,omitempty"`
+	// Ports is the published binding summary, already truncated to the form the
+	// scope table shows (`8080→80`). Empty means no published port.
+	Ports string `json:"ports,omitempty"`
 }
 
 // ServiceCatalog is an optional read-only feature capability. A feature that
