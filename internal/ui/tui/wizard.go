@@ -358,6 +358,8 @@ func (m *Model) cancelWizard() {
 	m.wizardReturnRes = nil
 	m.wizardReturnFeat = nil
 	m.currentStage = nil
+	m.stages = nil
+	m.planStages = nil
 	m.phase = phaseReady
 	m.notice = msgWizardCanceled
 }
