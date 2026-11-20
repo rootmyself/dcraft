@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/rootmyself/dcraft/internal/core"
@@ -59,6 +60,18 @@ func (m *Model) screenKeycaps() []visual.Keycap {
 		// the child), so the live row would be wrong.
 		return []visual.Keycap{
 			{Key: "ctrl+]", Label: "접속 종료", Priority: 0},
+			{Key: "?", Label: "도움말", Priority: 3},
+		}
+	}
+	if m.live != nil && m.liveScrolls() {
+		// A log stream owns the scroll keys when its output does not fit. The
+		// approved live row keeps its mandatory chips and gains only the keys
+		// this screen actually accepts.
+		return []visual.Keycap{
+			{Key: "q", Label: "화면 닫기", Priority: 0},
+			{Key: "ctrl+c", Label: "중단", Priority: 1},
+			{Key: "PgUp/PgDn", Label: "스크롤", Priority: 2},
+			{Key: "g/G", Label: "처음/끝", Priority: 3},
 			{Key: "?", Label: "도움말", Priority: 3},
 		}
 	}
@@ -209,6 +222,11 @@ func (m *Model) renderBody() []string {
 // all read the same inputs, so the drawn rows and the counter cannot disagree
 // about whether the screen scrolls.
 func (m *Model) layoutBody() bodyLayout {
+	if m.live != nil {
+		// The live screen is its own layout: a fixed header and one scrolling
+		// output band. It must not borrow the result screen's pinned table.
+		return m.liveLayout()
+	}
 	title := m.screenTitle()
 	if m.detailOpen {
 		title = msgDetailTitle
@@ -241,7 +259,15 @@ func (m *Model) layoutBody() bodyLayout {
 	}
 
 	if m.phase != phaseReady {
-		add(m.phaseBody())
+		if m.phase == phaseSelectingServices {
+			// The scope table pins its heading, the whole-stack row and the
+			// table header; only the service rows scroll.
+			screen := m.serviceScreen()
+			lines = append(lines, screen.Fixed...)
+			lines = append(lines, m.fitBand(lines, screen)...)
+		} else {
+			add(m.phaseBody())
+		}
 		if m.notice != "" {
 			add("")
 			add(m.noticeText(m.notice))
@@ -251,11 +277,11 @@ func (m *Model) layoutBody() bodyLayout {
 
 	if !m.resultDismissed {
 		screen := m.resultScreen()
-		lines = append(lines, m.liveTailLines()...)
+		lines = append(lines, m.liveTailLines(m.titleRows()+minResultRows)...)
 		lines = append(lines, screen.Fixed...)
 		out := m.fitBand(lines, screen)
 		lines = append(lines, out...)
-	} else if tail := m.liveTailLines(); len(tail) > 0 {
+	} else if tail := m.liveTailLines(m.titleRows() + minResultRows); len(tail) > 0 {
 		lines = append(lines, tail...)
 	}
 
@@ -381,9 +407,12 @@ func (m *Model) resultScrolls() bool {
 		return false
 	}
 	screen := m.resultScreen()
-	// Rows the result itself must place: title block, summary, table header
-	// and the guidance below. The hint row comes out of the same budget.
-	used := m.titleRows() + len(screen.Fixed) + len(screen.Band) + len(screen.Tail)
+	// Rows the result itself must place: title block, the kept live output
+	// panel, summary, table header and the guidance below. The hint row comes
+	// out of the same budget. The panel counts because it is drawn above the
+	// result and would otherwise push rows out with no counter to reach them.
+	used := m.titleRows() + len(m.liveTailLines(m.titleRows()+minResultRows)) +
+		len(screen.Fixed) + len(screen.Band) + len(screen.Tail)
 	return used > budget
 }
 
@@ -396,6 +425,9 @@ func (m *Model) bodyScrolls() bool {
 	}
 	if m.phase == phaseReady {
 		return m.resultScrolls()
+	}
+	if m.phase == phaseSelectingServices {
+		return m.serviceScrolls()
 	}
 	total := len(strings.Split(strings.TrimRight(m.phaseBody(), "\n"), "\n"))
 	return total > budget
@@ -413,12 +445,16 @@ func (m *Model) currentViewport() visual.Viewport {
 	if budget <= 0 {
 		return visual.Viewport{}
 	}
+	if m.phase == phaseSelectingServices {
+		return m.serviceViewport()
+	}
 	if m.phase != phaseReady {
 		lines := strings.Split(strings.TrimRight(m.phaseBody(), "\n"), "\n")
 		return fitViewport(visual.Viewport{Top: m.body.Top, Height: budget, Total: len(lines)}, budget)
 	}
 	screen := m.resultScreen()
-	available := budget - m.titleRows() - len(screen.Fixed) - len(screen.Tail)
+	available := budget - m.titleRows() - len(m.liveTailLines(m.titleRows()+minResultRows)) -
+		len(screen.Fixed) - len(screen.Tail)
 	if available <= 0 {
 		return visual.Viewport{}
 	}
@@ -429,6 +465,12 @@ func (m *Model) currentViewport() visual.Viewport {
 // from the same viewport the frame draws — including the row the hint costs, so
 // the counter can never describe a row that the hint pushed off screen.
 func (m *Model) scrollCounter() string {
+	if m.phase == phaseSelectingServices {
+		if !m.serviceScrolls() {
+			return ""
+		}
+		return m.serviceViewport().Counter()
+	}
 	if m.phase != phaseReady || !m.resultScrolls() {
 		return ""
 	}
@@ -535,9 +577,8 @@ func (m *Model) phaseBody() string {
 	case phaseWizardLoading, phaseWizardStep, phaseWizardPreview:
 		return m.wizardView()
 	case phaseLoading:
-		if m.live != nil {
-			return m.liveView()
-		}
+		// A live screen is laid out as a body (fixed header plus a scrolling
+		// band) by layoutBody; phaseBody only handles non-live work.
 		return m.workingBody(msgWorking)
 	default:
 		// phaseReady has no single-string body: its document is rendered as
@@ -565,16 +606,46 @@ func (m *Model) environmentView() string {
 	return b.String()
 }
 
-// liveTailLines is the kept live output shown above a result. It is raw process
-// output and is passed through unchanged.
-func (m *Model) liveTailLines() []string {
+// minResultRows is the floor the kept-output panel must leave for the result it
+// follows: enough for the title block, the outcome line and the scroll hint. A
+// panel that fills the frame would hide the event the reader came to read.
+const minResultRows = 6
+
+// liveTailLines is the kept live output shown on the management screen. The
+// content is raw process output and is passed through unchanged; only the frame
+// around it is the TUI's. It is drawn as a titled panel so the retained output
+// reads as one block with the rest of the screen instead of a bare list.
+//
+// reserve is how many body rows the screen below the panel still needs. The
+// panel keeps what is left, states the lines it had to leave out, and never
+// grows past that budget.
+func (m *Model) liveTailLines(reserve int) []string {
 	if len(m.lastLive) == 0 {
 		return nil
 	}
-	out := []string{m.title(msgLastOutput)}
-	out = append(out, m.lastLive...)
-	out = append(out, "")
-	return out
+	lines := m.lastLive
+	title := msgLastOutput
+
+	budget := m.bodyBudget()
+	if budget > 0 {
+		decorated := !m.compact()
+		chrome := 1 // the blank row after the panel
+		if decorated {
+			chrome += 2 // top and bottom border rows
+		}
+		limit := budget - reserve - chrome
+		if limit < 1 {
+			limit = 1
+		}
+		if len(lines) > limit {
+			omitted := len(lines) - limit
+			lines = lines[omitted:]
+			title = fmt.Sprintf(msgLastOutputOmitted, omitted)
+		}
+	}
+
+	panel := visual.Panel(m.theme, title, lines, m.bodyWidth(), !m.compact())
+	return append(panel, "")
 }
 
 // stageGlyph is the themed status symbol for one stage. The Korean label is

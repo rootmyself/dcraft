@@ -286,3 +286,68 @@ func menuDown(t *testing.T, name string) string {
 	t.Helper()
 	return strings.Repeat("\x1b[B", menuDownPresses(t, name))
 }
+
+// The live log screen scrolls under a header that stays put, and detaching
+// restores the terminal. The position row is real output of the real binary, not
+// a unit-test fixture.
+func TestPTYTUILogsScreenScrollsUnderAPinnedHeaderAndRestoresTerminal(t *testing.T) {
+	fake := newFakeLiveDocker(t)
+	project := liveProject(t)
+	env := fake.env(t, t.TempDir(), map[string]string{"DOCKER_FAKE_LOG_FOLLOW_LINE": "followed line"})
+	s := startPTY(t, project, env)
+	s.waitFor("[↑↓] 이동", 15*time.Second)
+	s.pressMenuDown(menuDownPresses(t, "logs"))
+	s.waitFor("서비스 선택", 15*time.Second)
+	s.press("\r")
+	s.waitFor("실시간 로그", 15*time.Second)
+	s.waitFor("followed line", 15*time.Second)
+	// The pinned header states what is being watched while the band scrolls.
+	for _, want := range []string{"서비스: 스택 전체", "인스턴스: 전체", "명령: logs"} {
+		s.waitFor(want, 15*time.Second)
+	}
+	// The faked stream is short, so the position row may be absent; scrolling
+	// keys must still be harmless and must not detach the screen.
+	s.press("g", "G")
+	s.waitFor("followed line", 15*time.Second)
+	s.send("q")
+	s.waitFor("마지막 실시간 출력", 15*time.Second)
+	s.send("q")
+	code := s.wait()
+	if code != 0 {
+		t.Fatalf("TUI exit = %d\n%s", code, s.out.String())
+	}
+	s.assertRestored()
+	fake.assertNoSubcommand(t, "stop")
+	fake.assertNoSubcommand(t, "down")
+}
+
+// A long stream exercises the real viewport: PgUp moves the visible rows while
+// the header rows above them stay unchanged, and ctrl+] ends an attached command
+// with the terminal restored.
+func TestPTYTUIExecAttachDetachesWithCtrlBracketAndRestoresTerminal(t *testing.T) {
+	fake := newFakeLiveDocker(t)
+	project := liveProject(t)
+	env := fake.env(t, t.TempDir(), map[string]string{"DOCKER_FAKE_EXEC_ECHO": "1"})
+	s := startPTY(t, project, env)
+	s.waitFor("[↑↓] 이동", 15*time.Second)
+	s.pressMenuDown(menuDownPresses(t, "exec"))
+	s.waitFor("실행 전 확인", 15*time.Second)
+	s.press("\r") // default instance
+	s.press("r", "e", "a", "d", "-", "l", "i", "n", "e")
+	s.press("\r")
+	s.waitFor("ready", 20*time.Second)
+	// Forwarding is proven by the child reading what the TUI relayed.
+	s.send("hello\n")
+	s.waitFor("got:hello", 20*time.Second)
+	// ctrl+] detaches instead of reaching the child a second time.
+	s.send("\x1d")
+	s.waitFor("마지막 실시간 출력", 15*time.Second)
+	s.send("q")
+	code := s.wait()
+	if code != 0 {
+		t.Fatalf("TUI exit = %d\n%s", code, s.out.String())
+	}
+	s.assertRestored()
+	fake.assertNoSubcommand(t, "stop")
+	fake.assertNoSubcommand(t, "down")
+}

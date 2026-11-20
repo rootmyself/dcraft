@@ -18,8 +18,8 @@ func TestTUIServiceScopeStopsOnlyTheSelectedService(t *testing.T) {
 		{wait: "[↑↓] 이동", send: menuDown(t, "stop")},
 		{wait: "▸ 스택 중지", send: "\r"},
 		{wait: "서비스 선택", send: "down"}, // 전체 → api (Compose order)
-		{wait: "> [ ] api", send: "down"},
-		{wait: "> [ ] web", send: " "},
+		{wait: "▸[ ] api", send: "down"},
+		{wait: "▸[ ] web", send: " "},
 		{wait: "[x] web", send: "\r"},
 		{wait: "다음 작업을 실행할까요?", send: ""},
 		{wait: "범위:", send: "\r"},
@@ -78,7 +78,7 @@ func TestTUIServiceScopeCancelChangesNothing(t *testing.T) {
 		{wait: "[↑↓] 이동", send: menuDown(t, "stop")},
 		{wait: "▸ 스택 중지", send: "\r"},
 		{wait: "서비스 선택", send: "down"},
-		{wait: "> [ ] api", send: "\x1b"}, // esc
+		{wait: "▸[ ] api", send: "\x1b"}, // esc
 		{wait: "아무것도 실행하지 않았습니다", send: ""},
 	})
 	if code != 0 {

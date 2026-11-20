@@ -89,10 +89,36 @@ func (l TableLayout) Lines() []string {
 func (l TableLayout) Empty() bool { return l.Header == "" }
 
 // compactTableWidth is the approved breakpoint below which the table collapses
-// to the two columns the screen exists to compare: service and state.
+// to the leading columns the screen can afford.
 const compactTableWidth = 60
 
-// LayoutTable fits a table into width cells.
+// compactTableColumns is the default compact fold: service and state, the pair
+// every table screen exists to compare.
+const compactTableColumns = 2
+
+// TableOptions are presentation choices the caller owns. The compact fold is a
+// screen decision: a table wider than the breakpoint still folds when its screen
+// is compact (a short terminal), and a screen that must keep three leading
+// columns says so.
+type TableOptions struct {
+	// Compact forces the compact fold regardless of width. Without it the fold
+	// happens only below the width breakpoint, which is the status table's rule.
+	Compact bool
+	// CompactColumns is how many leading columns a compact table keeps. Zero
+	// means compactTableColumns.
+	CompactColumns int
+	// CursorRow is the 1-based row the screen's cursor is on, bolded so the
+	// position survives a colorless frame. Zero means no cursor: the status
+	// table has no selection and must never bold a row by accident.
+	CursorRow int
+}
+
+// LayoutTable fits a table into width cells with the default options.
+func LayoutTable(th Theme, table core.Table, width int) TableLayout {
+	return LayoutTableOptions(th, table, width, TableOptions{})
+}
+
+// LayoutTableOptions fits a table into width cells.
 //
 // Fixed columns keep their exact width. Flexible columns share what is left by
 // weight, clamp to Min/Max, and the remainder is redistributed one cell at a
@@ -100,8 +126,8 @@ const compactTableWidth = 60
 // fit, columns are dropped by DropPriority: port, then image, then health.
 // Service, state and instances are never dropped by width because comparing
 // them is the reason the table exists; below the compact breakpoint the table
-// deliberately shows only service and state.
-func LayoutTable(th Theme, table core.Table, width int) TableLayout {
+// deliberately shows only the leading columns the caller names.
+func LayoutTableOptions(th Theme, table core.Table, width int, opts TableOptions) TableLayout {
 	ell := th.Ellipsis()
 	if len(table.Rows) == 0 {
 		return TableLayout{Rows: []string{emptyTableText(th, table.EmptyText, width)}}
@@ -112,9 +138,13 @@ func LayoutTable(th Theme, table core.Table, width int) TableLayout {
 		orig int
 	}
 	var chosen []placed
-	if width < compactTableWidth {
+	if opts.Compact || width < compactTableWidth {
+		keep := opts.CompactColumns
+		if keep <= 0 {
+			keep = compactTableColumns
+		}
 		for i, col := range table.Columns {
-			if i >= 2 {
+			if i >= keep {
 				break
 			}
 			chosen = append(chosen, placed{col: col, orig: i})
@@ -141,7 +171,7 @@ func LayoutTable(th Theme, table core.Table, width int) TableLayout {
 	}
 	layout.Header = Fit(strings.Join(header, " "), width, ell)
 
-	for _, row := range table.Rows {
+	for rowIndex, row := range table.Rows {
 		cells := make([]string, len(chosen))
 		lead := ""
 		if len(row.Cells) > 0 {
@@ -185,9 +215,28 @@ func LayoutTable(th Theme, table core.Table, width int) TableLayout {
 		if !row.Selectable {
 			line = th.Paint(TokenMuted, line)
 		}
+		if opts.CursorRow > 0 && rowIndex == opts.CursorRow-1 {
+			// The approved selection marker is the gutter glyph plus bold. Bold
+			// is an attribute rather than a color, but a colorless theme still
+			// promises no escape sequences at all, so it keeps only the glyph
+			// (drawn by the caller) and this row stays attribute-free.
+			if th.Color {
+				line = boldText(line)
+			}
+		}
 		layout.Rows = append(layout.Rows, Fit(line, width, ell))
 	}
 	return layout
+}
+
+// boldText wraps a row in the bold attribute. It is unconditional, unlike
+// Theme.Bold: the selection marker must survive a colorless theme, and bold
+// emits no cells.
+func boldText(s string) string {
+	if s == "" {
+		return s
+	}
+	return "\x1b[1m" + s + "\x1b[0m"
 }
 
 // fitColumns drops columns that cannot meet their minimum, in the approved

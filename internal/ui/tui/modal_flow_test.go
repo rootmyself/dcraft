@@ -32,6 +32,19 @@ func styledTarget(m *Model) {
 	}
 }
 
+// modalRow returns the last rendered row that carries label. The panel pads a
+// label column, so a label and its value are not adjacent characters; the row
+// is the unit that proves they belong together.
+func modalRow(view, label string) (string, bool) {
+	rows := strings.Split(view, "\n")
+	for i := len(rows) - 1; i >= 0; i-- {
+		if strings.Contains(rows[i], label) {
+			return rows[i], true
+		}
+	}
+	return "", false
+}
+
 // modalBorders counts the panel's top and bottom border rows. Only a border
 // exactly ModalWidth cells wide counts: the sidebar has a border of its own, and
 // a resize must not make the panel's border ambiguous.

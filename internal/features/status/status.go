@@ -79,6 +79,8 @@ func (f *Feature) Services(ctx context.Context, in core.Invocation) ([]core.Serv
 			Health:     string(svc.Health),
 			Instances:  len(svc.Instances),
 			Configured: svc.Configured,
+			Image:      imageText(svc),
+			Ports:      portText(svc),
 		})
 	}
 	return services, nil
