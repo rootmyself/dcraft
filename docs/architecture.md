@@ -799,6 +799,23 @@ make a separate plan call; the result carries the same public metadata.
 ### TUI (`internal/ui/tui`)
 
 `tui.NewModel(ctx, Options)` is pure construction; `tui.Run` starts Bubble Tea.
+Every screen is composed by the shared visual layer in
+`internal/ui/tui/visual`: a one-row header, the body and a one-row keycap
+footer. The header states `dcraft · project · environment` on the left and the
+last observed `Docker`/`Compose`/`로컬` facts on the right; it never polls, and
+the right side is dropped before the stack identity when cells are scarce. The
+footer is the approved keycap row for the current phase (menu/confirm/form/live/
+busy) and shrinks by priority, never by wrapping. The theme (six semantic
+tokens, light/dark palette, color on/off, UTF-8/ASCII glyphs) is resolved once
+in `NewModel` by a pure function over `DCRAFT_THEME`, `NO_COLOR`, `TERM`, the
+terminal color profile, the detected background and the locale; renderers only
+receive the resolved value, so no renderer reads the environment and no ANSI
+can reach a colorless or non-TTY path. Every rendered line is measured in
+display cells (Korean = 2 cells, ANSI ignored) and truncated with an explicit
+`…` (ASCII `~`) rather than clipped. Breakpoints use width and height only:
+`≥100` columns is the two-pane layout, `60–99` is a single column, and `<60`
+columns or `<18` rows is compact (borders, descriptions and secondary columns
+dropped; badges and core values kept).
 It derives everything from the registry:
 
 - the primary feature runs immediately;

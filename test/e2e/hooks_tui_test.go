@@ -3,7 +3,6 @@ package e2e
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -32,7 +31,7 @@ func TestHooksTUIShowsPlanTrustApprovalAndDeclineRunsNothing(t *testing.T) {
 		{wait: "스크립트 신뢰", send: ""},
 		{wait: "scripts/pre.sh", send: ""},
 		{wait: "sha256:", send: ""},
-		{wait: "enter 승인", send: "\x1b"},
+		{wait: "[enter] 실행", send: "\x1b"},
 		{wait: "아무것도 실행하지 않았습니다", send: ""},
 	})
 	if code != 0 {
@@ -42,7 +41,7 @@ func TestHooksTUIShowsPlanTrustApprovalAndDeclineRunsNothing(t *testing.T) {
 		"스크립트 신뢰", "script_trust", "scripts/pre.sh", "sha256:",
 		"새 승인 필요", "아무것도 실행하지 않았습니다",
 	} {
-		if !strings.Contains(output, want) {
+		if !screenContains(output, want) {
 			t.Fatalf("TUI output missing %q:\n%s", want, output)
 		}
 	}

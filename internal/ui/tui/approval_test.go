@@ -44,7 +44,7 @@ func TestApprovalPlannerShowsPlanAndWaitsForConfirmation(t *testing.T) {
 	initModel(t, m)
 
 	view := m.View()
-	for _, want := range []string{"출처", "버전: v1", "/plugins/docker-compose", "승인", "enter 승인", "esc 취소"} {
+	for _, want := range []string{"출처", "버전: v1", "/plugins/docker-compose", "승인", "[enter] 실행", "[esc] 취소"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("confirmation view missing %q:\n%s", want, view)
 		}
@@ -129,7 +129,7 @@ func TestPlanFailureIsShownInsteadOfConfirmation(t *testing.T) {
 	if !strings.Contains(view, "작업 실패") || !strings.Contains(view, "릴리스 정보를 확인하지 못했습니다") {
 		t.Fatalf("plan failure not shown:\n%s", view)
 	}
-	if strings.Contains(view, "enter 승인") {
+	if strings.Contains(view, "[space] 승인") {
 		t.Fatalf("failed plan still offered confirmation:\n%s", view)
 	}
 	if install.runs != 0 {
@@ -165,7 +165,7 @@ func TestOrdinaryPlannerShowsPlanAndRunsWithoutApproval(t *testing.T) {
 	feed(t, m, execute(t, cmd))
 
 	view := m.View()
-	for _, want := range []string{"예정 작업", "이미지 취득", "다음 작업", "enter 실행", "esc 취소"} {
+	for _, want := range []string{"예정 작업", "이미지 취득", "다음 작업", "[enter] 실행", "[esc] 취소"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("preview confirmation missing %q:\n%s", want, view)
 		}
@@ -215,7 +215,7 @@ func TestPreviousVersionApprovalUsesTheGenericScreen(t *testing.T) {
 	initModel(t, m)
 
 	view := m.View()
-	for _, want := range []string{"이전 정상 버전 복원 계획", "승인", "이전 버전 복원", "previous_version", "enter 승인", "esc 취소"} {
+	for _, want := range []string{"이전 정상 버전 복원 계획", "승인", "이전 버전 복원", "previous_version", "[enter] 실행", "[esc] 취소"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("confirmation view missing %q:\n%s", want, view)
 		}

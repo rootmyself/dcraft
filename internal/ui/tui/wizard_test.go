@@ -203,7 +203,7 @@ func TestWizardShowsEffectBeforeSaveAndDeclineSavesNothing(t *testing.T) {
 	}
 	answerWizard(t, m, true)
 	view := m.View()
-	for _, want := range []string{"저장할 비밀값 연결", "worker", "/run/secrets/token", "enter 저장"} {
+	for _, want := range []string{"저장할 비밀값 연결", "worker", "/run/secrets/token", "[enter] 저장"} {
 		if !stringsContains(view, want) {
 			t.Fatalf("preview missing %q:\n%s", want, view)
 		}

@@ -109,6 +109,11 @@ func StageList(stages []core.Stage) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
+// StageStatusLabel is the Korean status word for one stage. It is exported so
+// the TUI can render a stage with its own glyph set without duplicating the
+// wording; view.StageList keeps using it.
+func StageStatusLabel(status core.StageStatus) string { return stageStatusLabel(status) }
+
 func stageSymbol(status core.StageStatus) string {
 	switch status {
 	case core.StageSucceeded:

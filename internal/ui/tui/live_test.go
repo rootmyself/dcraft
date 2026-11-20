@@ -255,7 +255,7 @@ func TestTUILogsScreenStreamsAndReturnsToTheManagementView(t *testing.T) {
 		}
 		q.next(t, m)
 	}
-	if !strings.Contains(m.View(), "q/esc/ctrl+c") {
+	if !strings.Contains(m.View(), "[q] 화면 닫기") {
 		t.Fatalf("live hints missing:\n%s", m.View())
 	}
 

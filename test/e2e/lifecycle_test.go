@@ -521,7 +521,7 @@ func runLifecyclePTYSteps(t *testing.T, dir string, env []string, steps []lifecy
 	waitFor := func(text string) {
 		t.Helper()
 		deadline := time.Now().Add(20 * time.Second)
-		for !strings.Contains(out.String(), text) {
+		for !screenContains(out.String(), text) {
 			if time.Now().After(deadline) {
 				t.Fatalf("TUI did not render %q; output:\n%s", text, out.String())
 			}
@@ -543,7 +543,7 @@ func runLifecyclePTYSteps(t *testing.T, dir string, env []string, steps []lifecy
 		// being coalesced into one read.
 		time.Sleep(80 * time.Millisecond)
 	}
-	waitFor("q 종료")
+	waitFor("[q] 종료")
 	waitDone := make(chan error, 1)
 	go func() { waitDone <- cmd.Wait() }()
 	for attempt := 0; attempt < 4; attempt++ {
@@ -582,8 +582,8 @@ func TestLifecycleTUIMenuSelectsStopAndQuitsWithoutChangingServices(t *testing.T
 	if code != 0 {
 		t.Fatalf("TUI exit = %d\n%s", code, output)
 	}
-	for _, want := range []string{"스택 중지", "대상", "효과", "esc 취소"} {
-		if !strings.Contains(output, want) {
+	for _, want := range []string{"스택 중지", "대상", "효과", "[esc] 취소"} {
+		if !screenContains(output, want) {
 			t.Fatalf("confirmation missing %q:\n%s", want, output)
 		}
 	}
@@ -607,7 +607,7 @@ func TestLifecycleTUIRunsUpThroughTheSameEngine(t *testing.T) {
 		t.Fatalf("TUI exit = %d\n%s", code, output)
 	}
 	for _, want := range []string{"스택을 시작했습니다.", "자동 배정", "hello-world"} {
-		if !strings.Contains(output, want) {
+		if !screenContains(output, want) {
 			t.Fatalf("result missing %q:\n%s", want, output)
 		}
 	}

@@ -245,7 +245,7 @@ func TestRestoreBindTUIWizardSelectsABindArtifactAndTarget(t *testing.T) {
 		t.Fatalf("bind restore TUI exit = %d\n%s", code, output)
 	}
 	for _, want := range []string{"데이터 복원 설정", "볼륨과 연결 폴더 백업", "폴더", "복원 계획", "data_restore", "복원 완료"} {
-		if !strings.Contains(output, want) {
+		if !screenContains(output, want) {
 			t.Fatalf("TUI output missing %q:\n%s", want, output)
 		}
 	}

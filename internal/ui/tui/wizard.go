@@ -379,12 +379,12 @@ func (m *Model) wizardView() string {
 	var b strings.Builder
 	switch m.phase {
 	case phaseWizardLoading:
-		b.WriteString(titleStyle.Render(msgWizardLoading))
+		b.WriteString(m.title(msgWizardLoading))
 		b.WriteString("\n")
 		return b.String()
 	case phaseWizardStep:
 		if m.wizardSpec.Title != "" {
-			b.WriteString(titleStyle.Render(m.wizardSpec.Title))
+			b.WriteString(m.title(m.wizardSpec.Title))
 			b.WriteString("\n\n")
 		}
 		if m.wizardStep < 0 || m.wizardStep >= len(m.wizardSpec.Steps) {
@@ -393,7 +393,7 @@ func (m *Model) wizardView() string {
 		step := m.wizardSpec.Steps[m.wizardStep]
 		ordinal, total := m.wizardProgress()
 		fmt.Fprintf(&b, "%s %d/%d\n", msgWizardProgress, ordinal, total)
-		b.WriteString(titleStyle.Render(step.Title))
+		b.WriteString(m.title(step.Title))
 		b.WriteString("\n\n")
 		b.WriteString(step.Prompt)
 		b.WriteString("\n\n")
@@ -427,7 +427,7 @@ func (m *Model) wizardView() string {
 				hint += msgWizardOptionalHint
 			}
 			if hint != "" {
-				b.WriteString(hintStyle.Render(hint))
+				b.WriteString(m.hintText(hint))
 				b.WriteString("\n")
 			}
 		}
@@ -443,34 +443,10 @@ func (m *Model) wizardView() string {
 	}
 	if m.notice != "" {
 		b.WriteString("\n")
-		b.WriteString(noticeStyle.Render(m.notice))
+		b.WriteString(m.noticeText(m.notice))
 		b.WriteString("\n")
 	}
 	return b.String()
-}
-
-func (m *Model) wizardHints() string {
-	switch m.phase {
-	case phaseWizardStep:
-		if m.wizardTextInput() {
-			step := m.wizardSpec.Steps[m.wizardStep]
-			if step.Optional {
-				return msgHintWizardOptional
-			}
-			return msgHintWizardInput
-		}
-		if m.wizardStep >= 0 && m.wizardStep < len(m.wizardSpec.Steps) && m.wizardSpec.Steps[m.wizardStep].Multi {
-			return msgHintWizardMulti
-		}
-		return msgHintWizardChoice
-	case phaseWizardPreview:
-		if m.wizardPreviewErr != nil {
-			return msgHintWizardInvalid
-		}
-		return msgHintWizardPreview
-	default:
-		return msgHintWizardLoading
-	}
 }
 
 func wizardSpecFrom(data any) (core.WizardSpec, bool) {

@@ -63,7 +63,7 @@ func startPTY(t *testing.T, dir string, env []string, args ...string) *ptySessio
 func (s *ptySession) waitFor(text string, timeout time.Duration) {
 	s.t.Helper()
 	deadline := time.Now().Add(timeout)
-	for !strings.Contains(s.out.String(), text) {
+	for !screenContains(s.out.String(), text) {
 		if time.Now().After(deadline) {
 			_ = s.cmd.Process.Kill()
 			s.t.Fatalf("pty output never contained %q:\n%s", text, s.out.String())

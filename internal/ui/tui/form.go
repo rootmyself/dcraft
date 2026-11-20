@@ -148,7 +148,7 @@ func (m *Model) submitForm() (tea.Model, tea.Cmd) {
 func (m *Model) formView() string {
 	form := m.form
 	var b strings.Builder
-	b.WriteString(titleStyle.Render(msgFormTitle))
+	b.WriteString(m.title(msgFormTitle))
 	b.WriteString("\n\n")
 	if form.feature != nil {
 		desc := form.feature.Descriptor()
@@ -191,12 +191,12 @@ func (m *Model) formView() string {
 			}
 			fmt.Fprintf(&b, "%s%s: %s%s\n", marker, field.Label, form.values[field.Key], cursor)
 			if i == form.focus && field.Help != "" {
-				fmt.Fprintf(&b, "    %s\n", hintStyle.Render(field.Help))
+				fmt.Fprintf(&b, "    %s\n", m.hintText(field.Help))
 			}
 		}
 	}
 	b.WriteString("\n")
-	fmt.Fprintf(&b, "%s\n", titleStyle.Render(msgFormRunTitle))
+	fmt.Fprintf(&b, "%s\n", m.title(msgFormRunTitle))
 	for _, field := range form.fields {
 		value := form.values[field.Key]
 		if field.Kind == core.InputChoice && len(field.Options) > 0 {
@@ -209,7 +209,7 @@ func (m *Model) formView() string {
 	}
 	if form.notice != "" {
 		b.WriteString("\n")
-		b.WriteString(noticeStyle.Render(form.notice))
+		b.WriteString(m.noticeText(form.notice))
 		b.WriteString("\n")
 	}
 	return strings.TrimRight(b.String(), "\n")

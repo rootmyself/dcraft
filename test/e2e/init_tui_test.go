@@ -171,7 +171,7 @@ func TestInitTUIWizardDoesNotOverwriteAFileCreatedAfterThePreview(t *testing.T) 
 		t.Fatalf("a file created after the preview was overwritten:\n%s", data)
 	}
 	for _, want := range []string{"파일 덮어쓰기 승인이 필요합니다.", "다시 미리보기", "덮어쓰지 않습니다"} {
-		if !strings.Contains(output, want) {
+		if !screenContains(output, want) {
 			t.Fatalf("failure guidance missing %q:\n%s", want, output)
 		}
 	}

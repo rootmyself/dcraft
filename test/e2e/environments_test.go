@@ -227,7 +227,7 @@ func runPTYSteps(t *testing.T, dir string, env []string, steps []ptyStep) (strin
 	waitFor := func(text string) {
 		t.Helper()
 		deadline := time.Now().Add(15 * time.Second)
-		for !strings.Contains(out.String(), text) {
+		for !screenContains(out.String(), text) {
 			if time.Now().After(deadline) {
 				t.Fatalf("TUI did not render %q within timeout; output:\n%s", text, out.String())
 			}
@@ -281,7 +281,7 @@ func TestTUIEnvironmentSelectionAndQuitChangesNothing(t *testing.T) {
 		t.Fatalf("TUI exit = %d\n%s", code, output)
 	}
 	for _, want := range []string{"실행환경 선택", "dev", "prod", "> dev", "fake-project"} {
-		if !strings.Contains(output, want) {
+		if !screenContains(output, want) {
 			t.Fatalf("TUI output missing %q:\n%s", want, output)
 		}
 	}
