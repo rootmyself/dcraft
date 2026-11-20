@@ -59,6 +59,7 @@ func (f *Feature) Descriptor() core.Descriptor {
 		Title:   msgTitle,
 		Summary: msgSummary,
 		Usage:   msgUsage,
+		Section: core.SectionConfig,
 		// Registration is a local project-config edit. It asks only for the
 		// Docker CLI presence (the smallest published preflight set) and does
 		// not require a running engine or Compose.

@@ -71,6 +71,13 @@ type Model struct {
 	active   core.Feature
 	selected int
 
+	// filter narrows the menu by title or summary and filtering is true while
+	// "/" has the keyboard. navExpanded is the single-column menu's tab state:
+	// it changes the one-row summary, never the row count.
+	filter      string
+	filtering   bool
+	navExpanded bool
+
 	envs        []core.Environment
 	envSelected int
 
@@ -410,6 +417,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case tea.KeyMsg:
+		// The filter owns the keyboard while "/" is active: q and r are text,
+		// not commands, so a search can contain any letter.
+		if m.filtering {
+			return m, m.updateFilterKey(msg)
+		}
 		if m.form != nil {
 			return m.updateFormKey(msg)
 		}
@@ -498,6 +510,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "esc":
 			if m.isWizardPhase() {
 				m.cancelWizard()
+				return m, nil
+			}
+			if m.navMenuVisible() && m.filter != "" {
+				// esc clears the filter: the whole registry comes back and the
+				// cursor stays on the same feature when it is still visible.
+				m.filter = ""
+				m.filtering = false
+				m.keepSelectionVisible()
 			}
 			// A result sheet that covers the menu is put away, not acted on:
 			// nothing was selected, so nothing must run. A short result that
@@ -508,6 +528,22 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.body = visual.Viewport{}
 			}
 			return m, nil
+		}
+		if m.navMenuVisible() {
+			switch msg.String() {
+			case "/":
+				m.filtering = true
+				return m, nil
+			case "tab", "shift+tab":
+				// The single-column summary expands in place. It is one row
+				// either way, so the content keeps its height. Only the
+				// medium layout has that row; elsewhere tab has no meaning
+				// and must not pretend it did something.
+				if m.layoutMode() == visual.ModeMedium {
+					m.navExpanded = !m.navExpanded
+				}
+				return m, nil
+			}
 		}
 		if m.isWizardPhase() {
 			return m, m.updateWizard(msg)
@@ -547,20 +583,23 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, m.start(m.active)
 		case "up", "k":
-			if len(m.features) > 1 && m.phase == phaseReady {
-				m.selected = (m.selected - 1 + len(m.features)) % len(m.features)
+			if m.navMenuVisible() {
+				m.moveSelection(-1)
 			}
 			return m, nil
 		case "down", "j":
-			if len(m.features) > 1 && m.phase == phaseReady {
-				m.selected = (m.selected + 1) % len(m.features)
+			if m.navMenuVisible() {
+				m.moveSelection(1)
 			}
 			return m, nil
 		case "enter":
-			// While the result sheet covers the menu the highlighted feature
-			// is not visible; running it would act on an unseen selection.
-			if m.phase == phaseReady && len(m.features) > 0 && !m.menuHidden() {
-				return m, m.start(m.features[m.selected])
+			// While the result sheet covers the menu, or a filter has hidden
+			// the navigation, the highlighted feature is not visible; running
+			// it would act on an unseen selection.
+			if m.navMenuVisible() && !m.menuHidden() {
+				if f := m.selectedFeature(); f != nil {
+					return m, m.start(f)
+				}
 			}
 			return m, nil
 		}
@@ -1055,42 +1094,34 @@ func (m *Model) View() string {
 // follows the cursor and the omitted rows are stated explicitly.
 const menuWindow = 7
 
-func (m *Model) menuView() string {
-	var b strings.Builder
-	start, end := 0, len(m.features)
-	if end > menuWindow {
-		start = m.selected - menuWindow/2
-		if start < 0 {
-			start = 0
-		}
-		if start+menuWindow > end {
-			start = end - menuWindow
-		}
-		end = start + menuWindow
+// menuView is the single-column feature menu: the same sectioned list as the
+// sidebar, with the machine name kept because the layout has the width for it.
+// The cursor marker is the two-cell "> " form the existing key tests assert.
+// budget bounds the rows so a long registry cannot push the notice or the
+// result off the body; zero means no coding yet.
+func (m *Model) menuView(budget int) string {
+	if budget <= 0 {
+		budget = menuWindow
 	}
-	if start > 0 {
-		b.WriteString(m.hintText(fmt.Sprintf(msgMenuMoreAbove, m.theme.Glyphs.Ell)))
-		b.WriteString("\n")
+	lines := visual.MenuLines(m.theme, m.bodyWidth(), m.nav(), budget, !m.compact())
+	if len(lines) == 0 {
+		return ""
 	}
-	for i := start; i < end; i++ {
-		d := m.features[i].Descriptor()
-		marker := "  "
-		if i == m.selected {
-			marker = "> "
-		}
-		// Compact drops the secondary column (the machine name) and keeps the
-		// Korean title; the wide and medium layouts show both.
-		if m.compact() {
-			b.WriteString(marker + d.Title + "\n")
-			continue
-		}
-		b.WriteString(marker + d.Title + " (" + d.Name + ")\n")
+	return strings.Join(lines, "\n") + "\n"
+}
+
+// navLine is the one-row navigation of the medium layout. The wide layout has
+// the sidebar instead, and the compact layout is too narrow for a summary row.
+// An unknown size renders nothing: a guess would only be replaced one frame
+// later.
+func (m *Model) navLine() string {
+	if m.width <= 0 || m.layoutMode() != visual.ModeMedium {
+		return ""
 	}
-	if end < len(m.features) {
-		b.WriteString(m.hintText(fmt.Sprintf(msgMenuMoreBelow, m.theme.Glyphs.Ell)))
-		b.WriteString("\n")
+	if !m.navMenuVisible() {
+		return ""
 	}
-	return b.String()
+	return visual.NavRow(m.theme, m.bodyWidth(), m.nav(), m.navExpanded)
 }
 
 // confirmView explains the requested target and effect before a mutating

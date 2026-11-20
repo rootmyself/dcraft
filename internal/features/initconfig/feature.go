@@ -23,6 +23,7 @@ func (f *Feature) Descriptor() core.Descriptor {
 		Title:   initimpl.Title(),
 		Summary: initimpl.Summary(),
 		Usage:   initimpl.Usage(),
+		Section: core.SectionConfig,
 		// Generation and `docker compose config` validation do not need a
 		// reachable engine; the narrow requirement keeps init usable while the
 		// engine is stopped. A missing Compose is reported by the validation

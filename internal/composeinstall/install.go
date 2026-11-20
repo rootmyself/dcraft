@@ -104,6 +104,7 @@ func (f *Feature) Descriptor() core.Descriptor {
 		Title:   msgTitle,
 		Summary: msgSummary,
 		Usage:   msgUsage,
+		Section: core.SectionConfig,
 		// Installing Compose is a separate risk from running a stack.
 		Approval: core.ApprovalInstall,
 		// It exists precisely because Compose is missing, so it needs only the

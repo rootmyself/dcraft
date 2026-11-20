@@ -5,6 +5,9 @@
 // Renderers receive a resolved Theme and never read the environment
 // themselves. Resolve and Detect are pure functions over explicit inputs so
 // every environment combination is testable without a terminal.
+//
+// The navigation renderers (Sidebar, NavRow, MenuLines) take a Nav they never
+// derive: the TUI builds it from descriptors, so no feature name exists here.
 package visual
 
 import (

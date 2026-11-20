@@ -12,8 +12,12 @@ const (
 	msgMenuMoreAbove        = "  %s 위에 더 있음"
 	msgMenuMoreBelow        = "  %s 아래에 더 있음"
 	msgDetailTitle          = "전체 값"
-	msgStageTimeline        = "단계"
-	msgStagePending         = "예정"
+	// Navigation. The section headings come from core.Section.KoreanLabel, so
+	// only the frame around them is text owned by the TUI.
+	msgNavTitle      = "기능 · %d"
+	msgNavEmpty      = "조건에 맞는 기능이 없습니다. /로 다른 낱말을 찾거나 esc로 해제하세요."
+	msgStageTimeline = "단계"
+	msgStagePending  = "예정"
 
 	msgApprovalDeclined       = "승인하지 않아 아무것도 실행하지 않았습니다. 변경된 내용은 없습니다."
 	msgApprovalDeclinedAction = "필요할 때 다시 실행해 계획을 확인하고 승인하세요."

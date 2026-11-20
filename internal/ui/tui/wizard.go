@@ -397,7 +397,10 @@ func (m *Model) wizardView() string {
 		fmt.Fprintf(&b, "%s %d/%d\n", msgWizardProgress, ordinal, total)
 		b.WriteString(m.title(step.Title))
 		b.WriteString("\n\n")
-		b.WriteString(step.Prompt)
+		// A prompt is prose: it wraps at the content width instead of losing
+		// its ending to the frame's truncation marker. A narrower pane (the
+		// wide layout's sidebar) must not delete instructions.
+		b.WriteString(m.wrapProse(step.Prompt))
 		b.WriteString("\n\n")
 		if len(step.Options) > 0 {
 			for i, option := range step.Options {
@@ -440,7 +443,9 @@ func (m *Model) wizardView() string {
 			}
 			b.WriteString("enter 계획 확인 · left 이전 단계 · esc 취소\n\n")
 		}
-		b.WriteString(m.wizardPreview)
+		// The preview is the feature's own prose; a narrower content pane must
+		// not delete the part that explains the effect.
+		b.WriteString(m.wrapProse(m.wizardPreview))
 		b.WriteString("\n")
 	}
 	if m.notice != "" {

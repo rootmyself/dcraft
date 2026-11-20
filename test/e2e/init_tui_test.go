@@ -11,11 +11,11 @@ func initWizardNavigation() []lifecyclePTYStep {
 	// The TUI opens on status. init is registered last, so four downs reach it
 	// through the same menu every other feature uses.
 	return []lifecyclePTYStep{
-		{wait: "> 스택 상태 (status)", send: "\x1b[B"},
-		{wait: "> 스택 중지 (stop)", send: "\x1b[B"},
-		{wait: "> 스택 시작 (up)", send: "\x1b[B"},
-		{wait: "> 갱신 (update)", send: "\x1b[B"},
-		{wait: "> 최초 구성 (init)", send: "\r"},
+		{wait: "[↑↓] 이동", send: "\x1b[B"},
+		{wait: "▸ 스택 중지", send: "\x1b[B"},
+		{wait: "▸ 스택 시작", send: "\x1b[B"},
+		{wait: "▸ 갱신", send: "\x1b[B"},
+		{wait: "▸ 최초 구성", send: "\r"},
 	}
 }
 

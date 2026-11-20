@@ -58,6 +58,7 @@ func (f *Feature) Descriptor() core.Descriptor {
 		Title:            msgTitle,
 		Summary:          msgSummary,
 		Usage:            msgUsage,
+		Section:          core.SectionInspect,
 		ReadOnly:         true,
 		SupportsServices: true,
 		AcceptsArgs:      true,

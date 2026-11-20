@@ -160,8 +160,8 @@ func TestEscDismissesALongResultAndRestoresTheMenu(t *testing.T) {
 	initModel(t, m)
 	resize(t, m, 120, 24)
 
-	if strings.Contains(m.View(), "이전") || !m.resultScrolls() {
-		t.Fatalf("the menu should be hidden by a long result:\n%s", m.View())
+	if !m.resultScrolls() {
+		t.Fatalf("the long result should scroll:\n%s", m.View())
 	}
 	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	m = nm.(*Model)
@@ -172,7 +172,14 @@ func TestEscDismissesALongResultAndRestoresTheMenu(t *testing.T) {
 		t.Fatal("esc discarded the result")
 	}
 	view := m.View()
-	if !strings.Contains(view, "(status)") {
+	// At 120 columns the sidebar is the persistent menu; dismissing the sheet
+	// must make the whole navigation usable again, which the sidebar always
+	// shows, so the proof is that the result body is gone and the frame is
+	// back to the menu phase.
+	if strings.Contains(view, "svc-25") {
+		t.Fatalf("esc did not put the result away:\n%s", view)
+	}
+	if !strings.Contains(view, "제목 logs") {
 		t.Fatalf("esc did not restore the menu:\n%s", view)
 	}
 	// The result is not silently forgotten: it is still the last result, and r
@@ -203,7 +210,9 @@ func TestEnterDoesNotRunWhileTheResultSheetCoversTheMenu(t *testing.T) {
 	}
 }
 
-// A short result keeps the menu visible, so enter still works normally.
+// A short result keeps the navigation usable, so enter still works normally.
+// At 120 columns the persistent sidebar is the menu; the body no longer
+// repeats the feature list, so the sidebar entry is what must be present.
 func TestShortResultKeepsTheMenuUsable(t *testing.T) {
 	f := &documentOnlyFeature{desc: descriptor("status", true), doc: bigStackDocument(2)}
 	logs := &stubFeature{desc: descriptor("logs", false), body: "로그 본문"}
@@ -211,7 +220,7 @@ func TestShortResultKeepsTheMenuUsable(t *testing.T) {
 	m.theme = *plainTheme()
 	initModel(t, m)
 	resize(t, m, 120, 36)
-	if !strings.Contains(m.View(), "(status)") {
+	if !strings.Contains(m.View(), "제목 logs") {
 		t.Fatalf("menu missing over a short result:\n%s", m.View())
 	}
 	runs := logs.runs

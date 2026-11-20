@@ -25,7 +25,8 @@ func (f *catalogFeature) Services(ctx context.Context, in core.Invocation) ([]co
 func serviceTargetFeature() *testFeature {
 	return &testFeature{desc: core.Descriptor{
 		Name: "stop", Title: "스택 중지", Summary: "스택을 중지합니다.",
-		Usage: "dcraft stop", RecordsHistory: true, SupportsServices: true,
+		Section: core.SectionOperate,
+		Usage:   "dcraft stop", RecordsHistory: true, SupportsServices: true,
 	}}
 }
 

@@ -15,8 +15,8 @@ func TestTUIServiceScopeStopsOnlyTheSelectedService(t *testing.T) {
 	env := fake.env(t, t.TempDir())
 	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
 		{wait: "상태를 새로 고치려면", send: ""},
-		{wait: "> 스택 상태 (status)", send: "down"},
-		{wait: "> 스택 중지 (stop)", send: "\r"},
+		{wait: "[↑↓] 이동", send: menuDown(t, "stop")},
+		{wait: "▸ 스택 중지", send: "\r"},
 		{wait: "서비스 선택", send: "down"}, // 전체 → api (Compose order)
 		{wait: "> [ ] api", send: "down"},
 		{wait: "> [ ] web", send: " "},
@@ -46,8 +46,8 @@ func TestTUIServiceScopeWholeStackKeepsThePreviousBehavior(t *testing.T) {
 	env := fake.env(t, t.TempDir())
 	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
 		{wait: "상태를 새로 고치려면", send: ""},
-		{wait: "> 스택 상태 (status)", send: "down"},
-		{wait: "> 스택 중지 (stop)", send: "\r"},
+		{wait: "[↑↓] 이동", send: menuDown(t, "stop")},
+		{wait: "▸ 스택 중지", send: "\r"},
 		{wait: "서비스 선택", send: "\r"},
 		{wait: "다음 작업을 실행할까요?", send: ""},
 		{wait: "범위: 스택 전체", send: "\r"},
@@ -68,8 +68,8 @@ func TestTUIServiceScopeCancelChangesNothing(t *testing.T) {
 	env := fake.env(t, t.TempDir())
 	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
 		{wait: "상태를 새로 고치려면", send: ""},
-		{wait: "> 스택 상태 (status)", send: "down"},
-		{wait: "> 스택 중지 (stop)", send: "\r"},
+		{wait: "[↑↓] 이동", send: menuDown(t, "stop")},
+		{wait: "▸ 스택 중지", send: "\r"},
 		{wait: "서비스 선택", send: "down"},
 		{wait: "> [ ] api", send: "\x1b"}, // esc
 		{wait: "아무것도 실행하지 않았습니다", send: ""},
@@ -88,7 +88,7 @@ func TestTUILogsUsesTheSelectedServiceAndKeepsServicesRunning(t *testing.T) {
 	project := liveProject(t)
 	env := fake.env(t, t.TempDir(), nil)
 	s := startPTY(t, project, env)
-	s.waitFor("스택 상태 (status)", 15*time.Second)
+	s.waitFor("[↑↓] 이동", 15*time.Second)
 	s.pressMenuDown(menuDownPresses(t, "logs"))
 	s.waitFor("서비스 선택", 15*time.Second)
 	// 전체 → db → job → web

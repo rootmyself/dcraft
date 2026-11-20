@@ -24,6 +24,8 @@ func (f *Feature) Descriptor() core.Descriptor {
 		Title:          restoreimpl.MsgTitle,
 		Summary:        restoreimpl.MsgSummary,
 		Usage:          restoreimpl.MsgUsage,
+		Section:        core.SectionData,
+		Destructive:    true,
 		Approval:       core.ApprovalDataRestore,
 		RecordsHistory: true,
 		Wizard:         true,

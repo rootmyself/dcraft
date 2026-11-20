@@ -64,6 +64,7 @@ func TestEngineInputsResolvesWithoutRunningOrWritingHistory(t *testing.T) {
 	feature := &inputFeature{
 		testFeature: &testFeature{desc: core.Descriptor{
 			Name:     "attach",
+			Section:  core.SectionInspect,
 			Title:    "접속",
 			Summary:  "서비스에 접속합니다.",
 			Usage:    "dcraft attach",
@@ -113,6 +114,7 @@ func (f *fakeIdentity) ReadProjectName(ctx context.Context, target core.Target) 
 func TestEngineInputsUsesTheReadOnlyProjectIdentity(t *testing.T) {
 	feature := &inputFeature{testFeature: &testFeature{desc: core.Descriptor{
 		Name:     "attach",
+		Section:  core.SectionInspect,
 		Title:    "접속",
 		Summary:  "서비스에 접속합니다.",
 		Usage:    "dcraft attach",

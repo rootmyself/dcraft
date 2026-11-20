@@ -37,6 +37,7 @@ func (f *conditionalFeature) Plan(ctx context.Context, in core.Invocation) (core
 func mutatingDescriptor(name string) core.Descriptor {
 	return core.Descriptor{
 		Name:    name,
+		Section: core.SectionInspect,
 		Title:   "최초 구성",
 		Summary: "Compose 파일을 생성합니다.",
 		Usage:   "dcraft " + name,
@@ -84,6 +85,7 @@ func TestEngineStillRunsAWizardStepsPreviewWithoutTheConditionalApproval(t *test
 	feature := &conditionalFeature{
 		testFeature: &testFeature{desc: core.Descriptor{
 			Name: "init", Title: "최초 구성", Summary: "설정", Usage: "dcraft init", Wizard: true,
+			Section: core.SectionConfig,
 		}},
 		kind: core.ApprovalFileOverwrite,
 	}
@@ -128,6 +130,7 @@ func TestEngineRequiresDescriptorAndConditionalApprovalsIndependently(t *testing
 	feature := &conditionalFeature{
 		testFeature: &testFeature{desc: core.Descriptor{
 			Name:     "init",
+			Section:  core.SectionConfig,
 			Title:    "최초 구성",
 			Summary:  "설정",
 			Usage:    "dcraft init",

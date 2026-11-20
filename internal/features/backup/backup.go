@@ -24,6 +24,7 @@ func (f *Feature) Descriptor() core.Descriptor {
 		Title:          backupimpl.MsgTitle,
 		Summary:        backupimpl.MsgSummary,
 		Usage:          backupimpl.MsgUsage,
+		Section:        core.SectionData,
 		RecordsHistory: true,
 		Wizard:         true,
 		Flags: []core.Flag{

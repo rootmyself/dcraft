@@ -36,12 +36,29 @@ func (m *Model) footerPhase() visual.Phase {
 // that no approved row covers; those rows keep the approved chips and add only
 // the keys that screen actually accepts.
 func (m *Model) footerItems() []visual.Keycap {
+	if m.filtering {
+		// While "/" has the keyboard the only two meanings are clear and
+		// commit; q, r and the arrows are characters or menu moves here.
+		return []visual.Keycap{
+			{Key: "esc", Label: "해제", Priority: 0},
+			{Key: "enter", Label: "확정", Priority: 0},
+		}
+	}
 	if m.live != nil && m.live.mode == core.LiveAttach {
 		// Attach ends with ctrl+], never with ctrl+c (which is forwarded to
 		// the child), so the live row would be wrong.
 		return []visual.Keycap{
 			{Key: "ctrl+]", Label: "접속 종료", Priority: 0},
 			{Key: "?", Label: "도움말", Priority: 3},
+		}
+	}
+	if m.live == nil && (m.phase == phaseLoading || m.phase == phasePlanning) &&
+		m.active != nil && m.active.Descriptor().ReadOnly {
+		// A read-only operation in flight (not a live screen) accepts only
+		// quit; the menu keys do not work until the result is ready, so the
+		// row states just that. A mutating run returns PhaseBusy instead.
+		return []visual.Keycap{
+			{Key: "q", Label: "종료", Priority: 0},
 		}
 	}
 	if m.phase == phaseSelectingServices {
@@ -85,22 +102,29 @@ func (m *Model) footerItems() []visual.Keycap {
 	return m.resultScrollKeycaps(visual.FooterItems(m.footerPhase()))
 }
 
-// bodyWidth is the width the body renderers may use. The two-pane sidebar is
-// T3's; until it exists the body owns the whole width, so ContentWidth is
-// called with the single-column mode. The seam stays so T3 changes one call,
-// not every renderer.
+// bodyWidth is the width the body renderers may use. In the wide layout the
+// sidebar owns its cells and the approved one-cell gap; every other layout
+// gives the body the whole width. The budget follows the pane that is actually
+// drawn, so a hidden menu never costs the body its width.
 func (m *Model) bodyWidth() int {
 	if m.width <= 0 {
 		return 0
 	}
+	if m.sidebarVisible() {
+		return visual.ContentWidth(m.width, visual.ModeWide)
+	}
 	return visual.ContentWidth(m.width, visual.ModeMedium)
 }
 
-// layoutMode is the breakpoint decision for the current terminal size. T3
-// consumes it to show or collapse the sidebar; T2 uses it for compact-mode
-// decoration decisions and as the seam T3 switches the body width to.
+// layoutMode is the breakpoint decision for the current terminal size.
 func (m *Model) layoutMode() visual.Mode {
 	return visual.PickMode(m.width, m.height)
+}
+
+// sidebarVisible reports whether the persistent left pane is drawn. A menu of
+// one feature is not worth a pane, and the body then keeps its full width.
+func (m *Model) sidebarVisible() bool {
+	return m.width > 0 && m.layoutMode() == visual.ModeWide && len(m.features) > 1
 }
 
 // compact reports whether decoration must be dropped. Before the first
@@ -152,6 +176,13 @@ func (m *Model) layoutBody() bodyLayout {
 		lines = append(lines, strings.Split(s, "\n")...)
 	}
 
+	// The medium layout states the navigation in exactly one row directly
+	// under the header. It is one row collapsed and expanded, so opening the
+	// menu never costs the content a line.
+	if navLine := m.navLine(); navLine != "" {
+		add(navLine)
+	}
+
 	if title != "" {
 		// The separator is an explicit row: titleRows counts it, so dropping
 		// it would let the frame draw one row more than the budget.
@@ -177,13 +208,24 @@ func (m *Model) layoutBody() bodyLayout {
 		lines = append(lines, tail...)
 	}
 
-	// The menu is hidden while the result scrolls: two competing scroll lists
-	// would fight for the same keys. esc puts the result away and brings the
-	// menu back, so the feature list is never unreachable.
-	if len(m.features) > 1 && !m.menuHidden() {
+	// The full list is drawn wherever the navigation is not already a list:
+	// the wide layout has the persistent sidebar. The medium layout keeps the
+	// one-row summary as a headline *and* the list, because a collapsed row
+	// that names only one feature would hide the rest of the menu. Before the
+	// first WindowSizeMsg the sidebar is not drawn, so the list is.
+	//
+	// The list is also hidden while the result scrolls: two competing scroll
+	// lists would fight for the same keys. esc puts the result away and brings
+	// the menu back, so the feature list is never unreachable.
+	if len(m.features) > 1 && m.phase == phaseReady && !m.sidebarVisible() && !m.menuHidden() {
 		add("")
 		add(m.sectionLabel(msgMenu))
-		add(m.menuView())
+		budget := 0
+		if m.height > 0 {
+			// Everything the body has left after the lines already written.
+			budget = visual.BodyRows(m.height) - len(lines)
+		}
+		add(m.menuView(budget))
 	}
 	if m.notice != "" {
 		add("")
@@ -545,4 +587,14 @@ func (m *Model) hintText(s string) string {
 
 func (m *Model) noticeText(s string) string {
 	return m.theme.Bold(visual.TokenWarning, s)
+}
+
+// wrapProse wraps a paragraph to the body width. Prose may wrap; paths and
+// identifiers may not. The CLI paths pass width 0, which means "no wrapping".
+func (m *Model) wrapProse(text string) string {
+	width := m.bodyWidth()
+	if width <= 0 || strings.TrimSpace(text) == "" {
+		return text
+	}
+	return strings.Join(visual.Wrap(text, width), "\n")
 }

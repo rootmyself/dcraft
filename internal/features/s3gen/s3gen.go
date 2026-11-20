@@ -61,6 +61,7 @@ func (f *Feature) Descriptor() core.Descriptor {
 		Title:   msgTitle,
 		Summary: msgSummary,
 		Usage:   msgUsage,
+		Section: core.SectionConfig,
 		// Saving a project file is a local-config edit. Only the Docker CLI
 		// presence is required by the published preflight contract; the
 		// generated script needs aws, but generation does not.

@@ -44,7 +44,8 @@ func TestBackupWizardSelectsAVolumeCollectsTheOutputPathAndConfirmsTheEffect(t *
 	backup := &stubWizard{
 		stubFeature: &stubFeature{desc: core.Descriptor{
 			Name: "backup", Title: "데이터 백업", Summary: "백업합니다.", Usage: "dcraft backup",
-			Wizard: true, RecordsHistory: true,
+			Section: core.SectionData,
+			Wizard:  true, RecordsHistory: true,
 			Flags: []core.Flag{
 				{Name: "output", Shorthand: "o", Kind: core.FlagString, Required: true, Usage: "출력 폴더"},
 				{Name: "volume", Kind: core.FlagList, Required: true, Usage: "볼륨 키"},
@@ -118,7 +119,8 @@ func TestBackupWizardCancelRunsNothing(t *testing.T) {
 	backup := &stubWizard{
 		stubFeature: &stubFeature{desc: core.Descriptor{
 			Name: "backup", Title: "데이터 백업", Summary: "백업합니다.", Usage: "dcraft backup",
-			Wizard: true,
+			Section: core.SectionData,
+			Wizard:  true,
 		}},
 		steps:   core.WizardSpec{Title: "설정", Steps: []core.WizardStep{{Name: "volume", Title: "볼륨", Prompt: "고르세요", Options: []core.WizardOption{{Value: "data", Label: "data"}}}}},
 		preview: "미리보기",

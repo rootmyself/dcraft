@@ -58,7 +58,8 @@ func (f *stubFeature) Present(res core.Result, width int) string { return f.body
 func descriptor(name string, primary bool) core.Descriptor {
 	return core.Descriptor{
 		Name: name, Title: "제목 " + name, Summary: "요약 " + name,
-		Usage: "dcraft " + name, ReadOnly: true, Primary: primary,
+		Section: core.SectionInspect,
+		Usage:   "dcraft " + name, ReadOnly: true, Primary: primary,
 	}
 }
 

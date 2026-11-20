@@ -22,6 +22,7 @@ func (f *Feature) Descriptor() core.Descriptor {
 		Title:            msgTitle,
 		Summary:          msgSummary,
 		Usage:            msgUsage,
+		Section:          core.SectionOperate,
 		RecordsHistory:   true,
 		SupportsServices: true,
 	}
