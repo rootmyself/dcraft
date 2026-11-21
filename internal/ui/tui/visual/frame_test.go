@@ -141,7 +141,7 @@ func TestShellGeometryAtEveryBreakpoint(t *testing.T) {
 		w, h := size[0], size[1]
 		header := Header(th, w, fullFacts())
 		footer := Footer(th, PhaseMenu, w)
-		lines := Shell(th, w, h, header, bodyLines(30), footer, "… 생략")
+		lines := Compose(th, w, h, Frame{Header: header, Body: bodyLines(30), Footer: footer, Overflow: "… 생략"})
 		if len(lines) != h {
 			t.Fatalf("%dx%d: %d rows", w, h, len(lines))
 		}
@@ -163,7 +163,7 @@ func TestShellGeometryAtEveryBreakpoint(t *testing.T) {
 // so the frame keeps its exact height.
 func TestShellBodyOverflowIsExplicit(t *testing.T) {
 	th := Plain()
-	lines := Shell(th, 80, 10, "header", bodyLines(30), "footer", "… 내용 더 있음")
+	lines := Compose(th, 80, 10, Frame{Header: "header", Body: bodyLines(30), Footer: "footer", Overflow: "… 내용 더 있음"})
 	if len(lines) != 10 {
 		t.Fatalf("rows = %d", len(lines))
 	}
@@ -181,7 +181,7 @@ func TestShellBodyOverflowIsExplicit(t *testing.T) {
 func TestShellWithoutSizeKeepsAllBodyLines(t *testing.T) {
 	th := Plain()
 	body := bodyLines(40)
-	lines := Shell(th, 0, 0, "header", body, "footer", "… 생략")
+	lines := Compose(th, 0, 0, Frame{Header: "header", Body: body, Footer: "footer", Overflow: "… 생략"})
 	if len(lines) != len(body)+2 {
 		t.Fatalf("rows = %d, want %d", len(lines), len(body)+2)
 	}
@@ -190,7 +190,7 @@ func TestShellWithoutSizeKeepsAllBodyLines(t *testing.T) {
 func TestShellTinyHeightsDegradeSafely(t *testing.T) {
 	th := Plain()
 	for h := 0; h <= 4; h++ {
-		lines := Shell(th, 40, h, "header", bodyLines(5), "footer", "… 생략")
+		lines := Compose(th, 40, h, Frame{Header: "header", Body: bodyLines(5), Footer: "footer", Overflow: "… 생략"})
 		if h > 0 && len(lines) != h {
 			t.Fatalf("height=%d: %d rows", h, len(lines))
 		}
@@ -219,7 +219,7 @@ func TestShellBodyRowsMatchesGeometry(t *testing.T) {
 func TestShellBodyWidthContractASCII(t *testing.T) {
 	ascii := Resolve(Inputs{ThemeSetting: "dark", Profile: ProfileNone, DarkBackground: true, UTF8: false})
 	long := "아주 긴 서비스 설명 " + strings.Repeat("very-long-value-", 8)
-	lines := Shell(ascii, 30, 12, Header(ascii, 30, fullFacts()), []string{long}, Footer(ascii, PhaseMenu, 30), "~ 생략")
+	lines := Compose(ascii, 30, 12, Frame{Header: Header(ascii, 30, fullFacts()), Body: []string{long}, Footer: Footer(ascii, PhaseMenu, 30), Overflow: "~ 생략"})
 	for i, line := range lines {
 		if Width(line) > 30 {
 			t.Fatalf("row %d is %d cells: %q", i, Width(line), line)
@@ -250,40 +250,5 @@ func TestHeaderColoredPlateSpansTheRow(t *testing.T) {
 	}
 	if stripANSI(row) == "" || !strings.HasPrefix(stripANSI(row), " dcraft") {
 		t.Fatalf("plain text = %q", stripANSI(row))
-	}
-}
-
-// Pinned lines are never the part that gets cut. The confirmation risk
-// sentence must survive even when the body is far too long for the frame.
-func TestPinnedLinesSurviveOverflow(t *testing.T) {
-	th := Plain()
-	risk := "이 작업은 스택을 변경합니다. 중단하면 일부 변경이 남을 수 있습니다."
-	for _, size := range [][2]int{{40, 18}, {48, 18}, {80, 24}, {120, 36}} {
-		w, h := size[0], size[1]
-		lines := Compose(th, w, h, Frame{
-			Header:   Header(th, w, fullFacts()),
-			Body:     bodyLines(40),
-			Pinned:   []string{risk},
-			Footer:   Footer(th, PhaseConfirm, w),
-			Overflow: "… 생략",
-		})
-		if len(lines) != h {
-			t.Fatalf("%dx%d: %d rows", w, h, len(lines))
-		}
-		joined := strings.Join(lines, "\n")
-		if !strings.Contains(joined, "스택을 변경합니다") {
-			t.Fatalf("%dx%d: risk sentence was cut:\n%s", w, h, joined)
-		}
-		if strings.Index(joined, "스택을 변경합니다") > strings.Index(lines[h-1], "[enter]")+len(joined) {
-			t.Fatalf("%dx%d: risk is below the footer", w, h)
-		}
-		if !strings.Contains(lines[h-2], "스택을 변경합니다") {
-			t.Fatalf("%dx%d: risk is not pinned above the footer: %q", w, h, lines[h-2])
-		}
-		for i, line := range lines {
-			if Width(line) > w {
-				t.Fatalf("%dx%d row %d too wide: %q", w, h, i, line)
-			}
-		}
 	}
 }

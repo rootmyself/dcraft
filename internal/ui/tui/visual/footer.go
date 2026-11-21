@@ -65,40 +65,40 @@ func FooterItems(p Phase) []Keycap {
 		// Approving is a single key. The footer advertises exactly the keys
 		// that act on this screen, so a second accept key is not listed.
 		return []Keycap{
-			{Key: "enter", Label: "실행", Priority: 0},
-			{Key: "esc", Label: "취소", Priority: 0},
-			{Key: "↑↓", Label: "항목", Priority: 3},
-			{Key: "?", Label: "도움말", Priority: 2},
+			{Key: "enter", Label: msgKeyRun, Priority: 0},
+			{Key: "esc", Label: msgKeyCancel, Priority: 0},
+			{Key: "↑↓", Label: msgKeyItem, Priority: 3},
+			{Key: "?", Label: msgKeyHelp, Priority: 2},
 		}
 	case PhaseForm:
 		return []Keycap{
-			{Key: "enter", Label: "제출", Priority: 0},
-			{Key: "esc", Label: "취소", Priority: 0},
-			{Key: "tab", Label: "다음 항목", Priority: 2},
-			{Key: "shift+tab", Label: "이전", Priority: 3},
-			{Key: "?", Label: "도움말", Priority: 3},
+			{Key: "enter", Label: msgKeySubmit, Priority: 0},
+			{Key: "esc", Label: msgKeyCancel, Priority: 0},
+			{Key: "tab", Label: msgKeyNextField, Priority: 2},
+			{Key: "shift+tab", Label: msgKeyPrev, Priority: 3},
+			{Key: "?", Label: msgKeyHelp, Priority: 3},
 		}
 	case PhaseLive:
 		return []Keycap{
-			{Key: "q", Label: "화면 닫기", Priority: 0},
-			{Key: "ctrl+c", Label: "중단", Priority: 1},
-			{Key: "ctrl+]", Label: "접속 종료", Priority: 2},
-			{Key: "?", Label: "도움말", Priority: 3},
+			{Key: "q", Label: msgKeyCloseScreen, Priority: 0},
+			{Key: "ctrl+c", Label: msgKeyStop, Priority: 1},
+			{Key: "ctrl+]", Label: msgKeyDetach, Priority: 2},
+			{Key: "?", Label: msgKeyHelp, Priority: 3},
 		}
 	case PhaseBusy:
 		return []Keycap{
-			{Key: "ctrl+c", Label: "안전 취소", Priority: 0},
-			{Key: "q", Label: "종료 불가", Priority: 1},
+			{Key: "ctrl+c", Label: msgKeySafeCancel, Priority: 0},
+			{Key: "q", Label: msgKeyQuitBlocked, Priority: 1},
 		}
 	default: // PhaseMenu, and any future phase until it declares its own row.
 		return []Keycap{
-			{Key: "↑↓", Label: "이동", Priority: 1},
-			{Key: "enter", Label: "실행", Priority: 0},
-			{Key: "q", Label: "종료", Priority: 0},
-			{Key: "/", Label: "찾기", Priority: 3},
-			{Key: "tab", Label: "메뉴", Priority: 3},
-			{Key: "r", Label: "새로고침", Priority: 3},
-			{Key: "?", Label: "도움말", Priority: 2},
+			{Key: "↑↓", Label: msgKeyMove, Priority: 1},
+			{Key: "enter", Label: msgKeyRun, Priority: 0},
+			{Key: "q", Label: msgKeyQuit, Priority: 0},
+			{Key: "/", Label: msgKeyFind, Priority: 3},
+			{Key: "tab", Label: msgKeyMenu, Priority: 3},
+			{Key: "r", Label: msgKeyRefresh, Priority: 3},
+			{Key: "?", Label: msgKeyHelp, Priority: 2},
 		}
 	}
 }

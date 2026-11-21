@@ -206,7 +206,8 @@ func Sidebar(th Theme, width, height int, nav Nav) []string {
 	interior = append(interior, band...)
 
 	out := make([]string, 0, height)
-	out = append(out, borderTop(th, width, sidebarLabel(th, nav)))
+	title, right := sidebarLabel(th, nav)
+	out = append(out, borderTop(th, width, title, right))
 	for _, line := range interior {
 		out = append(out, th.Paint(TokenMuted, th.Glyphs.V)+Fit(line, inner, ell)+th.Paint(TokenMuted, th.Glyphs.V))
 	}
@@ -214,12 +215,15 @@ func Sidebar(th Theme, width, height int, nav Nav) []string {
 	return out
 }
 
-func sidebarLabel(th Theme, nav Nav) string {
-	label := nav.Title
+// sidebarLabel is the title-bar text: the feature count on the left and the
+// approved `esc 닫기` hint on the right. The hint says what esc does while the
+// sidebar has focus: it closes the pane's task, not the program.
+func sidebarLabel(th Theme, nav Nav) (string, string) {
+	title := nav.Title
 	if nav.Filter != "" || nav.FilterActive {
-		label += "  " + filterText(nav, th)
+		title += "  " + filterText(nav, th)
 	}
-	return label
+	return title, msgNavClose
 }
 
 // filterText is the visible filter field. While the field has the keyboard a
@@ -239,18 +243,35 @@ func filterText(nav Nav, th Theme) string {
 	return "/" + nav.Filter
 }
 
-func borderTop(th Theme, width int, label string) string {
+// borderTop draws the frame's top rule with an optional title on the left and
+// an optional hint on the right. The hint is dropped before the title when the
+// width cannot carry both: the pane's name says what the pane is, the hint only
+// names a key.
+func borderTop(th Theme, width int, label, right string) string {
 	inner := width - 2
-	used := 0
-	top := th.Glyphs.TL
+	if inner < 1 {
+		return th.Paint(TokenMuted, th.Glyphs.TL+th.Glyphs.TR)
+	}
+	left := ""
 	if label != "" {
 		text := " " + label + " "
 		if Width(text) <= inner {
-			top += text
-			used = Width(text)
+			left = text
 		}
 	}
-	top += strings.Repeat(th.Glyphs.H, inner-used) + th.Glyphs.TR
+	rightText := ""
+	if right != "" {
+		text := " " + right + " "
+		// Two cells of rule keep the hint from touching the title.
+		if Width(text) <= inner-Width(left)-2 {
+			rightText = text
+		}
+	}
+	fill := inner - Width(left) - Width(rightText)
+	if fill < 0 {
+		fill = 0
+	}
+	top := th.Glyphs.TL + left + strings.Repeat(th.Glyphs.H, fill) + rightText + th.Glyphs.TR
 	return th.Paint(TokenMuted, top)
 }
 
@@ -332,7 +353,7 @@ func navItemLine(th Theme, item NavItem, width int, showName bool) string {
 
 	badge := ""
 	if item.Danger {
-		badge = " " + th.Glyphs.Danger + " 위험"
+		badge = " " + th.Glyphs.Danger + msgDangerBadge
 	}
 	secondary := ""
 	if showName && item.Name != "" {
@@ -392,12 +413,12 @@ func NavRow(th Theme, width int, nav Nav, expanded bool) string {
 		return ""
 	}
 	ell := th.Glyphs.Ell
-	right := "tab 펼치기"
+	right := msgNavExpand
 	if expanded {
-		right = "tab 접기"
+		right = msgNavCollapse
 	}
 	var left strings.Builder
-	left.WriteString(th.Bold(TokenMuted, "메뉴"))
+	left.WriteString(th.Bold(TokenMuted, msgNavMenuLabel))
 	if nav.Filter != "" || nav.FilterActive {
 		left.WriteString(th.Paint(TokenMuted, " · "))
 		left.WriteString(th.Paint(TokenAccent, filterText(nav, th)))
@@ -406,7 +427,7 @@ func NavRow(th Theme, width int, nav Nav, expanded bool) string {
 		left.WriteString(th.Paint(TokenMuted, " · "))
 		label := th.Glyphs.Sel + " " + item.Title
 		if item.Danger {
-			label += " " + th.Glyphs.Danger + " 위험"
+			label += " " + th.Glyphs.Danger + msgDangerBadge
 			left.WriteString(th.Bold(TokenDanger, label))
 		} else {
 			left.WriteString(th.Bold(TokenAccent, label))
@@ -416,11 +437,11 @@ func NavRow(th Theme, width int, nav Nav, expanded bool) string {
 	if expanded {
 		parts := make([]string, 0, len(nav.Sections))
 		for _, section := range nav.Sections {
-			parts = append(parts, fmt.Sprintf("%s %d", section.Title, len(section.Items)))
+			parts = append(parts, fmt.Sprintf(msgNavSectionCnt, section.Title, len(section.Items)))
 		}
 		left.WriteString(th.Bold(TokenMuted, strings.Join(parts, "  ")))
 	} else {
-		left.WriteString(th.Paint(TokenMuted, fmt.Sprintf("%d개 기능", nav.Count())))
+		left.WriteString(th.Paint(TokenMuted, fmt.Sprintf(msgNavFeatureCnt, nav.Count())))
 	}
 	rightText := th.Paint(TokenMuted, right)
 	leftBudget := width - Width(rightText) - 2

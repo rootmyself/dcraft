@@ -183,13 +183,13 @@ func LayoutTableOptions(th Theme, table core.Table, width int, opts TableOptions
 				cell = row.Cells[p.orig]
 			}
 			text := cell.Text
-			if cell.Badge != BadgeNone {
+			if cell.Badge != core.BadgeNone {
 				text = badgeText(th, cell.Badge, text)
 			}
 			// A badge that does not fit falls back through its shorter labels
 			// before it is cut: `○ 컨테이너 없음` becomes `○ 미생성`, then
 			// the icon alone. Silently leaving `○ 컨…` would name nothing.
-			if Width(text) > widths[i] && cell.Badge != BadgeNone {
+			if Width(text) > widths[i] && cell.Badge != core.BadgeNone {
 				for _, candidate := range badgeFallbacks(th, cell.Badge) {
 					if Width(candidate) <= widths[i] {
 						text = candidate
@@ -406,7 +406,7 @@ func alignCell(align core.Align, text string, width int, ell string) string {
 
 func emptyTableText(th Theme, text string, width int) string {
 	if strings.TrimSpace(text) == "" {
-		text = "표시할 항목이 없습니다."
+		text = msgEmptyTable
 	}
 	return th.Paint(TokenMuted, Truncate(text, width, th.Ellipsis()))
 }
@@ -422,9 +422,6 @@ func nameOnlyRows(th Theme, table core.Table, width int) []string {
 	}
 	return out
 }
-
-// BadgeNone marks a cell without a semantic state.
-const BadgeNone core.BadgeKind = ""
 
 // badgeGlyph pairs every semantic kind with the approved icon. The Korean text
 // stays next to it, so the state never depends on color alone.
@@ -459,17 +456,17 @@ func badgeFallbacks(th Theme, kind core.BadgeKind) []string {
 	glyph, _ := badgeGlyph(th, kind)
 	switch kind {
 	case core.BadgeNotCreated:
-		return []string{glyph + " 미생성", glyph}
+		return []string{glyph + msgBadgeNotCreated, glyph}
 	case core.BadgeRunning:
-		return []string{glyph + " 실행", glyph}
+		return []string{glyph + msgBadgeRunning, glyph}
 	case core.BadgeStopped:
-		return []string{glyph + " 중지", glyph}
+		return []string{glyph + msgBadgeStopped, glyph}
 	case core.BadgeUnhealthy:
-		return []string{glyph + " 비정상", glyph}
+		return []string{glyph + msgBadgeUnhealthy, glyph}
 	case core.BadgeStarting:
-		return []string{glyph + " 확인", glyph}
+		return []string{glyph + msgBadgeStarting, glyph}
 	case core.BadgeRisk:
-		return []string{glyph + " 위험", glyph}
+		return []string{glyph + msgBadgeRisk, glyph}
 	default:
 		return nil
 	}
@@ -558,13 +555,13 @@ func renderBadges(th Theme, badges []core.Badge, width int) []string {
 func calloutLabel(kind core.CalloutKind) (string, Token) {
 	switch kind {
 	case core.CalloutWarn:
-		return "주의", TokenWarning
+		return msgCalloutWarn, TokenWarning
 	case core.CalloutDanger:
-		return "위험", TokenDanger
+		return msgCalloutDanger, TokenDanger
 	case core.CalloutNote:
-		return "참고", TokenMuted
+		return msgCalloutNote, TokenMuted
 	default:
-		return "안내", TokenAccent
+		return msgCalloutInfo, TokenAccent
 	}
 }
 

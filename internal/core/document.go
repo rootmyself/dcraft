@@ -103,6 +103,9 @@ type Cell struct {
 type BadgeKind string
 
 const (
+	// BadgeNone marks a cell without a semantic state. It is the zero value:
+	// there is exactly one "no badge" sentinel in the program.
+	BadgeNone       BadgeKind = ""
 	BadgeRunning    BadgeKind = "running"
 	BadgeStopped    BadgeKind = "stopped"
 	BadgeUnhealthy  BadgeKind = "unhealthy"

@@ -103,7 +103,7 @@ func (m *Model) observeTools(tools core.ToolInfo) {
 func localEnvironment(kind string) string {
 	switch kind {
 	case "unix", "npipe", "fd":
-		return "로컬"
+		return msgLocalEndpoint
 	default:
 		return ""
 	}

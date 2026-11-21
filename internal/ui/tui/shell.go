@@ -51,16 +51,16 @@ func (m *Model) screenKeycaps() []visual.Keycap {
 		// While "/" has the keyboard the only two meanings are clear and
 		// commit; q, r and the arrows are characters or menu moves here.
 		return []visual.Keycap{
-			{Key: "esc", Label: "해제", Priority: 0},
-			{Key: "enter", Label: "확정", Priority: 0},
+			{Key: "esc", Label: msgKeyClear, Priority: 0},
+			{Key: "enter", Label: msgKeyCommit, Priority: 0},
 		}
 	}
 	if m.live != nil && m.live.mode == core.LiveAttach {
 		// Attach ends with ctrl+], never with ctrl+c (which is forwarded to
 		// the child), so the live row would be wrong.
 		return []visual.Keycap{
-			{Key: "ctrl+]", Label: "접속 종료", Priority: 0},
-			{Key: "?", Label: "도움말", Priority: 3},
+			{Key: "ctrl+]", Label: msgKeyDetach, Priority: 0},
+			{Key: "?", Label: msgKeyHelp, Priority: 3},
 		}
 	}
 	if m.live != nil && m.liveScrolls() {
@@ -68,11 +68,11 @@ func (m *Model) screenKeycaps() []visual.Keycap {
 		// approved live row keeps its mandatory chips and gains only the keys
 		// this screen actually accepts.
 		return []visual.Keycap{
-			{Key: "q", Label: "화면 닫기", Priority: 0},
-			{Key: "ctrl+c", Label: "중단", Priority: 1},
-			{Key: "PgUp/PgDn", Label: "스크롤", Priority: 2},
-			{Key: "g/G", Label: "처음/끝", Priority: 3},
-			{Key: "?", Label: "도움말", Priority: 3},
+			{Key: "q", Label: msgKeyCloseScreen, Priority: 0},
+			{Key: "ctrl+c", Label: msgKeyStop, Priority: 1},
+			{Key: "PgUp/PgDn", Label: msgKeyScroll, Priority: 2},
+			{Key: "g/G", Label: msgKeyEnds, Priority: 3},
+			{Key: "?", Label: msgKeyHelp, Priority: 3},
 		}
 	}
 	if m.live == nil && (m.phase == phaseLoading || m.phase == phasePlanning) &&
@@ -81,27 +81,27 @@ func (m *Model) screenKeycaps() []visual.Keycap {
 		// quit; the menu keys do not work until the result is ready, so the
 		// row states just that. A mutating run returns PhaseBusy instead.
 		return []visual.Keycap{
-			{Key: "q", Label: "종료", Priority: 0},
+			{Key: "q", Label: msgKeyQuit, Priority: 0},
 		}
 	}
 	if m.phase == phaseSelectingEnvironment {
 		// The environment screen ignores "/", "r" and "tab"; advertising the
 		// menu row here would name keys that do nothing.
 		return []visual.Keycap{
-			{Key: "↑↓", Label: "선택", Priority: 1},
-			{Key: "enter", Label: "실행", Priority: 0},
-			{Key: "q", Label: "종료", Priority: 0},
-			{Key: "?", Label: "도움말", Priority: 3},
+			{Key: "↑↓", Label: msgKeySelect, Priority: 1},
+			{Key: "enter", Label: msgKeyRun, Priority: 0},
+			{Key: "q", Label: msgKeyQuit, Priority: 0},
+			{Key: "?", Label: msgKeyHelp, Priority: 3},
 		}
 	}
 	if m.phase == phaseSelectingServices {
 		return []visual.Keycap{
-			{Key: "↑↓", Label: "이동", Priority: 1},
-			{Key: "space", Label: "선택/해제", Priority: 1},
-			{Key: "enter", Label: "실행", Priority: 0},
-			{Key: "esc", Label: "취소", Priority: 0},
-			{Key: "q", Label: "종료", Priority: 0},
-			{Key: "?", Label: "도움말", Priority: 3},
+			{Key: "↑↓", Label: msgKeyMove, Priority: 1},
+			{Key: "space", Label: msgKeyToggle, Priority: 1},
+			{Key: "enter", Label: msgKeyRun, Priority: 0},
+			{Key: "esc", Label: msgKeyCancel, Priority: 0},
+			{Key: "q", Label: msgKeyQuit, Priority: 0},
+			{Key: "?", Label: msgKeyHelp, Priority: 3},
 		}
 	}
 	if m.form != nil {
@@ -119,48 +119,48 @@ func (m *Model) screenKeycaps() []visual.Keycap {
 		// would name a key that has no effect.
 		if m.phase == phaseWizardPreview {
 			keys := []visual.Keycap{
-				{Key: "enter", Label: "저장", Priority: 0},
-				{Key: "left", Label: "이전", Priority: 2},
-				{Key: "esc", Label: "취소", Priority: 0},
-				{Key: "q", Label: "종료", Priority: 0},
-				{Key: "?", Label: "도움말", Priority: 3},
+				{Key: "enter", Label: msgKeySave, Priority: 0},
+				{Key: "left", Label: msgKeyPrev, Priority: 2},
+				{Key: "esc", Label: msgKeyCancel, Priority: 0},
+				{Key: "q", Label: msgKeyQuit, Priority: 0},
+				{Key: "?", Label: msgKeyHelp, Priority: 3},
 			}
 			if m.wizardPreviewErr != nil {
 				// Enter does nothing while the preview is invalid, so the row
 				// must not offer it.
 				keys = []visual.Keycap{
-					{Key: "left", Label: "이전", Priority: 0},
-					{Key: "esc", Label: "취소", Priority: 0},
-					{Key: "q", Label: "종료", Priority: 0},
-					{Key: "?", Label: "도움말", Priority: 3},
+					{Key: "left", Label: msgKeyPrev, Priority: 0},
+					{Key: "esc", Label: msgKeyCancel, Priority: 0},
+					{Key: "q", Label: msgKeyQuit, Priority: 0},
+					{Key: "?", Label: msgKeyHelp, Priority: 3},
 				}
 			}
 			if m.bodyScrolls() {
 				// A long preview scrolls instead of being cut; the keys that
 				// move it must be on screen.
-				keys = append(keys, visual.Keycap{Key: "PgUp/PgDn", Label: "스크롤", Priority: 2})
+				keys = append(keys, visual.Keycap{Key: "PgUp/PgDn", Label: msgKeyScroll, Priority: 2})
 			}
 			return keys
 		}
 		items := []visual.Keycap{
-			{Key: "↑↓", Label: "선택", Priority: 1},
-			{Key: "enter", Label: "다음", Priority: 0},
-			{Key: "left", Label: "이전", Priority: 2},
-			{Key: "esc", Label: "취소", Priority: 0},
-			{Key: "q", Label: "종료", Priority: 0},
-			{Key: "?", Label: "도움말", Priority: 3},
+			{Key: "↑↓", Label: msgKeySelect, Priority: 1},
+			{Key: "enter", Label: msgKeyNext, Priority: 0},
+			{Key: "left", Label: msgKeyPrev, Priority: 2},
+			{Key: "esc", Label: msgKeyCancel, Priority: 0},
+			{Key: "q", Label: msgKeyQuit, Priority: 0},
+			{Key: "?", Label: msgKeyHelp, Priority: 3},
 		}
 		if m.wizardTextInput() {
 			// A free-text step accepts "?" as a character and has no list to
 			// move through; the row names only the keys that act here.
 			items = []visual.Keycap{
-				{Key: "enter", Label: "다음", Priority: 0},
-				{Key: "left", Label: "이전", Priority: 2},
-				{Key: "esc", Label: "취소", Priority: 0},
-				{Key: "q", Label: "종료", Priority: 0},
+				{Key: "enter", Label: msgKeyNext, Priority: 0},
+				{Key: "left", Label: msgKeyPrev, Priority: 2},
+				{Key: "esc", Label: msgKeyCancel, Priority: 0},
+				{Key: "q", Label: msgKeyQuit, Priority: 0},
 			}
 			if m.wizardStepIsOptional() {
-				items[0] = visual.Keycap{Key: "enter", Label: "다음/건너뛰기", Priority: 0}
+				items[0] = visual.Keycap{Key: "enter", Label: msgKeyNextSkip, Priority: 0}
 			}
 			return items
 		}
@@ -168,8 +168,8 @@ func (m *Model) screenKeycaps() []visual.Keycap {
 			// Space toggles one box; without the chip the row would only
 			// advertise moving the cursor on a multi-select question.
 			items = append([]visual.Keycap{
-				{Key: "↑↓", Label: "이동", Priority: 1},
-				{Key: "space", Label: "선택/해제", Priority: 1},
+				{Key: "↑↓", Label: msgKeyMove, Priority: 1},
+				{Key: "space", Label: msgKeyToggle, Priority: 1},
 			}, items[1:]...)
 		}
 		return items
@@ -230,6 +230,24 @@ type bodyLayout struct {
 	scrolls  bool
 }
 
+// bandGeometry is the one row-accounting decision for a screen with a fixed
+// head, a scrolling band and a tail. headerRows is every row drawn above the
+// screen (navigation row, title block, kept-output panel), so the band is never
+// measured against rows the frame also draws.
+type bandGeometry struct {
+	// tail is the guidance below the band after the rescue trim.
+	tail     []string
+	viewport visual.Viewport
+	scrolls  bool
+	// whole is true when nothing could be pinned: the fixed rows, the band and
+	// the tail scroll together so no row is unreachable.
+	whole bool
+	// table is true for a pinned table band (a fixed header above scrolling
+	// rows). Only a table band gets the approved scrollbar gutter; a plain body
+	// states its position in the scroll hint instead.
+	table bool
+}
+
 // renderBody builds every body line: the screen title, the phase content, the
 // feature menu and the notice. It never draws the header or the keycap footer;
 // those belong to the shell.
@@ -242,24 +260,41 @@ func (m *Model) renderBody() []string {
 	return m.layoutBody().lines
 }
 
-// layoutBody is the single layout pass. renderBody, bodyScrolls and the counter
-// all read the same inputs, so the drawn rows and the counter cannot disagree
-// about whether the screen scrolls.
+// layoutBody is the single layout pass. renderBody, bodyScrolls,
+// currentViewport, the title counter and the key handler all read its result,
+// so the drawn rows, the hint and the keys cannot disagree about whether the
+// screen scrolls.
 func (m *Model) layoutBody() bodyLayout {
 	if m.live != nil {
 		// The live screen is its own layout: a fixed header and one scrolling
 		// output band. It must not borrow the result screen's pinned table.
 		return m.liveLayout()
 	}
-	title := m.screenTitle()
-	if m.detailOpen {
-		title = msgDetailTitle
+	switch m.phase {
+	case phaseReady:
+		return m.resultBody()
+	case phaseSelectingServices:
+		return m.serviceBody()
+	case phaseWizardStep:
+		return m.wizardBody()
+	default:
+		return m.wholeBody()
 	}
-	counter := ""
-	if m.bodyScrolls() {
-		counter = m.scrollCounter()
-	}
+}
 
+// navRowCount is how many body rows the navigation summary occupies. The wide
+// layout draws a whole sidebar instead and the summary is one row everywhere
+// else, so this is exactly 0 or 1.
+func (m *Model) navRowCount() int {
+	if m.navLine() == "" {
+		return 0
+	}
+	return 1
+}
+
+// wholeBody is a screen whose content is one band: the navigation row, the
+// title block, the phase body and the notice scroll together.
+func (m *Model) wholeBody() bodyLayout {
 	var lines []string
 	add := func(s string) {
 		s = strings.TrimRight(s, "\n")
@@ -268,49 +303,44 @@ func (m *Model) layoutBody() bodyLayout {
 		}
 		lines = append(lines, strings.Split(s, "\n")...)
 	}
-
-	// The medium layout states the navigation in exactly one row directly
-	// under the header. It is one row collapsed and expanded, so opening the
-	// menu never costs the content a line.
 	if navLine := m.navLine(); navLine != "" {
 		add(navLine)
 	}
+	if title := m.screenTitle(); title != "" {
+		lines = append(lines, m.titleRow(title, ""), "")
+	}
+	add(m.phaseBody())
+	if m.notice != "" {
+		add(m.noticeText(m.notice))
+	}
+	return m.fitWhole(lines)
+}
 
+// resultBody is the result screen: the navigation row, the title block with the
+// position counter, the kept output panel, the table band and the guidance.
+func (m *Model) resultBody() bodyLayout {
+	lay := m.resultGeometry()
+	var lines []string
+	if navLine := m.navLine(); navLine != "" {
+		lines = append(lines, navLine)
+	}
+	title := m.screenTitle()
+	if m.detailOpen {
+		title = msgDetailTitle
+	}
 	if title != "" {
-		// The separator is an explicit row: titleRows counts it, so dropping
-		// it would let the frame draw one row more than the budget.
+		counter := ""
+		if lay.scrolls {
+			counter = lay.viewport.Counter()
+		}
 		lines = append(lines, m.titleRow(title, counter), "")
 	}
-
-	if m.phase != phaseReady {
-		if m.phase == phaseSelectingServices {
-			// The scope table pins its heading, the whole-stack row and the
-			// table header; only the service rows scroll.
-			screen := m.serviceScreen()
-			lines = append(lines, screen.Fixed...)
-			lines = append(lines, m.fitBand(lines, screen)...)
-		} else if m.phase == phaseWizardStep {
-			// A wizard question pins its title, progress and prompt; only the
-			// option cards scroll, as whole cards.
-			lines = append(lines, m.wizardStepLines(lines)...)
-		} else {
-			add(m.phaseBody())
-		}
-		if m.notice != "" {
-			add("")
-			add(m.noticeText(m.notice))
-		}
-		return m.fitWhole(lines)
-	}
-
+	lines = append(lines, lay.panel...)
 	if !m.resultDismissed {
-		screen := m.resultScreen()
-		lines = append(lines, m.liveTailLines(m.titleRows()+minResultRows)...)
-		lines = append(lines, screen.Fixed...)
-		out := m.fitBand(lines, screen)
-		lines = append(lines, out...)
-	} else if tail := m.liveTailLines(m.titleRows() + minResultRows); len(tail) > 0 {
-		lines = append(lines, tail...)
+		// The status table is one of the two scrolling content lists the
+		// contract gives a scrollbar; the detail view is a plain band and
+		// states its position in the hint alone.
+		lines = append(lines, m.drawBand(lay.screen, lay.band, lay.bar)...)
 	}
 
 	// The full list is drawn wherever the navigation is not already a list:
@@ -322,21 +352,131 @@ func (m *Model) layoutBody() bodyLayout {
 	// The list is also hidden while the result scrolls: two competing scroll
 	// lists would fight for the same keys. esc puts the result away and brings
 	// the menu back, so the feature list is never unreachable.
-	if len(m.features) > 1 && m.phase == phaseReady && !m.sidebarVisible() && !m.menuHidden() {
-		add("")
-		add(m.sectionLabel(msgMenu))
+	if len(m.features) > 1 && !m.sidebarVisible() && !m.menuHidden() && !m.resultDismissed {
+		lines = append(lines, m.sectionLabel(msgMenu))
 		budget := 0
 		if m.height > 0 {
 			// Everything the body has left after the lines already written.
 			budget = visual.BodyRows(m.height) - len(lines)
 		}
-		add(m.menuView(budget))
+		lines = append(lines, strings.Split(strings.TrimRight(m.menuView(budget), "\n"), "\n")...)
 	}
+	return bodyLayout{
+		lines:    trimTrailingBlank(lines),
+		viewport: lay.viewport,
+		scrolls:  lay.scrolls,
+	}
+}
+
+// resultLayout is the resolved result body: the screen rows at the width the
+// frame draws, the kept-output panel, the band geometry and whether the
+// approved scrollbar gutter is painted.
+type resultLayout struct {
+	screen   screenLines
+	panel    []string
+	band     bandGeometry
+	viewport visual.Viewport
+	scrolls  bool
+	// bar reports that the one-cell scrollbar gutter owns the last table cell.
+	bar bool
+}
+
+// resultGeometry is the single result layout decision. It narrows only the
+// scrolling table when the band overflows: the approved one-cell scrollbar
+// gutter takes that cell, so the thumb never covers a value.
+func (m *Model) resultGeometry() resultLayout {
+	lay := m.resultGeometryWith(false)
+	if lay.scrolls && lay.band.table && !lay.band.whole {
+		narrow := m.resultGeometryWith(true)
+		if narrow.scrolls && narrow.band.table && !narrow.band.whole {
+			narrow.bar = true
+			return narrow
+		}
+	}
+	return lay
+}
+
+// resultGeometryWith computes the result layout with an explicit scrollbar
+// decision.
+func (m *Model) resultGeometryWith(bar bool) resultLayout {
+	var panel []string
+	if m.lastLive != nil {
+		panel = m.liveTailLines(m.titleRows() + minResultRows)
+	}
+	screen := screenLines{}
+	if !m.resultDismissed {
+		screen = m.resultScreenWith(bar)
+		// A screen notice is part of the body, so it is counted against the
+		// same budget instead of being appended past it and clipped.
+		if m.notice != "" {
+			screen.Tail = append(screen.Tail, "", m.noticeText(m.notice))
+		}
+	}
+	headerRows := m.navRowCount() + m.titleRows() + len(panel)
+	band := m.fitBand(headerRows, screen)
+	return resultLayout{
+		screen:   screen,
+		panel:    panel,
+		band:     band,
+		viewport: band.viewport,
+		scrolls:  band.scrolls,
+	}
+}
+
+// serviceBody is the service scope screen: the title block, the pinned heading
+// and whole-stack row, the scrolling service rows and the guidance.
+func (m *Model) serviceBody() bodyLayout {
+	geom := m.serviceGeometry()
+	var lines []string
+	if navLine := m.navLine(); navLine != "" {
+		lines = append(lines, navLine)
+	}
+	if title := m.screenTitle(); title != "" {
+		counter := ""
+		if geom.scrolls {
+			counter = geom.viewport.Counter()
+		}
+		lines = append(lines, m.titleRow(title, counter), "")
+	}
+	lines = append(lines, m.drawBand(m.serviceScreen(), geom, false)...)
 	if m.notice != "" {
-		add("")
-		add(m.noticeText(m.notice))
+		lines = append(lines, "", m.noticeText(m.notice))
 	}
-	return bodyLayout{lines: trimTrailingBlank(lines)}
+	return bodyLayout{
+		lines:    trimTrailingBlank(lines),
+		viewport: geom.viewport,
+		scrolls:  geom.scrolls,
+	}
+}
+
+// serviceGeometry is the one row-accounting decision for the scope screen.
+func (m *Model) serviceGeometry() bandGeometry {
+	return m.fitBand(m.navRowCount()+m.titleRows(), m.serviceScreen())
+}
+
+// wizardBody is a guided question: the head and tail are pinned and the option
+// cards scroll as whole cards. wizardBandData is that one geometry.
+func (m *Model) wizardBody() bodyLayout {
+	var lines []string
+	if navLine := m.navLine(); navLine != "" {
+		lines = append(lines, navLine)
+	}
+	if title := m.screenTitle(); title != "" {
+		counter := ""
+		if m.wizardStepScrolls() {
+			counter = m.wizardCounter()
+		}
+		lines = append(lines, m.titleRow(title, counter), "")
+	}
+	lines = append(lines, m.wizardStepLines()...)
+	if m.notice != "" {
+		lines = append(lines, "", m.noticeText(m.notice))
+	}
+	return bodyLayout{
+		lines:    trimTrailingBlank(lines),
+		viewport: m.wizardViewport(),
+		scrolls:  m.wizardStepScrolls(),
+	}
 }
 
 // fitWhole scrolls a whole body that does not fit, and returns it unchanged when
@@ -359,56 +499,113 @@ func (m *Model) fitWhole(lines []string) bodyLayout {
 // Below this the guidance below the table gives its rows away first.
 const minTableRows = 3
 
-// fitBand draws the visible band rows, the hint and the tail. placed already
-// contains the title block and the fixed rows; only the band and the tail are
-// still to place. When the fixed rows and the tail alone do not fit, nothing can
-// be pinned: the whole result becomes one band so no row is unreachable.
-func (m *Model) fitBand(placed []string, screen screenLines) []string {
+// fitBand computes the band geometry. headerRows already counts every row the
+// frame draws above the screen; only the band and the tail are still to place.
+//
+// When the pinned tail would leave the table too short to read, the blank rows
+// at the front of the guidance give their space back. If that is still not
+// enough, nothing is pinned: the fixed rows, the table and the guidance scroll
+// together, so scroll reaches every row the counter names. No row is dropped.
+//
+// The returned viewport always describes the rows the frame draws, so the
+// counter, the hint and the keys read one computation instead of guessing.
+func (m *Model) fitBand(headerRows int, screen screenLines) bandGeometry {
+	// A pinned table band has a fixed header above scrolling rows and guidance
+	// below them. That shape is what the approved scrollbar gutter belongs to.
+	table := len(screen.Fixed) > 0 && len(screen.Tail) > 0
+	tail := screen.Tail
 	budget := m.bodyBudget()
 	if budget <= 0 {
 		// Unknown height: draw everything. The next WindowSizeMsg reflows it.
-		m.storeScroll(visual.Viewport{})
-		out := append([]string{}, screen.Band...)
-		return append(out, screen.Tail...)
+		return bandGeometry{tail: tail, viewport: wholeBandViewport(len(screen.Band)), table: table}
 	}
-	if total := len(placed) + len(screen.Band) + len(screen.Tail); total <= budget {
-		m.storeScroll(visual.Viewport{})
-		out := append([]string{}, screen.Band...)
-		return append(out, screen.Tail...)
+	if used := headerRows + len(screen.Fixed) + len(screen.Band) + len(tail); used <= budget {
+		return bandGeometry{tail: tail, viewport: wholeBandViewport(len(screen.Band)), table: table}
 	}
-	available := budget - len(placed) - len(screen.Tail)
-	if available < minTableRows && len(screen.Band) > minTableRows && len(screen.Tail) > 0 {
-		// A table reduced to a single row is not a table. The guidance below
-		// yields rows first, and is reachable by scrolling the whole body.
-		short := minTableRows - available
-		if short > len(screen.Tail) {
-			short = len(screen.Tail)
+	available := budget - headerRows - len(screen.Fixed) - len(tail)
+	if available < minTableRows && len(screen.Band) > minTableRows && len(tail) > 0 {
+		// A table reduced to a single row is not a table, so the blank rows in
+		// front of the guidance yield first. Dropping text would make it
+		// unreachable; dropping a separator costs nothing.
+		give := minTableRows - available
+		trimmed := 0
+		for trimmed < give && trimmed < len(tail) && strings.TrimSpace(tail[trimmed]) == "" {
+			trimmed++
 		}
-		screen.Tail = screen.Tail[short:]
-		available += short
+		if trimmed == give {
+			tail = tail[trimmed:]
+			available += trimmed
+		} else {
+			available = 0
+		}
 	}
 	if available <= 0 {
-		all := screen.lines()
-		viewport := fitViewport(visual.Viewport{Top: m.body.Top, Height: budget, Total: len(all)}, budget)
-		start, end := viewport.Window()
-		out := append([]string{}, all[start:end]...)
-		if hint := viewport.ScrollHint(m.theme, m.bodyWidth()); hint != "" {
-			out = append(out, hint)
-		}
-		m.storeScroll(viewport)
-		return out
+		total := len(screen.Fixed) + len(screen.Band) + len(tail)
+		height := budget - headerRows
+		viewport := fitViewport(visual.Viewport{Top: m.body.Top, Height: height, Total: total}, height)
+		return bandGeometry{tail: tail, viewport: viewport, scrolls: viewport.Overflow(), whole: true, table: table}
 	}
 	viewport := fitViewport(visual.Viewport{Top: m.body.Top, Height: available, Total: len(screen.Band)}, available)
-	m.storeScroll(viewport)
-	start, end := viewport.Window()
-	out := make([]string, 0, end-start+1)
-	for i := start; i < end && i < len(screen.Band); i++ {
-		out = append(out, screen.Band[i])
+	return bandGeometry{tail: tail, viewport: viewport, scrolls: viewport.Overflow(), table: table}
+}
+
+// wholeBandViewport is the window over every band row: what a band that fits
+// looks like to the counter and the keys.
+func wholeBandViewport(total int) visual.Viewport {
+	return visual.Viewport{Top: 0, Height: total, Total: total}
+}
+
+// drawBand draws the fixed rows, the visible band rows with the scroll hint and
+// the tail, exactly as fitBand measured them. bar paints the approved scrollbar
+// gutter; the status table and the log viewport are the two scrolling content
+// lists the contract names.
+func (m *Model) drawBand(screen screenLines, g bandGeometry, bar bool) []string {
+	rows := screen.Band
+	prefix := screen.Fixed
+	if g.whole {
+		rows = append(append([]string{}, screen.Fixed...), screen.Band...)
+		rows = append(rows, g.tail...)
+		prefix = nil
 	}
-	if hint := viewport.ScrollHint(m.theme, m.bodyWidth()); hint != "" {
+	out := make([]string, 0, len(prefix)+g.viewport.Visible()+len(g.tail)+1)
+	out = append(out, prefix...)
+	start, end := g.viewport.Window()
+	if start > len(rows) {
+		start = len(rows)
+	}
+	if end > len(rows) {
+		end = len(rows)
+	}
+	drawn := append([]string{}, rows[start:end]...)
+	if bar {
+		drawn = m.attachScrollbar(drawn, g)
+	}
+	out = append(out, drawn...)
+	if hint := g.viewport.ScrollHint(m.theme, m.bodyWidth()); hint != "" {
 		out = append(out, hint)
 	}
-	return append(out, screen.Tail...)
+	if !g.whole {
+		out = append(out, g.tail...)
+	}
+	return out
+}
+
+// attachScrollbar paints the approved one-cell gutter when the band overflows.
+// The table was laid out one cell narrower when the gutter was reserved, so the
+// cell is free and the thumb never covers a value.
+func (m *Model) attachScrollbar(rows []string, g bandGeometry) []string {
+	if !g.table || g.whole || !g.scrolls || !g.viewport.Overflow() {
+		return rows
+	}
+	gutter := visual.Scrollbar(m.theme, len(rows), g.viewport.Top, g.viewport.Visible(), g.viewport.Total)
+	if len(gutter) == 0 {
+		return rows
+	}
+	out := make([]string, len(rows))
+	for i, line := range rows {
+		out[i] = visual.Fit(line, m.bodyWidth()-1, m.theme.Glyphs.Ell) + gutter[i]
+	}
+	return out
 }
 
 // bodyBudget is how many body rows the frame has left after the header, the
@@ -425,96 +622,21 @@ func (m *Model) bodyBudget() int {
 	return rows
 }
 
-// resultScrolls reports whether the result body needs to scroll. It compares
-// against the rows the result actually gets: the title block, the tail and the
-// hint row all reduce the band, so comparing the raw body against the whole
-// budget under-reports and would leave rows unreachable.
+// resultScrolls reports whether the result body needs to scroll.
 func (m *Model) resultScrolls() bool {
-	budget := m.bodyBudget()
-	if budget <= 0 {
-		return false
-	}
-	screen := m.resultScreen()
-	// Rows the result itself must place: title block, the kept live output
-	// panel, summary, table header and the guidance below. The hint row comes
-	// out of the same budget. The panel counts because it is drawn above the
-	// result and would otherwise push rows out with no counter to reach them.
-	used := m.titleRows() + len(m.liveTailLines(m.titleRows()+minResultRows)) +
-		len(screen.Fixed) + len(screen.Band) + len(screen.Tail)
-	return used > budget
+	return m.resultGeometry().scrolls
 }
 
-// bodyScrolls reports whether the current screen scrolls. It drives the footer
-// and the key handler, so a screen that fits never advertises scrolling.
+// bodyScrolls reports whether the current screen scrolls. It drives the footer,
+// the key handler and the scroll hint, so it is the layout pass's own answer.
 func (m *Model) bodyScrolls() bool {
-	budget := m.bodyBudget()
-	if budget <= 0 {
-		return false
-	}
-	if m.phase == phaseReady {
-		return m.resultScrolls()
-	}
-	if m.phase == phaseSelectingServices {
-		return m.serviceScrolls()
-	}
-	if m.phase == phaseWizardStep {
-		return m.wizardStepScrolls()
-	}
-	total := len(strings.Split(strings.TrimRight(m.phaseBody(), "\n"), "\n"))
-	return total > budget
+	return m.layoutBody().scrolls
 }
 
-// currentViewport is the scroll window for the current screen, derived from the
-// model instead of from the last drawn frame. The keys and the counter both use
-// it, so a key press works even before the first frame is drawn and can never
-// disagree with the counter.
-//
-// A result screen pins its summary rows and the table header; other screens have
-// no band of their own and report the whole body.
+// currentViewport is the scroll window of the current screen, taken from the
+// same layout pass that draws it.
 func (m *Model) currentViewport() visual.Viewport {
-	budget := m.bodyBudget()
-	if budget <= 0 {
-		return visual.Viewport{}
-	}
-	if m.phase == phaseSelectingServices {
-		return m.serviceViewport()
-	}
-	if m.phase == phaseWizardStep {
-		return m.wizardViewport()
-	}
-	if m.phase != phaseReady {
-		lines := strings.Split(strings.TrimRight(m.phaseBody(), "\n"), "\n")
-		return fitViewport(visual.Viewport{Top: m.body.Top, Height: budget, Total: len(lines)}, budget)
-	}
-	screen := m.resultScreen()
-	available := budget - m.titleRows() - len(m.liveTailLines(m.titleRows()+minResultRows)) -
-		len(screen.Fixed) - len(screen.Tail)
-	if available <= 0 {
-		return visual.Viewport{}
-	}
-	return fitViewport(visual.Viewport{Top: m.body.Top, Height: available, Total: len(screen.Band)}, available)
-}
-
-// scrollCounter is the `first-last/total` position of the table rows, computed
-// from the same viewport the frame draws — including the row the hint costs, so
-// the counter can never describe a row that the hint pushed off screen.
-func (m *Model) scrollCounter() string {
-	if m.phase == phaseSelectingServices {
-		if !m.serviceScrolls() {
-			return ""
-		}
-		return m.serviceViewport().Counter()
-	}
-	if m.phase == phaseWizardStep {
-		if !m.wizardStepScrolls() {
-			return ""
-		}
-		return m.wizardCounter()
-	}
-	if m.phase != phaseReady || !m.resultScrolls() {
-		return ""
-	}
-	return m.currentViewport().Counter()
+	return m.layoutBody().viewport
 }
 
 // titleRows is the number of rows the title block occupies.

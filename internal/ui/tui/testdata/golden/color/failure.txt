@@ -110,7 +110,7 @@
 === 80x18 ===
  dcraft · acme-platform · staging        Docker 29.10.0 · Compose 2.39.1 · 로컬
 메뉴 · ▸ 스택 상태 · 18개 기능                                        tab 펼치기
-스택 시작                                                                1-13/18
+스택 시작                                                                1-12/18
 
 작업 실패: up
 대상: /work/acme-platform
@@ -213,7 +213,7 @@
 
 === 120x18 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─────────────╮ 스택 시작                                                                             1-13/18
+╭ 기능 · 18 ─── esc 닫기 ╮ 스택 시작                                                                             1-13/18
 │조회                    │
 │  서비스 접속           │ 작업 실패: up
 │  로그 보기             │ 대상: /work/acme-platform
@@ -233,7 +233,7 @@
 
 === 120x30 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─────────────╮ 스택 시작
+╭ 기능 · 18 ─── esc 닫기 ╮ 스택 시작
 │조회                    │
 │  서비스 접속           │ 작업 실패: up
 │  로그 보기             │ 대상: /work/acme-platform
@@ -265,7 +265,7 @@
 
 === 120x50 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─────────────╮ 스택 시작
+╭ 기능 · 18 ─── esc 닫기 ╮ 스택 시작
 │조회                    │
 │  서비스 접속           │ 작업 실패: up
 │  로그 보기             │ 대상: /work/acme-platform
@@ -317,7 +317,7 @@
 
 === 200x18 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─────────────────╮ 스택 시작                                                                                                                                                         1-13/18
+╭ 기능 · 18 ─────── esc 닫기 ╮ 스택 시작                                                                                                                                                         1-13/18
 │조회                        │
 │  서비스 접속               │ 작업 실패: up
 │  로그 보기                 │ 대상: /work/acme-platform
@@ -337,7 +337,7 @@
 
 === 200x30 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─────────────────╮ 스택 시작
+╭ 기능 · 18 ─────── esc 닫기 ╮ 스택 시작
 │조회                        │
 │  서비스 접속               │ 작업 실패: up
 │  로그 보기                 │ 대상: /work/acme-platform
@@ -369,7 +369,7 @@
 
 === 200x50 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─────────────────╮ 스택 시작
+╭ 기능 · 18 ─────── esc 닫기 ╮ 스택 시작
 │조회                        │
 │  서비스 접속               │ 작업 실패: up
 │  로그 보기                 │ 대상: /work/acme-platform

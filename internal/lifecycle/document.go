@@ -6,6 +6,7 @@ import (
 
 	"github.com/rootmyself/dcraft/internal/core"
 	"github.com/rootmyself/dcraft/internal/stack"
+	"github.com/rootmyself/dcraft/internal/stack/present"
 )
 
 // Document implements core.ViewPresenter for the four stack lifecycle features.
@@ -51,7 +52,7 @@ func Document(res core.Result) core.Document {
 func documentBadges(action Action, report Report) []core.Badge {
 	badges := []core.Badge{{Kind: core.BadgeRunning, Text: doneLine(action)}}
 	if len(report.Notices) > 0 {
-		badges = append(badges, core.Badge{Kind: core.BadgeRisk, Text: fmt.Sprintf("알림 %d", len(report.Notices))})
+		badges = append(badges, core.Badge{Kind: core.BadgeRisk, Text: fmt.Sprintf(msgBadgeNotices, len(report.Notices))})
 	}
 	return badges
 }
@@ -95,79 +96,15 @@ func StateTable(snap stack.Snapshot) *core.Table {
 			Selectable: svc.Configured,
 			Cells: []core.Cell{
 				{Text: svc.Name, Detail: svc.Name},
-				{Text: stateLabel(svc.State), Badge: stateBadge(svc.State)},
+				{Text: present.StateLabel(svc.State), Badge: present.StateBadge(svc.State)},
 				{Text: fmt.Sprintf("%d", len(svc.Instances))},
-				{Text: healthLabel(svc.Health), Badge: healthBadge(svc.Health)},
+				{Text: present.HealthLabel(svc.Health), Badge: present.HealthBadge(svc.Health)},
 				{Text: svc.Image, Detail: svc.Image},
 				{Text: portText(svc), Detail: portDetail(svc)},
 			},
 		})
 	}
 	return table
-}
-
-// stateLabel is the Korean service state, matching the shared TUI wording.
-func stateLabel(state stack.ServiceState) string {
-	switch state {
-	case stack.StateRunning:
-		return msgStateRunning
-	case stack.StateExited:
-		return msgStateExited
-	case stack.StatePaused:
-		return msgStatePaused
-	case stack.StateRestarting:
-		return msgStateRestarting
-	case stack.StateCreated:
-		return msgStateCreated
-	case stack.StateNotCreated:
-		return msgStateNotCreated
-	default:
-		if state == "" {
-			return msgStateUnknown
-		}
-		return string(state)
-	}
-}
-
-// stateBadge maps the aggregate state onto a semantic badge. Health stays a
-// separate column: a running container with a failing healthcheck is still
-// running.
-func stateBadge(state stack.ServiceState) core.BadgeKind {
-	switch state {
-	case stack.StateRunning:
-		return core.BadgeRunning
-	case stack.StateExited, stack.StatePaused:
-		return core.BadgeStopped
-	case stack.StateRestarting:
-		return core.BadgeStarting
-	default:
-		return core.BadgeNotCreated
-	}
-}
-
-// healthLabel is the TUI-only Korean wording; the CLI keeps its own sentences.
-func healthLabel(health stack.Health) string {
-	switch health {
-	case stack.HealthHealthy:
-		return msgHealthHealthy
-	case stack.HealthUnhealthy:
-		return msgHealthUnhealthy
-	case stack.HealthStarting:
-		return msgHealthStarting
-	default:
-		return msgHealthNone
-	}
-}
-
-func healthBadge(health stack.Health) core.BadgeKind {
-	switch health {
-	case stack.HealthUnhealthy:
-		return core.BadgeUnhealthy
-	case stack.HealthStarting:
-		return core.BadgeStarting
-	default:
-		return core.BadgeKind("")
-	}
 }
 
 func portText(svc stack.Service) string {

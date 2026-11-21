@@ -319,7 +319,7 @@ func renderModalPanel(th Theme, width, height int, spec ModalSpec) []string {
 
 // riskContinuation is the approved heading for the part of the risk that the
 // pinned band had to shorten.
-const riskContinuation = "위험 · 이어서"
+const riskContinuation = msgRiskContinuation
 
 // wrapRiskLines renders the risk statement with its label on the first line.
 // The sentence continues on the next line without repeating the label.

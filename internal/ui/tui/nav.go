@@ -14,6 +14,11 @@ import (
 // feature declares, its Korean title/summary and the Destructive flag. No
 // feature name appears here, so adding a feature never edits this file.
 //
+// Grouping comes from core.Registry.BySection, the contract's single grouping
+// function; a descriptor's declared section decides its heading and the order
+// inside one is registration order. The TUI narrows that grouping with the
+// active filter and maps it onto renderer items; it never re-groups.
+//
 // m.selected stays an index into m.features (registration order), because the
 // rest of the model and the tests address features that way. Only the display
 // and the arrow-key order are sectioned.
@@ -35,23 +40,81 @@ func (m *Model) navFilterMatches(d core.Descriptor) bool {
 		strings.Contains(strings.ToLower(d.Summary), needle)
 }
 
+// navGroups is the registry grouping narrowed by the active filter. Each member
+// carries its registration index so the cursor stays an index into m.features.
+func (m *Model) navGroups() []navGroup {
+	var groups []navGroup
+	for _, section := range m.registrySections() {
+		group := navGroup{section: section.Section}
+		for _, f := range section.Features {
+			d := f.Descriptor()
+			if !m.navFilterMatches(d) {
+				continue
+			}
+			group.items = append(group.items, navMember{index: m.featureIndex(d.Name), descriptor: d})
+		}
+		if len(group.items) > 0 {
+			groups = append(groups, group)
+		}
+	}
+	return groups
+}
+
+// navGroup is one rendered heading and its surviving members.
+type navGroup struct {
+	section core.Section
+	items   []navMember
+}
+
+// navMember is one feature of a group plus its registration index.
+type navMember struct {
+	index      int
+	descriptor core.Descriptor
+}
+
+// registrySections is the contract grouping. A model built without a registry
+// (a test that only sets m.features) groups its features through the same
+// function, so there is still exactly one grouping rule in the program.
+func (m *Model) registrySections() []core.SectionGroup {
+	if m.registry != nil {
+		return m.registry.BySection()
+	}
+	reg := core.NewRegistry()
+	for _, f := range m.features {
+		if err := reg.Register(f); err != nil {
+			// A feature that cannot register is already excluded from the
+			// menu: navigation shows the valid ones.
+			continue
+		}
+	}
+	return reg.BySection()
+}
+
+// featureIndex is the registration index of a named feature, or -1.
+func (m *Model) featureIndex(name string) int {
+	for i, f := range m.features {
+		if f.Descriptor().Name == name {
+			return i
+		}
+	}
+	return -1
+}
+
 // navIndexes is the navigation order: section order, then registration order
 // inside each section, narrowed by the active filter.
 func (m *Model) navIndexes() []int {
 	var out []int
-	for _, section := range core.Sections() {
-		for i, f := range m.features {
-			d := f.Descriptor()
-			if d.Section != section || !m.navFilterMatches(d) {
-				continue
+	for _, group := range m.navGroups() {
+		for _, member := range group.items {
+			if member.index >= 0 {
+				out = append(out, member.index)
 			}
-			out = append(out, i)
 		}
 	}
 	return out
 }
 
-// nav builds the renderer model. Sections come from the descriptors; the
+// nav builds the renderer model from the filtered registry grouping. The
 // selected item is the current cursor.
 func (m *Model) nav() visual.Nav {
 	nav := visual.Nav{
@@ -60,28 +123,19 @@ func (m *Model) nav() visual.Nav {
 		FilterActive: m.filtering,
 		Empty:        msgNavEmpty,
 	}
-	for _, section := range core.Sections() {
-		var items []visual.NavItem
-		for i, f := range m.features {
-			d := f.Descriptor()
-			if d.Section != section || !m.navFilterMatches(d) {
-				continue
-			}
+	for _, group := range m.navGroups() {
+		items := make([]visual.NavItem, 0, len(group.items))
+		for _, member := range group.items {
+			d := member.descriptor
 			items = append(items, visual.NavItem{
 				Name:     d.Name,
 				Title:    d.Title,
 				Summary:  d.Summary,
 				Danger:   d.Destructive,
-				Selected: i == m.selected,
+				Selected: member.index == m.selected,
 			})
 		}
-		if len(items) == 0 {
-			continue
-		}
-		nav.Sections = append(nav.Sections, visual.NavSection{Title: section.KoreanLabel(), Items: items})
-	}
-	if len(m.navIndexes()) == 0 {
-		nav.Sections = nil
+		nav.Sections = append(nav.Sections, visual.NavSection{Title: group.section.KoreanLabel(), Items: items})
 	}
 	return nav
 }

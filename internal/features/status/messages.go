@@ -33,12 +33,17 @@ const (
 	msgGuidePending            = "관리 작업: 갱신은 dcraft update, 로그는 dcraft logs, 실행·중지·제거·재시작은 dcraft up/stop/down/restart, 데이터 백업은 dcraft backup, 데이터 복원은 dcraft restore를 사용하세요."
 	msgGuideSecrets            = "기존 Compose/.env의 민감값은 자동 제거되지 않습니다. dcraft secrets로 참조를 등록하세요."
 
-	// The TUI document is a different surface from the CLI text. Health is
-	// Korean here only; Present keeps its own sentences byte-for-byte.
-	msgHealthHealthyTUI   = "정상"
-	msgHealthUnhealthyTUI = "비정상"
-	msgHealthStartingTUI  = "확인 중"
-	msgHealthNoneTUI      = "없음"
+	// State and health wording comes from internal/stack/present, the single
+	// mapping the TUI surfaces share; this file keeps only the status
+	// document's own labels. The summary badges are the document's counts, not
+	// the CLI's sentence form.
+	msgBadgeServices   = "서비스 %d"
+	msgBadgeRunning    = "실행 중 %d"
+	msgBadgeInstances  = "인스턴스 %d"
+	msgBadgeUnhealthy  = "비정상 %d"
+	msgBadgeUnverified = "확인 안 됨 %d"
+	msgBadgeStopped    = "중지 %d"
+	msgBadgeNotCreated = "미생성 %d"
 
 	msgPairObserved    = "마지막 조회"
 	msgPairComposeFile = "Compose 파일"

@@ -253,7 +253,7 @@ func (e *Engine) Run(ctx context.Context, req Request, sink Sink) (res Result) {
 	stageCountBefore := len(res.Stages)
 	payload, runErr := e.runFeature(ctx, feature, inv)
 	if len(res.Stages) == stageCountBefore {
-		rec.Begin("execute", msgStageExecute)
+		rec.Begin(StageNameExecute, msgStageExecute)
 		status := StageSucceeded
 		if runErr != nil {
 			status = StageFailed
@@ -261,7 +261,7 @@ func (e *Engine) Run(ctx context.Context, req Request, sink Sink) (res Result) {
 				status = StageCanceled
 			}
 		}
-		rec.End("execute", status, "")
+		rec.End(StageNameExecute, status, "")
 	}
 	if runErr != nil {
 		e.applyFailure(ctx, &res, runErr, feature)
@@ -274,7 +274,7 @@ func (e *Engine) Run(ctx context.Context, req Request, sink Sink) (res Result) {
 	}
 
 	if verifier, ok := feature.(Verifier); ok {
-		verifyErr := RunStage(rec, "verify", msgStageVerify, func() error {
+		verifyErr := RunStage(rec, StageNameVerify, msgStageVerify, func() error {
 			return runVerify(ctx, verifier, inv, payload)
 		})
 		if verifyErr != nil {
@@ -310,7 +310,7 @@ func (e *Engine) Run(ctx context.Context, req Request, sink Sink) (res Result) {
 	// actual operation. Recording the preview would write a success history
 	// entry for work the user has not confirmed yet.
 	if desc.RecordsHistory && req.Options["wizard"] != "steps" {
-		historyErr := RunStage(rec, "history", msgStageHistory, func() error {
+		historyErr := RunStage(rec, StageNameHistory, msgStageHistory, func() error {
 			if e.State == nil {
 				return errors.New("state store is not configured")
 			}
@@ -343,7 +343,7 @@ func (e *Engine) Run(ctx context.Context, req Request, sink Sink) (res Result) {
 // TargetOptional resolves a folder without Compose files; every other feature
 // keeps the full requirement.
 func (e *Engine) resolveTarget(ctx context.Context, rec *recorder, req Request, desc Descriptor, target *Target, warnings *[]Diagnostic) error {
-	return RunStage(rec, "resolve_target", msgStageResolveTarget, func() error {
+	return RunStage(rec, StageNameResolveTarget, msgStageResolveTarget, func() error {
 		if e.Resolver == nil {
 			return errors.New("target resolver is not configured")
 		}
@@ -413,7 +413,7 @@ func (e *Engine) conditionalApproval(ctx context.Context, feature ConditionalApp
 
 // runPreflight checks exactly the capabilities the descriptor declared.
 func (e *Engine) runPreflight(ctx context.Context, rec *recorder, desc Descriptor, pf *PreflightReport) error {
-	return RunStage(rec, "preflight", msgStagePreflight, func() error {
+	return RunStage(rec, StageNamePreflight, msgStagePreflight, func() error {
 		if e.Preflight == nil {
 			return errors.New("preflight is not configured")
 		}
@@ -602,7 +602,7 @@ func (e *Engine) Plan(ctx context.Context, req Request, sink Sink) (report PlanR
 		stageCountBefore := len(report.Stages)
 		plan, planErr := e.runPlan(ctx, planner, inv)
 		if len(report.Stages) == stageCountBefore {
-			rec.Begin("plan", msgStagePlan)
+			rec.Begin(StageNamePlan, msgStagePlan)
 			status := StageSucceeded
 			if planErr != nil {
 				status = StageFailed
@@ -610,7 +610,7 @@ func (e *Engine) Plan(ctx context.Context, req Request, sink Sink) (report PlanR
 					status = StageCanceled
 				}
 			}
-			rec.End("plan", status, "")
+			rec.End(StageNamePlan, status, "")
 		}
 		if planErr != nil {
 			if isCanceled(ctx, planErr) {
