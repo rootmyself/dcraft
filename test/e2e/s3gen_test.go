@@ -207,7 +207,8 @@ func TestGenerateS3HookTUIWizardShowsThePreviewAndDeclineWritesNothing(t *testin
 		{wait: "생성할 스크립트 파일 경로", send: "\r"},
 		{wait: "S3 호스트 스크립트 생성 계획", send: ""},
 		{wait: "file_overwrite", send: ""},
-		{wait: "dcraft hooks --add", send: "\x1b"},
+		{wait: "dcraft hooks --add", send: "\x1b[6~"}, // page down: applied values lead the panel
+		{wait: "aws s3 cp", send: "\x1b"},
 		{wait: "취소", send: ""},
 	}
 	output, code := runLifecyclePTYSteps(t, project, env, steps)

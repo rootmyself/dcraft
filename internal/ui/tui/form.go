@@ -21,15 +21,20 @@ type formState struct {
 	choices map[string]int
 	focus   int
 	notice  string
+	// noticeField is the field the notice belongs to. The guidance is drawn
+	// under that field, next to the value to correct, instead of at the
+	// bottom of the screen where it is detached from both.
+	noticeField int
 }
 
 func newFormState(feature core.Feature, fields []core.InputField, base core.Request) *formState {
 	form := &formState{
-		feature: feature,
-		base:    base,
-		fields:  fields,
-		values:  map[string]string{},
-		choices: map[string]int{},
+		feature:     feature,
+		base:        base,
+		fields:      fields,
+		values:      map[string]string{},
+		choices:     map[string]int{},
+		noticeField: -1,
 	}
 	for _, field := range fields {
 		if field.Kind == core.InputChoice && len(field.Options) > 0 {
@@ -69,10 +74,12 @@ func (m *Model) updateFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "tab":
 		form.focus = (form.focus + 1) % len(form.fields)
 		form.notice = ""
+		form.noticeField = -1
 		return m, nil
 	case "shift+tab":
 		form.focus = (form.focus - 1 + len(form.fields)) % len(form.fields)
 		form.notice = ""
+		form.noticeField = -1
 		return m, nil
 	case "up":
 		if field.Kind == core.InputChoice {
@@ -98,6 +105,7 @@ func (m *Model) updateFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if form.focus < len(form.fields)-1 {
 			form.focus++
 			form.notice = ""
+			form.noticeField = -1
 			return m, nil
 		}
 		return m.submitForm()
@@ -111,6 +119,11 @@ func (m *Model) updateFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if field.Kind == core.InputText {
+		if msg.Type == tea.KeyRunes || msg.Type == tea.KeySpace {
+			// Typing is the correction: the inline guidance has done its job.
+			form.notice = ""
+			form.noticeField = -1
+		}
 		if msg.Type == tea.KeyRunes {
 			form.values[field.Key] += string(msg.Runes)
 		} else if msg.Type == tea.KeySpace {
@@ -137,6 +150,7 @@ func (m *Model) submitForm() (tea.Model, tea.Cmd) {
 		if field.Required && value == "" {
 			form.focus = i
 			form.notice = fmt.Sprintf(msgFormRequired, field.Label)
+			form.noticeField = i
 			return m, nil
 		}
 		values[field.Key] = value
@@ -158,8 +172,10 @@ func (m *Model) submitForm() (tea.Model, tea.Cmd) {
 	return m, m.beginRequest(feature, req)
 }
 
-// formView shows every field and the exact values that will run. Nothing is
-// sent to the engine until the last field is confirmed.
+// formView shows every field with its label and help, the value being typed,
+// and the exact values that will run. Nothing is sent to the engine until the
+// last field is confirmed. Guidance about a missing answer is drawn inline
+// under the field it belongs to, so the value to correct is on the same row.
 func (m *Model) formView() string {
 	form := m.form
 	var b strings.Builder
@@ -190,6 +206,10 @@ func (m *Model) formView() string {
 				selected = field.Options[form.choices[field.Key]].Label
 			}
 			fmt.Fprintf(&b, "%s%s: %s\n", marker, field.Label, selected)
+			m.writeFormNotice(&b, form, i)
+			if field.Help != "" {
+				b.WriteString(m.helpLine(field.Help))
+			}
 			if i == form.focus {
 				for j, option := range field.Options {
 					pointer := "   "
@@ -202,32 +222,69 @@ func (m *Model) formView() string {
 		default:
 			cursor := ""
 			if i == form.focus {
-				cursor = "▌"
+				cursor = cursorGlyph
 			}
 			fmt.Fprintf(&b, "%s%s: %s%s\n", marker, field.Label, form.values[field.Key], cursor)
-			if i == form.focus && field.Help != "" {
-				fmt.Fprintf(&b, "    %s\n", m.hintText(field.Help))
+			m.writeFormNotice(&b, form, i)
+			if field.Help != "" {
+				b.WriteString(m.helpLine(field.Help))
 			}
 		}
 	}
 	b.WriteString("\n")
 	fmt.Fprintf(&b, "%s\n", m.title(msgFormRunTitle))
 	for _, field := range form.fields {
-		value := form.values[field.Key]
-		if field.Kind == core.InputChoice && len(field.Options) > 0 {
-			value = field.Options[form.choices[field.Key]].Label
-		}
+		value := form.reviewValue(field)
 		if value == "" {
 			value = msgFormEmpty
 		}
 		fmt.Fprintf(&b, "  %s: %s\n", field.Label, value)
 	}
-	if form.notice != "" {
+	if form.notice != "" && form.noticeField < 0 {
 		b.WriteString("\n")
 		b.WriteString(m.noticeText(form.notice))
 		b.WriteString("\n")
 	}
 	return strings.TrimRight(b.String(), "\n")
+}
+
+// writeFormNotice draws the inline guidance for one field, wrapped to the body
+// width. It is called only for the field the notice belongs to.
+func (m *Model) writeFormNotice(b *strings.Builder, form *formState, field int) {
+	if form.notice == "" || form.noticeField != field {
+		return
+	}
+	for _, line := range m.wrapTo(form.notice, m.bodyWidth()) {
+		b.WriteString(m.noticeText(line))
+		b.WriteString("\n")
+	}
+}
+
+// helpLine renders a field's help under its control, indented to the field's
+// value column. Help is a sentence, so it wraps instead of being cut.
+func (m *Model) helpLine(help string) string {
+	var b strings.Builder
+	for _, line := range m.wrapTo(help, m.bodyWidth()-4) {
+		b.WriteString("    ")
+		b.WriteString(m.hintText(line))
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+// reviewValue is exactly what the feature will receive for a field: a choice
+// contributes its machine value; text is trimmed when submitted and is shown
+// trimmed here so the review matches the run. A choice whose label differs
+// from its value states both, because the label alone would hide what runs.
+func (f *formState) reviewValue(field core.InputField) string {
+	if field.Kind == core.InputChoice && len(field.Options) > 0 {
+		option := field.Options[f.choices[field.Key]]
+		if option.Label == option.Value || strings.Contains(option.Label, option.Value) {
+			return option.Value
+		}
+		return option.Value + " (" + option.Label + ")"
+	}
+	return strings.TrimSpace(f.values[field.Key])
 }
 
 func inputErrorText(err error) string {

@@ -118,23 +118,29 @@ func (m *Model) screenKeycaps() []visual.Keycap {
 		// back with left, and tab does nothing. Advertising the form row here
 		// would name a key that has no effect.
 		if m.phase == phaseWizardPreview {
-			if m.wizardPreviewErr != nil {
-				// Enter does nothing while the preview is invalid, so the row
-				// must not offer it.
-				return []visual.Keycap{
-					{Key: "left", Label: "이전", Priority: 0},
-					{Key: "esc", Label: "취소", Priority: 0},
-					{Key: "q", Label: "종료", Priority: 0},
-					{Key: "?", Label: "도움말", Priority: 3},
-				}
-			}
-			return []visual.Keycap{
+			keys := []visual.Keycap{
 				{Key: "enter", Label: "저장", Priority: 0},
 				{Key: "left", Label: "이전", Priority: 2},
 				{Key: "esc", Label: "취소", Priority: 0},
 				{Key: "q", Label: "종료", Priority: 0},
 				{Key: "?", Label: "도움말", Priority: 3},
 			}
+			if m.wizardPreviewErr != nil {
+				// Enter does nothing while the preview is invalid, so the row
+				// must not offer it.
+				keys = []visual.Keycap{
+					{Key: "left", Label: "이전", Priority: 0},
+					{Key: "esc", Label: "취소", Priority: 0},
+					{Key: "q", Label: "종료", Priority: 0},
+					{Key: "?", Label: "도움말", Priority: 3},
+				}
+			}
+			if m.bodyScrolls() {
+				// A long preview scrolls instead of being cut; the keys that
+				// move it must be on screen.
+				keys = append(keys, visual.Keycap{Key: "PgUp/PgDn", Label: "스크롤", Priority: 2})
+			}
+			return keys
 		}
 		items := []visual.Keycap{
 			{Key: "↑↓", Label: "선택", Priority: 1},
@@ -145,8 +151,26 @@ func (m *Model) screenKeycaps() []visual.Keycap {
 			{Key: "?", Label: "도움말", Priority: 3},
 		}
 		if m.wizardTextInput() {
-			// A free-text step accepts "?" as a character.
-			items = withoutHelp(items)
+			// A free-text step accepts "?" as a character and has no list to
+			// move through; the row names only the keys that act here.
+			items = []visual.Keycap{
+				{Key: "enter", Label: "다음", Priority: 0},
+				{Key: "left", Label: "이전", Priority: 2},
+				{Key: "esc", Label: "취소", Priority: 0},
+				{Key: "q", Label: "종료", Priority: 0},
+			}
+			if m.wizardStepIsOptional() {
+				items[0] = visual.Keycap{Key: "enter", Label: "다음/건너뛰기", Priority: 0}
+			}
+			return items
+		}
+		if m.wizardStepIsMulti() {
+			// Space toggles one box; without the chip the row would only
+			// advertise moving the cursor on a multi-select question.
+			items = append([]visual.Keycap{
+				{Key: "↑↓", Label: "이동", Priority: 1},
+				{Key: "space", Label: "선택/해제", Priority: 1},
+			}, items[1:]...)
 		}
 		return items
 	}
@@ -265,6 +289,10 @@ func (m *Model) layoutBody() bodyLayout {
 			screen := m.serviceScreen()
 			lines = append(lines, screen.Fixed...)
 			lines = append(lines, m.fitBand(lines, screen)...)
+		} else if m.phase == phaseWizardStep {
+			// A wizard question pins its title, progress and prompt; only the
+			// option cards scroll, as whole cards.
+			lines = append(lines, m.wizardStepLines(lines)...)
 		} else {
 			add(m.phaseBody())
 		}
@@ -429,6 +457,9 @@ func (m *Model) bodyScrolls() bool {
 	if m.phase == phaseSelectingServices {
 		return m.serviceScrolls()
 	}
+	if m.phase == phaseWizardStep {
+		return m.wizardStepScrolls()
+	}
 	total := len(strings.Split(strings.TrimRight(m.phaseBody(), "\n"), "\n"))
 	return total > budget
 }
@@ -447,6 +478,9 @@ func (m *Model) currentViewport() visual.Viewport {
 	}
 	if m.phase == phaseSelectingServices {
 		return m.serviceViewport()
+	}
+	if m.phase == phaseWizardStep {
+		return m.wizardViewport()
 	}
 	if m.phase != phaseReady {
 		lines := strings.Split(strings.TrimRight(m.phaseBody(), "\n"), "\n")
@@ -470,6 +504,12 @@ func (m *Model) scrollCounter() string {
 			return ""
 		}
 		return m.serviceViewport().Counter()
+	}
+	if m.phase == phaseWizardStep {
+		if !m.wizardStepScrolls() {
+			return ""
+		}
+		return m.wizardCounter()
 	}
 	if m.phase != phaseReady || !m.resultScrolls() {
 		return ""
@@ -682,14 +722,4 @@ func (m *Model) hintText(s string) string {
 
 func (m *Model) noticeText(s string) string {
 	return m.theme.Bold(visual.TokenWarning, s)
-}
-
-// wrapProse wraps a paragraph to the body width. Prose may wrap; paths and
-// identifiers may not. The CLI paths pass width 0, which means "no wrapping".
-func (m *Model) wrapProse(text string) string {
-	width := m.bodyWidth()
-	if width <= 0 || strings.TrimSpace(text) == "" {
-		return text
-	}
-	return strings.Join(visual.Wrap(text, width), "\n")
 }
