@@ -52,6 +52,7 @@ cmd/dcraft                 process entry, signal context, TTY check, exit codes
         +-- internal/features/all    feature registration files (one per feature)
         +-- internal/selector        service/instance selection (ticket #5)
         +-- internal/stack           Backend/read types + Lifecycle/Identity seams
+        +-- internal/stack/present   the one state/health label + badge mapping
         +-- internal/compose         Preflight + Inspect + Lifecycle adapter (Docker CLI)
         +-- internal/composeinstall  approved Compose plugin installation
         +-- internal/artifacts       HTTP download + atomic file-install boundary
@@ -80,6 +81,13 @@ Dependency rules:
 - `internal/identity` implements the read-only `core.IdentityReader` from the
   same `stack.Identity` and `state.Store` boundaries. It never writes, locks or
   creates state.
+- `internal/stack/present` is the one mapping from a stack state, health or
+  update readiness to its Korean label and badge kind. The status document, the
+  lifecycle document, the update document and the TUI service scope all consume
+  it, so the same input renders the same words everywhere. It lives beside
+  `internal/stack` rather than in `core` because `stack` imports `core`: putting
+  it in `core` would invert that dependency, and putting it in a feature would
+  recreate the fork it exists to prevent.
 
 ---
 
@@ -556,8 +564,11 @@ invalid bool defaults.
 
 `Registry.All()` keeps registration order; `Registry.BySection()` groups the
 same features by `SectionOrder` (`inspect`, `operate`, `data`, `config`) while
-preserving registration order inside each section. The TUI is the only consumer
-of the grouping.
+preserving registration order inside each section. The TUI navigation is its
+consumer: `internal/ui/tui/nav.go` narrows the grouping by the active filter and
+maps it onto renderer items, and `Registry.All()` stays the source of the
+registration index the cursor holds. No other code re-implements the section
+grouping.
 
 ### Adding a feature (the only steps)
 
@@ -743,13 +754,6 @@ is in the payload and in every Compose call.
   to show the canceled result with partial-effect guidance; a later `q` quits.
   Read-only loading keeps the ticket-01 quit behavior. Normal quit after
   completion touches no service.
-- During an in-flight mutating operation, `q` explains that the operation is
-  running and that quitting can leave partial effects (it does not orphan the
-  Compose process). `ctrl+c` requests safe cancellation: the per-run context is
-  canceled, the external Compose process is stopped, and the screen stays open
-  to show the canceled result with partial-effect guidance; a later `q` quits.
-  Read-only loading keeps the ticket-01 quit behavior. Normal quit after
-  completion touches no service.
 
 ---
 
@@ -846,10 +850,9 @@ row H            footer   (one row of keycaps)
   key that does nothing and never hides one that works.
 - `visual.Compose` returns exactly `height` rows of exactly `width` cells. A body
   line wider than the frame is cut with the theme's explicit marker, never
-  silently clipped. `Frame.Pinned` and `Frame.Overflow` exist in the type but the
-  shell does not use them: the one pinned statement in the product is the
-  confirmation risk, and it lives inside the panel where it cannot be scrolled
-  away or drawn twice.
+  silently clipped. `Frame.Overflow` is the only explicit overflow slot the
+  shell uses: the one pinned statement in the product is the confirmation risk,
+  and it lives inside the panel where it cannot be scrolled away or drawn twice.
 - Breakpoints use width and height only, never content length, so a resize
   reflows and never renegotiates the mode: `≥100` columns is the two-pane layout,
   `60–99` a single column, and `<60` columns or `<18` rows is compact (borders,
@@ -863,13 +866,18 @@ row H            footer   (one row of keycaps)
   lists the four sections the descriptors declare (`조회`/`운영`/`데이터`/`설정`)
   in that fixed order, registration order inside each section, with the focused
   entry's summary in a pinned band. A sidebar too short for both keeps its
-  entries and drops the band.
-- Medium (`60–99`): a one-row navigation summary under the header
-  (`메뉴 · ▸ <title> · N개 기능` … `tab 펼치기`). `tab`/`shift+tab` expands it in
-  place into per-section counts; the row count never changes, so opening the menu
-  never costs the body a line.
-- Compact (`<60` or `<18`): a title row, the content and the menu list; no
-  borders, no descriptions.
+  entries and drops the band. Its title bar carries `esc 닫기` on the right; the
+  hint is dropped before the title when the pane is too narrow for both.
+- Medium (`60–99`) and compact-by-height (`<18` rows): a one-row navigation
+  summary under the header (`메뉴 · ▸ <title> · N개 기능` … `tab 펼치기`).
+  `tab`/`shift+tab` expands it in place into per-section counts; the row count
+  never changes, so opening the menu never costs the body a line. The summary
+  stays at every height because the current position must remain visible: without
+  it, `↑`/`↓` would move a cursor nothing on screen shows.
+- Compact (`<60` columns, or `<18` rows for decoration): a title row, the content
+  and the menu list; no borders, no descriptions. Compact is decided by width or
+  height, so a tall table on a short terminal folds to its leading columns even
+  though the terminal is wide.
 - The menu is derived entirely from the registry: section, Korean title, summary
   and the `Destructive` flag come from `core.Descriptor`. A destructive entry
   carries the danger glyph and the word `위험`, which is a text channel, not only
@@ -937,12 +945,20 @@ reliability: color is the third channel, never the only one.
 - The result body is split into fixed rows (summary, table header), a scrollable
   band and a tail (guidance). The header stays put while the rows scroll. When
   even the fixed rows do not fit, the whole result becomes one band so no row is
-  unreachable.
+  unreachable. One layout function (`fitBand`) computes that split, and the drawn
+  rows, the title counter, the overflow hint, `bodyScrolls()` and the scroll key
+  handler all read its result: there is no second accounting pass that could
+  count a row the frame did not draw.
 - The scroll viewport is shared by the keys and the counter, so what is drawn and
   what `PgUp` moves cannot disagree. Keys: `PgUp`/`PgDn`, `g`/`G`, `home`/`end`.
   The table counter is the range form `first-last/total` and is computed from the
   rows actually drawn. The old truncation notice is gone: content scrolls
   instead of being cut.
+- A scrolling content list also carries the approved one-cell scrollbar gutter in
+  its last content cell: a blank track with a solid thumb (`█`, ASCII `#`) in the
+  accent token. It applies to the status table and the log viewport; the content
+  is laid out one cell narrower when it appears, so the thumb never covers a
+  value.
 - A truncated value opens in the detail view with `d` (advertised only when
   something was cut) and is shown in full with a hanging indent; `esc`/`d`
   closes it, `q` quits.

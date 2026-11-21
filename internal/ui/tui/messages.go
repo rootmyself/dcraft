@@ -70,28 +70,17 @@ const (
 	// the same engine/status inspect path as the status screen. Its columns are
 	// the status table's, prefixed with the selection column, in the approved
 	// order.
-	msgServiceLoading         = "서비스 목록을 확인하는 중…"
-	msgServiceSelectTitle     = "서비스 선택"
-	msgServiceSelectIntro     = "이 작업을 적용할 범위를 선택하세요. 전체를 선택하면 스택 전체에 적용합니다."
-	msgServiceSelectionNote   = "선택은 같은 엔진 규칙으로 다시 검증됩니다. 인스턴스 단위 선택은 로그·exec 화면에서만 제공합니다."
-	msgServiceWhole           = "전체 (스택 전체)"
-	msgServiceCanceled        = "서비스 선택을 취소했습니다. 아무것도 실행하지 않았습니다."
-	msgServiceNotConfigured   = "현재 설정에 없음"
-	msgServiceNoServices      = "서비스가 없습니다. Compose 파일에 services 항목이 있는지 확인하세요."
-	msgServiceNoPort          = "-"
-	msgServiceStateRunning    = "실행 중"
-	msgServiceStateExited     = "중지됨"
-	msgServiceStatePaused     = "일시정지됨"
-	msgServiceStateRestarting = "재시작 중"
-	msgServiceStateCreated    = "생성됨"
-	msgServiceStateNotCreated = "컨테이너 없음"
-	msgServiceStateUnknown    = "상태 알 수 없음"
-	// Health is Korean on this screen only (T1 decision 5); the CLI keeps its
-	// own sentences. These mirror the status document's TUI labels.
-	msgServiceHealthOK       = "정상"
-	msgServiceHealthStarting = "확인 중"
-	msgServiceHealthNone     = "없음"
-	msgServiceUnhealthy      = "비정상"
+	msgServiceLoading       = "서비스 목록을 확인하는 중…"
+	msgServiceSelectTitle   = "서비스 선택"
+	msgServiceSelectIntro   = "이 작업을 적용할 범위를 선택하세요. 전체를 선택하면 스택 전체에 적용합니다."
+	msgServiceSelectionNote = "선택은 같은 엔진 규칙으로 다시 검증됩니다. 인스턴스 단위 선택은 로그·exec 화면에서만 제공합니다."
+	msgServiceWhole         = "전체 (스택 전체)"
+	msgServiceCanceled      = "서비스 선택을 취소했습니다. 아무것도 실행하지 않았습니다."
+	msgServiceNotConfigured = "현재 설정에 없음"
+	msgServiceNoServices    = "서비스가 없습니다. Compose 파일에 services 항목이 있는지 확인하세요."
+	msgServiceNoPort        = "-"
+	// State and health wording comes from internal/stack/present; the service
+	// scope screen draws the same words as the status table.
 	// Table headers. The status document owns the same words on its own
 	// surface; the two screens must not drift.
 	msgServiceColumnSelect    = "선택"
@@ -137,4 +126,36 @@ const (
 	// An optional answer that was deliberately left empty is stated as such:
 	// leaving the row out would make the review look incomplete.
 	msgWizardAnswerEmpty = "(비움)"
+)
+
+// Keycap labels. The visual layer draws the keycap row; these are the words the
+// TUI's own screens put in it, so no screen writes a Korean label inline.
+const (
+	msgKeyClear       = "해제"
+	msgKeyCommit      = "확정"
+	msgKeyDetach      = "접속 종료"
+	msgKeyHelp        = "도움말"
+	msgKeyCloseScreen = "화면 닫기"
+	msgKeyStop        = "중단"
+	msgKeyScroll      = "스크롤"
+	msgKeyEnds        = "처음/끝"
+	msgKeyQuit        = "종료"
+	msgKeySelect      = "선택"
+	msgKeyRun         = "실행"
+	msgKeyMove        = "이동"
+	msgKeyToggle      = "선택/해제"
+	msgKeyCancel      = "취소"
+	msgKeySave        = "저장"
+	msgKeyPrev        = "이전"
+	msgKeyNext        = "다음"
+	msgKeyNextSkip    = "다음/건너뛰기"
+	msgKeyPage        = "페이지"
+	msgKeyClose       = "닫기"
+	msgKeyDetail      = "상세"
+
+	// The environment summary counts its files.
+	msgEnvCount = "%s %d개"
+
+	// The header names a verified local Docker endpoint.
+	msgLocalEndpoint = "로컬"
 )

@@ -2,14 +2,13 @@ package visual
 
 import "strings"
 
-// Frame is one composed screen. Header and Footer own one row each; Pinned
-// lines sit directly above the footer and are always visible; Body takes the
-// remaining rows. Overflow is the explicit note shown when the body does not
+// Frame is one composed screen. Header and Footer own one row each; Body takes
+// the remaining rows. Overflow is the explicit note shown when the body does not
 // fit.
 //
-// Pinned exists because some lines must never be the part that gets cut. The
-// approved contract pins the risk sentence of a confirmation; the shell keeps
-// it visible at every size instead of relying on each renderer.
+// There is no frame-level pinned band: the one pinned statement in the product
+// is the confirmation risk, and it lives inside the modal panel, where it cannot
+// be scrolled away and cannot be drawn twice.
 type Frame struct {
 	Header string
 	// Left is a prepared pane (already exactly as tall and wide as it wants
@@ -18,7 +17,6 @@ type Frame struct {
 	// span the whole terminal.
 	Left     []string
 	Body     []string
-	Pinned   []string
 	Footer   string
 	Overflow string
 }
@@ -28,8 +26,7 @@ type Frame struct {
 // With a positive width every returned line occupies exactly that width. Body
 // lines wider than the frame are truncated with the theme's explicit marker.
 // When the body does not fit, its last visible row becomes the overflow note,
-// so the note itself is never hidden. Pinned lines are laid out last and kept
-// whenever their rows are available.
+// so the note itself is never hidden.
 //
 // With no known size (width<=0 or height<=0) Compose returns the content
 // unchanged plus the header and footer, so a model built before its first
@@ -37,15 +34,9 @@ type Frame struct {
 func Compose(th Theme, width, height int, f Frame) []string {
 	ell := th.Glyphs.Ell
 	if width <= 0 || height <= 0 {
-		out := make([]string, 0, len(f.Body)+len(f.Pinned)+2)
+		out := make([]string, 0, len(f.Body)+2)
 		out = append(out, f.Header)
 		for _, line := range f.Body {
-			if width > 0 {
-				line = Truncate(line, width, ell)
-			}
-			out = append(out, line)
-		}
-		for _, line := range f.Pinned {
 			if width > 0 {
 				line = Truncate(line, width, ell)
 			}
@@ -65,22 +56,7 @@ func Compose(th Theme, width, height int, f Frame) []string {
 		return []string{Fit(f.Header, width, ell), Fit(f.Footer, width, ell)}
 	}
 
-	rows := height - 2
-	// Pinned lines get their rows first; the body gets what is left. When
-	// even the pinned lines cannot all fit, the last pinned line is the one
-	// kept, because callers pin in increasing importance order.
-	pinned := make([]string, 0, len(f.Pinned))
-	if len(f.Pinned) > rows {
-		start := len(f.Pinned) - rows
-		for _, line := range f.Pinned[start:] {
-			pinned = append(pinned, Truncate(line, width, ell))
-		}
-	} else {
-		for _, line := range f.Pinned {
-			pinned = append(pinned, Truncate(line, width, ell))
-		}
-	}
-	bodyRows := rows - len(pinned)
+	bodyRows := height - 2
 
 	// A left pane owns a fixed slice of every body row. The body is measured
 	// against what is left, so a content line can never cross the pane.
@@ -133,10 +109,9 @@ func Compose(th Theme, width, height int, f Frame) []string {
 		// gap cell; the content then fills the rest of the row.
 		out = append(out, Fit(pane, leftWidth-1, ell)+" "+Fit(line, bodyWidth, ell))
 	}
-	for len(out) < height-1-len(pinned) {
+	for len(out) < height-1 {
 		out = append(out, blank)
 	}
-	out = append(out, pinned...)
 	out = append(out, Fit(f.Footer, width, ell))
 	if th.Glyphs.ASCII {
 		// A non-UTF-8 locale must not receive a decorative glyph from a
@@ -145,13 +120,6 @@ func Compose(th Theme, width, height int, f Frame) []string {
 		return ASCIISafeLines(out)
 	}
 	return out
-}
-
-// Shell is Compose without pinned lines.
-func Shell(th Theme, width, height int, header string, body []string, footer, overflowNote string) []string {
-	return Compose(th, width, height, Frame{
-		Header: header, Body: body, Footer: footer, Overflow: overflowNote,
-	})
 }
 
 // Facts are the last observed header values. The TUI never polls: it keeps the

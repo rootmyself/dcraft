@@ -410,6 +410,30 @@ func (m *Model) livePositionRow(v visual.Viewport) string {
 	return m.hintText(left) + strings.Repeat(" ", gap) + m.hintText(right)
 }
 
+// attachLogScrollbar paints the approved one-cell gutter over the log band. The
+// output lines are arbitrary child text and are never re-wrapped, so the gutter
+// takes the last body cell and a line that already reached it is cut with the
+// explicit marker; the reader keeps the position row and the counter.
+func (m *Model) attachLogScrollbar(rows []string, vp visual.Viewport) []string {
+	width := m.bodyWidth()
+	if width <= 1 {
+		return rows
+	}
+	gutter := visual.Scrollbar(m.theme, len(rows), vp.Top, vp.Visible(), vp.Total)
+	if len(gutter) == 0 {
+		return rows
+	}
+	out := make([]string, len(rows))
+	for i, line := range rows {
+		cell := " "
+		if i < len(gutter) {
+			cell = gutter[i]
+		}
+		out[i] = visual.Fit(line, width-1, m.theme.Glyphs.Ell) + cell
+	}
+	return out
+}
+
 // liveLayout is the live screen: fixed header, scrolling output band, position
 // row and the stopping notice. It is one layout pass; the keys and the
 // indicator use liveViewport too, so what is drawn and what PgUp moves cannot
@@ -436,7 +460,14 @@ func (m *Model) liveLayout() bodyLayout {
 	lines = append(lines, header...)
 	lines = append(lines, "")
 	start, end := vp.Window()
-	lines = append(lines, m.live.lines[start:end]...)
+	output := append([]string{}, m.live.lines[start:end]...)
+	// The log viewport is the second scrolling content list the contract gives
+	// a scrollbar. The output band is the live feed, not a table, so the gutter
+	// is added over the drawn rows instead of narrowing the child's own output.
+	if vp.Overflow() && len(output) > 0 {
+		output = m.attachLogScrollbar(output, vp)
+	}
+	lines = append(lines, output...)
 
 	if position != "" {
 		// Pad the gap so the position and the notice are the final body rows.

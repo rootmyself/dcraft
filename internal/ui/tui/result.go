@@ -50,6 +50,13 @@ func (m *Model) detailLines() []string {
 // resultScreen is the result body split into fixed rows (the summary and the
 // table header), the scrollable rows, and the guidance below.
 func (m *Model) resultScreen() screenLines {
+	return m.resultScreenWith(false)
+}
+
+// resultScreenWith is resultScreen with an explicit scrollbar decision. Only
+// the scrolling table loses the reserved cell; the summary above it and the
+// guidance below keep the full body width.
+func (m *Model) resultScreenWith(bar bool) screenLines {
 	if m.result == nil {
 		return screenLines{}
 	}
@@ -72,7 +79,8 @@ func (m *Model) resultScreen() screenLines {
 	doc := m.resultDocument()
 	doc.Title = ""
 	layout := visual.RenderDocumentLayoutOptions(m.theme, doc, m.bodyWidth(), visual.RenderOptions{
-		Compact: m.compact(),
+		Compact:   m.compact(),
+		Scrollbar: bar,
 	})
 	out := screenLines{
 		Fixed: layout.Fixed(),
@@ -84,16 +92,6 @@ func (m *Model) resultScreen() screenLines {
 		out.Tail = append(out.Tail, strings.Split(view.Diagnostics(warnings), "\n")...)
 	}
 	return out
-}
-
-// storeScroll records the position actually drawn so the next frame continues
-// from there instead of a stale request.
-func (m *Model) storeScroll(viewport visual.Viewport) {
-	if m.detailOpen {
-		m.detailScroll = viewport
-		return
-	}
-	m.body = viewport
 }
 
 // fitViewport reserves one row for the scroll hint when the band overflows, so
@@ -175,10 +173,15 @@ func (m *Model) detailKey(msg tea.KeyMsg) tea.Cmd {
 }
 
 // applyScroll runs one viewport move against the derived window and keeps only
-// the resulting Top: the size is recomputed from the model on every frame.
+// the resulting Top: the size is recomputed from the model on every frame. The
+// detail view keeps its own position so closing it returns to the table.
 func (m *Model) applyScroll(move func(*visual.Viewport)) {
 	v := m.currentViewport()
 	move(&v)
+	if m.detailOpen {
+		m.detailScroll.Top = v.Top
+		return
+	}
 	m.body.Top = v.Top
 }
 
@@ -208,11 +211,11 @@ func (m *Model) resetScrollState() {
 // replaces the menu row because none of the menu keys act on that screen.
 func (m *Model) detailViewKeycaps() []visual.Keycap {
 	return []visual.Keycap{
-		{Key: "esc", Label: "닫기", Priority: 0},
-		{Key: "↑↓", Label: "이동", Priority: 1},
-		{Key: "PgUp/PgDn", Label: "페이지", Priority: 2},
-		{Key: "g/G", Label: "처음/끝", Priority: 3},
-		{Key: "q", Label: "종료", Priority: 0},
+		{Key: "esc", Label: msgKeyClose, Priority: 0},
+		{Key: "↑↓", Label: msgKeyMove, Priority: 1},
+		{Key: "PgUp/PgDn", Label: msgKeyPage, Priority: 2},
+		{Key: "g/G", Label: msgKeyEnds, Priority: 3},
+		{Key: "q", Label: msgKeyQuit, Priority: 0},
 	}
 }
 
@@ -224,10 +227,10 @@ func (m *Model) resultScrollKeycaps(items []visual.Keycap) []visual.Keycap {
 		return m.detailViewKeycaps()
 	}
 	if m.bodyScrolls() {
-		items = append(items, visual.Keycap{Key: "PgUp/PgDn", Label: "스크롤", Priority: 2})
+		items = append(items, visual.Keycap{Key: "PgUp/PgDn", Label: msgKeyScroll, Priority: 2})
 	}
 	if m.hasDetail() && m.phase == phaseReady {
-		items = append(items, visual.Keycap{Key: "d", Label: "상세", Priority: 2})
+		items = append(items, visual.Keycap{Key: "d", Label: msgKeyDetail, Priority: 2})
 	}
 	return items
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/rootmyself/dcraft/internal/core"
 	"github.com/rootmyself/dcraft/internal/stack"
+	"github.com/rootmyself/dcraft/internal/stack/present"
 )
 
 // Document implements core.ViewPresenter. The TUI renders these four blocks in
@@ -48,23 +49,23 @@ func documentBadges(snap stack.Snapshot) []core.Badge {
 	// icon: an icon would claim a meaning the count does not have. Only the
 	// state counts below carry a badge kind.
 	badges := []core.Badge{
-		{Text: fmt.Sprintf("서비스 %d", s.Services)},
-		{Kind: core.BadgeRunning, Text: fmt.Sprintf("실행 중 %d", s.Running)},
+		{Text: fmt.Sprintf(msgBadgeServices, s.Services)},
+		{Kind: core.BadgeRunning, Text: fmt.Sprintf(msgBadgeRunning, s.Running)},
 	}
 	if s.Instances > 0 {
-		badges = append(badges, core.Badge{Text: fmt.Sprintf("인스턴스 %d", s.Instances)})
+		badges = append(badges, core.Badge{Text: fmt.Sprintf(msgBadgeInstances, s.Instances)})
 	}
 	if s.Unhealthy > 0 {
-		badges = append(badges, core.Badge{Kind: core.BadgeUnhealthy, Text: fmt.Sprintf("비정상 %d", s.Unhealthy)})
+		badges = append(badges, core.Badge{Kind: core.BadgeUnhealthy, Text: fmt.Sprintf(msgBadgeUnhealthy, s.Unhealthy)})
 	}
 	if s.Unverified > 0 {
-		badges = append(badges, core.Badge{Kind: core.BadgeStarting, Text: fmt.Sprintf("확인 안 됨 %d", s.Unverified)})
+		badges = append(badges, core.Badge{Kind: core.BadgeStarting, Text: fmt.Sprintf(msgBadgeUnverified, s.Unverified)})
 	}
 	if s.Stopped > 0 {
-		badges = append(badges, core.Badge{Kind: core.BadgeStopped, Text: fmt.Sprintf("중지 %d", s.Stopped)})
+		badges = append(badges, core.Badge{Kind: core.BadgeStopped, Text: fmt.Sprintf(msgBadgeStopped, s.Stopped)})
 	}
 	if s.NotCreated > 0 {
-		badges = append(badges, core.Badge{Kind: core.BadgeNotCreated, Text: fmt.Sprintf("미생성 %d", s.NotCreated)})
+		badges = append(badges, core.Badge{Kind: core.BadgeNotCreated, Text: fmt.Sprintf(msgBadgeNotCreated, s.NotCreated)})
 	}
 	return badges
 }
@@ -119,59 +120,15 @@ func documentTable(snap stack.Snapshot) *core.Table {
 			Selectable: svc.Configured,
 			Cells: []core.Cell{
 				{Text: svc.Name, Detail: svc.Name},
-				{Text: stateLabel(svc.State), Badge: stateBadge(svc.State)},
+				{Text: present.StateLabel(svc.State), Badge: present.StateBadge(svc.State)},
 				{Text: fmt.Sprintf("%d", len(svc.Instances))},
-				{Text: documentHealth(svc.Health), Badge: healthBadge(svc.Health)},
+				{Text: present.HealthLabel(svc.Health), Badge: present.HealthBadge(svc.Health)},
 				{Text: imageText(svc), Detail: imageText(svc)},
 				{Text: portText(svc), Detail: portDetail(svc)},
 			},
 		})
 	}
 	return table
-}
-
-// stateBadge maps the aggregate state onto the semantic badge. Health is
-// deliberately not folded in: a running container with a failing healthcheck is
-// still running, and the health column says so.
-func stateBadge(state stack.ServiceState) core.BadgeKind {
-	switch state {
-	case stack.StateRunning:
-		return core.BadgeRunning
-	case stack.StateExited, stack.StatePaused:
-		return core.BadgeStopped
-	case stack.StateRestarting:
-		return core.BadgeStarting
-	case stack.StateNotCreated, stack.StateUnknown, "":
-		return core.BadgeNotCreated
-	default:
-		return core.BadgeNotCreated
-	}
-}
-
-// documentHealth is the TUI-only Korean wording from the approved decision:
-// 정상 / 비정상 / 확인 중 / 없음. The CLI keeps its own health sentences.
-func documentHealth(health stack.Health) string {
-	switch health {
-	case stack.HealthHealthy:
-		return msgHealthHealthyTUI
-	case stack.HealthUnhealthy:
-		return msgHealthUnhealthyTUI
-	case stack.HealthStarting:
-		return msgHealthStartingTUI
-	default:
-		return msgHealthNoneTUI
-	}
-}
-
-func healthBadge(health stack.Health) core.BadgeKind {
-	switch health {
-	case stack.HealthUnhealthy:
-		return core.BadgeUnhealthy
-	case stack.HealthStarting:
-		return core.BadgeStarting
-	default:
-		return core.BadgeKind("")
-	}
 }
 
 // imageText is one cell: the image reference, marked when the service builds

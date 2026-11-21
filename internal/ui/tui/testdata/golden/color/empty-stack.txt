@@ -213,7 +213,7 @@ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-platform/compose.st
 
 === 120x18 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─────────────╮ 스택 상태
+╭ 기능 · 18 ─── esc 닫기 ╮ 스택 상태
 │조회                    │
 │  서비스 접속           │ ○ 서비스 없음
 │  로그 보기             │
@@ -233,7 +233,7 @@ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-platform/compose.st
 
 === 120x30 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─────────────╮ 스택 상태
+╭ 기능 · 18 ─── esc 닫기 ╮ 스택 상태
 │조회                    │
 │  서비스 접속           │ ○ 서비스 없음
 │  로그 보기             │
@@ -265,7 +265,7 @@ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-platform/compose.st
 
 === 120x50 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─────────────╮ 스택 상태
+╭ 기능 · 18 ─── esc 닫기 ╮ 스택 상태
 │조회                    │
 │  서비스 접속           │ ○ 서비스 없음
 │  로그 보기             │
@@ -317,7 +317,7 @@ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-platform/compose.st
 
 === 200x18 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─────────────────╮ 스택 상태
+╭ 기능 · 18 ─────── esc 닫기 ╮ 스택 상태
 │조회                        │
 │  서비스 접속               │ ○ 서비스 없음
 │  로그 보기                 │
@@ -337,7 +337,7 @@ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-platform/compose.st
 
 === 200x30 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─────────────────╮ 스택 상태
+╭ 기능 · 18 ─────── esc 닫기 ╮ 스택 상태
 │조회                        │
 │  서비스 접속               │ ○ 서비스 없음
 │  로그 보기                 │
@@ -369,7 +369,7 @@ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-platform/compose.st
 
 === 200x50 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─────────────────╮ 스택 상태
+╭ 기능 · 18 ─────── esc 닫기 ╮ 스택 상태
 │조회                        │
 │  서비스 접속               │ ○ 서비스 없음
 │  로그 보기                 │

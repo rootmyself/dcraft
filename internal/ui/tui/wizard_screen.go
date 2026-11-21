@@ -250,7 +250,7 @@ func (m *Model) wizardCounter() string {
 // wizardStepLines draws the current question: the pinned rows, the whole cards
 // the window contains, the rows below them and the scroll hint when cards are
 // outside the window.
-func (m *Model) wizardStepLines(placed []string) []string {
+func (m *Model) wizardStepLines() []string {
 	band := m.wizardBandData()
 	if band.Total == 0 {
 		// No cards: the whole question is one body and scrolls as one band.

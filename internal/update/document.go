@@ -6,6 +6,7 @@ import (
 
 	"github.com/rootmyself/dcraft/internal/core"
 	"github.com/rootmyself/dcraft/internal/stack"
+	"github.com/rootmyself/dcraft/internal/stack/present"
 )
 
 // Document implements core.ViewPresenter for a successful update. The CLI keeps
@@ -130,27 +131,12 @@ func readinessTable(readiness []stack.ServiceReadiness) *core.Table {
 			Selectable: true,
 			Cells: []core.Cell{
 				{Text: svc.Service, Detail: svc.Service},
-				{Text: readinessLabel(svc), Badge: readinessBadge(svc.Status)},
+				{Text: readinessLabel(svc), Badge: present.ReadinessBadge(svc.Status)},
 				{Text: readinessDetailText(svc), Detail: readinessDetailText(svc)},
 			},
 		})
 	}
 	return table
-}
-
-func readinessBadge(status stack.Readiness) core.BadgeKind {
-	switch status {
-	case stack.ReadinessHealthy, stack.ReadinessRunningUnverified:
-		return core.BadgeRunning
-	case stack.ReadinessUnhealthy:
-		return core.BadgeUnhealthy
-	case stack.ReadinessRestarting, stack.ReadinessTimeout:
-		return core.BadgeStarting
-	case stack.ReadinessExited, stack.ReadinessNotStarted, stack.ReadinessNotCreated:
-		return core.BadgeStopped
-	default:
-		return core.BadgeKind("")
-	}
 }
 
 // recordText states what the good-version recording did, without ever claiming a

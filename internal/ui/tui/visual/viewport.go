@@ -127,11 +127,11 @@ func (v Viewport) Hint() string {
 	below := v.Total - (v.Top + v.Visible())
 	switch {
 	case above > 0 && below > 0:
-		return fmt.Sprintf("↑ %d개 · ↓ %d개 더 있음 · PgUp/PgDn", above, below)
+		return fmt.Sprintf(msgHintBoth, above, below)
 	case above > 0:
-		return fmt.Sprintf("↑ %d개 더 있음 · PgUp/PgDn", above)
+		return fmt.Sprintf(msgHintAbove, above)
 	case below > 0:
-		return fmt.Sprintf("↓ %d개 더 있음 · PgUp/PgDn", below)
+		return fmt.Sprintf(msgHintBelow, below)
 	default:
 		return ""
 	}

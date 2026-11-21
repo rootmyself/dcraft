@@ -52,6 +52,11 @@ type RenderOptions struct {
 	// key-value block and the multi-line guidance. Badges and the table stay,
 	// because they are the reason the screen exists.
 	Compact bool
+	// Scrollbar reserves the last content cell of the scrolling table for the
+	// approved one-cell scrollbar gutter. Only the table loses the cell: the
+	// summary and guidance above and below it keep the full width, so a wide
+	// path is not shortened by decoration that does not touch it.
+	Scrollbar bool
 }
 
 // RenderDocumentLayoutOptions is RenderDocumentLayout with explicit
@@ -63,6 +68,14 @@ func RenderDocumentLayoutOptions(th Theme, doc core.Document, width int, opts Re
 		// before its size arrives must still render something complete.
 		lines := unlaidDocument(th, doc)
 		return DocumentLayout{Lines: lines, BandEnd: len(lines)}
+	}
+	// The screen decides compact mode from width *and* height, so a tall table
+	// on a short terminal folds like a narrow one. The renderer never re-reads
+	// the terminal size.
+	tableOpts := TableOptions{Compact: opts.Compact}
+	bandWidth := width
+	if opts.Scrollbar && bandWidth > 1 {
+		bandWidth--
 	}
 	var lines []string
 	gap := false
@@ -85,7 +98,7 @@ func RenderDocumentLayoutOptions(th Theme, doc core.Document, width int, opts Re
 	banded := false
 	for _, block := range doc.Blocks {
 		if block.Kind == core.BlockTable && block.Table != nil && !banded && len(block.Table.Rows) > 0 {
-			table := LayoutTable(th, *block.Table, width)
+			table := LayoutTableOptions(th, *block.Table, bandWidth, tableOpts)
 			if gap && len(lines) > 0 {
 				lines = append(lines, "")
 			}
@@ -116,7 +129,7 @@ func RenderDocumentLayoutOptions(th Theme, doc core.Document, width int, opts Re
 			if block.Table == nil {
 				continue
 			}
-			add(LayoutTable(th, *block.Table, width).Lines())
+			add(LayoutTableOptions(th, *block.Table, width, tableOpts).Lines())
 		case core.BlockDivider:
 			add([]string{divider(th, width)})
 		case core.BlockCallout:
@@ -217,7 +230,7 @@ func unlaidDocument(th Theme, doc core.Document) []string {
 				cells := make([]string, len(row.Cells))
 				for i, cell := range row.Cells {
 					text := cell.Text
-					if cell.Badge != BadgeNone {
+					if cell.Badge != core.BadgeNone {
 						text = badgeText(th, cell.Badge, text)
 					}
 					cells[i] = text

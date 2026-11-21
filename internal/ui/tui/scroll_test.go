@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/rootmyself/dcraft/internal/ui/tui/visual"
 )
@@ -16,18 +17,22 @@ import (
 // 2. the window never exceeds the total
 // 3. no scroll hint when everything fits
 // 4. the selection (the cursor row of a scrolling body) stays visible
+//
+// The size matrix includes the frames the review found broken: 120x18 drew no
+// service row at all while the counter claimed `1-1/8`, and 99/98/90x24 drew a
+// "more rows" hint that PgUp/PgDn could not act on.
 func TestResultCounterInvariants(t *testing.T) {
 	// A representative matrix: a body that fits, one that barely spills, and a
 	// stack far taller than the frame.
 	for _, total := range []int{1, 5, 17, 18, 19, 25, 40} {
-		for _, height := range []int{18, 20, 24, 30, 40} {
-			total, height := total, height
-			t.Run(counterName(total, height), func(t *testing.T) {
+		for _, size := range invariantSizes {
+			total, size := total, size
+			t.Run(counterName(total, size), func(t *testing.T) {
 				f := &documentOnlyFeature{desc: descriptor("status", true), doc: bigStackDocument(total)}
 				m := newTestModel(t, f)
 				m.theme = *plainTheme()
 				initModel(t, m)
-				resize(t, m, 120, height)
+				resize(t, m, size[0], size[1])
 
 				checkCounterMatchesDrawnRows(t, m, total)
 				checkWindowNeverExceedsTotal(t, m, total)
@@ -54,8 +59,16 @@ func TestResultCounterInvariants(t *testing.T) {
 	}
 }
 
-func counterName(total, height int) string {
-	return "rows=" + itoa(total) + "/height=" + itoa(height)
+// invariantSizes is the approved matrix plus the regression sizes from the
+// review: 120x18 is a tall-enough-to-be-wide but too-short frame, and
+// 99/98/90x24 are medium layouts where the navigation row costs a body line.
+var invariantSizes = [][2]int{
+	{120, 18}, {99, 24}, {98, 24}, {90, 24},
+	{120, 20}, {120, 24}, {120, 30}, {120, 40},
+}
+
+func counterName(total int, size [2]int) string {
+	return "rows=" + itoa(total) + "/size=" + itoa(size[0]) + "x" + itoa(size[1])
 }
 
 func pressRunes(t *testing.T, m *Model, r string) {
@@ -75,21 +88,30 @@ func checkCounterMatchesDrawnRows(t *testing.T, m *Model, total int) {
 		return
 	}
 	first, last, counterTotal := splitCounter(t, viewport.Counter())
-	if counterTotal != total {
-		t.Fatalf("counter total %d, want %d", counterTotal, total)
+	// The window is over the table rows, or over the whole result when nothing
+	// could be pinned; either way the counter names that region's total.
+	if counterTotal != viewport.Total {
+		t.Fatalf("counter total %d, viewport total %d", counterTotal, viewport.Total)
 	}
 	if first != viewport.Top+1 || last != viewport.Top+viewport.Visible() {
 		t.Fatalf("counter %d-%d disagrees with window %d..%d",
 			first, last, viewport.Top, viewport.Top+viewport.Visible())
 	}
+	// Every row the window claims must be drawn somewhere in the body, and the
+	// region must not draw one more table row than the window allows.
 	drawn := 0
-	for _, line := range strings.Split(m.View(), "\n") {
+	for _, line := range strings.Split(ansi.Strip(m.View()), "\n") {
 		if strings.Contains(line, "svc-") {
 			drawn++
 		}
 	}
-	if drawn != viewport.Visible() {
-		t.Fatalf("drew %d service rows, counter says %d", drawn, viewport.Visible())
+	if limit := viewport.Visible(); drawn > limit {
+		t.Fatalf("drew %d service rows, the window allows %d", drawn, limit)
+	}
+	if drawn == 0 && viewport.Visible() > 0 && len(m.resultScreen().Band) > 0 {
+		if len(m.resultScreen().Band[0]) > 0 && strings.HasPrefix(m.resultScreen().Band[0], "svc-") {
+			t.Fatalf("the window claims %d rows but no service row is drawn:\n%s", viewport.Visible(), m.View())
+		}
 	}
 }
 

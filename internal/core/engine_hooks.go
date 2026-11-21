@@ -30,7 +30,7 @@ func (e *Engine) prepareHooks(ctx context.Context, rec *recorder, req Request, d
 	if err != nil {
 		// Surface a failed pre-hook stage even when planning itself failed,
 		// because the main operation must not start.
-		_ = RunStage(rec, "hooks_pre", msgStageHooksPre, func() error { return err })
+		_ = RunStage(rec, StageNameHooksPre, msgStageHooksPre, func() error { return err })
 		return HookPlan{}, err
 	}
 	if len(plan.Entries) == 0 {
@@ -70,14 +70,14 @@ func (e *Engine) prepareHooks(ctx context.Context, rec *recorder, req Request, d
 	if len(pre) == 0 {
 		return plan, nil
 	}
-	err = RunStage(rec, "hooks_pre", msgStageHooksPre, func() error {
+	err = RunStage(rec, StageNameHooksPre, msgStageHooksPre, func() error {
 		return e.runHookEntries(ctx, res, req.Feature, res.OperationID, *target, pre)
 	})
 	if err != nil {
 		return plan, err
 	}
 
-	err = RunStage(rec, "revalidate_inputs", msgStageRevalidateInput, func() error {
+	err = RunStage(rec, StageNameRevalidate, msgStageRevalidateInput, func() error {
 		fresh, warnings, resolveErr := e.resolveFreshTarget(ctx, req, desc)
 		if resolveErr != nil {
 			return resolveErr
@@ -124,7 +124,7 @@ func (e *Engine) runHooksPost(ctx context.Context, rec *recorder, res *Result, a
 	if len(entries) == 0 {
 		return false
 	}
-	err := RunStage(rec, "hooks_post", msgStageHooksPost, func() error {
+	err := RunStage(rec, StageNameHooksPost, msgStageHooksPost, func() error {
 		return e.runHookEntries(ctx, res, action, operationID, target, entries)
 	})
 	if err == nil {

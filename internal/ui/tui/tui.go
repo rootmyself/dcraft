@@ -11,6 +11,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/rootmyself/dcraft/internal/core"
+	"github.com/rootmyself/dcraft/internal/stack"
+	"github.com/rootmyself/dcraft/internal/stack/present"
 	"github.com/rootmyself/dcraft/internal/ui/tui/visual"
 )
 
@@ -1153,12 +1155,25 @@ func (m *Model) menuView(budget int) string {
 	return strings.Join(lines, "\n") + "\n"
 }
 
-// navLine is the one-row navigation of the medium layout. The wide layout has
-// the sidebar instead, and the compact layout is too narrow for a summary row.
-// An unknown size renders nothing: a guess would only be replaced one frame
-// later.
+// compactByHeight reports a terminal too short for the decorated layout. The
+// compact mode is chosen by width or height, but only the height case needs the
+// navigation summary: a narrow terminal still has rows for the menu list.
+func (m *Model) compactByHeight() bool {
+	return m.height > 0 && m.height < visual.CompactMinRows
+}
+
+// navLine is the one-row navigation of the single-column layouts. The wide
+// layout has the persistent sidebar instead. A compact-by-height screen keeps
+// the row too: spec stories 11/12/14 require the current position to stay
+// visible, and a screen that hid the only navigation would let ↑/↓ move an
+// invisible cursor. Before the first WindowSizeMsg it renders nothing; a guess
+// would only be replaced one frame later.
 func (m *Model) navLine() string {
-	if m.width <= 0 || m.layoutMode() != visual.ModeMedium {
+	if m.width <= 0 || m.layoutMode() == visual.ModeWide {
+		return ""
+	}
+	if m.layoutMode() == visual.ModeCompact && !m.compactByHeight() {
+		// Compact by width: the menu list is drawn, and it names the position.
 		return ""
 	}
 	if !m.navMenuVisible() {
@@ -1203,11 +1218,11 @@ func (m *Model) serviceTable(compact bool) core.Table {
 		if m.serviceCursor == i+1 {
 			marker = m.theme.Glyphs.Sel
 		}
-		state := serviceStateLabel(svc.State)
-		stateBadge := serviceStateBadge(svc.State)
+		state := present.StateLabelValue(svc.State)
+		stateBadge := present.StateBadgeValue(svc.State)
 		if compact {
 			if folded, ok := serviceFoldedHealth(svc.Health); ok {
-				state, stateBadge = folded, serviceHealthBadge(svc.Health)
+				state, stateBadge = folded, present.HealthBadgeValue(svc.Health)
 			}
 		}
 		table.Rows = append(table.Rows, core.Row{
@@ -1217,7 +1232,7 @@ func (m *Model) serviceTable(compact bool) core.Table {
 				{Text: svc.Name, Detail: svc.Name},
 				{Text: state, Badge: stateBadge},
 				{Text: fmt.Sprintf("%d", svc.Instances)},
-				{Text: serviceHealthLabel(svc.Health), Badge: serviceHealthBadge(svc.Health)},
+				{Text: present.HealthLabelValue(svc.Health), Badge: present.HealthBadgeValue(svc.Health)},
 				{Text: serviceImageLabel(svc), Detail: svc.Image},
 				{Text: servicePortLabel(svc), Detail: svc.Ports},
 			},
@@ -1327,22 +1342,13 @@ func (m *Model) serviceView() string {
 
 // serviceScrolls reports whether the service rows have rows outside the window.
 func (m *Model) serviceScrolls() bool {
-	return m.serviceViewport().Overflow()
+	return m.serviceGeometry().scrolls
 }
 
-// serviceViewport is the scrolling window over the service rows, derived from
-// the model so the keys, the counter and the frame cannot disagree.
+// serviceViewport is the scrolling window over the service rows, taken from the
+// same layout pass that draws them.
 func (m *Model) serviceViewport() visual.Viewport {
-	budget := m.bodyBudget()
-	if budget <= 0 {
-		return visual.Viewport{}
-	}
-	screen := m.serviceScreen()
-	available := budget - m.titleRows() - len(screen.Fixed) - len(screen.Tail)
-	if available <= 0 {
-		return visual.Viewport{}
-	}
-	return fitViewport(visual.Viewport{Top: m.body.Top, Height: available, Total: len(screen.Band)}, available)
+	return m.serviceGeometry().viewport
 }
 
 // followServiceCursor scrolls the minimum distance that keeps the cursor row
@@ -1360,52 +1366,18 @@ func (m *Model) followServiceCursor() {
 	m.body.Top = v.Top
 }
 
-// serviceStateBadge pairs a container state with its semantic icon. Paused has
-// no badge on purpose: `■ 일시정지됨` is one cell wider than the approved state
-// column, and the shorter fallback (`■ 중지`) would name the wrong state. The
-// Korean label alone fits and stays exact.
-func serviceStateBadge(state string) core.BadgeKind {
-	switch state {
-	case "running":
-		return core.BadgeRunning
-	case "exited":
-		return core.BadgeStopped
-	case "restarting":
-		return core.BadgeStarting
-	case "created", "not_created", "":
-		return core.BadgeNotCreated
-	default:
-		return ""
-	}
-}
-
 // serviceFoldedHealth is the compact state-cell wording for a health problem.
 // A healthy or absent healthcheck is not a problem, so the container state
-// stays: `실행 중` says more than `정상` when the column is already gone.
+// stays: `실행 중` says more than `정상` when the column is already gone. The
+// word itself comes from the shared mapping, never a second copy.
 func serviceFoldedHealth(health string) (string, bool) {
-	switch health {
-	case "unhealthy":
-		return msgServiceUnhealthy, true
-	case "starting":
-		return msgServiceHealthStarting, true
+	switch stack.Health(health) {
+	case stack.HealthUnhealthy, stack.HealthStarting:
+		return present.HealthLabelValue(health), true
 	default:
 		return "", false
 	}
 }
-
-func serviceHealthBadge(health string) core.BadgeKind {
-	switch health {
-	case "unhealthy":
-		return core.BadgeUnhealthy
-	case "starting":
-		return core.BadgeStarting
-	default:
-		return BadgeNoneKind
-	}
-}
-
-// BadgeNoneKind is "no semantic badge"; the renderer draws the text alone.
-const BadgeNoneKind core.BadgeKind = ""
 
 // serviceImageLabel never leaves a cell empty: a catalog that cannot report the
 // image shows the approved dash, which is a fact ("unknown here"), not a blank.
@@ -1421,42 +1393,6 @@ func servicePortLabel(svc core.ServiceStatus) string {
 		return msgServiceNoPort
 	}
 	return svc.Ports
-}
-
-func serviceStateLabel(state string) string {
-	switch state {
-	case "running":
-		return msgServiceStateRunning
-	case "exited":
-		return msgServiceStateExited
-	case "paused":
-		return msgServiceStatePaused
-	case "restarting":
-		return msgServiceStateRestarting
-	case "created":
-		return msgServiceStateCreated
-	case "not_created":
-		return msgServiceStateNotCreated
-	case "":
-		return msgServiceStateUnknown
-	default:
-		return state
-	}
-}
-
-func serviceHealthLabel(health string) string {
-	switch health {
-	case "", "none":
-		return msgServiceHealthNone
-	case "healthy":
-		return msgServiceHealthOK
-	case "starting":
-		return msgServiceHealthStarting
-	case "unhealthy":
-		return msgServiceUnhealthy
-	default:
-		return health
-	}
 }
 
 // serviceScopeText is the exact scope shown on the plan/confirm screen. It
@@ -1479,10 +1415,10 @@ func environmentSummary(env core.Environment) string {
 	if len(env.Files) == 0 {
 		parts = append(parts, msgEnvDefaultFiles)
 	} else {
-		parts = append(parts, fmt.Sprintf("%s %d개", msgEnvComposeFiles, len(env.Files)))
+		parts = append(parts, fmt.Sprintf(msgEnvCount, msgEnvComposeFiles, len(env.Files)))
 	}
 	if len(env.EnvFiles) > 0 {
-		parts = append(parts, fmt.Sprintf("%s %d개", msgEnvEnvFiles, len(env.EnvFiles)))
+		parts = append(parts, fmt.Sprintf(msgEnvCount, msgEnvEnvFiles, len(env.EnvFiles)))
 	}
 	if len(env.Profiles) > 0 {
 		parts = append(parts, msgEnvProfiles+" "+strings.Join(env.Profiles, ", "))
