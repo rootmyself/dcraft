@@ -32,11 +32,18 @@ type ptySession struct {
 
 func startPTY(t *testing.T, dir string, env []string, args ...string) *ptySession {
 	t.Helper()
+	return startPTYWithTerm(t, dir, env, "xterm-256color", args...)
+}
+
+// startPTYWithTerm is startPTY with an explicit TERM, so a test can exercise the
+// color-profile decision on a real terminal.
+func startPTYWithTerm(t *testing.T, dir string, env []string, termName string, args ...string) *ptySession {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	t.Cleanup(cancel)
 	cmd := exec.CommandContext(ctx, binaryPath, args...)
 	cmd.Dir = dir
-	cmd.Env = append(append([]string{}, env...), "TERM=xterm-256color")
+	cmd.Env = append(append([]string{}, env...), "TERM="+termName)
 	master, err := pty.Start(cmd)
 	if err != nil {
 		t.Fatalf("start pty: %v", err)

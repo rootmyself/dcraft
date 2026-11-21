@@ -451,6 +451,10 @@ func badgeGlyph(th Theme, kind core.BadgeKind) (string, Token) {
 // fit its column: the full label (which the caller already has), then a short
 // Korean label, then the icon alone. The icon alone is still a non-color channel
 // because every row also carries the column position, but it is the last resort.
+//
+// `◐ 확인 중` is nine cells and the health column is eight, so `starting` needs
+// its own short form: without one it fell straight to the bare icon, which names
+// nothing. `◐ 확인` keeps the icon and a Korean word for the same state.
 func badgeFallbacks(th Theme, kind core.BadgeKind) []string {
 	glyph, _ := badgeGlyph(th, kind)
 	switch kind {
@@ -463,7 +467,7 @@ func badgeFallbacks(th Theme, kind core.BadgeKind) []string {
 	case core.BadgeUnhealthy:
 		return []string{glyph + " 비정상", glyph}
 	case core.BadgeStarting:
-		return []string{glyph + " 확인 중", glyph}
+		return []string{glyph + " 확인", glyph}
 	case core.BadgeRisk:
 		return []string{glyph + " 위험", glyph}
 	default:

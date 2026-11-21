@@ -109,11 +109,25 @@ func ComposeModal(th Theme, width, height int, frame []string, spec ModalSpec) [
 			continue
 		}
 		plain := Fit(ansi.Strip(frame[y]), width, th.Glyphs.Ell)
-		gutterLeft := ansi.Cut(plain, 0, left)
-		gutterRight := ansi.Cut(plain, left+mw, width)
+		gutterLeft := gutterCells(plain, 0, left)
+		gutterRight := gutterCells(plain, left+mw, width-left-mw)
 		out[y] = th.Paint(TokenMuted, gutterLeft) + row + th.Paint(TokenMuted, gutterRight)
 	}
 	return out
+}
+
+// gutterCells is exactly w cells of the already-stripped row, starting at cell
+// `left`. The panel covers the cells in between, so a wide grapheme that
+// straddles either boundary belongs to neither gutter: it is dropped and the
+// gutter is padded. ansi.Cut alone is not enough because it keeps a straddling
+// grapheme whole, which would make the row one cell wider than the terminal.
+func gutterCells(plain string, left, w int) string {
+	if w <= 0 {
+		return ""
+	}
+	_, rest := splitCells(plain, left)
+	part, _ := splitCells(rest, w)
+	return Pad(part, w)
 }
 
 // dimLine lowers one body row to muted. The content is kept exactly: the dim

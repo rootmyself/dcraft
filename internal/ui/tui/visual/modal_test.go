@@ -262,3 +262,38 @@ func TestComposeModalWithoutASizeKeepsTheContent(t *testing.T) {
 		}
 	}
 }
+
+// The panel gutters are the dimmed background. A wide glyph in the background
+// that straddles an edge must be dropped, not kept whole: keeping it whole
+// makes the row one cell wider than the terminal, which wraps and corrupts the
+// frame. This is the Korean-text case the contract singles out.
+//
+// The shift loop matters: a syllable only straddles the boundary at particular
+// alignments, so a test with one alignment can pass while the bug is present.
+func TestComposeModalGuttersNeverOverflowOnStraddlingWideGlyphs(t *testing.T) {
+	th := Plain()
+	for _, w := range []int{40, 48, 80, 120, 200} {
+		h := 24
+		for shift := 0; shift < 8; shift++ {
+			prefix := strings.Repeat(" ", shift)
+			body := make([]string, h)
+			for i := range body {
+				body[i] = Fit(prefix+strings.Repeat("가나다라마", 40), w, th.Glyphs.Ell)
+			}
+			frame := Compose(th, w, h, Frame{
+				Header: Header(th, w, fullFacts()),
+				Body:   body,
+				Footer: Footer(th, PhaseConfirm, w),
+			})
+			out := ComposeModal(th, w, h, frame, panelSpec(9, 1))
+			if len(out) != h {
+				t.Fatalf("%d columns: %d rows", w, len(out))
+			}
+			for i, line := range out {
+				if got := Width(line); got != w {
+					t.Fatalf("%d columns shift %d row %d = %d cells: %q", w, shift, i, got, ansi.Strip(line))
+				}
+			}
+		}
+	}
+}
