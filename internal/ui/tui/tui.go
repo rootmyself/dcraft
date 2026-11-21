@@ -121,6 +121,12 @@ type Model struct {
 	// discarding the value (r re-reads, any feature reruns).
 	resultDismissed bool
 
+	// helpOpen is the "?" keymap panel; confirmScroll is the open panel's
+	// first visible row. Both are screen state, never persisted: a new flow
+	// starts at the top.
+	helpOpen      bool
+	confirmScroll int
+
 	// pendingApproval and planText hold the generic confirmation state. Any
 	// approval-gated feature that implements core.Planner reuses this screen;
 	// no feature-specific branch is added here. pendingApprovals carries every
@@ -304,6 +310,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.pending = m.active
 		}
 		m.phase = phaseConfirm
+		m.confirmScroll = 0
 		return m, nil
 	case environmentListMsg:
 		if m.phase != phaseLoadingEnvironments {
@@ -423,6 +430,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case tea.KeyMsg:
+		// The help panel is the outermost layer: while it is open it owns
+		// every key, and closing it runs nothing.
+		if m.helpOpen {
+			return m, m.updateHelpKey(msg)
+		}
 		// The filter owns the keyboard while "/" is active: q and r are text,
 		// not commands, so a search can contain any letter.
 		if m.filtering {
@@ -448,43 +460,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateServiceKey(msg)
 		}
 		if m.phase == phaseConfirm {
-			switch msg.String() {
-			case "q", "ctrl+c":
-				// A confirmation is not an operation; quitting is safe and
-				// runs nothing.
-				return m, tea.Quit
-			case "esc", "n":
-				if m.pendingApproval != core.ApprovalNone {
-					m.declineApproval()
-				} else {
-					m.pending = nil
-					m.planText = ""
-					m.phase = phaseReady
-					m.notice = ""
-				}
+			if msg.String() == "?" {
+				m.openHelp()
 				return m, nil
-			case "enter":
-				if m.pendingApproval != core.ApprovalNone {
-					feature := m.active
-					approvals := append([]core.ApprovalKind{}, m.pendingApprovals...)
-					m.pendingApproval = ""
-					m.pendingApprovals = nil
-					m.planText = ""
-					if feature == nil {
-						m.phase = phaseReady
-						return m, nil
-					}
-					return m, m.runApproved(feature, approvals)
-				}
-				if m.pending == nil {
-					m.phase = phaseReady
-					return m, nil
-				}
-				f := m.pending
-				m.pending = nil
-				return m, m.startRun(f, nil)
 			}
-			return m, nil
+			return m.updateConfirmKey(msg)
 		}
 		switch msg.String() {
 		case "q":
@@ -556,6 +536,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.phase == phaseSelectingEnvironment {
 			switch msg.String() {
+			case "?":
+				m.openHelp()
+				return m, nil
 			case "up", "k":
 				if len(m.envs) > 0 {
 					if m.envSelected <= 0 {
@@ -577,6 +560,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		switch msg.String() {
+		case "?":
+			// Help is available on every screen that advertises it. It only
+			// shows the current screen's keys and closes with esc; it never
+			// runs anything.
+			m.openHelp()
+			return m, nil
 		case "d":
 			if m.phase == phaseReady && m.hasDetail() {
 				m.openDetail()
@@ -703,6 +692,7 @@ func (m *Model) startRunPath(f core.Feature) tea.Cmd {
 	m.stages = nil
 	m.planStages = nil
 	m.phase = phaseConfirm
+	m.confirmScroll = 0
 	m.notice = ""
 	return nil
 }
@@ -964,6 +954,8 @@ func (m *Model) resetRunState() {
 	m.planText = ""
 	m.planFingerprint = ""
 	m.notice = ""
+	m.helpOpen = false
+	m.confirmScroll = 0
 	m.closeLive()
 	m.form = nil
 	m.lastLive = nil
@@ -1018,6 +1010,7 @@ func (m *Model) declineApproval() {
 	m.planText = ""
 	m.planFingerprint = ""
 	m.req.PlanFingerprint = ""
+	m.confirmScroll = 0
 	m.phase = phaseReady
 }
 
@@ -1121,7 +1114,14 @@ func waitStageCmd(events chan core.Stage) tea.Cmd {
 // keycap footer. Every line fits the terminal width exactly, so a resize
 // reflows immediately and never leaves the frame ragged.
 func (m *Model) View() string {
-	lines := m.composeFrame(m.renderBody())
+	body := m.renderBody()
+	if m.overlayOpen() {
+		// The panel covers the body; what shows through is the screen the
+		// user was on, dimmed. It still states the stack identity and the
+		// keys, so the panel never hides where the change would land.
+		body = m.backgroundModel().renderBody()
+	}
+	lines := m.composeFrame(body)
 	// No trailing newline: the frame already occupies exactly the terminal
 	// height, and Bubble Tea drops the top line of a view taller than the
 	// window. One extra newline would scroll the header off screen.
@@ -1163,53 +1163,7 @@ func (m *Model) navLine() string {
 	return visual.NavRow(m.theme, m.bodyWidth(), m.nav(), m.navExpanded)
 }
 
-// confirmView explains the requested target and effect before a mutating
-// feature runs. It shows only caller input; the engine resolves and reports
-// the Compose project name after the operation starts.
-func (m *Model) confirmView() string {
-	var b strings.Builder
-	b.WriteString(msgConfirmTitle)
-	b.WriteString("\n")
-	if m.pending == nil {
-		return strings.TrimRight(b.String(), "\n")
-	}
-	d := m.pending.Descriptor()
-	fmt.Fprintf(&b, "%s: %s (%s)\n", msgConfirmActionLabel, d.Title, d.Name)
-	target := m.target.Path
-	if target == "" {
-		target = msgConfirmTargetNow
-	}
-	fmt.Fprintf(&b, "%s: %s\n", msgConfirmTargetLabel, target)
-	if m.target.Environment != "" {
-		fmt.Fprintf(&b, "%s: %s\n", msgConfirmEnvironment, m.target.Environment)
-	}
-	if len(m.target.Files) > 0 {
-		fmt.Fprintf(&b, "%s: %s\n", msgConfirmFileLabel, strings.Join(m.target.Files, ", "))
-	}
-	if len(m.target.Profiles) > 0 {
-		fmt.Fprintf(&b, "%s: %s\n", msgConfirmProfile, strings.Join(m.target.Profiles, ", "))
-	}
-	if m.target.ProjectName != "" {
-		fmt.Fprintf(&b, "%s: %s\n", msgConfirmProject, m.target.ProjectName)
-	} else {
-		fmt.Fprintf(&b, "%s: %s\n", msgConfirmProject, msgConfirmProjectAuto)
-	}
-	fmt.Fprintf(&b, "%s: %s\n", msgConfirmScopeLabel, serviceScopeText(m.req.Services))
-	fmt.Fprintf(&b, "%s: %s\n", msgConfirmEffectLabel, d.Summary)
-	if strings.TrimSpace(m.planText) != "" {
-		b.WriteString("\n")
-		b.WriteString(m.planText)
-		b.WriteString("\n")
-	}
-	if block := m.timelineBlock(m.stages, m.planStages); block != "" {
-		b.WriteString("\n")
-		b.WriteString(block)
-		b.WriteString("\n")
-	}
-	return strings.TrimRight(b.String(), "\n")
-}
-
-// serviceCategoryColumnWidth is the exact width of the selection column. It is
+// serviceSelectCellWidth is the exact width of the selection column. It is
 // four cells because the cursor glyph and the checkbox together are four
 // (`▸[x]`), which keeps every row's name starting in the same cell.
 const serviceSelectCellWidth = 4

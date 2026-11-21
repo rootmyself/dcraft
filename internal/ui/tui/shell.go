@@ -32,11 +32,21 @@ func (m *Model) footerPhase() visual.Phase {
 	return visual.PhaseMenu
 }
 
-// footerItems is the exact keycap row for the current screen. The approved
-// phase rows apply verbatim except where a screen's keys are a strict superset
-// that no approved row covers; those rows keep the approved chips and add only
-// the keys that screen actually accepts.
+// footerItems is the exact keycap row for the current screen. While the help
+// panel is open it states the one key that screen has: closing the panel.
+// There is exactly one keycap row per screen, so a panel never repeats one.
 func (m *Model) footerItems() []visual.Keycap {
+	if m.helpOpen {
+		return []visual.Keycap{{Key: "esc", Label: msgHelpClose, Priority: 0}}
+	}
+	return m.screenKeycaps()
+}
+
+// screenKeycaps is the keycap row of the screen under any open panel. The
+// approved phase rows apply verbatim except where a screen's keys are a strict
+// superset that no approved row covers; those rows keep the approved chips and
+// add only the keys that screen actually accepts.
+func (m *Model) screenKeycaps() []visual.Keycap {
 	if m.filtering {
 		// While "/" has the keyboard the only two meanings are clear and
 		// commit; q, r and the arrows are characters or menu moves here.
@@ -74,6 +84,16 @@ func (m *Model) footerItems() []visual.Keycap {
 			{Key: "q", Label: "종료", Priority: 0},
 		}
 	}
+	if m.phase == phaseSelectingEnvironment {
+		// The environment screen ignores "/", "r" and "tab"; advertising the
+		// menu row here would name keys that do nothing.
+		return []visual.Keycap{
+			{Key: "↑↓", Label: "선택", Priority: 1},
+			{Key: "enter", Label: "실행", Priority: 0},
+			{Key: "q", Label: "종료", Priority: 0},
+			{Key: "?", Label: "도움말", Priority: 3},
+		}
+	}
 	if m.phase == phaseSelectingServices {
 		return []visual.Keycap{
 			{Key: "↑↓", Label: "이동", Priority: 1},
@@ -81,7 +101,17 @@ func (m *Model) footerItems() []visual.Keycap {
 			{Key: "enter", Label: "실행", Priority: 0},
 			{Key: "esc", Label: "취소", Priority: 0},
 			{Key: "q", Label: "종료", Priority: 0},
+			{Key: "?", Label: "도움말", Priority: 3},
 		}
+	}
+	if m.form != nil {
+		// A text field accepts "?" as input, so the help key only exists on
+		// choice fields. The footer states only keys that do something.
+		items := visual.FooterItems(visual.PhaseForm)
+		if m.formFocusIsText() {
+			items = withoutHelp(items)
+		}
+		return items
 	}
 	if m.isWizardPhase() {
 		// The wizard's keys are not the form's: it moves with arrows and goes
@@ -95,6 +125,7 @@ func (m *Model) footerItems() []visual.Keycap {
 					{Key: "left", Label: "이전", Priority: 0},
 					{Key: "esc", Label: "취소", Priority: 0},
 					{Key: "q", Label: "종료", Priority: 0},
+					{Key: "?", Label: "도움말", Priority: 3},
 				}
 			}
 			return []visual.Keycap{
@@ -102,17 +133,37 @@ func (m *Model) footerItems() []visual.Keycap {
 				{Key: "left", Label: "이전", Priority: 2},
 				{Key: "esc", Label: "취소", Priority: 0},
 				{Key: "q", Label: "종료", Priority: 0},
+				{Key: "?", Label: "도움말", Priority: 3},
 			}
 		}
-		return []visual.Keycap{
+		items := []visual.Keycap{
 			{Key: "↑↓", Label: "선택", Priority: 1},
 			{Key: "enter", Label: "다음", Priority: 0},
 			{Key: "left", Label: "이전", Priority: 2},
 			{Key: "esc", Label: "취소", Priority: 0},
 			{Key: "q", Label: "종료", Priority: 0},
+			{Key: "?", Label: "도움말", Priority: 3},
 		}
+		if m.wizardTextInput() {
+			// A free-text step accepts "?" as a character.
+			items = withoutHelp(items)
+		}
+		return items
 	}
 	return m.resultScrollKeycaps(visual.FooterItems(m.footerPhase()))
+}
+
+// withoutHelp drops the help chip from a row for a screen that cannot open the
+// overlay. It never mutates the input: the approval footer rows are shared.
+func withoutHelp(items []visual.Keycap) []visual.Keycap {
+	out := make([]visual.Keycap, 0, len(items))
+	for _, item := range items {
+		if item.Key == "?" {
+			continue
+		}
+		out = append(out, item)
+	}
+	return out
 }
 
 // bodyWidth is the width the body renderers may use. In the wide layout the
@@ -339,7 +390,7 @@ func (m *Model) bodyBudget() int {
 	if m.height <= 0 {
 		return 0
 	}
-	rows := visual.BodyRows(m.height) - len(m.pinnedLines())
+	rows := visual.BodyRows(m.height)
 	if rows < 1 {
 		rows = 1
 	}
@@ -485,8 +536,10 @@ func (m *Model) screenTitle() string {
 	if (m.phase == phaseLoadingServices || m.phase == phaseSelectingServices) && m.serviceFeature != nil {
 		shown = m.serviceFeature
 	}
-	if m.phase == phaseConfirm && m.pending != nil {
-		shown = m.pending
+	if m.confirmOpen() {
+		// The panel states the action; the background keeps the stack
+		// identity without repeating it.
+		shown = nil
 	}
 	if m.live != nil && m.active != nil {
 		shown = m.active
@@ -506,10 +559,9 @@ func (m *Model) phaseBody() string {
 	case phasePlanning:
 		return m.workingBody(msgPlanning)
 	case phaseConfirm:
-		if m.pendingApproval != core.ApprovalNone {
-			return m.planView()
-		}
-		return m.confirmView()
+		// The confirmation is a composed panel, not a body screen: the body
+		// under it is the dimmed background.
+		return ""
 	case phaseLoadingEnvironments:
 		return msgEnvChecking
 	case phaseSelectingEnvironment:
@@ -533,34 +585,6 @@ func (m *Model) phaseBody() string {
 		// lines by renderBody so the table can scroll under a fixed header.
 		return ""
 	}
-}
-
-// planView is the approval screen: the generic plan plus the independent
-// approval kinds. Field order and wording are unchanged; only styling moved to
-// the theme.
-func (m *Model) planView() string {
-	var b strings.Builder
-	b.WriteString(m.title(msgApprovalConfirmTitle))
-	b.WriteString("\n")
-	if m.active != nil {
-		d := m.active.Descriptor()
-		b.WriteString("작업: " + d.Title + " (" + d.Name + ")\n")
-	}
-	b.WriteString(msgConfirmScopeLabel + ": " + serviceScopeText(m.req.Services) + "\n")
-	b.WriteString("승인: " + m.pendingApproval.KoreanLabel() + " (" + string(m.pendingApproval) + ")\n")
-	for _, kind := range m.pendingApprovals {
-		if kind == m.pendingApproval {
-			continue
-		}
-		b.WriteString("승인: " + kind.KoreanLabel() + " (" + string(kind) + ")\n")
-	}
-	b.WriteString("\n")
-	b.WriteString(m.planText)
-	if block := m.timelineBlock(m.stages, m.planStages); block != "" {
-		b.WriteString("\n\n")
-		b.WriteString(block)
-	}
-	return strings.TrimRight(b.String(), "\n")
 }
 
 // environmentView lists named environments; nothing is preselected.

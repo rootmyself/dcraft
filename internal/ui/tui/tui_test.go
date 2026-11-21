@@ -462,7 +462,7 @@ func TestMutatingFeatureConfirmsTargetAndEffectBeforeRunning(t *testing.T) {
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = nm.(*Model)
 	view := m.View()
-	for _, want := range []string{"다음 작업", "제목 up", "대상", "범위", "스택 전체", "효과", "요약 up", "변경", "[enter] 실행", "[esc] 취소"} {
+	for _, want := range []string{msgConfirmTitle, "제목 up", "대상", "범위", "스택 전체", "효과", "요약 up", "변경", "[enter] 실행", "[esc] 취소"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("confirmation missing %q:\n%s", want, view)
 		}
@@ -525,7 +525,7 @@ func TestEscapeCancelsConfirmationWithoutRunning(t *testing.T) {
 	if up.runs != 0 {
 		t.Fatalf("escaped confirmation ran the feature: %d", up.runs)
 	}
-	if strings.Contains(m.View(), "다음 작업") {
+	if strings.Contains(m.View(), msgConfirmTitle) {
 		t.Fatalf("confirmation still visible:\n%s", m.View())
 	}
 	if !strings.Contains(m.View(), "body") {
@@ -624,7 +624,7 @@ func TestRefreshOfAMutatingFeatureAlsoConfirms(t *testing.T) {
 	if up.runs != 1 {
 		t.Fatalf("r reran a mutating feature without confirmation: %d", up.runs)
 	}
-	if !strings.Contains(m.View(), "다음 작업") {
+	if !strings.Contains(m.View(), msgConfirmTitle) {
 		t.Fatalf("refresh did not ask for confirmation:\n%s", m.View())
 	}
 }

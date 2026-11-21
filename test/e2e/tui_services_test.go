@@ -22,9 +22,13 @@ func TestTUIServiceScopeStopsOnlyTheSelectedService(t *testing.T) {
 		{wait: "▸[ ] web", send: " "},
 		{wait: "[x] web", send: "\r"},
 		{wait: "다음 작업을 실행할까요?", send: ""},
-		{wait: "범위: web", send: "\r"},
+		{wait: "범위:", send: "\r"},
 		{wait: "스택을 중지했습니다.", send: ""},
 	})
+	// The chosen scope is echoed on the confirmation panel.
+	if row, ok := screenRowWith(output, "범위:"); !ok || !strings.Contains(row, "web") {
+		t.Fatalf("confirmation did not echo the chosen scope:\n%s", output)
+	}
 	if code != 0 {
 		t.Fatalf("TUI exit = %d\n%s", code, output)
 	}
@@ -50,11 +54,14 @@ func TestTUIServiceScopeWholeStackKeepsThePreviousBehavior(t *testing.T) {
 		{wait: "▸ 스택 중지", send: "\r"},
 		{wait: "서비스 선택", send: "\r"},
 		{wait: "다음 작업을 실행할까요?", send: ""},
-		{wait: "범위: 스택 전체", send: "\r"},
+		{wait: "범위:", send: "\r"},
 		{wait: "스택을 중지했습니다.", send: ""},
 	})
 	if code != 0 {
 		t.Fatalf("TUI exit = %d\n%s", code, output)
+	}
+	if row, ok := screenRowWith(output, "범위:"); !ok || !strings.Contains(row, "스택 전체") {
+		t.Fatalf("confirmation did not echo the whole-stack scope:\n%s", output)
 	}
 	stopLine := findCall(t, fake.calls(t), " stop")
 	if !strings.HasSuffix(stopLine, " stop") {

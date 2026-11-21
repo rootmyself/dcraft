@@ -22,3 +22,16 @@ func visibleText(s string) string {
 func screenContains(screen, text string) bool {
 	return strings.Contains(visibleText(screen), text)
 }
+
+// screenRowWith returns the last visible row containing label. A panel pads a
+// label column, so a label and its value are not adjacent characters; the row
+// is the unit that proves they belong together.
+func screenRowWith(screen, label string) (string, bool) {
+	rows := strings.Split(visibleText(screen), "\n")
+	for i := len(rows) - 1; i >= 0; i-- {
+		if strings.Contains(rows[i], label) {
+			return rows[i], true
+		}
+	}
+	return "", false
+}

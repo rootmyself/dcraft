@@ -94,7 +94,7 @@ func TestScopeTableClearingEveryServiceRestoresTheWholeStack(t *testing.T) {
 	}
 
 	feedCmd(t, m, press(m, tea.KeyMsg{Type: tea.KeyEnter}))
-	if !strings.Contains(m.View(), "범위: 스택 전체") {
+	if row, ok := modalRow(m.View(), "범위:"); !ok || !strings.Contains(row, "스택 전체") {
 		t.Fatalf("whole-stack scope is not shown:\n%s", m.View())
 	}
 	feedCmd(t, m, press(m, tea.KeyMsg{Type: tea.KeyEnter}))

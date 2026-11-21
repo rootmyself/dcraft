@@ -230,10 +230,11 @@ func TestScopeTableConfirmedSubsetIsEchoedUnchanged(t *testing.T) {
 		t.Fatalf("phase = %v, want confirmation; view:\n%s", m.phase, m.View())
 	}
 	confirm := viewOf(m)
-	if !strings.Contains(confirm, "범위: api") {
+	row, ok := modalRow(confirm, "범위:")
+	if !ok || !strings.Contains(row, "api") {
 		t.Fatalf("confirmation does not echo the chosen scope:\n%s", confirm)
 	}
-	if strings.Contains(confirm, "범위: 스택 전체") {
+	if strings.Contains(row, "스택 전체") {
 		t.Fatalf("a subset silently widened to the whole stack:\n%s", confirm)
 	}
 }
