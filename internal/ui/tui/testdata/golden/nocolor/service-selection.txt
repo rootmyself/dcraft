@@ -1,0 +1,420 @@
+# dcraft TUI golden snapshot
+# screen: service-selection
+# theme: nocolor
+# regenerate: go test ./internal/ui/tui -run TestGolden -update
+
+=== 40x18 ===
+ dcraft · acme-platform · staging
+제목 stop                         1-6/25
+
+서비스 선택
+대상: /work/acme-platform
+실행환경: staging
+
+ [ ] 전체 (스택 전체)
+선택 서비스                  상태
+ [x] svc-01                  ✓ 실행 중
+▸[ ] svc-02                  ■ 중지됨
+ [ ] svc-03                  ▲ 비정상
+ [ ] svc-04                  ◐ 확인 중
+ [ ] svc-05                  ✓ 실행 중
+ [ ] svc-06                  ■ 중지됨
+              ↓ 19개 더 있음 · PgUp/PgDn
+현재 설정에 없음: svc-25
+[enter] 실행  [esc] 취소  [q] 종료
+
+=== 40x30 ===
+ dcraft · acme-platform · staging
+제목 stop                        1-18/25
+
+서비스 선택
+대상: /work/acme-platform
+실행환경: staging
+
+ [ ] 전체 (스택 전체)
+선택 서비스                  상태
+ [x] svc-01                  ✓ 실행 중
+▸[ ] svc-02                  ■ 중지됨
+ [ ] svc-03                  ▲ 비정상
+ [ ] svc-04                  ◐ 확인 중
+ [ ] svc-05                  ✓ 실행 중
+ [ ] svc-06                  ■ 중지됨
+ [ ] svc-07                  ▲ 비정상
+ [ ] svc-08                  ◐ 확인 중
+ [ ] svc-09                  ✓ 실행 중
+ [ ] svc-10                  ■ 중지됨
+ [ ] svc-11                  ▲ 비정상
+ [ ] svc-12                  ◐ 확인 중
+ [ ] svc-13                  ✓ 실행 중
+ [ ] svc-14                  ■ 중지됨
+ [ ] svc-15                  ▲ 비정상
+ [ ] svc-16                  ◐ 확인 중
+ [ ] svc-17                  ✓ 실행 중
+ [ ] svc-18                  ■ 중지됨
+               ↓ 7개 더 있음 · PgUp/PgDn
+현재 설정에 없음: svc-25
+[enter] 실행  [esc] 취소  [q] 종료
+
+=== 40x50 ===
+ dcraft · acme-platform · staging
+제목 stop
+
+서비스 선택
+대상: /work/acme-platform
+실행환경: staging
+
+ [ ] 전체 (스택 전체)
+선택 서비스                  상태
+ [x] svc-01                  ✓ 실행 중
+▸[ ] svc-02                  ■ 중지됨
+ [ ] svc-03                  ▲ 비정상
+ [ ] svc-04                  ◐ 확인 중
+ [ ] svc-05                  ✓ 실행 중
+ [ ] svc-06                  ■ 중지됨
+ [ ] svc-07                  ▲ 비정상
+ [ ] svc-08                  ◐ 확인 중
+ [ ] svc-09                  ✓ 실행 중
+ [ ] svc-10                  ■ 중지됨
+ [ ] svc-11                  ▲ 비정상
+ [ ] svc-12                  ◐ 확인 중
+ [ ] svc-13                  ✓ 실행 중
+ [ ] svc-14                  ■ 중지됨
+ [ ] svc-15                  ▲ 비정상
+ [ ] svc-16                  ◐ 확인 중
+ [ ] svc-17                  ✓ 실행 중
+ [ ] svc-18                  ■ 중지됨
+ [ ] svc-19                  ▲ 비정상
+ [ ] svc-20                  ◐ 확인 중
+ [ ] svc-21                  ✓ 실행 중
+ [ ] svc-22                  ■ 중지됨
+ [ ] svc-23                  ▲ 비정상
+ [ ] svc-24                  ◐ 확인 중
+ [ ] svc-25                  ✓ 실행 중
+현재 설정에 없음: svc-25
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[enter] 실행  [esc] 취소  [q] 종료
+
+=== 80x18 ===
+ dcraft · acme-platform · staging        Docker 29.10.0 · Compose 2.39.1 · 로컬
+제목 stop                                                                 1-2/25
+
+서비스 선택
+대상: /work/acme-platform
+실행환경: staging
+
+이 작업을 적용할 범위를 선택하세요. 전체를 선택하면 스택 전체에 적용합니다.
+
+ [ ] 전체 (스택 전체)
+선택 서비스       상태        인스턴스 health   이미지             포트
+ [x] svc-01       ✓ 실행 중          1 정상     ghcr.io/acme/plat… 9000→8080
+▸[ ] svc-02       ■ 중지됨           0 없음     ghcr.io/acme/plat… -
+                                                      ↓ 23개 더 있음 · PgUp/PgDn
+현재 설정에 없음: svc-25
+
+선택은 같은 엔진 규칙으로 다시 검증됩니다. 인스턴스 단위 선택은 로그·exec 화면…
+[↑↓] 이동  [space] 선택/해제  [enter] 실행  [esc] 취소  [q] 종료  [?] 도움말
+
+=== 80x30 ===
+ dcraft · acme-platform · staging        Docker 29.10.0 · Compose 2.39.1 · 로컬
+제목 stop                                                                1-14/25
+
+서비스 선택
+대상: /work/acme-platform
+실행환경: staging
+
+이 작업을 적용할 범위를 선택하세요. 전체를 선택하면 스택 전체에 적용합니다.
+
+ [ ] 전체 (스택 전체)
+선택 서비스       상태        인스턴스 health   이미지             포트
+ [x] svc-01       ✓ 실행 중          1 정상     ghcr.io/acme/plat… 9000→8080
+▸[ ] svc-02       ■ 중지됨           0 없음     ghcr.io/acme/plat… -
+ [ ] svc-03       ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/plat… -
+ [ ] svc-04       ○ 생성됨           0 ◐ 확인   ghcr.io/acme/plat… 9003→8080
+ [ ] svc-05       ✓ 실행 중          1 정상     ghcr.io/acme/plat… -
+ [ ] svc-06       ■ 중지됨           0 없음     ghcr.io/acme/plat… -
+ [ ] svc-07       ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/plat… 9006→8080
+ [ ] svc-08       ○ 생성됨           0 ◐ 확인   ghcr.io/acme/plat… -
+ [ ] svc-09       ✓ 실행 중          1 정상     ghcr.io/acme/plat… -
+ [ ] svc-10       ■ 중지됨           0 없음     ghcr.io/acme/plat… 9009→8080
+ [ ] svc-11       ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/plat… -
+ [ ] svc-12       ○ 생성됨           0 ◐ 확인   ghcr.io/acme/plat… -
+ [ ] svc-13       ✓ 실행 중          1 정상     ghcr.io/acme/plat… 9012→8080
+ [ ] svc-14       ■ 중지됨           0 없음     ghcr.io/acme/plat… -
+                                                      ↓ 11개 더 있음 · PgUp/PgDn
+현재 설정에 없음: svc-25
+
+선택은 같은 엔진 규칙으로 다시 검증됩니다. 인스턴스 단위 선택은 로그·exec 화면…
+[↑↓] 이동  [space] 선택/해제  [enter] 실행  [esc] 취소  [q] 종료  [?] 도움말
+
+=== 80x50 ===
+ dcraft · acme-platform · staging        Docker 29.10.0 · Compose 2.39.1 · 로컬
+제목 stop
+
+서비스 선택
+대상: /work/acme-platform
+실행환경: staging
+
+이 작업을 적용할 범위를 선택하세요. 전체를 선택하면 스택 전체에 적용합니다.
+
+ [ ] 전체 (스택 전체)
+선택 서비스       상태        인스턴스 health   이미지             포트
+ [x] svc-01       ✓ 실행 중          1 정상     ghcr.io/acme/plat… 9000→8080
+▸[ ] svc-02       ■ 중지됨           0 없음     ghcr.io/acme/plat… -
+ [ ] svc-03       ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/plat… -
+ [ ] svc-04       ○ 생성됨           0 ◐ 확인   ghcr.io/acme/plat… 9003→8080
+ [ ] svc-05       ✓ 실행 중          1 정상     ghcr.io/acme/plat… -
+ [ ] svc-06       ■ 중지됨           0 없음     ghcr.io/acme/plat… -
+ [ ] svc-07       ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/plat… 9006→8080
+ [ ] svc-08       ○ 생성됨           0 ◐ 확인   ghcr.io/acme/plat… -
+ [ ] svc-09       ✓ 실행 중          1 정상     ghcr.io/acme/plat… -
+ [ ] svc-10       ■ 중지됨           0 없음     ghcr.io/acme/plat… 9009→8080
+ [ ] svc-11       ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/plat… -
+ [ ] svc-12       ○ 생성됨           0 ◐ 확인   ghcr.io/acme/plat… -
+ [ ] svc-13       ✓ 실행 중          1 정상     ghcr.io/acme/plat… 9012→8080
+ [ ] svc-14       ■ 중지됨           0 없음     ghcr.io/acme/plat… -
+ [ ] svc-15       ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/plat… -
+ [ ] svc-16       ○ 생성됨           0 ◐ 확인   ghcr.io/acme/plat… 9015→8080
+ [ ] svc-17       ✓ 실행 중          1 정상     ghcr.io/acme/plat… -
+ [ ] svc-18       ■ 중지됨           0 없음     ghcr.io/acme/plat… -
+ [ ] svc-19       ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/plat… 9018→8080
+ [ ] svc-20       ○ 생성됨           0 ◐ 확인   ghcr.io/acme/plat… -
+ [ ] svc-21       ✓ 실행 중          1 정상     ghcr.io/acme/plat… -
+ [ ] svc-22       ■ 중지됨           0 없음     ghcr.io/acme/plat… 9021→8080
+ [ ] svc-23       ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/plat… -
+ [ ] svc-24       ○ 생성됨           0 ◐ 확인   ghcr.io/acme/plat… -
+ [ ] svc-25       ✓ 실행 중          1 정상     ghcr.io/acme/plat… 9024→8080
+현재 설정에 없음: svc-25
+
+선택은 같은 엔진 규칙으로 다시 검증됩니다. 인스턴스 단위 선택은 로그·exec 화면…
+
+
+
+
+
+
+
+
+
+
+[↑↓] 이동  [space] 선택/해제  [enter] 실행  [esc] 취소  [q] 종료  [?] 도움말
+
+=== 120x18 ===
+ dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
+╭ 기능 · 18 ─────────────╮ 제목 stop                                                                              1-2/25
+│조회                    │
+│  서비스 접속           │ 서비스 선택
+│  로그 보기             │ 대상: /work/acme-platform
+│  스택 상태             │ 실행환경: staging
+│▸ 제목 stop             │
+│                        │ 이 작업을 적용할 범위를 선택하세요. 전체를 선택하면 스택 전체에 적용합니다.
+│운영                    │
+│  스택 제거 ▲ 위험      │  [ ] 전체 (스택 전체)
+│  스택 재시작           │ 선택 서비스             상태        인스턴스 health   이미지                    포트
+│  스택 시작             │  [x] svc-01             ✓ 실행 중          1 정상     ghcr.io/acme/platform-sv… 9000→8080
+│  갱신                  │ ▸[ ] svc-02             ■ 중지됨           0 없음     ghcr.io/acme/platform-sv… -
+│                        │                                                                    ↓ 23개 더 있음 · PgUp/PgDn
+│데이터                  │ 현재 설정에 없음: svc-25
+│  데이터 백업           │
+╰────────────────────────╯ 선택은 같은 엔진 규칙으로 다시 검증됩니다. 인스턴스 단위 선택은 로그·exec 화면에서만 제공합…
+[↑↓] 이동  [space] 선택/해제  [enter] 실행  [esc] 취소  [q] 종료  [?] 도움말
+
+=== 120x30 ===
+ dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
+╭ 기능 · 18 ─────────────╮ 제목 stop                                                                             1-14/25
+│조회                    │
+│  서비스 접속           │ 서비스 선택
+│  로그 보기             │ 대상: /work/acme-platform
+│  스택 상태             │ 실행환경: staging
+│▸ 제목 stop             │
+│                        │ 이 작업을 적용할 범위를 선택하세요. 전체를 선택하면 스택 전체에 적용합니다.
+│운영                    │
+│  스택 제거 ▲ 위험      │  [ ] 전체 (스택 전체)
+│  스택 재시작           │ 선택 서비스             상태        인스턴스 health   이미지                    포트
+│  스택 시작             │  [x] svc-01             ✓ 실행 중          1 정상     ghcr.io/acme/platform-sv… 9000→8080
+│  갱신                  │ ▸[ ] svc-02             ■ 중지됨           0 없음     ghcr.io/acme/platform-sv… -
+│                        │  [ ] svc-03             ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/platform-sv… -
+│데이터                  │  [ ] svc-04             ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-sv… 9003→8080
+│  데이터 백업           │  [ ] svc-05             ✓ 실행 중          1 정상     ghcr.io/acme/platform-sv… -
+│  데이터 복원 ▲ 위험    │  [ ] svc-06             ■ 중지됨           0 없음     ghcr.io/acme/platform-sv… -
+│  이전 버전 복… ▲ 위험  │  [ ] svc-07             ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/platform-sv… 9006→8080
+│                        │  [ ] svc-08             ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-sv… -
+│설정                    │  [ ] svc-09             ✓ 실행 중          1 정상     ghcr.io/acme/platform-sv… -
+│  실행환경 별칭         │  [ ] svc-10             ■ 중지됨           0 없음     ghcr.io/acme/platform-sv… 9009→8080
+│  Git 호스트 스크립트…  │  [ ] svc-11             ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/platform-sv… -
+│  호스트 스크립트       │  [ ] svc-12             ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-sv… -
+│  Compose 설치          │  [ ] svc-13             ✓ 실행 중          1 정상     ghcr.io/acme/platform-sv… 9012→8080
+│  S3 호스트 스크립트 …  │  [ ] svc-14             ■ 중지됨           0 없음     ghcr.io/acme/platform-sv… -
+│────────────────────────│                                                                    ↓ 11개 더 있음 · PgUp/PgDn
+│ ▸ 제목 stop            │ 현재 설정에 없음: svc-25
+│ 요약 stop              │
+╰────────────────────────╯ 선택은 같은 엔진 규칙으로 다시 검증됩니다. 인스턴스 단위 선택은 로그·exec 화면에서만 제공합…
+[↑↓] 이동  [space] 선택/해제  [enter] 실행  [esc] 취소  [q] 종료  [?] 도움말
+
+=== 120x50 ===
+ dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
+╭ 기능 · 18 ─────────────╮ 제목 stop
+│조회                    │
+│  서비스 접속           │ 서비스 선택
+│  로그 보기             │ 대상: /work/acme-platform
+│  스택 상태             │ 실행환경: staging
+│▸ 제목 stop             │
+│                        │ 이 작업을 적용할 범위를 선택하세요. 전체를 선택하면 스택 전체에 적용합니다.
+│운영                    │
+│  스택 제거 ▲ 위험      │  [ ] 전체 (스택 전체)
+│  스택 재시작           │ 선택 서비스             상태        인스턴스 health   이미지                    포트
+│  스택 시작             │  [x] svc-01             ✓ 실행 중          1 정상     ghcr.io/acme/platform-sv… 9000→8080
+│  갱신                  │ ▸[ ] svc-02             ■ 중지됨           0 없음     ghcr.io/acme/platform-sv… -
+│                        │  [ ] svc-03             ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/platform-sv… -
+│데이터                  │  [ ] svc-04             ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-sv… 9003→8080
+│  데이터 백업           │  [ ] svc-05             ✓ 실행 중          1 정상     ghcr.io/acme/platform-sv… -
+│  데이터 복원 ▲ 위험    │  [ ] svc-06             ■ 중지됨           0 없음     ghcr.io/acme/platform-sv… -
+│  이전 버전 복… ▲ 위험  │  [ ] svc-07             ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/platform-sv… 9006→8080
+│                        │  [ ] svc-08             ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-sv… -
+│설정                    │  [ ] svc-09             ✓ 실행 중          1 정상     ghcr.io/acme/platform-sv… -
+│  실행환경 별칭         │  [ ] svc-10             ■ 중지됨           0 없음     ghcr.io/acme/platform-sv… 9009→8080
+│  Git 호스트 스크립트…  │  [ ] svc-11             ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/platform-sv… -
+│  호스트 스크립트       │  [ ] svc-12             ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-sv… -
+│  Compose 설치          │  [ ] svc-13             ✓ 실행 중          1 정상     ghcr.io/acme/platform-sv… 9012→8080
+│  S3 호스트 스크립트 …  │  [ ] svc-14             ■ 중지됨           0 없음     ghcr.io/acme/platform-sv… -
+│  비밀값 연결           │  [ ] svc-15             ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/platform-sv… -
+│  최초 구성             │  [ ] svc-16             ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-sv… 9015→8080
+│                        │  [ ] svc-17             ✓ 실행 중          1 정상     ghcr.io/acme/platform-sv… -
+│                        │  [ ] svc-18             ■ 중지됨           0 없음     ghcr.io/acme/platform-sv… -
+│                        │  [ ] svc-19             ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/platform-sv… 9018→8080
+│                        │  [ ] svc-20             ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-sv… -
+│                        │  [ ] svc-21             ✓ 실행 중          1 정상     ghcr.io/acme/platform-sv… -
+│                        │  [ ] svc-22             ■ 중지됨           0 없음     ghcr.io/acme/platform-sv… 9021→8080
+│                        │  [ ] svc-23             ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/platform-sv… -
+│                        │  [ ] svc-24             ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-sv… -
+│                        │  [ ] svc-25             ✓ 실행 중          1 정상     ghcr.io/acme/platform-sv… 9024→8080
+│                        │ 현재 설정에 없음: svc-25
+│                        │
+│                        │ 선택은 같은 엔진 규칙으로 다시 검증됩니다. 인스턴스 단위 선택은 로그·exec 화면에서만 제공합…
+│                        │
+│                        │
+│                        │
+│                        │
+│                        │
+│                        │
+│────────────────────────│
+│ ▸ 제목 stop            │
+│ 요약 stop              │
+╰────────────────────────╯
+[↑↓] 이동  [space] 선택/해제  [enter] 실행  [esc] 취소  [q] 종료  [?] 도움말
+
+=== 200x18 ===
+ dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
+╭ 기능 · 18 ─────────────────╮ 제목 stop                                                                                                                                                          1-2/25
+│조회                        │
+│  서비스 접속               │ 서비스 선택
+│  로그 보기                 │ 대상: /work/acme-platform
+│  스택 상태                 │ 실행환경: staging
+│▸ 제목 stop                 │
+│                            │ 이 작업을 적용할 범위를 선택하세요. 전체를 선택하면 스택 전체에 적용합니다.
+│운영                        │
+│  스택 제거 ▲ 위험          │  [ ] 전체 (스택 전체)
+│  스택 재시작               │ 선택 서비스                   상태        인스턴스 health   이미지                             포트
+│  스택 시작                 │  [x] svc-01                   ✓ 실행 중          1 정상     ghcr.io/acme/platform-svc-01:2026… 9000→8080
+│  갱신                      │ ▸[ ] svc-02                   ■ 중지됨           0 없음     ghcr.io/acme/platform-svc-02:2026… -
+│                            │                                                                                                                                                ↓ 23개 더 있음 · PgUp/PgDn
+│데이터                      │ 현재 설정에 없음: svc-25
+│  데이터 백업               │
+╰────────────────────────────╯ 선택은 같은 엔진 규칙으로 다시 검증됩니다. 인스턴스 단위 선택은 로그·exec 화면에서만 제공합니다.
+[↑↓] 이동  [space] 선택/해제  [enter] 실행  [esc] 취소  [q] 종료  [?] 도움말
+
+=== 200x30 ===
+ dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
+╭ 기능 · 18 ─────────────────╮ 제목 stop                                                                                                                                                         1-14/25
+│조회                        │
+│  서비스 접속               │ 서비스 선택
+│  로그 보기                 │ 대상: /work/acme-platform
+│  스택 상태                 │ 실행환경: staging
+│▸ 제목 stop                 │
+│                            │ 이 작업을 적용할 범위를 선택하세요. 전체를 선택하면 스택 전체에 적용합니다.
+│운영                        │
+│  스택 제거 ▲ 위험          │  [ ] 전체 (스택 전체)
+│  스택 재시작               │ 선택 서비스                   상태        인스턴스 health   이미지                             포트
+│  스택 시작                 │  [x] svc-01                   ✓ 실행 중          1 정상     ghcr.io/acme/platform-svc-01:2026… 9000→8080
+│  갱신                      │ ▸[ ] svc-02                   ■ 중지됨           0 없음     ghcr.io/acme/platform-svc-02:2026… -
+│                            │  [ ] svc-03                   ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/platform-svc-03:2026… -
+│데이터                      │  [ ] svc-04                   ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-svc-04:2026… 9003→8080
+│  데이터 백업               │  [ ] svc-05                   ✓ 실행 중          1 정상     ghcr.io/acme/platform-svc-05:2026… -
+│  데이터 복원 ▲ 위험        │  [ ] svc-06                   ■ 중지됨           0 없음     ghcr.io/acme/platform-svc-06:2026… -
+│  이전 버전 복원 ▲ 위험     │  [ ] svc-07                   ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/platform-svc-07:2026… 9006→8080
+│                            │  [ ] svc-08                   ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-svc-08:2026… -
+│설정                        │  [ ] svc-09                   ✓ 실행 중          1 정상     ghcr.io/acme/platform-svc-09:2026… -
+│  실행환경 별칭             │  [ ] svc-10                   ■ 중지됨           0 없음     ghcr.io/acme/platform-svc-10:2026… 9009→8080
+│  Git 호스트 스크립트 생성  │  [ ] svc-11                   ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/platform-svc-11:2026… -
+│  호스트 스크립트           │  [ ] svc-12                   ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-svc-12:2026… -
+│  Compose 설치              │  [ ] svc-13                   ✓ 실행 중          1 정상     ghcr.io/acme/platform-svc-13:2026… 9012→8080
+│  S3 호스트 스크립트 생성   │  [ ] svc-14                   ■ 중지됨           0 없음     ghcr.io/acme/platform-svc-14:2026… -
+│────────────────────────────│                                                                                                                                                ↓ 11개 더 있음 · PgUp/PgDn
+│ ▸ 제목 stop                │ 현재 설정에 없음: svc-25
+│ 요약 stop                  │
+╰────────────────────────────╯ 선택은 같은 엔진 규칙으로 다시 검증됩니다. 인스턴스 단위 선택은 로그·exec 화면에서만 제공합니다.
+[↑↓] 이동  [space] 선택/해제  [enter] 실행  [esc] 취소  [q] 종료  [?] 도움말
+
+=== 200x50 ===
+ dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
+╭ 기능 · 18 ─────────────────╮ 제목 stop
+│조회                        │
+│  서비스 접속               │ 서비스 선택
+│  로그 보기                 │ 대상: /work/acme-platform
+│  스택 상태                 │ 실행환경: staging
+│▸ 제목 stop                 │
+│                            │ 이 작업을 적용할 범위를 선택하세요. 전체를 선택하면 스택 전체에 적용합니다.
+│운영                        │
+│  스택 제거 ▲ 위험          │  [ ] 전체 (스택 전체)
+│  스택 재시작               │ 선택 서비스                   상태        인스턴스 health   이미지                             포트
+│  스택 시작                 │  [x] svc-01                   ✓ 실행 중          1 정상     ghcr.io/acme/platform-svc-01:2026… 9000→8080
+│  갱신                      │ ▸[ ] svc-02                   ■ 중지됨           0 없음     ghcr.io/acme/platform-svc-02:2026… -
+│                            │  [ ] svc-03                   ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/platform-svc-03:2026… -
+│데이터                      │  [ ] svc-04                   ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-svc-04:2026… 9003→8080
+│  데이터 백업               │  [ ] svc-05                   ✓ 실행 중          1 정상     ghcr.io/acme/platform-svc-05:2026… -
+│  데이터 복원 ▲ 위험        │  [ ] svc-06                   ■ 중지됨           0 없음     ghcr.io/acme/platform-svc-06:2026… -
+│  이전 버전 복원 ▲ 위험     │  [ ] svc-07                   ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/platform-svc-07:2026… 9006→8080
+│                            │  [ ] svc-08                   ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-svc-08:2026… -
+│설정                        │  [ ] svc-09                   ✓ 실행 중          1 정상     ghcr.io/acme/platform-svc-09:2026… -
+│  실행환경 별칭             │  [ ] svc-10                   ■ 중지됨           0 없음     ghcr.io/acme/platform-svc-10:2026… 9009→8080
+│  Git 호스트 스크립트 생성  │  [ ] svc-11                   ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/platform-svc-11:2026… -
+│  호스트 스크립트           │  [ ] svc-12                   ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-svc-12:2026… -
+│  Compose 설치              │  [ ] svc-13                   ✓ 실행 중          1 정상     ghcr.io/acme/platform-svc-13:2026… 9012→8080
+│  S3 호스트 스크립트 생성   │  [ ] svc-14                   ■ 중지됨           0 없음     ghcr.io/acme/platform-svc-14:2026… -
+│  비밀값 연결               │  [ ] svc-15                   ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/platform-svc-15:2026… -
+│  최초 구성                 │  [ ] svc-16                   ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-svc-16:2026… 9015→8080
+│                            │  [ ] svc-17                   ✓ 실행 중          1 정상     ghcr.io/acme/platform-svc-17:2026… -
+│                            │  [ ] svc-18                   ■ 중지됨           0 없음     ghcr.io/acme/platform-svc-18:2026… -
+│                            │  [ ] svc-19                   ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/platform-svc-19:2026… 9018→8080
+│                            │  [ ] svc-20                   ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-svc-20:2026… -
+│                            │  [ ] svc-21                   ✓ 실행 중          1 정상     ghcr.io/acme/platform-svc-21:2026… -
+│                            │  [ ] svc-22                   ■ 중지됨           0 없음     ghcr.io/acme/platform-svc-22:2026… 9021→8080
+│                            │  [ ] svc-23                   ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/platform-svc-23:2026… -
+│                            │  [ ] svc-24                   ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-svc-24:2026… -
+│                            │  [ ] svc-25                   ✓ 실행 중          1 정상     ghcr.io/acme/platform-svc-25:2026… 9024→8080
+│                            │ 현재 설정에 없음: svc-25
+│                            │
+│                            │ 선택은 같은 엔진 규칙으로 다시 검증됩니다. 인스턴스 단위 선택은 로그·exec 화면에서만 제공합니다.
+│                            │
+│                            │
+│                            │
+│                            │
+│                            │
+│                            │
+│────────────────────────────│
+│ ▸ 제목 stop                │
+│ 요약 stop                  │
+╰────────────────────────────╯
+[↑↓] 이동  [space] 선택/해제  [enter] 실행  [esc] 취소  [q] 종료  [?] 도움말

@@ -1,0 +1,50 @@
+# Build and test on every push and pull request.
+#
+# Real-Docker end-to-end tests are deliberately NOT run here: GitHub-hosted
+# runners have no guaranteed Docker engine with Compose. They stay a local
+# check:
+#   go test ./test/... -p 1                       # dist + e2e with fake Docker
+#   DCRAFT_INTEGRATION=1 go test ./test/e2e -p 1  # real Docker
+# Never run ./test/dist and ./test/e2e concurrently: they contend for Docker and
+# one gets SIGTERM.
+name: test
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "these files are not gofmt'd:" >&2
+            echo "$unformatted" >&2
+            exit 1
+          fi
+      - name: Vet
+        run: go vet ./...
+      - name: Build
+        run: go build ./...
+      - name: Unit tests
+        run: go test ./internal/...
+      - name: Golden snapshots are current
+        run: scripts/tui-golden.sh -check
+      - name: Distribution tests
+        run: go test ./test/dist
