@@ -121,6 +121,11 @@ func (m *Model) scrollKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	if m.phase == phaseSelectingServices {
 		return false, nil
 	}
+	// A free-text wizard answer accepts "g" as a character. Scrolling must not
+	// steal a letter from the field the user is typing in.
+	if m.wizardTextInput() {
+		return false, nil
+	}
 	switch msg.String() {
 	case "pgup", "pgdown", "home", "end", "g", "G":
 		if !m.bodyScrolls() {

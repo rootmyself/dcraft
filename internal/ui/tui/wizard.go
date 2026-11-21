@@ -1,12 +1,12 @@
 package tui
 
 import (
-	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/rootmyself/dcraft/internal/core"
+	"github.com/rootmyself/dcraft/internal/ui/tui/visual"
 )
 
 // beginWizard starts the guided flow for a feature that declares the Wizard
@@ -91,12 +91,35 @@ func (m *Model) wizardTextInput() bool {
 	return len(step.Options) == 0 && step.AllowCustom
 }
 
+// wizardStepIsMulti reports whether the current question is a checkbox list.
+func (m *Model) wizardStepIsMulti() bool {
+	if m.phase != phaseWizardStep || m.wizardStep < 0 || m.wizardStep >= len(m.wizardSpec.Steps) {
+		return false
+	}
+	step := m.wizardSpec.Steps[m.wizardStep]
+	return len(step.Options) > 0 && step.Multi
+}
+
+// wizardStepIsOptional reports whether the current question may be answered
+// with an empty value.
+func (m *Model) wizardStepIsOptional() bool {
+	if m.phase != phaseWizardStep || m.wizardStep < 0 || m.wizardStep >= len(m.wizardSpec.Steps) {
+		return false
+	}
+	step := m.wizardSpec.Steps[m.wizardStep]
+	return len(step.Options) == 0 && step.AllowCustom && step.Optional
+}
+
 func (m *Model) initWizardStep() {
 	if m.wizardStep < 0 || m.wizardStep >= len(m.wizardSpec.Steps) {
 		return
 	}
 	step := m.wizardSpec.Steps[m.wizardStep]
 	m.notice = ""
+	m.wizardNotice = ""
+	// Each question starts at the top of the screen: a scroll position kept
+	// from the previous step would hide the question being asked.
+	m.body = visual.Viewport{}
 	if len(step.Options) > 0 {
 		wanted := step.Default
 		if previous, ok := m.wizardAnswers[step.Name]; ok && previous != "" {
@@ -117,8 +140,15 @@ func (m *Model) initWizardStep() {
 				}
 			}
 		}
+		if m.phase == phaseWizardStep {
+			// Coming back to a choice step must show the restored card, not
+			// the top of a list the reader already walked past.
+			m.followWizardCursor()
+		}
 		return
 	}
+	m.wizardChoice = 0
+	m.wizardChecked = map[string]bool{}
 	m.wizardInput = m.wizardAnswers[step.Name]
 	if m.wizardInput == "" {
 		m.wizardInput = step.Default
@@ -142,8 +172,10 @@ func (m *Model) updateWizard(msg tea.KeyMsg) tea.Cmd {
 			switch msg.String() {
 			case "up", "k":
 				m.wizardChoice = (m.wizardChoice - 1 + len(step.Options)) % len(step.Options)
+				m.followWizardCursor()
 			case "down", "j":
 				m.wizardChoice = (m.wizardChoice + 1) % len(step.Options)
+				m.followWizardCursor()
 			case " ":
 				if step.Multi {
 					value := step.Options[m.wizardChoice].Value
@@ -182,7 +214,10 @@ func (m *Model) updateWizard(msg tea.KeyMsg) tea.Cmd {
 		case "enter":
 			value := strings.TrimSpace(m.wizardInput)
 			if value == "" && !step.Optional {
-				m.notice = msgWizardNeedValue
+				// The guidance belongs to this field: the reader must see
+				// which answer is missing, not a detached notice.
+				m.wizardNotice = msgWizardNeedValue
+				m.notice = ""
 				return nil
 			}
 			m.wizardAnswers[step.Name] = value
@@ -192,6 +227,7 @@ func (m *Model) updateWizard(msg tea.KeyMsg) tea.Cmd {
 				m.previousWizardStep()
 			}
 		case "backspace":
+			m.wizardNotice = ""
 			runes := []rune(m.wizardInput)
 			if len(runes) > 0 {
 				m.wizardInput = string(runes[:len(runes)-1])
@@ -200,6 +236,7 @@ func (m *Model) updateWizard(msg tea.KeyMsg) tea.Cmd {
 			}
 		default:
 			if len(msg.Runes) > 0 {
+				m.wizardNotice = ""
 				m.wizardInput += string(msg.Runes)
 			}
 		}
@@ -288,6 +325,9 @@ func (m *Model) advanceWizard() {
 	}
 	text, err := wizard.WizardPreview(m.wizardAnswers)
 	m.phase = phaseWizardPreview
+	// The preview starts at its top: a scroll position from the option list
+	// would hide the first applied value.
+	m.body = visual.Viewport{}
 	m.wizardPreview = text
 	m.wizardPreviewErr = err
 	m.notice = ""
@@ -391,67 +431,16 @@ func (m *Model) wizardView() string {
 		b.WriteString("\n")
 		return b.String()
 	case phaseWizardStep:
-		if m.wizardSpec.Title != "" {
-			b.WriteString(m.title(m.wizardSpec.Title))
-			b.WriteString("\n\n")
-		}
 		if m.wizardStep < 0 || m.wizardStep >= len(m.wizardSpec.Steps) {
 			return b.String()
 		}
-		step := m.wizardSpec.Steps[m.wizardStep]
-		ordinal, total := m.wizardProgress()
-		fmt.Fprintf(&b, "%s %d/%d\n", msgWizardProgress, ordinal, total)
-		b.WriteString(m.title(step.Title))
-		b.WriteString("\n\n")
-		// A prompt is prose: it wraps at the content width instead of losing
-		// its ending to the frame's truncation marker. A narrower pane (the
-		// wide layout's sidebar) must not delete instructions.
-		b.WriteString(m.wrapProse(step.Prompt))
-		b.WriteString("\n\n")
-		if len(step.Options) > 0 {
-			for i, option := range step.Options {
-				marker := "  "
-				if i == m.wizardChoice {
-					marker = "> "
-				}
-				if step.Multi {
-					box := "[ ]"
-					if m.wizardChecked[option.Value] {
-						box = "[x]"
-					}
-					fmt.Fprintf(&b, "%s%s %s\n", marker, box, option.Label)
-					continue
-				}
-				fmt.Fprintf(&b, "%s%s\n", marker, option.Label)
-			}
-		} else if step.AllowCustom {
-			input := m.wizardInput
-			if input == "" {
-				input = " "
-			}
-			fmt.Fprintf(&b, "%s%s_\n", msgWizardInputLabel, input)
-			hint := step.CustomHint
-			if step.Optional {
-				if hint != "" {
-					hint += " · "
-				}
-				hint += msgWizardOptionalHint
-			}
-			if hint != "" {
-				b.WriteString(m.hintText(hint))
-				b.WriteString("\n")
-			}
-		}
+		screen := m.wizardStepScreen(m.wizardSpec.Steps[m.wizardStep])
+		b.WriteString(strings.Join(screen.lines(), "\n"))
+		b.WriteString("\n")
 	case phaseWizardPreview:
-		if approvals := m.previewApprovals(); len(approvals) > 0 {
-			for _, kind := range approvals {
-				fmt.Fprintf(&b, "%s: %s (%s)\n", msgWizardRequiredApprovals, kind.KoreanLabel(), kind)
-			}
-			b.WriteString("enter 계획 확인 · left 이전 단계 · esc 취소\n\n")
-		}
-		// The preview is the feature's own prose; a narrower content pane must
-		// not delete the part that explains the effect.
-		b.WriteString(m.wrapProse(m.wizardPreview))
+		// The preview is the applied-values panel. Approvals are listed inside
+		// it and the keys live in the footer, so nothing is stated twice.
+		b.WriteString(strings.Join(m.wizardPreviewPanel(), "\n"))
 		b.WriteString("\n")
 	}
 	if m.notice != "" {

@@ -175,6 +175,10 @@ type Model struct {
 	wizardChecked    map[string]bool
 	wizardPreview    string
 	wizardPreviewErr error
+	// wizardNotice is guidance about the answer being typed (an empty
+	// required value). It is drawn inline under that field, not as a
+	// screen-level notice: the problem must stay next to the value to fix.
+	wizardNotice     string
 	wizardAwaiting   bool
 	wizardApplying   bool
 	wizardCanceled   bool

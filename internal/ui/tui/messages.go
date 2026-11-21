@@ -130,4 +130,11 @@ const (
 	msgWizardCanceled          = "대화형 설정을 취소했습니다. 저장된 내용은 없습니다."
 	msgWizardOptionalHint      = "비우려면 enter"
 	msgWizardRequiredApprovals = msgApprovalsSection
+	// The preview panel's own heading. It states the collected answers that
+	// the apply will send, so the effect description below it is never the
+	// only thing the reader has to trust.
+	msgWizardAppliedTitle = "적용 내용"
+	// An optional answer that was deliberately left empty is stated as such:
+	// leaving the row out would make the review look incomplete.
+	msgWizardAnswerEmpty = "(비움)"
 )

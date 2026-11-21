@@ -865,7 +865,15 @@ It derives everything from the registry:
   is the target/planned-work preview and one `enter` runs it without an extra
   approval kind;
 - a feature with `Descriptor.Wizard` starts the generic guided flow (`steps`
-  run, keyboard answers, effect preview, `apply` run). `backup` uses it to select
+  run, keyboard answers, effect preview, `apply` run). Each question states
+  its position (`단계 1/4`, counted over the visible steps, so a conditional
+  step that is hidden or restored changes the denominator), the step title and
+  the prompt; choice steps render as selectable cards and a multi step as
+  explicit `[ ]`/`[x]` checkboxes. A typed answer shows a visible end caret and
+  an empty required value is refused with inline guidance under the field.
+  The preview is a titled panel that lists every collected answer as the
+  apply will send it, then the feature's effect prose, then any independent
+  approvals; a long preview scrolls instead of being cut. `backup` uses it to select
   a mixed volume/bind selection and an output directory and to show
   affected/running services before anything is stopped. The source step is the
   published generic `Multi` step; the TUI adds no safety rule; the feature
@@ -883,8 +891,10 @@ It derives everything from the registry:
   detaches with `ctrl+]`. Both return to the management view, keep the last
   output lines visible, and never stop a service;
 - a feature implementing `core.InputProvider` first opens the generic form
-  (`phaseForm`) fed by `Engine.Inputs`; `esc` runs nothing and the exact
-  service/instance/command values are shown before the feature runs;
+  (`phaseForm`) fed by `Engine.Inputs`; every field shows its label and its
+  help, a typed value shows a visible end caret, a missing required value is
+  refused with inline guidance under that field, and the `실행 내용` review
+  lists the exact values the feature will receive; `esc` runs nothing;
 - normal quit is not an operation and does not touch services. During an
   in-flight mutating operation `q` explains the risk; `ctrl+c` requests safe
   cancellation and keeps the screen for the canceled result (see §5).
