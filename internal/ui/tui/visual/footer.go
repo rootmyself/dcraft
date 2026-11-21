@@ -62,10 +62,11 @@ const footerSeparator = "  "
 func FooterItems(p Phase) []Keycap {
 	switch p {
 	case PhaseConfirm:
+		// Approving is a single key. The footer advertises exactly the keys
+		// that act on this screen, so a second accept key is not listed.
 		return []Keycap{
 			{Key: "enter", Label: "실행", Priority: 0},
 			{Key: "esc", Label: "취소", Priority: 0},
-			{Key: "space", Label: "승인", Priority: 1},
 			{Key: "↑↓", Label: "항목", Priority: 3},
 			{Key: "?", Label: "도움말", Priority: 2},
 		}

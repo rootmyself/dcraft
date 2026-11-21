@@ -174,7 +174,7 @@ func TestFooterFollowsThePhase(t *testing.T) {
 	m2 = nm.(*Model)
 	resize(t, m2, 120, 36)
 	view := m2.View()
-	for _, want := range []string{"[enter] 실행", "[esc] 취소", "[space] 승인"} {
+	for _, want := range []string{"[enter] 실행", "[esc] 취소"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("confirm footer missing %q:\n%s", want, view)
 		}

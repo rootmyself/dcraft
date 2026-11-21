@@ -195,8 +195,9 @@ func (m *Model) updateHelpKey(msg tea.KeyMsg) tea.Cmd {
 }
 
 // updateConfirmKey drives the confirmation panel. enter approves and runs; esc
-// declines and runs nothing. space is the approved second acknowledge key;
-// arrows and page keys scroll the panel body.
+// declines and runs nothing. Approving stays a single key on purpose: one
+// deliberate accept keeps the approval path unambiguous. Arrows and page keys
+// scroll the panel body.
 func (m *Model) updateConfirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q", "ctrl+c":
@@ -222,7 +223,7 @@ func (m *Model) updateConfirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.phase = phaseReady
 		m.notice = ""
 		return m, nil
-	case "enter", " ":
+	case "enter":
 		return m.approveConfirmation()
 	case "up", "k":
 		m.scrollOverlay(-1)

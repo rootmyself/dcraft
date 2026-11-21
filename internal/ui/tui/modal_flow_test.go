@@ -260,8 +260,8 @@ func TestClosingAnOrdinaryConfirmationKeepsThePreviousResult(t *testing.T) {
 	}
 }
 
-// space is the approved second acknowledge key; it approves exactly like enter.
-func TestSpaceApprovesLikeEnter(t *testing.T) {
+// Approving is a single deliberate key: space must not run an operation.
+func TestSpaceDoesNotApprove(t *testing.T) {
 	status := &stubFeature{desc: descriptor("status", true), body: "상태 본문"}
 	up := &stubFeature{desc: mutatingDescriptor("up"), body: "시작 본문"}
 	m := newTestModel(t, status, up)
@@ -270,8 +270,11 @@ func TestSpaceApprovesLikeEnter(t *testing.T) {
 	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeySpace})
 	m = nm.(*Model)
 	feed(t, m, execute(t, cmd))
-	if up.runs != 1 {
-		t.Fatalf("space did not approve: runs = %d", up.runs)
+	if up.runs != 0 {
+		t.Fatalf("space approved an operation: runs = %d", up.runs)
+	}
+	if m.phase != phaseConfirm {
+		t.Fatalf("space left the confirmation screen: phase = %v", m.phase)
 	}
 }
 
@@ -371,7 +374,7 @@ func TestHelpListsOnlyCurrentScreenKeysAndEscCloses(t *testing.T) {
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("?")})
 	m = nm.(*Model)
 	view = m.View()
-	for _, want := range []string{"[enter] 실행", "[esc] 취소", "[space] 승인"} {
+	for _, want := range []string{"[enter] 실행", "[esc] 취소", "[↑↓] 항목"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("confirm help missing %q:\n%s", want, view)
 		}
@@ -403,8 +406,11 @@ func TestModalDoesNotDuplicateKeycapsInThePanel(t *testing.T) {
 	if rows != 1 {
 		t.Fatalf("%d rows carry the enter chip:\n%s", rows, strings.Join(lines, "\n"))
 	}
-	if !strings.Contains(lines[len(lines)-1], "[esc] 취소") || !strings.Contains(lines[len(lines)-1], "[space] 승인") {
+	if !strings.Contains(lines[len(lines)-1], "[esc] 취소") {
 		t.Fatalf("confirm footer is not the approved row: %q", lines[len(lines)-1])
+	}
+	if strings.Contains(lines[len(lines)-1], "[space] 승인") {
+		t.Fatalf("confirm footer advertises a key that does nothing: %q", lines[len(lines)-1])
 	}
 }
 
