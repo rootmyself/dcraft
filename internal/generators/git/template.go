@@ -56,10 +56,19 @@ const gitScriptTemplate = `#!/usr/bin/env bash
 # =============================================================================
 set -euo pipefail
 
+# SELF_DIR uses only bash builtins: a generated script must still reach its
+# own guidance when PATH is empty (no dirname, no git). An external command
+# inside a command substitution would fail silently here — command
+# substitution does not trip "set -e" — and leave SELF_DIR empty.
+case "${BASH_SOURCE[0]}" in
+  */*) SELF_DIR=${BASH_SOURCE[0]%/*} ;;
+  *)   SELF_DIR=. ;;
+esac
+SELF_DIR=$(CDPATH= cd -- "$SELF_DIR" && pwd -P)
+
 REPO={{REPO_SH}}
 REF={{REF_SH}}
 REF_KIND={{KIND_SH}}
-SELF_DIR=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 {{PROJECT_DIR_EXPR}}
 {{DEST_EXPR}}
 
