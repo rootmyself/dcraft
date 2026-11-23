@@ -20,20 +20,52 @@ import (
 // emitting a newline, so consecutive frames can share a captured line.
 const frameHome = "\x1b[H"
 
-// lastFrame returns the rows of the most recent repaint.
+// cursorMove matches the cursor placement the renderer appends after the last
+// row of a repaint. It is not content, so a row carrying only this sequence is
+// one the renderer skipped.
+var cursorMove = regexp.MustCompile("\x1b\\[[0-9;]*[Hf]")
+
+// lastFrame returns the visible screen as the terminal would show it.
+//
+// Every repaint starts at home, but the renderer only writes the rows whose
+// content changed since the previous flush: an unchanged row arrives as an
+// empty line (the cursor just moves down). Animation such as the sidebar
+// marquee therefore emits partial repaints between the full frame that follows
+// a resize, so reading only the last chunk would see just the animated row.
+// Replaying every repaint in order and keeping the previous row for an empty
+// line reproduces the actual screen.
 func lastFrame(screen string) []string {
-	chunks := strings.Split(screen, frameHome)
-	raw := chunks[len(chunks)-1]
-	if len(chunks) > 1 {
-		// A frame is written top-to-bottom with CRLF between rows; the final
-		// cursor placement appends no newline.
-		raw = strings.TrimRight(raw, "\x1b[0m")
+	var rows []string
+	for _, chunk := range strings.Split(screen, frameHome) {
+		if strings.Contains(chunk, "\x1b[2J") {
+			rows = nil
+		}
+		lines := strings.Split(chunk, "\n")
+		for i, line := range lines {
+			line = cursorMove.ReplaceAllString(strings.TrimSuffix(line, "\r"), "")
+			line = strings.ReplaceAll(line, "\x1b[J", "")
+			if line == "" {
+				// A skipped row: the terminal keeps what is already there.
+				continue
+			}
+			for len(rows) <= i {
+				rows = append(rows, "")
+			}
+			rows[i] = line
+		}
+		if strings.Contains(chunk, "\x1b[J") && len(rows) > len(lines) {
+			// Erase below: the screen got shorter, so the rows past the new
+			// frame are gone instead of stale content from a taller one.
+			rows = rows[:len(lines)]
+		}
 	}
-	lines := strings.Split(visibleText(raw), "\n")
-	for len(lines) > 0 && strings.TrimRight(lines[len(lines)-1], " ") == "" {
-		lines = lines[:len(lines)-1]
+	for i, row := range rows {
+		rows[i] = visibleText(row)
 	}
-	return lines
+	for len(rows) > 0 && strings.TrimRight(rows[len(rows)-1], " ") == "" {
+		rows = rows[:len(rows)-1]
+	}
+	return rows
 }
 
 // sgrOnly matches a Select Graphic Rendition sequence: color and attributes.
@@ -56,6 +88,33 @@ func overWideRows(screen string, width int) []string {
 		}
 	}
 	return out
+}
+
+// A partial repaint between full frames must not erase the rest of the screen:
+// the renderer emits only the changed rows, so replaying the capture has to
+// keep the rows it skipped. Before this helper replayed every chunk, an
+// animated sidebar row landing last hid the header from the assertions.
+func TestLastFrameAppliesPartialRepaints(t *testing.T) {
+	full := frameHome + "header\r\nbody a\r\nbody b\r\nfooter"
+	partial := frameHome + "\n\nbody B\n\n\x1b[4;H"
+	if got, want := strings.Join(lastFrame(full+partial), "|"), "header|body a|body B|footer"; got != want {
+		t.Fatalf("replayed screen = %q, want %q", got, want)
+	}
+
+	// The cursor placement after the last row is not content: a partial repaint
+	// that skipped the footer must keep it.
+	skippedFooter := frameHome + "\n\n\n\x1b[4;H"
+	if got, want := strings.Join(lastFrame(full+skippedFooter), "|"), "header|body a|body b|footer"; got != want {
+		t.Fatalf("skipped footer = %q, want %q", got, want)
+	}
+
+	// A padded blank row the renderer did write is content, not a skip, so it
+	// replaces what the previous frame had in that row.
+	short := frameHome + "header\nbody\nfooter"
+	cleared := frameHome + "   \nbody\nfooter"
+	if got, want := strings.Join(lastFrame(short+cleared), "|"), "   |body|footer"; got != want {
+		t.Fatalf("written blank row = %q, want %q", got, want)
+	}
 }
 
 // resizing the terminal must reflow the frame immediately: the header comes
