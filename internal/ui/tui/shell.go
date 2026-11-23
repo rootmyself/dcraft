@@ -498,6 +498,13 @@ func (m *Model) fitWhole(lines []string) bodyLayout {
 		return bodyLayout{lines: lines}
 	}
 	viewport := fitViewport(visual.Viewport{Top: m.body.Top, Height: budget, Total: len(lines)}, budget)
+	if m.phase == phaseSelectingEnvironment {
+		selectedRow := -1
+		if m.envSelected >= 0 {
+			selectedRow = m.navRowCount() + m.titleRows() + 2 + m.envSelected
+		}
+		viewport.Follow(selectedRow)
+	}
 	start, end := viewport.Window()
 	out := append([]string{}, lines[start:end]...)
 	if hint := viewport.ScrollHint(m.theme, m.bodyWidth()); hint != "" {

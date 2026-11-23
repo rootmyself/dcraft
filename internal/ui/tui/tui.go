@@ -654,6 +654,14 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if len(m.envs) > 0 {
 					m.envSelected = (m.envSelected + 1) % len(m.envs)
 				}
+			case "pgup":
+				m.envSelected = max(0, m.envSelected-max(1, m.currentViewport().Visible()))
+			case "pgdown":
+				m.envSelected = min(len(m.envs)-1, max(0, m.envSelected)+max(1, m.currentViewport().Visible()))
+			case "home", "g":
+				m.envSelected = 0
+			case "end", "G":
+				m.envSelected = len(m.envs) - 1
 			case "enter":
 				if m.envSelected >= 0 && m.envSelected < len(m.envs) && m.primary != nil {
 					m.target.Environment = m.envs[m.envSelected].Name

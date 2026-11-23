@@ -116,7 +116,7 @@ func (m *Model) scrollKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	}
 	// The scope table follows its selection: PgUp/PgDn move the cursor there,
 	// and a second scroll position would let the two disagree.
-	if m.phase == phaseSelectingServices {
+	if m.phase == phaseSelectingServices || m.phase == phaseSelectingEnvironment {
 		return false, nil
 	}
 	// A free-text wizard answer accepts "g" as a character. Scrolling must not

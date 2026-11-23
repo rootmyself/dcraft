@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -352,6 +353,52 @@ func TestEnvironmentAdministrationSwitchDoesNotRunFeature(t *testing.T) {
 	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if view := m.View(); !strings.Contains(view, "stage") || strings.Contains(view, "old result") {
 		t.Fatalf("switch did not update header and clear result:\n%s", view)
+	}
+	if status.runs != 1 || admin.runs != 0 {
+		t.Fatalf("switch ran a feature: status=%d admin=%d", status.runs, admin.runs)
+	}
+}
+
+func TestEnvironmentSwitchKeepsLongListSelectionVisible(t *testing.T) {
+	status := &stubFeature{desc: descriptor("status", true), body: "old result"}
+	adminDesc := descriptor("aliases", false)
+	adminDesc.EnvironmentAdmin = true
+	admin := &stubFeature{desc: adminDesc}
+	resolver := envResolver()
+	m := newEnvTestModel(t, resolver, core.TargetRequest{Environment: "dev"}, status, admin)
+	initModel(t, m)
+	resize(t, m, 80, 24)
+	m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	for i := 0; i < 30; i++ {
+		resolver.envs = append(resolver.envs, core.Environment{Name: fmt.Sprintf("env%02d", i)})
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	feed(t, m, execute(t, cmd))
+	for i := 0; i < 30; i++ {
+		m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	}
+	if view := m.View(); !strings.Contains(view, "> env27") {
+		t.Fatalf("selected environment is not visible:\n%s", view)
+	}
+	resize(t, m, 40, 18)
+	if view := m.View(); !strings.Contains(view, "> env27") {
+		t.Fatalf("selected environment disappeared after resize:\n%s", view)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyHome})
+	if view := m.View(); !strings.Contains(view, "> dev") {
+		t.Fatalf("home did not select a visible first environment:\n%s", view)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyEnd})
+	if view := m.View(); !strings.Contains(view, "> env29") {
+		t.Fatalf("end did not select a visible last environment:\n%s", view)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if view := m.View(); !strings.Contains(view, "env27") || strings.Contains(view, "old result") {
+		t.Fatalf("switch did not select visible target:\n%s", view)
 	}
 	if status.runs != 1 || admin.runs != 0 {
 		t.Fatalf("switch ran a feature: status=%d admin=%d", status.runs, admin.runs)
