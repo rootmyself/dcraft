@@ -118,10 +118,11 @@ func (m *Model) navIndexes() []int {
 // selected item is the current cursor.
 func (m *Model) nav() visual.Nav {
 	nav := visual.Nav{
-		Title:        fmt.Sprintf(msgNavTitle, len(m.features)),
-		Filter:       m.filter,
-		FilterActive: m.filtering,
-		Empty:        msgNavEmpty,
+		Title:         fmt.Sprintf(msgNavTitle, len(m.features)),
+		Filter:        m.filter,
+		FilterActive:  m.filtering,
+		Empty:         msgNavEmpty,
+		SummaryOffset: m.marquee.offset,
 	}
 	for _, group := range m.navGroups() {
 		items := make([]visual.NavItem, 0, len(group.items))
