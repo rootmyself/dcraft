@@ -322,7 +322,7 @@ var goldenRegistryOrder = []goldenDescriptorSpec{
 	{name: "generate-git-hook", title: "Git 호스트 스크립트 생성", summary: "Git 훅 스크립트를 만듦.", section: core.SectionConfig},
 	{name: "hooks", title: "호스트 스크립트", summary: "호스트 스크립트 등록.", section: core.SectionConfig},
 	{name: "install-compose", title: "Compose 설치", summary: "Compose 실행 파일 설치.", section: core.SectionConfig},
-	{name: "logs", title: "로그 보기", summary: "서비스 로그를 따라봅니다.", section: core.SectionInspect, readOnly: true},
+	{name: "logs", title: "로그 보기", summary: "서비스 로그 따라보기.", section: core.SectionInspect, readOnly: true},
 	{name: "restart", title: "스택 재시작", summary: "스택을 다시 시작.", section: core.SectionOperate},
 	{name: "restore", title: "데이터 복원", summary: "백업에서 데이터를 되돌림.", section: core.SectionData, destructive: true},
 	{name: "rollback", title: "이전 버전 복원", summary: "마지막 정상 버전으로 되돌림.", section: core.SectionData, destructive: true},

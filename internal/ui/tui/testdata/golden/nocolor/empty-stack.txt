@@ -146,7 +146,7 @@ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-
 작업
 조회
   서비스 접속 (exec) · 실행 중인 서비스에 접속.
-  로그 보기 (logs) · 서비스 로그를 따라봅니다.
+  로그 보기 (logs) · 서비스 로그 따라보기.
 ▸ 스택 상태 (status) · 현재 스택과 서비스 상태를 보여 줌.
 
 운영
@@ -178,7 +178,7 @@ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-
 작업
 조회
   서비스 접속 (exec) · 실행 중인 서비스에 접속.
-  로그 보기 (logs) · 서비스 로그를 따라봅니다.
+  로그 보기 (logs) · 서비스 로그 따라보기.
 ▸ 스택 상태 (status) · 현재 스택과 서비스 상태를 보여 줌.
 
 운영

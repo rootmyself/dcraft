@@ -403,8 +403,10 @@ func TestWizardStepFits48ColumnsWithoutClipping(t *testing.T) {
 		steps: core.WizardSpec{Title: "좁은 화면 설정", Steps: []core.WizardStep{{
 			Name: "service", Title: "서비스 선택", Prompt: "서비스 선택.",
 			Options: []core.WizardOption{
-				{Value: "web", Label: "첫 번째 선택지 아주 긴 라벨"},
-				{Value: "worker", Label: "두 번째 선택지도 아주 긴 라벨"},
+				// The labels keep the pre-fragment length so the 48-column
+				// check still stresses the widest option the test used to.
+				{Value: "web", Label: "첫 번째 선택지 아주 긴 라벨 항목"},
+				{Value: "worker", Label: "두 번째 선택지도 아주 긴 라벨 항목"},
 			},
 		}}},
 		preview: "OK",
@@ -417,7 +419,7 @@ func TestWizardStepFits48ColumnsWithoutClipping(t *testing.T) {
 	if strings.Contains(view, m.theme.Glyphs.Ell) {
 		t.Fatalf("48 columns clipped the step:\n%s", view)
 	}
-	for _, want := range []string{"서비스 선택.", "첫 번째 선택지", "긴 라벨", "두 번째 선택지도", "긴 라벨"} {
+	for _, want := range []string{"서비스 선택.", "첫 번째 선택지", "긴 라벨 항목", "두 번째 선택지도", "긴 라벨 항목"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("48-column step missing %q:\n%s", want, view)
 		}
