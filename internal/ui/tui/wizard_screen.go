@@ -81,6 +81,30 @@ func (m *Model) wizardStepScreen(step core.WizardStep) wizardStepScreen {
 		if step.CustomHint != "" {
 			screen.tail = append(screen.tail, m.wrapTo(step.CustomHint, width)...)
 		}
+		// A single wrapped item must fit in the band; otherwise no part of
+		// that item can be selected or drawn by the whole-card viewport.
+		if budget := m.bodyBudget(); budget > 0 {
+			maxRows := budget - m.titleRows() - len(screen.head) - len(screen.tail) - 1
+			if maxRows < 1 {
+				maxRows = 1
+			}
+			var cards []string
+			for i, r := range screen.ranges[:len(screen.ranges)-1] {
+				start := len(cards)
+				end := r[1]
+				if end-r[0] > maxRows {
+					end = r[0] + maxRows
+				}
+				cards = append(cards, screen.cards[r[0]:end]...)
+				if end < r[1] {
+					last := len(cards) - 1
+					cards[last] = visual.Fit(cards[last]+m.theme.Glyphs.Ell, width, m.theme.Glyphs.Ell)
+				}
+				screen.ranges[i] = [2]int{start, len(cards)}
+			}
+			screen.cards = cards
+			screen.ranges[len(screen.ranges)-1] = [2]int{len(cards), len(cards)}
+		}
 		return screen
 	}
 	if len(step.Options) > 0 {

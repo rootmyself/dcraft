@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -50,5 +51,111 @@ func TestWizardListEditingAndReview(t *testing.T) {
 	view := m.View()
 	if !strings.Contains(view, "* cache:/cache-new") {
 		t.Fatalf("review missing list bullet:\n%s", view)
+	}
+}
+
+func TestWizardListScrollKeepsSelectionAndInputVisible(t *testing.T) {
+	f := &wizardStub{desc: descriptor("wizard", false), steps: core.WizardSpec{Steps: []core.WizardStep{
+		{Name: "items", Title: "Items", List: true, AllowCustom: true, Optional: true},
+	}}}
+	f.desc.Wizard = true
+	m := newWizardModel(t, f)
+	openWizard(t, m)
+	resize(t, m, 40, 24)
+	for i := 0; i < 20; i++ {
+		feed(t, m, []tea.Msg{
+			tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(fmt.Sprintf("item-%02d", i))},
+			tea.KeyMsg{Type: tea.KeyEnter},
+		})
+	}
+	feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeyUp}})
+	if view := m.View(); !strings.Contains(view, "> * item-19") || !strings.Contains(view, "_") {
+		t.Fatalf("last selected item or input is hidden:\n%s", view)
+	}
+	for i := 0; i < 19; i++ {
+		feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeyUp}})
+	}
+	if view := m.View(); !strings.Contains(view, "> * item-00") || !strings.Contains(view, "_") {
+		t.Fatalf("first selected item or input is hidden:\n%s", view)
+	}
+}
+
+func TestWizardLongListKeepsSelectionVisible(t *testing.T) {
+	f := &wizardStub{desc: descriptor("wizard", false), steps: core.WizardSpec{Steps: []core.WizardStep{
+		{Name: "items", Title: "Items", List: true, AllowCustom: true, Optional: true},
+	}}}
+	f.desc.Wizard = true
+	m := newWizardModel(t, f)
+	openWizard(t, m)
+	resize(t, m, 40, 24)
+	key := func(k tea.KeyType) { feed(t, m, []tea.Msg{tea.KeyMsg{Type: k}}) }
+	text := func(s string) { feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}}) }
+	text("LONGSTART" + strings.Repeat("x", 800))
+	key(tea.KeyEnter)
+	for i := 0; i < 12; i++ {
+		text(fmt.Sprintf("item-%02d", i))
+		key(tea.KeyEnter)
+	}
+	key(tea.KeyUp)
+	if !strings.Contains(m.View(), "> * item-11") || !strings.Contains(m.View(), "_") {
+		t.Fatalf("last item or input missing:\n%s", m.View())
+	}
+	for i := 0; i < 12; i++ {
+		key(tea.KeyUp)
+	}
+	if !strings.Contains(m.View(), "> * LONGSTART") || !strings.Contains(m.View(), "_") {
+		t.Fatalf("long selected item or input missing:\n%s", m.View())
+	}
+	key(tea.KeyDown)
+	if !strings.Contains(m.View(), "> * item-00") {
+		t.Fatalf("cannot move past long item:\n%s", m.View())
+	}
+}
+
+func TestWizardOptionalListCanBeEmpty(t *testing.T) {
+	f := &wizardStub{desc: descriptor("wizard", false), steps: core.WizardSpec{Steps: []core.WizardStep{
+		{Name: "items", Title: "Items", List: true, AllowCustom: true, Optional: true},
+	}}}
+	f.desc.Wizard = true
+	m := newWizardModel(t, f)
+	openWizard(t, m)
+	feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeyEnter}})
+	if !strings.Contains(m.View(), msgWizardAnswerEmpty) {
+		t.Fatalf("empty optional list did not reach review:\n%s", m.View())
+	}
+}
+
+func TestWizardListOversizedItemRemainsSelectable(t *testing.T) {
+	f := &wizardStub{desc: descriptor("wizard", false), steps: core.WizardSpec{Steps: []core.WizardStep{
+		{Name: "items", Title: "Items", List: true, AllowCustom: true, Optional: true},
+	}}}
+	f.desc.Wizard = true
+	m := newWizardModel(t, f)
+	openWizard(t, m)
+	resize(t, m, 40, 24)
+	feed(t, m, []tea.Msg{
+		tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(strings.Repeat("longvalue", 90))},
+		tea.KeyMsg{Type: tea.KeyEnter},
+		tea.KeyMsg{Type: tea.KeyUp},
+	})
+	if view := m.View(); !strings.Contains(view, "> * longvalue") {
+		t.Fatalf("selected oversized item is not visible:\n%s", view)
+	}
+	feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeyEnter}})
+	if view := m.View(); !strings.Contains(view, "수정 취소") {
+		t.Fatalf("oversized item cannot be edited:\n%s", view)
+	}
+}
+
+func TestWizardListOptionalEmpty(t *testing.T) {
+	f := &wizardStub{desc: descriptor("wizard", false), steps: core.WizardSpec{Steps: []core.WizardStep{
+		{Name: "items", Title: "Items", List: true, AllowCustom: true, Optional: true},
+	}}}
+	f.desc.Wizard = true
+	m := newWizardModel(t, f)
+	openWizard(t, m)
+	feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeyEnter}})
+	if view := m.View(); !strings.Contains(view, "Items:") {
+		t.Fatalf("empty optional list did not advance to review:\n%s", view)
 	}
 }
