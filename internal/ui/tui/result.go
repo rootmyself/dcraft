@@ -226,6 +226,18 @@ func (m *Model) resultScrollKeycaps(items []visual.Keycap) []visual.Keycap {
 	if m.detailOpen {
 		return m.detailViewKeycaps()
 	}
+	if m.navMenuVisible() && !m.selectionVisible() && m.resultScrolls() {
+		hidden := []visual.Keycap{
+			{Key: "esc", Label: msgKeyMenu, Priority: 0},
+			{Key: "↑↓", Label: msgKeyScroll, Priority: 0},
+			{Key: "q", Label: msgKeyQuit, Priority: 0},
+			{Key: "PgUp/PgDn", Label: msgKeyScroll, Priority: 2},
+		}
+		if m.hasDetail() {
+			hidden = append(hidden, visual.Keycap{Key: "d", Label: msgKeyDetail, Priority: 2})
+		}
+		return hidden
+	}
 	if m.bodyScrolls() {
 		items = append(items, visual.Keycap{Key: "PgUp/PgDn", Label: msgKeyScroll, Priority: 2})
 	}

@@ -21,7 +21,7 @@
   … 위에 더 있음
   ▲ 작업 실행 (실패)
                ↓ 2개 더 있음 · PgUp/PgDn
-[↑↓] 이동  [enter] 실행  [q] 종료
+[esc] 메뉴  [↑↓] 스크롤  [q] 종료
 
 === 40x30 ===
  dcraft · acme-platform · staging
