@@ -263,7 +263,7 @@ func TestLogsIndexWithoutASingleServiceFailsWithExitTwo(t *testing.T) {
 	if res.code != 2 {
 		t.Fatalf("exit = %d, want 2 (stderr=%q stdout=%q)", res.code, res.stderr, res.stdout)
 	}
-	for _, want := range []string{"서비스를 하나만", "-s"} {
+	for _, want := range []string{"서비스 하나만", "-s"} {
 		if !strings.Contains(res.stderr, want) {
 			t.Fatalf("stderr missing %q:\n%s", want, res.stderr)
 		}

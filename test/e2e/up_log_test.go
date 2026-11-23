@@ -51,15 +51,15 @@ func TestPTYTUIUpShowsComposeProgressInTheLogPane(t *testing.T) {
 		{wait: "[↑↓] 이동", send: menuDown(t, "up")},
 		{wait: "▸ 스택 시작", send: "\r"},
 		{wait: "서비스 선택", send: "\r"},
-		{wait: "다음 작업을 실행할까요?", send: "\r"},
+		{wait: "작업 실행 확인", send: "\r"},
 		{wait: "dcraft-progress line-59", send: ""},
 		{wait: "PgUp/PgDn", send: ""},
-		{wait: "스택을 시작했습니다.", send: ""},
+		{wait: "현재 Compose 설정을 적용해", send: ""},
 	})
 	if code != 0 {
 		t.Fatalf("TUI exit = %d\n%s", code, output)
 	}
-	for _, want := range []string{"dcraft-progress line-59", "PgUp/PgDn", "스택을 시작했습니다."} {
+	for _, want := range []string{"dcraft-progress line-59", "PgUp/PgDn", "현재 Compose 설정을 적용해"} {
 		if !screenContains(output, want) {
 			t.Fatalf("TUI output missing %q:\n%s", want, visibleText(output))
 		}
