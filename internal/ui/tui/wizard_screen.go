@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/rootmyself/dcraft/internal/core"
 	"github.com/rootmyself/dcraft/internal/ui/tui/visual"
 )
@@ -53,6 +54,71 @@ func (m *Model) wizardStepScreen(step core.WizardStep) wizardStepScreen {
 		screen.head = append(screen.head, "")
 	}
 
+	if step.List {
+		for i, item := range m.wizardItems {
+			marker := "  "
+			if i == m.wizardChoice {
+				marker = "> "
+			}
+			if i == m.wizardChoice && m.wizardEditing {
+				item += msgListEditing
+			}
+			start := len(screen.cards)
+			screen.cards = append(screen.cards, wrapWithPrefix(item, marker+"* ", "    ", width, m.theme.Glyphs.Ell)...)
+			screen.ranges = append(screen.ranges, [2]int{start, len(screen.cards)})
+		}
+		screen.ranges = append(screen.ranges, [2]int{len(screen.cards), len(screen.cards)})
+		marker := "  "
+		if m.wizardChoice == len(m.wizardItems) || m.wizardEditing {
+			marker = "> "
+		}
+		input := m.wizardInput
+		available := width - visual.Width(marker) - visual.Width(cursorGlyph)
+		if width > 0 && visual.Width(input) > available {
+			ell := m.theme.Glyphs.Ell
+			available -= visual.Width(ell)
+			if available < 0 {
+				available = 0
+			}
+			inputWidth := visual.Width(input)
+			input = ell + ansi.Cut(input, inputWidth-available, inputWidth)
+		}
+		screen.tail = append(screen.tail, marker+input+cursorGlyph)
+		for _, line := range m.wrapTo(fmt.Sprintf(msgListHint, len(m.wizardItems)), width) {
+			screen.tail = append(screen.tail, m.hintText(line))
+		}
+		if m.wizardNotice != "" {
+			screen.tail = append(screen.tail, m.noticeText(m.wizardNotice))
+		}
+		if step.CustomHint != "" {
+			screen.tail = append(screen.tail, m.wrapTo(step.CustomHint, width)...)
+		}
+		// A single wrapped item must fit in the band; otherwise no part of
+		// that item can be selected or drawn by the whole-card viewport.
+		if budget := m.bodyBudget(); budget > 0 {
+			maxRows := budget - m.titleRows() - len(screen.head) - len(screen.tail) - 1
+			if maxRows < 1 {
+				maxRows = 1
+			}
+			var cards []string
+			for i, r := range screen.ranges[:len(screen.ranges)-1] {
+				start := len(cards)
+				end := r[1]
+				if end-r[0] > maxRows {
+					end = r[0] + maxRows
+				}
+				cards = append(cards, screen.cards[r[0]:end]...)
+				if end < r[1] {
+					last := len(cards) - 1
+					cards[last] = visual.Fit(cards[last]+m.theme.Glyphs.Ell, width, m.theme.Glyphs.Ell)
+				}
+				screen.ranges[i] = [2]int{start, len(cards)}
+			}
+			screen.cards = cards
+			screen.ranges[len(screen.ranges)-1] = [2]int{len(cards), len(cards)}
+		}
+		return screen
+	}
 	if len(step.Options) > 0 {
 		if step.Multi {
 			screen.cards, screen.ranges = m.wizardCheckboxes(step)
@@ -397,6 +463,15 @@ func (m *Model) wizardAnswerLines(width int) []string {
 		label := step.Title
 		if strings.TrimSpace(label) == "" {
 			label = step.Name
+		}
+		if step.List && strings.TrimSpace(value) != "" {
+			out = append(out, m.wrapTo(label+":", width)...)
+			for _, item := range strings.Split(value, "\n") {
+				if item = strings.TrimSpace(item); item != "" {
+					out = append(out, wrapWithPrefix(item, "* ", "  ", width, m.theme.Glyphs.Ell)...)
+				}
+			}
+			continue
 		}
 		text := label + ": " + wizardAnswerDisplay(step, value)
 		for _, line := range m.wrapTo(text, width) {

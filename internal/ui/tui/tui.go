@@ -180,6 +180,8 @@ type Model struct {
 	wizardStep       int
 	wizardChoice     int
 	wizardInput      string
+	wizardItems      []string
+	wizardEditing    bool
 	wizardAnswers    map[string]string
 	wizardChecked    map[string]bool
 	wizardPreview    string
@@ -532,6 +534,12 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "esc":
 			if m.isWizardPhase() {
+				if m.phase == phaseWizardStep && m.wizardEditing {
+					m.wizardEditing = false
+					m.wizardInput = ""
+					m.wizardNotice = ""
+					return m, nil
+				}
 				m.cancelWizard()
 				return m, nil
 			}

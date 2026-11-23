@@ -46,13 +46,13 @@ type composeDocument struct {
 }
 
 type composeService struct {
-	Image       string            `yaml:"image,omitempty"`
-	Build       *composeBuild     `yaml:"build,omitempty"`
-	Ports       []string          `yaml:"ports,omitempty"`
-	Volumes     []string          `yaml:"volumes,omitempty"`
-	Environment map[string]string `yaml:"environment,omitempty"`
-	Command     string            `yaml:"command,omitempty"`
-	Restart     string            `yaml:"restart,omitempty"`
+	Image       string        `yaml:"image,omitempty"`
+	Build       *composeBuild `yaml:"build,omitempty"`
+	Ports       []string      `yaml:"ports,omitempty"`
+	Volumes     []string      `yaml:"volumes,omitempty"`
+	Environment any           `yaml:"environment,omitempty"`
+	Command     string        `yaml:"command,omitempty"`
+	Restart     string        `yaml:"restart,omitempty"`
 }
 
 type composeBuild struct {
@@ -74,7 +74,11 @@ func buildSpec(projectDir string, input Input, dest Destination) (*Spec, error) 
 		return nil, err
 	}
 	if len(env) > 0 {
-		service.Environment = env
+		if input.wizard {
+			service.Environment = append([]string{}, input.Env...)
+		} else {
+			service.Environment = env
+		}
 	}
 
 	named := map[string]bool{}

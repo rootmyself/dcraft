@@ -185,6 +185,7 @@ func TestWizardCollectsAndPreviewsCreation(t *testing.T) {
 	dir := t.TempDir()
 	base := write(t, dir, "compose.yaml", "services: {}\n")
 	write(t, dir, "compose.dev.yaml", "services: {}\n")
+	write(t, dir, "compose,extra.yaml", "services: {}\n")
 	write(t, dir, ".env.dev", "TOP_SECRET=hidden\n")
 	f := New()
 	payload, err := f.Run(context.Background(), core.Invocation{
@@ -208,17 +209,22 @@ func TestWizardCollectsAndPreviewsCreation(t *testing.T) {
 	if !strings.Contains(spec.Steps[1].Default, "compose.yaml") {
 		t.Fatalf("files default does not use discovery: %q", spec.Steps[1].Default)
 	}
+	for _, step := range spec.Steps[1:] {
+		if !step.List {
+			t.Fatalf("step %s is not a list", step.Name)
+		}
+	}
 
 	preview, err := f.WizardPreview(map[string]string{
 		"name":      "dev",
-		"files":     "compose.yaml, compose.dev.yaml",
+		"files":     "compose.yaml\ncompose,extra.yaml\ncompose.dev.yaml",
 		"env_files": ".env.dev",
-		"profiles":  "dev, tools",
+		"profiles":  "dev\ntools",
 	})
 	if err != nil {
 		t.Fatalf("preview: %v", err)
 	}
-	for _, want := range []string{"environments:", "dev:", "compose.yaml", "compose.dev.yaml", ".env.dev", "profiles", "격리하지 않습니다"} {
+	for _, want := range []string{"environments:", "dev:", "compose.yaml", "compose,extra.yaml", "compose.dev.yaml", ".env.dev", "profiles", "격리하지 않습니다"} {
 		if !strings.Contains(preview, want) {
 			t.Fatalf("preview missing %q:\n%s", want, preview)
 		}
@@ -249,6 +255,27 @@ func TestWizardCollectsAndPreviewsCreation(t *testing.T) {
 	}
 	if got := payload.(Payload).Environments.Aliases; len(got) != 1 || got[0].Name != "dev" {
 		t.Fatalf("applied aliases = %+v", got)
+	}
+}
+
+func TestWizardPreservesCommasInFileNames(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "compose,local.yaml", "services: {}\n")
+	write(t, dir, "compose.yaml", "services: {}\n")
+	f := New()
+	_, err := f.Run(context.Background(), core.Invocation{
+		Target: core.Target{ProjectDir: dir},
+		Options: map[string]string{"wizard": "steps"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	text, err := f.WizardPreview(map[string]string{"name": "dev", "files": "compose,local.yaml\ncompose.yaml"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(text, "compose,local.yaml") || strings.Index(text, "compose,local.yaml") > strings.Index(text, "compose.yaml") {
+		t.Fatalf("list order or comma lost:\n%s", text)
 	}
 }
 

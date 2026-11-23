@@ -34,6 +34,7 @@ type Input struct {
 	Env        []string
 	Command    string
 	Restart    string
+	wizard     bool
 }
 
 func (i Input) modeLabel() string {
@@ -72,11 +73,12 @@ func collectInput(in core.Invocation, wizard bool) (Input, error) {
 		Context:    strings.TrimSpace(in.Option("context")),
 		Dockerfile: strings.TrimSpace(in.Option("dockerfile")),
 		Image:      strings.TrimSpace(in.Option("image")),
-		Ports:      optionValues(in, "port"),
-		Volumes:    optionValues(in, "volume"),
-		Env:        optionValues(in, "env-var"),
+		Ports:      optionValues(in, "port", wizard),
+		Volumes:    optionValues(in, "volume", wizard),
+		Env:        optionValues(in, "env-var", wizard),
 		Command:    strings.TrimSpace(in.Option("command")),
 		Restart:    strings.TrimSpace(in.Option("restart")),
+		wizard:     wizard,
 	}
 
 	switch raw.Mode {
@@ -140,10 +142,8 @@ func collectInput(in core.Invocation, wizard bool) (Input, error) {
 	return raw, nil
 }
 
-// optionValues reads a repeatable flag, or splits the comma-separated value the
-// TUI wizard collects in one text step. Values are never re-split silently
-// when the CLI used the repeatable flag.
-func optionValues(in core.Invocation, name string) []string {
+// optionValues preserves repeatable flags and decodes wizard answers by line.
+func optionValues(in core.Invocation, name string, wizard bool) []string {
 	if list := in.OptionList(name); len(list) > 0 {
 		out := make([]string, 0, len(list))
 		for _, value := range list {
@@ -152,6 +152,15 @@ func optionValues(in core.Invocation, name string) []string {
 			}
 		}
 		return out
+	}
+	if wizard {
+		var values []string
+		for _, value := range strings.Split(in.Option(name), "\n") {
+			if value = strings.TrimSpace(value); value != "" {
+				values = append(values, value)
+			}
+		}
+		return values
 	}
 	return splitComma(in.Option(name))
 }

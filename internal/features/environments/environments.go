@@ -190,16 +190,16 @@ func (f *Feature) wizardSteps(in core.Invocation) core.WizardSpec {
 			},
 			{
 				Name: "files", Title: msgWizardFilesTitle, Prompt: msgWizardFilesPrompt,
-				AllowCustom: true, CustomHint: msgWizardFilesHint,
-				Default: strings.Join(in.Target.Files, ", "),
+				AllowCustom: true, List: true, CustomHint: msgWizardFilesHint,
+				Default: strings.Join(in.Target.Files, "\n"),
 			},
 			{
 				Name: "env_files", Title: msgWizardEnvFilesTitle, Prompt: msgWizardEnvFilesPrompt,
-				AllowCustom: true, CustomHint: msgWizardEnvFilesHint, Optional: true,
+				AllowCustom: true, List: true, CustomHint: msgWizardEnvFilesHint, Optional: true,
 			},
 			{
 				Name: "profiles", Title: msgWizardProfilesTitle, Prompt: msgWizardProfilesPrompt,
-				AllowCustom: true, CustomHint: msgWizardProfilesHint, Optional: true,
+				AllowCustom: true, List: true, CustomHint: msgWizardProfilesHint, Optional: true,
 			},
 		},
 	}
@@ -250,14 +250,9 @@ func environmentFromAnswers(answers map[string]string) (core.Environment, error)
 	}, nil
 }
 
-// splitAnswers accepts the wizard's single-line comma-separated input and the
-// multi-select newline form. Empty tokens are ignored; explicit empty entries
-// inside a list are rejected later by the storage validation when the user
-// typed a stray separator at the end.
+// splitAnswers decodes ordered wizard list items without treating commas as separators.
 func splitAnswers(value string) []string {
-	fields := strings.FieldsFunc(value, func(r rune) bool {
-		return r == ',' || r == '\n' || r == '\r'
-	})
+	fields := strings.Split(value, "\n")
 	out := make([]string, 0, len(fields))
 	for _, field := range fields {
 		if trimmed := strings.TrimSpace(field); trimmed != "" {

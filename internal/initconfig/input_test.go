@@ -90,8 +90,8 @@ func TestCollectModeSpecificInputsAreNotInvented(t *testing.T) {
 func TestCollectSplitsWizardListsAndKeepsExplicitLists(t *testing.T) {
 	input, err := collectInput(invocation(map[string]string{
 		"from": "image", "service-name": "web", "image": "busybox:1.36",
-		"port": "8080:80, 8443:443", "volume": "./data:/data, cache:/cache",
-		"env-var": "FOO=bar, BAZ=", "wizard": "apply",
+		"port": "8080:80\n8443:443", "volume": "./data:/data:ro,Z\ncache:/cache",
+		"env-var": "FOO=bar,baz\nBAZ=", "wizard": "apply",
 	}, nil), true)
 	if err != nil {
 		t.Fatalf("collect: %v", err)
@@ -99,10 +99,10 @@ func TestCollectSplitsWizardListsAndKeepsExplicitLists(t *testing.T) {
 	if len(input.Ports) != 2 || input.Ports[1] != "8443:443" {
 		t.Fatalf("ports = %v", input.Ports)
 	}
-	if len(input.Volumes) != 2 || input.Volumes[0] != "./data:/data" {
+	if len(input.Volumes) != 2 || input.Volumes[0] != "./data:/data:ro,Z" {
 		t.Fatalf("volumes = %v", input.Volumes)
 	}
-	if len(input.Env) != 2 || input.Env[1] != "BAZ=" {
+	if len(input.Env) != 2 || input.Env[0] != "FOO=bar,baz" || input.Env[1] != "BAZ=" {
 		t.Fatalf("env = %v", input.Env)
 	}
 

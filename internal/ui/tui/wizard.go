@@ -117,9 +117,25 @@ func (m *Model) initWizardStep() {
 	step := m.wizardSpec.Steps[m.wizardStep]
 	m.notice = ""
 	m.wizardNotice = ""
+	m.wizardEditing = false
 	// Each question starts at the top of the screen: a scroll position kept
 	// from the previous step would hide the question being asked.
 	m.body = visual.Viewport{}
+	if step.List {
+		m.wizardItems = nil
+		value, answered := m.wizardAnswers[step.Name]
+		if !answered {
+			value = step.Default
+		}
+		for _, item := range strings.Split(value, "\n") {
+			if item = strings.TrimSpace(item); item != "" {
+				m.wizardItems = append(m.wizardItems, item)
+			}
+		}
+		m.wizardChoice = len(m.wizardItems)
+		m.wizardInput = ""
+		return
+	}
 	if len(step.Options) > 0 {
 		wanted := step.Default
 		if previous, ok := m.wizardAnswers[step.Name]; ok && previous != "" {
@@ -168,6 +184,10 @@ func (m *Model) updateWizard(msg tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 		step := m.wizardSpec.Steps[m.wizardStep]
+		if step.List {
+			m.updateWizardList(msg, step)
+			return nil
+		}
 		if len(step.Options) > 0 {
 			switch msg.String() {
 			case "up", "k":
@@ -255,6 +275,75 @@ func (m *Model) updateWizard(msg tea.KeyMsg) tea.Cmd {
 		}
 	}
 	return nil
+}
+
+func (m *Model) updateWizardList(msg tea.KeyMsg, step core.WizardStep) {
+	switch msg.String() {
+	case "up":
+		if !m.wizardEditing && m.wizardChoice > 0 {
+			m.wizardChoice--
+			m.followWizardCursor()
+		}
+	case "down":
+		if !m.wizardEditing && m.wizardChoice < len(m.wizardItems) {
+			m.wizardChoice++
+			m.followWizardCursor()
+		}
+	case "left":
+		if !m.wizardEditing {
+			m.wizardAnswers[step.Name] = strings.Join(m.wizardItems, "\n")
+			m.previousWizardStep()
+		}
+	case "enter":
+		value := strings.TrimSpace(m.wizardInput)
+		if m.wizardEditing {
+			if value == "" {
+				m.wizardNotice = msgWizardNeedValue
+				return
+			}
+			m.wizardItems[m.wizardChoice] = value
+			m.wizardEditing = false
+			m.wizardInput = ""
+		} else if m.wizardChoice < len(m.wizardItems) {
+			m.wizardEditing = true
+			m.wizardInput = m.wizardItems[m.wizardChoice]
+		} else if value != "" {
+			m.wizardItems = append(m.wizardItems, value)
+			m.wizardChoice = len(m.wizardItems)
+			m.wizardInput = ""
+		} else if len(m.wizardItems) == 0 && !step.Optional {
+			m.wizardNotice = msgWizardNeedValue
+			return
+		} else {
+			m.wizardAnswers[step.Name] = strings.Join(m.wizardItems, "\n")
+			m.advanceWizard()
+		}
+		m.wizardNotice = ""
+		m.followWizardCursor()
+	case "backspace", "delete":
+		m.wizardNotice = ""
+		if m.wizardEditing || (m.wizardChoice == len(m.wizardItems) && m.wizardInput != "") {
+			runes := []rune(m.wizardInput)
+			if len(runes) > 0 {
+				m.wizardInput = string(runes[:len(runes)-1])
+			}
+		} else if len(m.wizardItems) > 0 {
+			i := m.wizardChoice
+			if i == len(m.wizardItems) {
+				i--
+			}
+			m.wizardItems = append(m.wizardItems[:i], m.wizardItems[i+1:]...)
+			if m.wizardChoice > len(m.wizardItems) {
+				m.wizardChoice = len(m.wizardItems)
+			}
+			m.followWizardCursor()
+		}
+	default:
+		if len(msg.Runes) > 0 && (m.wizardEditing || m.wizardChoice == len(m.wizardItems)) {
+			m.wizardInput += string(msg.Runes)
+			m.wizardNotice = ""
+		}
+	}
 }
 
 // wizardStepVisible evaluates a step's single dependency against the answers
