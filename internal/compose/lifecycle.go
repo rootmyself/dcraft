@@ -31,9 +31,11 @@ func (c *Compose) Up(ctx context.Context, t core.Target, services []string) (sta
 
 // UpProgress implements stack.ProgressLifecycle. It runs the same up operation
 // with plain, colorless Compose progress and sends the command's own stdout and
-// stderr to progress while it runs. Container logs are not tailed. A runner
-// without the streaming capability keeps captured output, so the call still
-// succeeds and never blocks the screen on a promise it cannot keep.
+// stderr to progress while it runs. Streamed lines pass through the session's
+// redaction exactly as the captured result does, so the live view never shows a
+// referenced secret value. Container logs are not tailed. A runner without the
+// streaming capability keeps captured output, so the call still succeeds and
+// never blocks the screen on a promise it cannot keep.
 func (c *Compose) UpProgress(ctx context.Context, t core.Target, services []string, progress io.Writer) (stack.OpResult, error) {
 	return c.up(ctx, t, services, progress)
 }
@@ -68,7 +70,7 @@ func (c *Compose) up(ctx context.Context, t core.Target, services []string, prog
 	cmd := execx.Command{Name: "docker", Args: args, Dir: t.ProjectDir, Env: composeEnv(prep.Env)}
 	var res execx.Result
 	if progress != nil {
-		res, err = c.runProgress(ctx, cmd, progress)
+		res, err = c.runProgress(ctx, cmd, progress, prep.Redact)
 	} else {
 		res, err = c.run(ctx, cmd)
 	}
@@ -97,16 +99,23 @@ func (c *Compose) up(ctx context.Context, t core.Target, services []string, prog
 
 // runProgress uses the optional streaming capability of the command boundary.
 // The runner is a narrow interface, so an implementation that only captures
-// keeps the capture path instead of failing the operation.
-func (c *Compose) runProgress(ctx context.Context, cmd execx.Command, progress io.Writer) (execx.Result, error) {
+// keeps the capture path instead of failing the operation. Each stream gets its
+// own line buffer, so stdout and stderr cannot splice half a line into each
+// other, and both redact with the same session values.
+func (c *Compose) runProgress(ctx context.Context, cmd execx.Command, progress io.Writer, redact func(string) string) (execx.Result, error) {
 	streamer, ok := c.runner.(execx.Streamer)
 	if !ok {
 		return c.run(ctx, cmd)
 	}
-	return streamer.RunStream(ctx, cmd, execx.Stream{
-		Stdout: progress,
-		Stderr: progress,
+	stdout := newRedactWriter(progress, redact)
+	stderr := newRedactWriter(progress, redact)
+	res, err := streamer.RunStream(ctx, cmd, execx.Stream{
+		Stdout: stdout,
+		Stderr: stderr,
 	})
+	_ = stdout.Flush()
+	_ = stderr.Flush()
+	return res, err
 }
 
 // noBuildGuard reports whether an implicit Compose build must be suppressed
