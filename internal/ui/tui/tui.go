@@ -52,6 +52,7 @@ const (
 	phaseNoPrimary phase = iota
 	phaseLoadingEnvironments
 	phaseSelectingEnvironment
+	phaseEnvironmentActions
 	phaseLoadingServices
 	phaseSelectingServices
 	phaseLoading
@@ -86,6 +87,9 @@ type Model struct {
 
 	envs        []core.Environment
 	envSelected int
+	envSwitch   bool
+	envAction   int
+	envCreated  string
 
 	phase        phase
 	result       *core.Result
@@ -355,9 +359,31 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.phase != phaseLoadingEnvironments {
 			return m, nil
 		}
-		// A broken catalog is not hidden here: running the primary feature
-		// through the engine produces the same resolve_target failure with
-		// Korean guidance and no Docker contact.
+		if m.envCreated != "" {
+			if msg.err == nil {
+				m.envs = msg.envs
+			} else {
+				m.notice = msgEnvReloadFailed + msg.err.Error()
+			}
+			m.target.Environment = m.envCreated
+			m.facts.Environment = m.envCreated
+			m.envCreated = ""
+			m.phase = phaseReady
+			return m, nil
+		}
+		if m.envSwitch {
+			if msg.err != nil || len(msg.envs) == 0 {
+				m.envSwitch = false
+				m.phase = phaseReady
+				m.notice = msgEnvSwitchFailed
+				return m, nil
+			}
+			m.envs = msg.envs
+			m.envSelected = -1
+			m.phase = phaseSelectingEnvironment
+			return m, nil
+		}
+		// On startup the primary feature reports catalog failures through the engine.
 		if msg.err != nil || len(msg.envs) == 0 {
 			return m, m.start(m.primary)
 		}
@@ -443,6 +469,10 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.beginWizardSteps(res)
 			return m, nil
 		}
+		created := ""
+		if m.wizardApplying && res.Outcome == core.OutcomeSuccess && m.wizardFeature != nil && m.wizardFeature.Descriptor().EnvironmentAdmin {
+			created = strings.TrimSpace(m.wizardAnswers["name"])
+		}
 		if m.wizardApplying {
 			m.wizardApplying = false
 			m.wizardFeature = nil
@@ -466,6 +496,11 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.live.close()
 			m.live = nil
 			m.liveCh = nil
+		}
+		if created != "" && m.engine != nil && m.engine.SupportsEnvironments() {
+			m.envCreated = created
+			m.phase = phaseLoadingEnvironments
+			return m, m.listEnvironmentsCmd()
 		}
 		return m, nil
 	case tea.KeyMsg:
@@ -533,6 +568,11 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, tea.Quit
 		case "esc":
+			if m.phase == phaseEnvironmentActions || (m.phase == phaseSelectingEnvironment && m.envSwitch) {
+				m.envSwitch = false
+				m.phase = phaseReady
+				return m, nil
+			}
 			if m.isWizardPhase() {
 				if m.phase == phaseWizardStep && m.wizardEditing {
 					m.wizardEditing = false
@@ -579,6 +619,24 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.isWizardPhase() {
 			return m, m.updateWizard(msg)
 		}
+		if m.phase == phaseEnvironmentActions {
+			switch msg.String() {
+			case "?":
+				m.openHelp()
+			case "up", "k":
+				m.envAction = 1 - m.envAction
+			case "down", "j":
+				m.envAction = 1 - m.envAction
+			case "enter":
+				if m.envAction == 0 {
+					return m, m.startRunPath(m.active)
+				}
+				m.envSwitch = true
+				m.phase = phaseLoadingEnvironments
+				return m, m.listEnvironmentsCmd()
+			}
+			return m, nil
+		}
 		if m.phase == phaseSelectingEnvironment {
 			switch msg.String() {
 			case "?":
@@ -599,6 +657,15 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "enter":
 				if m.envSelected >= 0 && m.envSelected < len(m.envs) && m.primary != nil {
 					m.target.Environment = m.envs[m.envSelected].Name
+					if m.envSwitch {
+						m.envSwitch = false
+						m.facts.Environment = m.target.Environment
+						m.result = nil
+						m.resultDismissed = false
+						m.resetScrollState()
+						m.phase = phaseReady
+						return m, nil
+					}
 					return m, m.start(m.primary)
 				}
 			}
@@ -710,6 +777,12 @@ func (m *Model) start(f core.Feature) tea.Cmd {
 	}
 	m.ensureRequest(f)
 	m.pending = nil
+	if f.Descriptor().EnvironmentAdmin && m.engine != nil && m.engine.SupportsEnvironments() {
+		m.active = f
+		m.envAction = 0
+		m.phase = phaseEnvironmentActions
+		return nil
+	}
 	if m.wantsServiceSelection(f) {
 		return m.beginServiceSelection(f)
 	}

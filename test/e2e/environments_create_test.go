@@ -182,6 +182,7 @@ func TestEnvironmentTUIWizardPreviewDeclineThenAccept(t *testing.T) {
 		{waitText: "[↑↓] 이동"},
 		{send: down},
 		{waitText: "▸ 실행환경 별칭", send: "\r"},
+		{waitText: "새 별칭", send: "\r"},
 		{waitText: "별칭 이름", send: "dev\r"},
 		{waitText: "Compose 파일", send: "\r"},
 		{waitText: "환경 파일", send: ".env.dev\r\r"},
@@ -213,12 +214,14 @@ func TestEnvironmentTUIWizardPreviewDeclineThenAccept(t *testing.T) {
 		{waitText: "[↑↓] 이동"},
 		{send: down},
 		{waitText: "▸ 실행환경 별칭", send: "\r"},
+		{waitText: "새 별칭", send: "\r"},
 		{waitText: "별칭 이름", send: "dev\r"},
 		{waitText: "Compose 파일", send: "\r"},
 		{waitText: "환경 파일", send: ".env.dev\r\r"},
 		{waitText: "Compose 프로필", send: "dev\r\r"},
 		{waitText: "다음 실행환경 별칭을 저장할까요?", send: "\r"},
 		{waitText: "별칭을 저장했습니다"},
+		{waitText: "· dev"},
 		{send: "q"},
 	})
 	if code != 0 {

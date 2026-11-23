@@ -84,15 +84,19 @@ func (m *Model) screenKeycaps() []visual.Keycap {
 			{Key: "q", Label: msgKeyQuit, Priority: 0},
 		}
 	}
-	if m.phase == phaseSelectingEnvironment {
+	if m.phase == phaseSelectingEnvironment || m.phase == phaseEnvironmentActions {
 		// The environment screen ignores "/", "r" and "tab"; advertising the
 		// menu row here would name keys that do nothing.
-		return []visual.Keycap{
+		keys := []visual.Keycap{
 			{Key: "↑↓", Label: msgKeySelect, Priority: 1},
 			{Key: "enter", Label: msgKeyRun, Priority: 0},
 			{Key: "q", Label: msgKeyQuit, Priority: 0},
 			{Key: "?", Label: msgKeyHelp, Priority: 3},
 		}
+		if m.envSwitch || m.phase == phaseEnvironmentActions {
+			keys = append(keys, visual.Keycap{Key: "esc", Label: msgKeyCancel, Priority: 0})
+		}
+		return keys
 	}
 	if m.phase == phaseSelectingServices {
 		return []visual.Keycap{
@@ -744,6 +748,10 @@ func (m *Model) phaseBody() string {
 		return msgEnvChecking
 	case phaseSelectingEnvironment:
 		return m.environmentView()
+	case phaseEnvironmentActions:
+		markers := [2]string{"  ", "  "}
+		markers[m.envAction] = "> "
+		return m.title(msgEnvActionsTitle) + "\n" + markers[0] + msgEnvNewAlias + "\n" + markers[1] + msgEnvSwitch + "\n"
 	case phaseLoadingServices:
 		return msgServiceLoading
 	case phaseSelectingServices:
@@ -777,7 +785,11 @@ func (m *Model) environmentView() string {
 		if i == m.envSelected {
 			marker = "> "
 		}
-		b.WriteString(marker + env.Name + " — " + environmentSummary(env) + "\n")
+		current := ""
+		if env.Name == m.target.Environment {
+			current = msgEnvCurrent
+		}
+		b.WriteString(marker + env.Name + current + " — " + environmentSummary(env) + "\n")
 	}
 	b.WriteString(m.hintText(msgEnvIsolationNote))
 	b.WriteString("\n")

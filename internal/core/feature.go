@@ -69,6 +69,8 @@ type Descriptor struct {
 	// the generic confirmation screen. The feature must implement Wizard and
 	// handle Options["wizard"]="steps"/"apply" in Run.
 	Wizard bool
+	// EnvironmentAdmin offers alias issuance and target switching in the TUI.
+	EnvironmentAdmin bool
 	// Hooks declares the registered host-script attachment point. The zero
 	// value runs no scripts. HookUpUpdate is only valid on `up` and `update`;
 	// read-only features may never declare it.
