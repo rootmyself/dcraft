@@ -272,7 +272,7 @@ func TestWizardPreservesCommasInFileNames(t *testing.T) {
 	write(t, dir, "compose.yaml", "services: {}\n")
 	f := New()
 	_, err := f.Run(context.Background(), core.Invocation{
-		Target: core.Target{ProjectDir: dir},
+		Target:  core.Target{ProjectDir: dir},
 		Options: map[string]string{"wizard": "steps"},
 	})
 	if err != nil {
