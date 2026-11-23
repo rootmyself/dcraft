@@ -218,7 +218,7 @@ func TestExecRejectsAStoppedServiceWithExitOne(t *testing.T) {
 	if d.Category != core.CategoryInstanceStopped {
 		t.Fatalf("category = %q", d.Category)
 	}
-	if !strings.Contains(d.Message, "실행 중이 아닙니다") || len(d.NextActions) == 0 {
+	if !strings.Contains(d.Message, "실행 중이 아님") || len(d.NextActions) == 0 {
 		t.Fatalf("diagnostic = %+v", d)
 	}
 	if streamer.callCount() != 0 {
@@ -322,7 +322,7 @@ func TestExecExplainsAMissingCommandWithoutAssumingAShell(t *testing.T) {
 	if d.Category != core.CategoryExecFailed {
 		t.Fatalf("category = %q", d.Category)
 	}
-	if !strings.Contains(d.Message, "nosuch") || !strings.Contains(d.Message, "없습니다") {
+	if !strings.Contains(d.Message, "nosuch") || !strings.Contains(d.Message, "없음") {
 		t.Fatalf("message = %q", d.Message)
 	}
 	joined := strings.Join(d.NextActions, " ")
@@ -336,7 +336,7 @@ func TestExecExplainsAServiceThatStoppedAfterSelection(t *testing.T) {
 	f := New(&fakeBackend{snap: scaledSnapshot()}, streamer)
 	_, err := f.Run(context.Background(), invocation([]string{"db"}, []string{"date"}, nil, core.IO{Stdout: &strings.Builder{}}, &fakeReporter{}))
 	d := diagnosticOf(t, err)
-	if d.Category != core.CategoryExecFailed || !strings.Contains(d.Message, "실행 중이 아닙니다") {
+	if d.Category != core.CategoryExecFailed || !strings.Contains(d.Message, "실행 중이 아님") {
 		t.Fatalf("diagnostic = %+v", d)
 	}
 }

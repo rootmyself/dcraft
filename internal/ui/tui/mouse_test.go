@@ -79,7 +79,7 @@ func TestMouseSidebarWheelMovesSelection(t *testing.T) {
 }
 
 func TestMouseMenuClickSelectsAndDoubleClickRuns(t *testing.T) {
-	status := &stubFeature{desc: sectionDescriptor("status", "스택 상태", "상태를 확인합니다.", core.SectionInspect, true, false), body: "상태 본문"}
+	status := &stubFeature{desc: sectionDescriptor("status", "스택 상태", "상태 확인.", core.SectionInspect, true, false), body: "상태 본문"}
 	logs := &stubFeature{desc: sectionDescriptor("logs", "로그 보기", "실시간 로그를 따라봅니다.", core.SectionInspect, false, false), body: "로그 본문"}
 	m := newTestModel(t, status, logs)
 	m.theme = *plainTheme()

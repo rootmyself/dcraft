@@ -177,14 +177,14 @@ func TestGenerateS3HookHumanOutputShowsThePlanAndNextCommands(t *testing.T) {
 		t.Fatalf("exit = %d stderr=%q", res.code, res.stderr)
 	}
 	for _, want := range []string{
-		"S3 호스트 스크립트 생성 계획", "S3에 접속하지 않습니다", "aws CLI",
+		"S3 호스트 스크립트 생성 계획", "S3에 접속하지 않음", "aws CLI",
 		"gzip -t", "script_trust", "file_overwrite",
 	} {
 		if !strings.Contains(res.stderr, want) {
 			t.Fatalf("plan missing %q:\n%s", want, res.stderr)
 		}
 	}
-	for _, want := range []string{"S3 호스트 스크립트를 저장했습니다", "dcraft hooks --add --stage pre", "script_trust"} {
+	for _, want := range []string{"S3 호스트 스크립트 저장", "dcraft hooks --add --stage pre", "script_trust"} {
 		if !strings.Contains(res.stdout, want) {
 			t.Fatalf("human output missing %q:\n%s", want, res.stdout)
 		}
@@ -196,7 +196,7 @@ func TestGenerateS3HookTUIWizardShowsThePreviewAndDeclineWritesNothing(t *testin
 	project := projectNamed(t, "s3gen-tui-decline")
 	env := fake.env(t, t.TempDir())
 	steps := []lifecyclePTYStep{
-		{wait: "상태를 새로 고치려면", send: ""},
+		{wait: "상태 새로 고침", send: ""},
 		{wait: "[↑↓] 이동", send: strings.Repeat("\x1b[B", menuDownPresses(t, "generate-s3-hook"))},
 		{wait: "▸ S3 호스트 스크립트 생성", send: "\r"},
 		{wait: "S3 원본", send: "s3://bucket/path/app.tar.gz"},
@@ -216,7 +216,7 @@ func TestGenerateS3HookTUIWizardShowsThePreviewAndDeclineWritesNothing(t *testin
 		t.Fatalf("TUI exit = %d\n%s", code, output)
 	}
 	for _, want := range []string{
-		"S3 호스트 스크립트 생성", "S3에 접속하지 않습니다", "aws s3 cp",
+		"S3 호스트 스크립트 생성", "S3에 접속하지 않음", "aws s3 cp",
 		"gzip -t", "file_overwrite", "script_trust", "취소",
 	} {
 		if !screenContains(output, want) {
@@ -233,7 +233,7 @@ func TestGenerateS3HookTUIWizardAcceptSavesTheScript(t *testing.T) {
 	project := projectNamed(t, "s3gen-tui-accept")
 	env := fake.env(t, t.TempDir())
 	steps := []lifecyclePTYStep{
-		{wait: "상태를 새로 고치려면", send: ""},
+		{wait: "상태 새로 고침", send: ""},
 		{wait: "[↑↓] 이동", send: strings.Repeat("\x1b[B", menuDownPresses(t, "generate-s3-hook"))},
 		{wait: "▸ S3 호스트 스크립트 생성", send: "\r"},
 		{wait: "S3 원본", send: "s3://bucket/deploy"},
@@ -244,7 +244,7 @@ func TestGenerateS3HookTUIWizardAcceptSavesTheScript(t *testing.T) {
 		{wait: "S3 호스트 스크립트 생성 계획", send: ""},
 		{wait: "dcraft hooks --add", send: "\r"},
 		{wait: "승인 확인", send: "\r"},
-		{wait: "S3 호스트 스크립트를 저장했습니다", send: ""},
+		{wait: "S3 호스트 스크립트 저장", send: ""},
 	}
 	output, code := runLifecyclePTYSteps(t, project, env, steps)
 	if code != 0 {
@@ -254,7 +254,7 @@ func TestGenerateS3HookTUIWizardAcceptSavesTheScript(t *testing.T) {
 	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o755 {
 		t.Fatalf("accepted wizard did not save the script: %v, %v", info, err)
 	}
-	if !strings.Contains(output, "S3 호스트 스크립트를 저장했습니다") {
+	if !strings.Contains(output, "S3 호스트 스크립트 저장") {
 		t.Fatalf("TUI output missing the success screen:\n%s", output)
 	}
 	if _, err := os.Stat(filepath.Join(project, ".dcraft.yaml")); !os.IsNotExist(err) {

@@ -93,7 +93,7 @@ func TestPadDoesNotTruncate(t *testing.T) {
 }
 
 func TestWrapKoreanProse(t *testing.T) {
-	lines := Wrap("서비스를 잠시 멈춘 뒤 로컬 폴더에 백업합니다", 20)
+	lines := Wrap("서비스를 잠시 멈춘 뒤 로컬 폴더에 백업", 20)
 	if len(lines) < 2 {
 		t.Fatalf("wrap produced %d line(s): %q", len(lines), lines)
 	}
@@ -110,7 +110,7 @@ func TestWrapKoreanProse(t *testing.T) {
 	for _, line := range lines {
 		joined += line
 	}
-	if !contains(joined, "백업합니다") || !contains(joined, "서비스를") {
+	if !contains(joined, "백업") || !contains(joined, "서비스를") {
 		t.Fatalf("wrap broke words: %q", lines)
 	}
 }

@@ -102,6 +102,6 @@ func CanceledDiagnostic() core.Diagnostic {
 		Category:    core.CategoryCanceled,
 		Severity:    core.SeverityWarning,
 		Message:     msgCanceled,
-		NextActions: []string{msgCanceledAct, "dcraft status로 기존 Compose 설정을 확인하세요."},
+		NextActions: []string{msgCanceledAct, "dcraft status로 기존 Compose 설정 확인."},
 	}
 }

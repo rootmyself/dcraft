@@ -65,70 +65,70 @@ func inputError(field, message, detail string) *InputError {
 func ResolveLayout(projectDir, destination, scriptPath string) (Layout, error) {
 	project, err := canonicalProject(projectDir)
 	if err != nil {
-		return Layout{}, inputError("project", "프로젝트 폴더를 확인하지 못했습니다.", err.Error())
+		return Layout{}, inputError("project", "프로젝트 폴더 확인 실패.", err.Error())
 	}
 	dest := strings.TrimSpace(destination)
 	script := strings.TrimSpace(scriptPath)
 	if dest == "" {
-		return Layout{}, inputError("dest", "받을 폴더를 입력하세요.", "")
+		return Layout{}, inputError("dest", "받을 폴더 입력.", "")
 	}
 	if script == "" {
-		return Layout{}, inputError("output", "스크립트 파일 경로를 입력하세요.", "")
+		return Layout{}, inputError("output", "스크립트 파일 경로 입력.", "")
 	}
 	if hasControl(dest) {
-		return Layout{}, inputError("dest", "받을 폴더 경로에 허용되지 않는 제어 문자가 있습니다.", "")
+		return Layout{}, inputError("dest", "받을 폴더 경로에 허용되지 않는 제어 문자가 있음.", "")
 	}
 	if hasControl(script) {
-		return Layout{}, inputError("output", "스크립트 경로에 허용되지 않는 제어 문자가 있습니다.", "")
+		return Layout{}, inputError("output", "스크립트 경로에 허용되지 않는 제어 문자가 있음.", "")
 	}
 
 	destSpell := candidate(project, dest)
 	scriptSpell := candidate(project, script)
 	if hasGitComponent(destSpell) {
-		return Layout{}, inputError("dest", "받을 폴더를 .git 내부로 지정할 수 없습니다.", dest)
+		return Layout{}, inputError("dest", "받을 폴더를 .git 내부로 지정 불가.", dest)
 	}
 	if hasGitComponent(scriptSpell) {
-		return Layout{}, inputError("output", "스크립트를 .git 내부에 만들 수 없습니다.", script)
+		return Layout{}, inputError("output", "스크립트를 .git 내부에 만들 수 없음.", script)
 	}
 
 	destResolved, err := resolveExisting(destSpell)
 	if err != nil {
-		return Layout{}, inputError("dest", "받을 폴더 경로를 확인하지 못했습니다.", err.Error())
+		return Layout{}, inputError("dest", "받을 폴더 경로 확인 실패.", err.Error())
 	}
 	scriptResolved, err := resolveExisting(scriptSpell)
 	if err != nil {
-		return Layout{}, inputError("output", "스크립트 경로를 확인하지 못했습니다.", err.Error())
+		return Layout{}, inputError("output", "스크립트 경로 확인 실패.", err.Error())
 	}
 
 	if !inside(project, destResolved) {
-		return Layout{}, inputError("dest", "받을 폴더는 프로젝트 폴더 안이어야 합니다.", dest)
+		return Layout{}, inputError("dest", "받을 폴더는 프로젝트 폴더 안이어야 함.", dest)
 	}
 	if !inside(project, scriptResolved) {
-		return Layout{}, inputError("output", "스크립트 경로는 프로젝트 폴더 안이어야 합니다.", script)
+		return Layout{}, inputError("output", "스크립트 경로는 프로젝트 폴더 안이어야 함.", script)
 	}
 	if destResolved == project {
-		return Layout{}, inputError("dest", "프로젝트 폴더 자체를 받을 폴더로 사용할 수 없습니다.", dest)
+		return Layout{}, inputError("dest", "프로젝트 폴더 자체를 받을 폴더로 사용 불가.", dest)
 	}
 	if inside(destResolved, scriptResolved) {
-		return Layout{}, inputError("output", "스크립트를 받을 폴더 안에 만들 수 없습니다. checkout이 스크립트를 덮을 수 있습니다.", script)
+		return Layout{}, inputError("output", "스크립트를 받을 폴더 안에 만들 수 없음. checkout이 스크립트를 덮을 수 있음.", script)
 	}
 	if filepath.Dir(scriptResolved) == destResolved {
-		return Layout{}, inputError("dest", "받을 폴더가 스크립트 폴더와 같습니다. 서로 다른 폴더를 사용하세요.", dest)
+		return Layout{}, inputError("dest", "받을 폴더가 스크립트 폴더와 같음. 서로 다른 폴더 사용.", dest)
 	}
 
 	if info, statErr := os.Lstat(scriptSpell); statErr == nil {
 		if info.Mode()&os.ModeSymlink != 0 {
-			return Layout{}, inputError("output", "기존 스크립트 경로가 심볼릭 링크입니다. 안전을 위해 덮어쓰지 않습니다.", script)
+			return Layout{}, inputError("output", "기존 스크립트 경로가 심볼릭 링크. 안전을 위해 덮어쓰지 않음.", script)
 		}
 		if info.IsDir() {
-			return Layout{}, inputError("output", "스크립트 경로가 폴더입니다.", script)
+			return Layout{}, inputError("output", "스크립트 경로가 폴더.", script)
 		}
 		if !info.Mode().IsRegular() {
-			return Layout{}, inputError("output", "스크립트 경로가 일반 파일이 아닙니다.", script)
+			return Layout{}, inputError("output", "스크립트 경로가 일반 파일이 아님.", script)
 		}
 	}
 	if info, statErr := os.Lstat(destResolved); statErr == nil && !info.IsDir() {
-		return Layout{}, inputError("dest", "받을 폴더 경로에 폴더가 아닌 파일이 있습니다.", dest)
+		return Layout{}, inputError("dest", "받을 폴더 경로에 폴더가 아닌 파일이 있음.", dest)
 	}
 
 	layout := Layout{
@@ -141,7 +141,7 @@ func ResolveLayout(projectDir, destination, scriptPath string) (Layout, error) {
 	layout.ScriptInsideProject = inside(project, scriptResolved)
 	layout.ScriptToProject, err = filepath.Rel(filepath.Dir(scriptResolved), project)
 	if err != nil {
-		return Layout{}, inputError("output", "스크립트 위치에서 프로젝트 폴더까지의 경로를 계산하지 못했습니다.", err.Error())
+		return Layout{}, inputError("output", "스크립트 위치에서 프로젝트 폴더까지의 경로 계산 실패.", err.Error())
 	}
 	return layout, nil
 }

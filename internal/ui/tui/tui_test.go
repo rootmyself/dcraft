@@ -48,7 +48,7 @@ func (f *stubFeature) Run(ctx context.Context, in core.Invocation) (any, error) 
 	if f.outcome == core.OutcomeFailure {
 		return nil, core.Fail(core.Diagnostic{
 			Category: core.CategoryEngineUnreachable, Severity: core.SeverityError,
-			Message: "Docker Engine에 연결할 수 없습니다.",
+			Message: "Docker Engine에 연결 불가.",
 		})
 	}
 	return "payload", nil
@@ -204,7 +204,7 @@ func TestNoPrimaryScreenExplainsAndOnlyQuits(t *testing.T) {
 		t.Fatal("model without a primary feature started work")
 	}
 	view := m.View()
-	if !strings.Contains(view, "기본 화면이 없습니다") {
+	if !strings.Contains(view, "등록된 기본 화면 없음") {
 		t.Fatalf("view = %s", view)
 	}
 	if !strings.Contains(view, "[q] 종료") {
@@ -232,7 +232,7 @@ func TestFailureRendersDiagnosticsAndStages(t *testing.T) {
 	m := newTestModel(t, status)
 	initModel(t, m)
 	view := m.View()
-	for _, want := range []string{"작업 실패", "Docker Engine에 연결할 수 없습니다", "대상 확인", "환경 확인"} {
+	for _, want := range []string{"작업 실패", "Docker Engine에 연결 불가", "대상 확인", "환경 확인"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("view missing %q:\n%s", want, view)
 		}
@@ -257,7 +257,7 @@ func TestSuccessWarningsAreVisibleInTheTUI(t *testing.T) {
 	initModel(t, m)
 	m.result.Diagnostics = []core.Diagnostic{{
 		Category: core.CategoryMultipleConfigFiles, Severity: core.SeverityWarning,
-		Message: "대상 폴더에 여러 개의 Compose 파일이 있습니다.",
+		Message: "대상 폴더에 여러 개의 Compose 파일이 있음.",
 	}}
 	if view := m.View(); !strings.Contains(view, "여러 개의 Compose 파일") {
 		t.Fatalf("warning not rendered:\n%s", view)
@@ -449,7 +449,7 @@ func TestEnvironmentSelectionIsRequiredWhenAliasesExist(t *testing.T) {
 	m := newEnvTestModel(t, resolver, core.TargetRequest{}, status)
 	initModel(t, m)
 	view := m.View()
-	for _, want := range []string{"실행환경 선택", "dev", "prod", "직접 선택", "[q] 종료"} {
+	for _, want := range []string{"실행환경 선택", "dev", "prod", "작업할 실행환경 선택", "[q] 종료"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("selection view missing %q:\n%s", want, view)
 		}
@@ -762,7 +762,7 @@ func TestCtrlCDuringMutatingOperationRequestsSafeCancellation(t *testing.T) {
 	if m.runCtx == nil || m.runCtx.Err() != context.Canceled {
 		t.Fatalf("run context was not canceled: %v", m.runCtx)
 	}
-	if !strings.Contains(m.View(), "중단을 요청했습니다") {
+	if !strings.Contains(m.View(), "중단 요청됨") {
 		t.Fatalf("no cancellation notice:\n%s", m.View())
 	}
 	// The engine reports the canceled result; the screen must show it.
@@ -772,7 +772,7 @@ func TestCtrlCDuringMutatingOperationRequestsSafeCancellation(t *testing.T) {
 		Outcome:       core.OutcomeCanceled,
 		Diagnostics: []core.Diagnostic{{
 			Category: core.CategoryCanceled, Severity: core.SeverityWarning,
-			Message: "작업이 중단되었습니다. 이미 완료된 단계의 효과는 남아 있을 수 있습니다.",
+			Message: "작업이 중단되었음. 이미 완료된 단계의 효과는 남아 있을 수 있음.",
 		}},
 	}})
 	m = nm.(*Model)

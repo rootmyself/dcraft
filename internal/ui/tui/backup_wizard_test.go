@@ -43,7 +43,7 @@ func TestBackupWizardSelectsAVolumeCollectsTheOutputPathAndConfirmsTheEffect(t *
 	status := &stubFeature{desc: descriptor("status", true), body: "상태"}
 	backup := &stubWizard{
 		stubFeature: &stubFeature{desc: core.Descriptor{
-			Name: "backup", Title: "데이터 백업", Summary: "백업합니다.", Usage: "dcraft backup",
+			Name: "backup", Title: "데이터 백업", Summary: "백업.", Usage: "dcraft backup",
 			Section: core.SectionData,
 			Wizard:  true, RecordsHistory: true,
 			Flags: []core.Flag{
@@ -55,14 +55,14 @@ func TestBackupWizardSelectsAVolumeCollectsTheOutputPathAndConfirmsTheEffect(t *
 			Title: "데이터 백업 설정",
 			Steps: []core.WizardStep{
 				{
-					Name: "volume", Title: "볼륨 선택", Prompt: "볼륨을 고르세요",
+					Name: "volume", Title: "볼륨 선택", Prompt: "볼륨을 고르",
 					Options: []core.WizardOption{
 						{Value: "data", Label: "data → proj_data · 서비스 app"},
 						{Value: "logs", Label: "logs → proj_logs"},
 					},
 				},
 				{
-					Name: "output", Title: "저장 폴더", Prompt: "폴더를 입력하세요",
+					Name: "output", Title: "저장 폴더", Prompt: "폴더 입력",
 					AllowCustom: true, Default: "./dcraft-backups",
 				},
 			},
@@ -118,11 +118,11 @@ func TestBackupWizardCancelRunsNothing(t *testing.T) {
 	status := &stubFeature{desc: descriptor("status", true), body: "상태"}
 	backup := &stubWizard{
 		stubFeature: &stubFeature{desc: core.Descriptor{
-			Name: "backup", Title: "데이터 백업", Summary: "백업합니다.", Usage: "dcraft backup",
+			Name: "backup", Title: "데이터 백업", Summary: "백업.", Usage: "dcraft backup",
 			Section: core.SectionData,
 			Wizard:  true,
 		}},
-		steps:   core.WizardSpec{Title: "설정", Steps: []core.WizardStep{{Name: "volume", Title: "볼륨", Prompt: "고르세요", Options: []core.WizardOption{{Value: "data", Label: "data"}}}}},
+		steps:   core.WizardSpec{Title: "설정", Steps: []core.WizardStep{{Name: "volume", Title: "볼륨", Prompt: "고르", Options: []core.WizardOption{{Value: "data", Label: "data"}}}}},
 		preview: "미리보기",
 	}
 	m := newTestModel(t, status, backup)

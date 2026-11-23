@@ -550,7 +550,7 @@ func TestPreviewExplainsBuildSecretCacheLimitation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"빌드 시점 비밀값", "--no-cache", "저장하거나 비교하지 않습니다"} {
+	for _, want := range []string{"빌드 시점 비밀값", "--no-cache", "저장하거나 비교하지 않음"} {
 		if !strings.Contains(plan.Text, want) {
 			t.Fatalf("plan missing %q:\n%s", want, plan.Text)
 		}
@@ -839,7 +839,7 @@ func TestPreviewShowsTargetPlanAndHonestLimits(t *testing.T) {
 	}
 	for _, want := range []string{
 		"/work/app/compose.yaml", ".env.dev", "dev", "app", "api", "db",
-		"캐시 사용 안 함", "강제 재생성", "정확한 미래 상태 diff가 아닙니다",
+		"캐시 사용 안 함", "강제 재생성", "정확한 미래 상태 diff가 아님",
 	} {
 		if !strings.Contains(plan.Text, want) {
 			t.Fatalf("preview misses %q:\n%s", want, plan.Text)

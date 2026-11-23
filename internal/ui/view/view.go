@@ -99,7 +99,7 @@ func SuccessFallback(res core.Result) string {
 		action = "작업"
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "작업을 완료했습니다: %s\n", action)
+	fmt.Fprintf(&b, "작업 완료: %s\n", action)
 	if res.Target.ProjectDir != "" {
 		fmt.Fprintf(&b, "대상: %s\n", res.Target.ProjectDir)
 	}

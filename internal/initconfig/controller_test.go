@@ -345,7 +345,7 @@ func TestPlanShowsTheExactFileAndDoesNotSave(t *testing.T) {
 		"image: busybox:1.36",
 		"8080:80",
 		"dcraft up",
-		"저장은 실행이 아닙니다",
+		"저장은 실행이 아님",
 	} {
 		if !strings.Contains(plan.Text, want) {
 			t.Fatalf("plan missing %q:\n%s", want, plan.Text)

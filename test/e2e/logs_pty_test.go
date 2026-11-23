@@ -273,7 +273,7 @@ func TestPTYTUIExecScreenShowsTargetRunsAndReturnsToTheMenu(t *testing.T) {
 	s.press("\r") // choose the default instance, move to command
 	s.press("d", "a", "t", "e")
 	s.press("\r") // submit
-	s.waitFor("명령을 실행했습니다", 20*time.Second)
+	s.waitFor("명령 실행", 20*time.Second)
 	s.send("q")
 	code := s.wait()
 	if code != 0 {

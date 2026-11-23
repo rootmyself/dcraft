@@ -380,7 +380,7 @@ func TestWizardFeatureSkipsTheScopeTable(t *testing.T) {
 	d.Wizard = true
 	guided := &wizardStub{desc: d, steps: core.WizardSpec{
 		Title: "안내 설정",
-		Steps: []core.WizardStep{{Name: "service", Title: "서비스", Prompt: "서비스를 선택하세요."}},
+		Steps: []core.WizardStep{{Name: "service", Title: "서비스", Prompt: "서비스 선택."}},
 	}}
 	reg := core.NewRegistry()
 	if err := reg.Register(catalog); err != nil {
@@ -403,7 +403,7 @@ func TestWizardFeatureSkipsTheScopeTable(t *testing.T) {
 	if m.phase != phaseWizardStep {
 		t.Fatalf("phase = %v, want a wizard step; view:\n%s", m.phase, m.View())
 	}
-	if strings.Contains(m.View(), msgServiceSelectTitle) {
+	if strings.Contains(m.View(), msgServiceWhole) {
 		t.Fatalf("the scope table replaced the wizard:\n%s", m.View())
 	}
 }

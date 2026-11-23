@@ -28,8 +28,8 @@ func (f *fakeLiveFeature) CanceledDiagnostic() core.Diagnostic {
 	return core.Diagnostic{
 		Category:    core.CategoryCanceled,
 		Severity:    core.SeverityWarning,
-		Message:     "실시간 화면을 분리했습니다. 서비스는 계속 실행 중입니다.",
-		NextActions: []string{"dcraft status로 상태를 확인하세요."},
+		Message:     "실시간 화면을 분리. 서비스는 계속 실행 중.",
+		NextActions: []string{"dcraft status로 상태 확인."},
 	}
 }
 

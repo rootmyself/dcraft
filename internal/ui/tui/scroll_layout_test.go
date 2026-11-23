@@ -99,9 +99,9 @@ func TestMediumResultCountsTheNavigationRow(t *testing.T) {
 		resize(t, m, width, 24)
 		// Every guidance line the model renders must be visible or reachable.
 		for _, want := range []string{
-			"상태를 새로 고치려면",
-			"비정상·중지 서비스의 로그를 먼저 확인하세요.",
-			"컨테이너가 없는 서비스는 스택 시작으로 생성됩니다.",
+			"상태 새로 고침",
+			"비정상·중지 서비스의 로그를 먼저 확인.",
+			"컨테이너가 없는 서비스는 스택 시작으로 생성됨.",
 		} {
 			if !viewContains(m, want) {
 				pressRunes(t, m, "G")
@@ -132,7 +132,7 @@ func TestWideShortFrameNeverCountsAnUndrawnRow(t *testing.T) {
 	}
 	// The guidance is reachable instead of being cut.
 	pressRunes(t, m, "G")
-	if !strings.Contains(strings.Join(m.layoutBody().lines, "\n"), "스택 시작으로 생성됩니다") {
+	if !strings.Contains(strings.Join(m.layoutBody().lines, "\n"), "스택 시작으로 생성됨") {
 		t.Fatalf("G did not reach the guidance:\n%s", m.View())
 	}
 }

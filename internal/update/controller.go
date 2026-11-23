@@ -515,9 +515,9 @@ func validateServices(selected, configured []string) error {
 	return core.Fail(core.Diagnostic{
 		Category:    core.CategoryServiceUnknown,
 		Severity:    core.SeverityError,
-		Message:     fmt.Sprintf("갱신 대상 서비스를 찾지 못했습니다: %s", strings.Join(unknown, ", ")),
+		Message:     fmt.Sprintf("갱신 대상 서비스 찾지 못함: %s", strings.Join(unknown, ", ")),
 		Detail:      "사용 가능한 서비스: " + strings.Join(configured, ", "),
-		NextActions: []string{"-s/--service에 설정된 서비스 이름을 사용하세요.", "dcraft status로 서비스 목록을 확인하세요."},
+		NextActions: []string{"-s/--service에 설정된 서비스 이름 사용.", "dcraft status로 서비스 목록 확인."},
 	})
 }
 

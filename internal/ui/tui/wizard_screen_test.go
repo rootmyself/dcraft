@@ -20,7 +20,7 @@ func secretWizard() (*wizardStub, core.WizardSpec) {
 			Section: core.SectionConfig, Wizard: true,
 		},
 		steps:   spec,
-		preview: "저장할 비밀값 연결\n서비스: worker\n효과: dcraft up 시 파일로 전달합니다.",
+		preview: "저장할 비밀값 연결\n서비스: worker\n효과: dcraft up 시 파일로 전달.",
 	}
 	return stub, spec
 }
@@ -34,7 +34,7 @@ func TestWizardStepShowsProgressTitleAndPrompt(t *testing.T) {
 	resize(t, m, 120, 36)
 
 	view := m.View()
-	for _, want := range []string{"단계 1/5", "서비스 선택", "서비스를 선택하세요."} {
+	for _, want := range []string{"단계 1/5", "서비스 선택", "서비스 선택."} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("step screen missing %q:\n%s", want, view)
 		}
@@ -43,7 +43,7 @@ func TestWizardStepShowsProgressTitleAndPrompt(t *testing.T) {
 	// The ordinal counts visible steps, so the second question reads 2/5.
 	feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeyEnter}})
 	view = m.View()
-	for _, want := range []string{"단계 2/5", "시점 선택", "시점을 선택하세요."} {
+	for _, want := range []string{"단계 2/5", "시점 선택", "시점 선택."} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("second step screen missing %q:\n%s", want, view)
 		}
@@ -58,14 +58,14 @@ func TestWizardConditionalStepHidesAndIsRestored(t *testing.T) {
 		Title: "조건 단계",
 		Steps: []core.WizardStep{
 			{
-				Name: "source", Title: "원본 종류", Prompt: "원본을 선택하세요.", Default: "env",
+				Name: "source", Title: "원본 종류", Prompt: "원본 선택.", Default: "env",
 				Options: []core.WizardOption{{Value: "env", Label: "환경변수"}, {Value: "aws", Label: "AWS"}},
 			},
 			{
-				Name: "field", Title: "AWS field", Prompt: "field를 입력하세요.", AllowCustom: true,
+				Name: "field", Title: "AWS field", Prompt: "field를 입력.", AllowCustom: true,
 				DependsOn: "source", DependsValue: "aws",
 			},
-			{Name: "ref", Title: "참조", Prompt: "참조를 입력하세요.", AllowCustom: true},
+			{Name: "ref", Title: "참조", Prompt: "참조 입력.", AllowCustom: true},
 		},
 	}
 	desc := descriptor("secrets", false)
@@ -167,12 +167,12 @@ func TestWizardChoiceStepRendersSelectableCards(t *testing.T) {
 // toggles only the highlighted box.
 func TestWizardMultiStepUsesExplicitCheckboxes(t *testing.T) {
 	wizard := &wizardStub{
-		desc: core.Descriptor{Name: "backup", Title: "백업", Summary: "백업합니다.", Usage: "dcraft backup", Section: core.SectionData, Wizard: true},
+		desc: core.Descriptor{Name: "backup", Title: "백업", Summary: "백업.", Usage: "dcraft backup", Section: core.SectionData, Wizard: true},
 		steps: core.WizardSpec{
 			Title: "백업 설정",
 			Steps: []core.WizardStep{
 				{
-					Name: "sources", Title: "데이터 선택", Prompt: "여러 항목을 고르세요.", Multi: true,
+					Name: "sources", Title: "데이터 선택", Prompt: "여러 항목을 고르.", Multi: true,
 					Options: []core.WizardOption{
 						{Value: "volume:data", Label: "볼륨 data"},
 						{Value: "bind:/srv/app", Label: "폴더 /srv/app"},
@@ -401,10 +401,10 @@ func TestWizardStepFits48ColumnsWithoutClipping(t *testing.T) {
 	stub := &wizardStub{
 		desc: desc,
 		steps: core.WizardSpec{Title: "좁은 화면 설정", Steps: []core.WizardStep{{
-			Name: "service", Title: "서비스 선택", Prompt: "서비스를 선택하세요.",
+			Name: "service", Title: "서비스 선택", Prompt: "서비스 선택.",
 			Options: []core.WizardOption{
-				{Value: "web", Label: "첫 번째 선택지 아주 긴 라벨입니다"},
-				{Value: "worker", Label: "두 번째 선택지도 아주 긴 라벨입니다"},
+				{Value: "web", Label: "첫 번째 선택지 아주 긴 라벨"},
+				{Value: "worker", Label: "두 번째 선택지도 아주 긴 라벨"},
 			},
 		}}},
 		preview: "OK",
@@ -417,7 +417,7 @@ func TestWizardStepFits48ColumnsWithoutClipping(t *testing.T) {
 	if strings.Contains(view, m.theme.Glyphs.Ell) {
 		t.Fatalf("48 columns clipped the step:\n%s", view)
 	}
-	for _, want := range []string{"서비스를 선택하세요.", "첫 번째 선택지", "긴 라벨입니다", "두 번째 선택지도", "긴 라벨입니다"} {
+	for _, want := range []string{"서비스 선택.", "첫 번째 선택지", "긴 라벨", "두 번째 선택지도", "긴 라벨"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("48-column step missing %q:\n%s", want, view)
 		}

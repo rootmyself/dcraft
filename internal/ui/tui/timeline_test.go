@@ -330,7 +330,7 @@ func TestFailedPlanDoesNotPromiseRemainingStages(t *testing.T) {
 		plan: func(context.Context, core.Invocation) (core.Plan, error) {
 			return core.Plan{}, core.Fail(core.Diagnostic{
 				Category: core.CategoryEngineUnreachable, Severity: core.SeverityError,
-				Message: "Docker Engine에 연결할 수 없습니다.",
+				Message: "Docker Engine에 연결 불가.",
 			})
 		},
 	}
@@ -434,7 +434,7 @@ func TestBusyTimelineKeepsQuitRiskAndCancelFlow(t *testing.T) {
 		t.Fatal("q quit during a mutating run")
 	}
 	view := m.View()
-	for _, want := range []string{"지금 화면을 닫으면 일부 변경이 남을 수 있습니다", "ctrl+c", "환경 확인", "[q] 종료 불가"} {
+	for _, want := range []string{"지금 화면을 닫으면 일부 변경이 남을 수 있음", "ctrl+c", "환경 확인", "[q] 종료 불가"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("busy screen missing %q:\n%s", want, view)
 		}
@@ -450,7 +450,7 @@ func TestBusyTimelineKeepsQuitRiskAndCancelFlow(t *testing.T) {
 		t.Fatalf("run context was not canceled")
 	}
 	view = m.View()
-	for _, want := range []string{"중단을 요청했습니다", "일부 변경이 남을 수 있습니다", "환경 확인"} {
+	for _, want := range []string{"중단 요청됨", "일부 변경이 남을 수 있음", "환경 확인"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("canceling screen missing %q:\n%s", want, view)
 		}
@@ -466,13 +466,13 @@ func TestBusyTimelineKeepsQuitRiskAndCancelFlow(t *testing.T) {
 		},
 		Diagnostics: []core.Diagnostic{{
 			Category: core.CategoryCanceled, Severity: core.SeverityWarning,
-			Message: "작업이 중단되었습니다. 이미 완료된 단계의 효과는 남아 있을 수 있습니다.",
+			Message: "작업이 중단되었음. 이미 완료된 단계의 효과는 남아 있을 수 있음.",
 		}},
 	}})
 	m = nm.(*Model)
 	view = m.View()
 	for _, want := range []string{
-		"작업 중단", "이미 완료된 단계의 효과는 남아 있을 수 있습니다",
+		"작업 중단", "이미 완료된 단계의 효과는 남아 있을 수 있음",
 		m.theme.Glyphs.Stopped + " 환경 확인 (중단)",
 		m.theme.Glyphs.Dot + " 작업 실행 (예정)",
 	} {
@@ -590,9 +590,9 @@ func TestFailureKeepsTheFailedStageDiagnosticsAndRemainingStages(t *testing.T) {
 		},
 		Diagnostics: []core.Diagnostic{{
 			Category: core.CategoryEngineUnreachable, Severity: core.SeverityError,
-			Message:     "Docker Engine에 연결할 수 없습니다.",
+			Message:     "Docker Engine에 연결 불가.",
 			Detail:      "Cannot connect to the Docker daemon",
-			NextActions: []string{"Docker Desktop을 실행하세요."},
+			NextActions: []string{"Docker Desktop을 실행."},
 		}},
 	}})
 	m = nm.(*Model)
@@ -600,9 +600,9 @@ func TestFailureKeepsTheFailedStageDiagnosticsAndRemainingStages(t *testing.T) {
 	view := m.View()
 	for _, want := range []string{
 		"작업 실패",
-		"Docker Engine에 연결할 수 없습니다",
+		"Docker Engine에 연결 불가",
 		"Cannot connect to the Docker daemon",
-		"Docker Desktop을 실행하세요",
+		"Docker Desktop을 실행",
 		m.theme.Glyphs.OK + " 대상 확인 (완료)",
 		m.theme.Glyphs.Danger + " 환경 확인 (실패)",
 		m.theme.Glyphs.Dot + " 작업 실행 (예정)",

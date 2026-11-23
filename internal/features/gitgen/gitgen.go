@@ -129,7 +129,7 @@ func (f *Feature) generate(ctx context.Context, in core.Invocation) (any, error)
 		return nil, core.FailCause(err, core.Diagnostic{
 			Category:    core.CategoryGeneratorFailed,
 			Severity:    core.SeverityError,
-			Message:     "스크립트 파일을 저장하지 못했습니다.",
+			Message:     "스크립트 파일 저장 실패.",
 			Detail:      err.Error(),
 			NextActions: []string{msgWriteActionOne, msgWriteActionTwo},
 		})
@@ -162,7 +162,7 @@ func (f *Feature) payload(gen gitgen.Generated, created bool) Payload {
 			msgDoneNotRun,
 			msgDoneTrust,
 			msgDoneGeneration,
-			"dcraft update에도 같은 사전/사후 스크립트가 적용됩니다. 스크립트를 수정하면 다시 신뢰 승인이 필요합니다.",
+			"dcraft update에도 같은 사전/사후 스크립트가 적용됨. 스크립트를 수정하면 다시 신뢰 승인이 필요.",
 		},
 	}
 	if !created {
@@ -254,11 +254,11 @@ func previewText(gen gitgen.Generated) string {
 	fmt.Fprintf(&b, "%s\n", msgPlanNext)
 	fmt.Fprintf(&b, "  dcraft hooks --add --stage %s --script %s\n", gen.Stage, shellQuote(script))
 	fmt.Fprintf(&b, "  dcraft up --approve script_trust\n")
-	fmt.Fprintf(&b, "  스크립트 내용이 바뀌면 새 script_trust 승인이 필요합니다.\n\n")
+	fmt.Fprintf(&b, "  스크립트 내용이 바뀌면 새 script_trust 승인이 필요.\n\n")
 
 	fmt.Fprintf(&b, "%s\n", msgPlanApproval)
-	fmt.Fprintf(&b, "  이 작업은 file_overwrite 승인이 필요합니다(새 파일 생성 또는 기존 파일 교체). 자동화에서는 --approve file_overwrite를 명시하세요.\n")
-	fmt.Fprintf(&b, "  생성 승인과 첫 실행의 script_trust 승인은 별개입니다.\n\n")
+	fmt.Fprintf(&b, "  이 작업은 file_overwrite 승인이 필요(새 파일 생성 또는 기존 파일 교체). 자동화에서는 --approve file_overwrite를 명시.\n")
+	fmt.Fprintf(&b, "  생성 승인과 첫 실행의 script_trust 승인은 별개.\n\n")
 
 	fmt.Fprintf(&b, "%s\n", msgPlanInputs)
 	fmt.Fprintf(&b, "  저장소: %s\n", gen.Repository)
@@ -276,9 +276,9 @@ func previewText(gen gitgen.Generated) string {
 	b.WriteString("\n")
 
 	fmt.Fprintf(&b, "%s\n", msgPlanExecution)
-	fmt.Fprintf(&b, "  훅으로 등록하면 dcraft가 프로젝트 폴더에서 실행합니다. 스크립트는 자기 위치에서 프로젝트 폴더를 계산합니다.\n")
+	fmt.Fprintf(&b, "  훅으로 등록하면 dcraft가 프로젝트 폴더에서 실행. 스크립트는 자기 위치에서 프로젝트 폴더를 계산.\n")
 	fmt.Fprintf(&b, "  %s\n", save)
-	fmt.Fprintf(&b, "  실행 권한 0755로 저장합니다. .dcraft.yaml은 이 단계에서 수정하지 않습니다.\n")
+	fmt.Fprintf(&b, "  실행 권한 0755로 저장. .dcraft.yaml은 이 단계에서 수정하지 않음.\n")
 	b.WriteString("\n")
 
 	fmt.Fprintf(&b, "%s\n", msgPlanEffects)
@@ -337,7 +337,7 @@ func inputError(err error) *core.Error {
 	return core.FailCause(err, core.Diagnostic{
 		Category:    core.CategoryGeneratorInputInvalid,
 		Severity:    core.SeverityError,
-		Message:     "생성 입력을 확인하지 못했습니다.",
+		Message:     "생성 입력 확인 실패.",
 		Detail:      err.Error(),
 		NextActions: []string{msgInputActionOne, msgInputActionTwo},
 	})
@@ -360,7 +360,7 @@ func presentLines(res core.Result) []core.ValueLine {
 		if ptr, ptrOK := res.Data.(*Payload); ptrOK && ptr != nil {
 			payload = *ptr
 		} else {
-			return []core.ValueLine{{{Text: "Git 스크립트 생성 결과를 표시할 수 없습니다."}}}
+			return []core.ValueLine{{{Text: "Git 스크립트 생성 결과 표시 불가."}}}
 		}
 	}
 	report := payload.Generator

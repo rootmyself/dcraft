@@ -248,7 +248,7 @@ func TestSecretsCLIBuildPhaseUsesBuildKitAndReportsManagedFile(t *testing.T) {
 	if strings.Contains(string(data), "value") {
 		t.Fatalf("build override contains a value field:\n%s", data)
 	}
-	for _, want := range []string{"캐시", "--no-cache", "Dockerfile", "자동으로 수정하지 않습니다"} {
+	for _, want := range []string{"캐시", "--no-cache", "Dockerfile", "자동으로 수정하지 않음"} {
 		if !strings.Contains(strings.Join(report.Notices, "\n"), want) {
 			t.Fatalf("notices missing %q: %v", want, report.Notices)
 		}
@@ -285,7 +285,7 @@ func TestSecretsHumanOutputExplainsDelivery(t *testing.T) {
 	if res.code != 0 {
 		t.Fatalf("exit = %d stderr=%q", res.code, res.stderr)
 	}
-	for _, want := range []string{"비밀값 참조를 저장했습니다", "/run/secrets/token", "직접 읽어야", "dcraft는 앱의 파일 소비를 보장하지 않습니다", "자동으로 찾아 제거하지 않습니다"} {
+	for _, want := range []string{"비밀값 참조 저장", "/run/secrets/token", "직접 읽어야", "dcraft는 앱의 파일 소비를 보장하지 않음", "자동으로 찾아 제거하지 않음"} {
 		if !strings.Contains(res.stdout, want) {
 			t.Fatalf("stdout missing %q:\n%s", want, res.stdout)
 		}

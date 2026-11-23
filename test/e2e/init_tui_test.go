@@ -49,7 +49,7 @@ func TestInitTUIWizardDeclinesWithoutWritingAndSavesAfterConfirmation(t *testing
 	steps := append(initWizardNavigation(), initWizardAnswers()...)
 	steps = append(steps,
 		lifecyclePTYStep{wait: "다음 명령: dcraft up", send: "\x1b"},
-		lifecyclePTYStep{wait: "저장된 내용은 없습니다", send: ""},
+		lifecyclePTYStep{wait: "저장된 내용 없음", send: ""},
 	)
 	output, code := runLifecyclePTYSteps(t, project, env, steps)
 	if code != 0 {
@@ -62,7 +62,7 @@ func TestInitTUIWizardDeclinesWithoutWritingAndSavesAfterConfirmation(t *testing
 	steps = append(initWizardNavigation(), initWizardAnswers()...)
 	steps = append(steps,
 		lifecyclePTYStep{wait: "다음 명령: dcraft up", send: "\r"},
-		lifecyclePTYStep{wait: "Compose 파일을 저장했습니다.", send: ""},
+		lifecyclePTYStep{wait: "Compose 파일 저장.", send: ""},
 		lifecyclePTYStep{wait: "dcraft up", send: ""},
 	)
 	output, code = runLifecyclePTYSteps(t, project, env, steps)
@@ -78,7 +78,7 @@ func TestInitTUIWizardDeclinesWithoutWritingAndSavesAfterConfirmation(t *testing
 			t.Fatalf("saved file missing %q:\n%s", want, data)
 		}
 	}
-	if strings.Contains(output, "실행합니다") && strings.Contains(output, "스택을 시작했습니다") {
+	if strings.Contains(output, "실행") && strings.Contains(output, "스택 시작") {
 		t.Fatalf("init ran the stack after saving:\n%s", output)
 	}
 }
@@ -100,7 +100,7 @@ func TestInitTUIWizardOverwriteShowsTheApprovalAndDeclineKeepsTheOldFile(t *test
 	steps := append(initWizardNavigation(), initWizardAnswers()...)
 	steps = append(steps,
 		lifecyclePTYStep{wait: "파일 덮어쓰기 (file_overwrite)", send: "\x1b"},
-		lifecyclePTYStep{wait: "저장된 내용은 없습니다", send: ""},
+		lifecyclePTYStep{wait: "저장된 내용 없음", send: ""},
 	)
 	output, code := runLifecyclePTYSteps(t, project, env, steps)
 	if code != 0 {
@@ -115,8 +115,8 @@ func TestInitTUIWizardOverwriteShowsTheApprovalAndDeclineKeepsTheOldFile(t *test
 		lifecyclePTYStep{wait: "파일 덮어쓰기 (file_overwrite)", send: "\r"},
 		lifecyclePTYStep{wait: "승인 확인", send: ""},
 		lifecyclePTYStep{wait: "파일 덮어쓰기", send: "\r"},
-		lifecyclePTYStep{wait: "Compose 파일을 저장했습니다.", send: ""},
-		lifecyclePTYStep{wait: "기존 파일을 덮어썼습니다.", send: ""},
+		lifecyclePTYStep{wait: "Compose 파일 저장.", send: ""},
+		lifecyclePTYStep{wait: "기존 파일을 덮어썼음.", send: ""},
 		lifecyclePTYStep{wait: "dcraft up", send: ""},
 	)
 	output, code = runLifecyclePTYSteps(t, project, env, steps)
@@ -156,7 +156,7 @@ func TestInitTUIWizardDoesNotOverwriteAFileCreatedAfterThePreview(t *testing.T) 
 			},
 			send: "\r",
 		},
-		lifecyclePTYStep{wait: "파일 덮어쓰기 승인이 필요합니다.", send: ""},
+		lifecyclePTYStep{wait: "파일 덮어쓰기 승인이 필요.", send: ""},
 		lifecyclePTYStep{wait: "다시 미리보기", send: ""},
 	)
 	output, code := runLifecyclePTYSteps(t, project, env, steps)
@@ -170,7 +170,7 @@ func TestInitTUIWizardDoesNotOverwriteAFileCreatedAfterThePreview(t *testing.T) 
 	if string(data) != intruder {
 		t.Fatalf("a file created after the preview was overwritten:\n%s", data)
 	}
-	for _, want := range []string{"파일 덮어쓰기 승인이 필요합니다.", "다시 미리보기", "덮어쓰지 않습니다"} {
+	for _, want := range []string{"파일 덮어쓰기 승인이 필요.", "다시 미리보기", "덮어쓰지 않음"} {
 		if !screenContains(output, want) {
 			t.Fatalf("failure guidance missing %q:\n%s", want, output)
 		}

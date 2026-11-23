@@ -123,8 +123,8 @@ func (e *Engine) Run(ctx context.Context, req Request, sink Sink) (res Result) {
 		res.Diagnostics = append(res.Diagnostics, Diagnostic{
 			Category:    CategoryInternal,
 			Severity:    SeverityError,
-			Message:     fmt.Sprintf("등록되지 않은 작업입니다: %s", req.Feature),
-			NextActions: []string{"dcraft --help로 사용 가능한 명령을 확인하세요."},
+			Message:     fmt.Sprintf("등록되지 않은 작업: %s", req.Feature),
+			NextActions: []string{"dcraft --help로 사용 가능한 명령 확인."},
 		})
 		return res
 	}
@@ -468,8 +468,8 @@ func (e *Engine) Plan(ctx context.Context, req Request, sink Sink) (report PlanR
 		report.Diagnostics = append(report.Diagnostics, Diagnostic{
 			Category:    CategoryInternal,
 			Severity:    SeverityError,
-			Message:     fmt.Sprintf("등록되지 않은 작업입니다: %s", req.Feature),
-			NextActions: []string{"dcraft --help로 사용 가능한 명령을 확인하세요."},
+			Message:     fmt.Sprintf("등록되지 않은 작업: %s", req.Feature),
+			NextActions: []string{"dcraft --help로 사용 가능한 명령 확인."},
 		})
 		return report
 	}
@@ -562,9 +562,9 @@ func (e *Engine) Plan(ctx context.Context, req Request, sink Sink) (report PlanR
 			report.Diagnostics = append(report.Diagnostics, Diagnostic{
 				Category:    CategoryInternal,
 				Severity:    SeverityError,
-				Message:     "호스트 스크립트 연결이 준비되지 않았습니다.",
+				Message:     "호스트 스크립트 연결이 준비되지 않았음.",
 				Detail:      "hook service is not configured",
-				NextActions: []string{"dcraft를 다시 빌드하거나 설치한 뒤 실행하세요."},
+				NextActions: []string{"dcraft를 다시 빌드하거나 설치한 뒤 실행."},
 			})
 			return report
 		}
@@ -688,8 +688,8 @@ func (e *Engine) Inputs(ctx context.Context, req Request, sink Sink) (report Inp
 		report.Diagnostics = append(report.Diagnostics, Diagnostic{
 			Category:    CategoryInternal,
 			Severity:    SeverityError,
-			Message:     fmt.Sprintf("등록되지 않은 작업입니다: %s", req.Feature),
-			NextActions: []string{"dcraft --help로 사용 가능한 명령을 확인하세요."},
+			Message:     fmt.Sprintf("등록되지 않은 작업: %s", req.Feature),
+			NextActions: []string{"dcraft --help로 사용 가능한 명령 확인."},
 		})
 		return report
 	}

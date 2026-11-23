@@ -23,14 +23,14 @@ func TestSecretsTUIWizardShowsEffectAndSavesOnlyAfterConfirmation(t *testing.T) 
 		{wait: "원본 참조 입력", send: "DB_PASSWORD\r"},
 		{wait: "저장할 비밀값 연결", send: ""},
 		{wait: "Docker 조회 권한", send: "\x1b"}, // esc: decline, save nothing
-		{wait: "저장된 내용은 없습니다", send: ""},
+		{wait: "저장된 내용 없음", send: ""},
 	})
 	if code != 0 {
 		t.Fatalf("TUI decline exit = %d\n%s", code, declineOutput)
 	}
 	for _, want := range []string{
 		"비밀값 연결 설정", "서비스 선택", "전달 방식 선택", "원본 종류 선택",
-		"저장할 비밀값 연결", "환경변수", "Docker 조회 권한", "저장된 내용은 없습니다",
+		"저장할 비밀값 연결", "환경변수", "Docker 조회 권한", "저장된 내용 없음",
 	} {
 		if !strings.Contains(declineOutput, want) {
 			t.Fatalf("TUI output missing %q:\n%s", want, declineOutput)
@@ -49,12 +49,12 @@ func TestSecretsTUIWizardShowsEffectAndSavesOnlyAfterConfirmation(t *testing.T) 
 		{wait: "원본 종류 선택", send: "\r"},
 		{wait: "원본 참조 입력", send: "DB_PASSWORD\r"},
 		{wait: "저장할 비밀값 연결", send: "\r"}, // enter: save
-		{wait: "비밀값 참조를 저장했습니다", send: ""},
+		{wait: "비밀값 참조 저장", send: ""},
 	})
 	if code != 0 {
 		t.Fatalf("TUI save exit = %d\n%s", code, output)
 	}
-	if !strings.Contains(output, "비밀값 참조를 저장했습니다") || !strings.Contains(output, "DB_PASSWORD") {
+	if !strings.Contains(output, "비밀값 참조 저장") || !strings.Contains(output, "DB_PASSWORD") {
 		t.Fatalf("TUI output missing the saved reference:\n%s", output)
 	}
 	config := readConfig(t, project)
@@ -83,14 +83,14 @@ func TestSecretsTUIWizardBuildPhaseFixesDeliveryToBuildKit(t *testing.T) {
 		{wait: "원본 참조 입력", send: "BUILD_TOKEN\r"},
 		{wait: "저장할 비밀값 연결", send: ""},
 		{wait: "BuildKit secret mount로 고정", send: "\r"},
-		{wait: "비밀값 참조를 저장했습니다", send: ""},
+		{wait: "비밀값 참조 저장", send: ""},
 	})
 	if code != 0 {
 		t.Fatalf("TUI exit = %d\n%s", code, output)
 	}
 	for _, want := range []string{
-		"빌드 시점", "BuildKit", "--no-cache", "자동으로 수정하지 않습니다",
-		"비밀값 참조를 저장했습니다",
+		"빌드 시점", "BuildKit", "--no-cache", "자동으로 수정하지 않음",
+		"비밀값 참조 저장",
 	} {
 		if !screenContains(output, want) {
 			t.Fatalf("TUI output missing %q:\n%s", want, output)
@@ -120,7 +120,7 @@ func TestSecretsTUIDeclineLeavesNoConfig(t *testing.T) {
 		{wait: "원본 종류 선택", send: "\r"},
 		{wait: "원본 참조 입력", send: "DB_PASSWORD\r"},
 		{wait: "저장할 비밀값 연결", send: "\x1b"},
-		{wait: "저장된 내용은 없습니다", send: ""},
+		{wait: "저장된 내용 없음", send: ""},
 	})
 	if code != 0 {
 		t.Fatalf("TUI exit = %d\n%s", code, output)

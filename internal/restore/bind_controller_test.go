@@ -191,7 +191,7 @@ func TestRunBindPathMismatchRequiresTheExplicitFlagAndWarns(t *testing.T) {
 	if !report.PathMapping {
 		t.Fatalf("path mapping was not reported: %+v", report)
 	}
-	if !containsSubstring(report.Warnings, "경로가 백업과 다릅니다") {
+	if !containsSubstring(report.Warnings, "경로가 백업과 다름") {
 		t.Fatalf("mapping warning missing: %v", report.Warnings)
 	}
 	if after := bindTree(t, other); !sameFacts(archived, after) {
@@ -382,7 +382,7 @@ func TestPlanBindIsReadOnlyAndShowsTheDeclaredTargetAndLimits(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Plan: %v", err)
 	}
-	for _, want := range []string{"복원 계획", "폴더", "안전 백업 위치", "병합이 아닙니다", "xattr"} {
+	for _, want := range []string{"복원 계획", "폴더", "안전 백업 위치", "병합이 아님", "xattr"} {
 		if !strings.Contains(plan.Text, want) {
 			t.Fatalf("bind plan missing %q:\n%s", want, plan.Text)
 		}

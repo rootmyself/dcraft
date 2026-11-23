@@ -236,7 +236,7 @@ func TestDocumentEmptyStackIsExplained(t *testing.T) {
 	if len(table.Rows) != 0 {
 		t.Fatalf("empty stack has %d rows", len(table.Rows))
 	}
-	if !strings.Contains(table.EmptyText, "서비스가 없습니다") {
+	if !strings.Contains(table.EmptyText, "서비스가 없음") {
 		t.Fatalf("empty text = %q", table.EmptyText)
 	}
 	if !strings.Contains(table.EmptyText, "Compose") {
@@ -258,7 +258,7 @@ func TestDocumentHandlesMissingPayload(t *testing.T) {
 	for _, b := range doc.Blocks {
 		text.WriteString(b.Text)
 	}
-	if !strings.Contains(text.String(), "상태 정보를 표시할 수 없습니다") {
+	if !strings.Contains(text.String(), "상태 정보 표시 불가") {
 		t.Fatalf("missing payload not explained: %+v", doc.Blocks)
 	}
 }

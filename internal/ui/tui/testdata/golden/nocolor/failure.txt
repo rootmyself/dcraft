@@ -11,14 +11,14 @@
 대상: /work/acme-platform
 작업 ID: op_golden_failure
 
-문제: 스택을 시작하지 못했습니다.
+문제: 스택을 시작 실패.
   Container acme-platform-api-1 exited
   with code 1
 다음 행동:
-  1. dcraft logs -s api로 서비스
-  로그를 확인하세요.
+  1. dcraft logs -s api로 서비스 로그
+  확인.
   2. Docker Desktop이 실행 중인지
-  확인한 뒤 다시 시도하세요.
+  확인한 뒤 다시 시도.
 
                ↓ 5개 더 있음 · PgUp/PgDn
 [esc] 메뉴  [↑↓] 스크롤  [q] 종료
@@ -31,14 +31,14 @@
 대상: /work/acme-platform
 작업 ID: op_golden_failure
 
-문제: 스택을 시작하지 못했습니다.
+문제: 스택을 시작 실패.
   Container acme-platform-api-1 exited
   with code 1
 다음 행동:
-  1. dcraft logs -s api로 서비스
-  로그를 확인하세요.
+  1. dcraft logs -s api로 서비스 로그
+  확인.
   2. Docker Desktop이 실행 중인지
-  확인한 뒤 다시 시도하세요.
+  확인한 뒤 다시 시도.
 
 단계
   … 위에 더 있음
@@ -63,14 +63,14 @@
 대상: /work/acme-platform
 작업 ID: op_golden_failure
 
-문제: 스택을 시작하지 못했습니다.
+문제: 스택을 시작 실패.
   Container acme-platform-api-1 exited
   with code 1
 다음 행동:
-  1. dcraft logs -s api로 서비스
-  로그를 확인하세요.
+  1. dcraft logs -s api로 서비스 로그
+  확인.
   2. Docker Desktop이 실행 중인지
-  확인한 뒤 다시 시도하세요.
+  확인한 뒤 다시 시도.
 
 단계
   … 위에 더 있음
@@ -116,11 +116,11 @@
 대상: /work/acme-platform
 작업 ID: op_golden_failure
 
-문제: 스택을 시작하지 못했습니다.
+문제: 스택을 시작 실패.
   Container acme-platform-api-1 exited with code 1
 다음 행동:
-  1. dcraft logs -s api로 서비스 로그를 확인하세요.
-  2. Docker Desktop이 실행 중인지 확인한 뒤 다시 시도하세요.
+  1. dcraft logs -s api로 서비스 로그 확인.
+  2. Docker Desktop이 실행 중인지 확인한 뒤 다시 시도.
 
 단계
   ✓ 대상 확인 (완료)
@@ -136,11 +136,11 @@
 대상: /work/acme-platform
 작업 ID: op_golden_failure
 
-문제: 스택을 시작하지 못했습니다.
+문제: 스택을 시작 실패.
   Container acme-platform-api-1 exited with code 1
 다음 행동:
-  1. dcraft logs -s api로 서비스 로그를 확인하세요.
-  2. Docker Desktop이 실행 중인지 확인한 뒤 다시 시도하세요.
+  1. dcraft logs -s api로 서비스 로그 확인.
+  2. Docker Desktop이 실행 중인지 확인한 뒤 다시 시도.
 
 단계
   ✓ 대상 확인 (완료)
@@ -152,9 +152,9 @@
   · 이력 기록 (예정)
 작업
 조회
-  서비스 접속 (exec) · 실행 중인 서비스에 접속합니다.
+  서비스 접속 (exec) · 실행 중인 서비스에 접속.
   로그 보기 (logs) · 서비스 로그를 따라봅니다.
-▸ 스택 상태 (status) · 현재 스택과 서비스 상태를 보여줍니다.
+▸ 스택 상태 (status) · 현재 스택과 서비스 상태를 보여 줌.
 
 
 [↑↓] 이동  [enter] 실행  [q] 종료  [?] 도움말
@@ -168,11 +168,11 @@
 대상: /work/acme-platform
 작업 ID: op_golden_failure
 
-문제: 스택을 시작하지 못했습니다.
+문제: 스택을 시작 실패.
   Container acme-platform-api-1 exited with code 1
 다음 행동:
-  1. dcraft logs -s api로 서비스 로그를 확인하세요.
-  2. Docker Desktop이 실행 중인지 확인한 뒤 다시 시도하세요.
+  1. dcraft logs -s api로 서비스 로그 확인.
+  2. Docker Desktop이 실행 중인지 확인한 뒤 다시 시도.
 
 단계
   ✓ 대상 확인 (완료)
@@ -184,30 +184,30 @@
   · 이력 기록 (예정)
 작업
 조회
-  서비스 접속 (exec) · 실행 중인 서비스에 접속합니다.
+  서비스 접속 (exec) · 실행 중인 서비스에 접속.
   로그 보기 (logs) · 서비스 로그를 따라봅니다.
-▸ 스택 상태 (status) · 현재 스택과 서비스 상태를 보여줍니다.
+▸ 스택 상태 (status) · 현재 스택과 서비스 상태를 보여 줌.
 
 운영
-  스택 제거 ▲ 위험 (down) · 컨테이너와 네트워크를 제거합니다.
-  스택 재시작 (restart) · 스택을 다시 시작합니다.
-  스택 중지 (stop) · 선택한 서비스나 스택을 중지합니다.
-  스택 시작 (up) · 현재 폴더 스택을 시작합니다.
-  갱신 (update) · 이미지를 갱신하고 변경을 적용합니다.
+  스택 제거 ▲ 위험 (down) · 컨테이너와 네트워크 제거.
+  스택 재시작 (restart) · 스택을 다시 시작.
+  스택 중지 (stop) · 선택한 서비스나 스택 중지.
+  스택 시작 (up) · 현재 폴더 스택 시작.
+  갱신 (update) · 이미지를 갱신하고 변경 적용.
 
 데이터
-  데이터 백업 (backup) · 볼륨과 폴더를 백업합니다.
-  데이터 복원 ▲ 위험 (restore) · 백업에서 데이터를 되돌립니다.
-  이전 버전 복원 ▲ 위험 (rollback) · 마지막 정상 버전으로 되돌립니다.
+  데이터 백업 (backup) · 볼륨과 폴더 백업.
+  데이터 복원 ▲ 위험 (restore) · 백업에서 데이터를 되돌림.
+  이전 버전 복원 ▲ 위험 (rollback) · 마지막 정상 버전으로 되돌림.
 
 설정
-  실행환경 별칭 (environments) · 이름 붙은 실행환경을 관리합니다.
-  Git 호스트 스크립트 생성 (generate-git-hook) · Git 훅 스크립트를 만듭니다.
-  호스트 스크립트 (hooks) · 호스트 스크립트를 등록합니다.
-  Compose 설치 (install-compose) · Compose 실행 파일을 설치합니다.
-  S3 호스트 스크립트 생성 (generate-s3-hook) · S3 훅 스크립트를 만듭니다.
-  비밀값 연결 (secrets) · 비밀값 참조를 등록합니다.
-  최초 구성 (init) · Compose 파일과 .env를 생성합니다.
+  실행환경 별칭 (environments) · 이름 붙은 실행환경을 관리.
+  Git 호스트 스크립트 생성 (generate-git-hook) · Git 훅 스크립트를 만듦.
+  호스트 스크립트 (hooks) · 호스트 스크립트 등록.
+  Compose 설치 (install-compose) · Compose 실행 파일 설치.
+  S3 호스트 스크립트 생성 (generate-s3-hook) · S3 훅 스크립트를 만듦.
+  비밀값 연결 (secrets) · 비밀값 참조 등록.
+  최초 구성 (init) · Compose 파일과 .env를 생성.
 
 [↑↓] 이동  [enter] 실행  [q] 종료  [?] 도움말
 
@@ -219,11 +219,11 @@
 │  로그 보기             │ 대상: /work/acme-platform
 │▸ 스택 상태             │ 작업 ID: op_golden_failure
 │                        │
-│운영                    │ 문제: 스택을 시작하지 못했습니다.
+│운영                    │ 문제: 스택을 시작 실패.
 │  스택 제거 ▲ 위험      │   Container acme-platform-api-1 exited with code 1
 │  스택 재시작           │ 다음 행동:
-│  스택 중지             │   1. dcraft logs -s api로 서비스 로그를 확인하세요.
-│  스택 시작             │   2. Docker Desktop이 실행 중인지 확인한 뒤 다시 시도하세요.
+│  스택 중지             │   1. dcraft logs -s api로 서비스 로그 확인.
+│  스택 시작             │   2. Docker Desktop이 실행 중인지 확인한 뒤 다시 시도.
 │  갱신                  │
 │                        │ 단계
 │데이터                  │   ✓ 대상 확인 (완료)
@@ -239,11 +239,11 @@
 │  로그 보기             │ 대상: /work/acme-platform
 │▸ 스택 상태             │ 작업 ID: op_golden_failure
 │                        │
-│운영                    │ 문제: 스택을 시작하지 못했습니다.
+│운영                    │ 문제: 스택을 시작 실패.
 │  스택 제거 ▲ 위험      │   Container acme-platform-api-1 exited with code 1
 │  스택 재시작           │ 다음 행동:
-│  스택 중지             │   1. dcraft logs -s api로 서비스 로그를 확인하세요.
-│  스택 시작             │   2. Docker Desktop이 실행 중인지 확인한 뒤 다시 시도하세요.
+│  스택 중지             │   1. dcraft logs -s api로 서비스 로그 확인.
+│  스택 시작             │   2. Docker Desktop이 실행 중인지 확인한 뒤 다시 시도.
 │  갱신                  │
 │                        │ 단계
 │데이터                  │   ✓ 대상 확인 (완료)
@@ -271,11 +271,11 @@
 │  로그 보기             │ 대상: /work/acme-platform
 │▸ 스택 상태             │ 작업 ID: op_golden_failure
 │                        │
-│운영                    │ 문제: 스택을 시작하지 못했습니다.
+│운영                    │ 문제: 스택을 시작 실패.
 │  스택 제거 ▲ 위험      │   Container acme-platform-api-1 exited with code 1
 │  스택 재시작           │ 다음 행동:
-│  스택 중지             │   1. dcraft logs -s api로 서비스 로그를 확인하세요.
-│  스택 시작             │   2. Docker Desktop이 실행 중인지 확인한 뒤 다시 시도하세요.
+│  스택 중지             │   1. dcraft logs -s api로 서비스 로그 확인.
+│  스택 시작             │   2. Docker Desktop이 실행 중인지 확인한 뒤 다시 시도.
 │  갱신                  │
 │                        │ 단계
 │데이터                  │   ✓ 대상 확인 (완료)
@@ -323,11 +323,11 @@
 │  로그 보기                 │ 대상: /work/acme-platform
 │▸ 스택 상태                 │ 작업 ID: op_golden_failure
 │                            │
-│운영                        │ 문제: 스택을 시작하지 못했습니다.
+│운영                        │ 문제: 스택을 시작 실패.
 │  스택 제거 ▲ 위험          │   Container acme-platform-api-1 exited with code 1
 │  스택 재시작               │ 다음 행동:
-│  스택 중지                 │   1. dcraft logs -s api로 서비스 로그를 확인하세요.
-│  스택 시작                 │   2. Docker Desktop이 실행 중인지 확인한 뒤 다시 시도하세요.
+│  스택 중지                 │   1. dcraft logs -s api로 서비스 로그 확인.
+│  스택 시작                 │   2. Docker Desktop이 실행 중인지 확인한 뒤 다시 시도.
 │  갱신                      │
 │                            │ 단계
 │데이터                      │   ✓ 대상 확인 (완료)
@@ -343,11 +343,11 @@
 │  로그 보기                 │ 대상: /work/acme-platform
 │▸ 스택 상태                 │ 작업 ID: op_golden_failure
 │                            │
-│운영                        │ 문제: 스택을 시작하지 못했습니다.
+│운영                        │ 문제: 스택을 시작 실패.
 │  스택 제거 ▲ 위험          │   Container acme-platform-api-1 exited with code 1
 │  스택 재시작               │ 다음 행동:
-│  스택 중지                 │   1. dcraft logs -s api로 서비스 로그를 확인하세요.
-│  스택 시작                 │   2. Docker Desktop이 실행 중인지 확인한 뒤 다시 시도하세요.
+│  스택 중지                 │   1. dcraft logs -s api로 서비스 로그 확인.
+│  스택 시작                 │   2. Docker Desktop이 실행 중인지 확인한 뒤 다시 시도.
 │  갱신                      │
 │                            │ 단계
 │데이터                      │   ✓ 대상 확인 (완료)
@@ -375,11 +375,11 @@
 │  로그 보기                 │ 대상: /work/acme-platform
 │▸ 스택 상태                 │ 작업 ID: op_golden_failure
 │                            │
-│운영                        │ 문제: 스택을 시작하지 못했습니다.
+│운영                        │ 문제: 스택을 시작 실패.
 │  스택 제거 ▲ 위험          │   Container acme-platform-api-1 exited with code 1
 │  스택 재시작               │ 다음 행동:
-│  스택 중지                 │   1. dcraft logs -s api로 서비스 로그를 확인하세요.
-│  스택 시작                 │   2. Docker Desktop이 실행 중인지 확인한 뒤 다시 시도하세요.
+│  스택 중지                 │   1. dcraft logs -s api로 서비스 로그 확인.
+│  스택 시작                 │   2. Docker Desktop이 실행 중인지 확인한 뒤 다시 시도.
 │  갱신                      │
 │                            │ 단계
 │데이터                      │   ✓ 대상 확인 (완료)

@@ -14,7 +14,7 @@ import (
 func Present(res core.Result, width int) string {
 	payload, ok := payloadFrom(res.Data)
 	if !ok {
-		return "백업 결과를 표시할 수 없습니다."
+		return "백업 결과 표시 불가."
 	}
 	report := payload.Backup
 	var b strings.Builder
@@ -28,7 +28,7 @@ func Present(res core.Result, width int) string {
 	if len(report.Stopped) > 0 {
 		fmt.Fprintf(&b, "중지했다가 다시 시작한 서비스: %s\n", strings.Join(report.Stopped, ", "))
 	} else {
-		b.WriteString("중지한 서비스: 없음 (이미 중지된 서비스는 시작하지 않았습니다)\n")
+		b.WriteString("중지한 서비스: 없음 (이미 중지된 서비스는 시작하지 않았음)\n")
 	}
 	fmt.Fprintf(&b, "상태 복구: %s\n", joinOrNone(report.Restarted))
 	b.WriteString("\n산출물:\n")

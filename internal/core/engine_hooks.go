@@ -21,9 +21,9 @@ func (e *Engine) prepareHooks(ctx context.Context, rec *recorder, req Request, d
 		return HookPlan{}, Fail(Diagnostic{
 			Category:    CategoryInternal,
 			Severity:    SeverityError,
-			Message:     "호스트 스크립트 연결이 준비되지 않았습니다.",
+			Message:     "호스트 스크립트 연결이 준비되지 않았음.",
 			Detail:      "hook service is not configured",
-			NextActions: []string{"dcraft를 다시 빌드하거나 설치한 뒤 실행하세요."},
+			NextActions: []string{"dcraft를 다시 빌드하거나 설치한 뒤 실행."},
 		})
 	}
 	plan, err := e.Hooks.Plan(ctx, *target)
@@ -44,12 +44,12 @@ func (e *Engine) prepareHooks(ctx context.Context, rec *recorder, req Request, d
 					Category: CategoryHookContentChanged,
 					Severity: SeverityError,
 					Message: fmt.Sprintf(
-						"승인 화면에서 확인한 뒤 스크립트 내용이 바뀌었습니다: %s (%s). 이전 승인을 재사용하지 않습니다.",
+						"승인 화면에서 확인한 뒤 스크립트 내용이 바뀌었음: %s (%s). 이전 승인을 재사용하지 않음.",
 						changed.Path, changed.Stage),
 					Detail: fmt.Sprintf("approved_sha256=%s current_sha256=%s", changed.ApprovedSHA256, changed.SHA256),
 					NextActions: []string{
-						"스크립트 내용을 다시 확인한 뒤 새로 승인하세요.",
-						"dcraft는 이 스크립트를 실행하지 않았고 본 작업도 시작하지 않았습니다.",
+						"스크립트 내용을 다시 확인한 뒤 새로 승인.",
+						"dcraft는 이 스크립트를 실행하지 않았고 본 작업도 시작하지 않았음.",
 					},
 				})
 			}
@@ -98,12 +98,12 @@ func (e *Engine) prepareHooks(ctx context.Context, rec *recorder, req Request, d
 				Category: CategoryHookContentChanged,
 				Severity: SeverityError,
 				Message: fmt.Sprintf(
-					"사전 스크립트가 승인 이후 후처리 스크립트를 바꿨습니다: %s (%s). 이전 승인을 재사용하지 않습니다.",
+					"사전 스크립트가 승인 이후 후처리 스크립트를 바꿨음: %s (%s). 이전 승인을 재사용하지 않음.",
 					changed.Path, changed.Stage),
 				Detail: fmt.Sprintf("approved_sha256=%s current_sha256=%s", changed.ApprovedSHA256, changed.SHA256),
 				NextActions: []string{
-					"스크립트 내용과 등록을 확인한 뒤 다시 실행해 스크립트 신뢰를 승인하세요.",
-					"승인 없이는 본 작업도 시작하지 않았습니다.",
+					"스크립트 내용과 등록을 확인한 뒤 다시 실행해 스크립트 신뢰를 승인.",
+					"승인 없이는 본 작업도 시작하지 않았음.",
 				},
 			})
 		}
@@ -134,11 +134,11 @@ func (e *Engine) runHooksPost(ctx context.Context, rec *recorder, res *Result, a
 		res.Diagnostics = append(res.Diagnostics, Diagnostic{
 			Category: CategoryHookPostFailed,
 			Severity: SeverityWarning,
-			Message:  "본 작업은 완료되었지만 사후 스크립트가 중단되었습니다. 일부 외부 변경이 남아 있을 수 있습니다.",
+			Message:  "본 작업은 완료되었지만 사후 스크립트가 중단되었음. 일부 외부 변경이 남아 있을 수 있음.",
 			Detail:   hookErrorDetail(err),
 			NextActions: []string{
-				"dcraft status로 스택 상태를 확인하세요.",
-				"사후 스크립트를 다시 실행하려면 작업을 다시 실행해야 하며, 배포를 자동으로 되돌리지 않습니다.",
+				"dcraft status로 스택 상태 확인.",
+				"사후 스크립트를 다시 실행하려면 작업을 다시 실행해야 하며, 배포를 자동으로 되돌리지 않음.",
 			},
 		})
 		return true
@@ -182,11 +182,11 @@ func (e *Engine) runHookEntries(ctx context.Context, res *Result, action, operat
 			return FailCause(err, Diagnostic{
 				Category: CategoryHookInvalid,
 				Severity: SeverityError,
-				Message:  fmt.Sprintf("스크립트를 실행하지 못했습니다: %s (%s)", entry.Path, entry.Stage),
+				Message:  fmt.Sprintf("스크립트 실행 실패: %s (%s)", entry.Path, entry.Stage),
 				Detail:   errDetail(err),
 				NextActions: []string{
-					"스크립트 파일의 실행 권한과 첫 줄(셔뱅)을 확인하세요.",
-					"dcraft는 인터프리터를 추측하지 않습니다.",
+					"스크립트 파일의 실행 권한과 첫 줄(셔뱅)을 확인.",
+					"dcraft는 인터프리터를 추측하지 않음.",
 				},
 			})
 		}
@@ -195,12 +195,12 @@ func (e *Engine) runHookEntries(ctx context.Context, res *Result, action, operat
 			return Fail(Diagnostic{
 				Category: CategoryHookFailed,
 				Severity: SeverityError,
-				Message:  fmt.Sprintf("%s 스크립트가 실패했습니다: %s (종료 코드 %d)", hookStageKorean(entry.Stage), entry.Path, exec.ExitCode),
+				Message:  fmt.Sprintf("%s 스크립트가 실패: %s (종료 코드 %d)", hookStageKorean(entry.Stage), entry.Path, exec.ExitCode),
 				Detail:   detail,
 				NextActions: []string{
-					"스크립트를 수정하거나 등록을 제거한 뒤 다시 실행하세요.",
-					"이 단계에서 실패하면 본 작업은 시작되지 않습니다.",
-					"스크립트의 외부 변경은 dcraft가 자동으로 되돌리지 않습니다.",
+					"스크립트를 수정하거나 등록을 제거한 뒤 다시 실행.",
+					"이 단계에서 실패하면 본 작업은 시작되지 않음.",
+					"스크립트의 외부 변경은 dcraft가 자동으로 되돌리지 않음.",
 				},
 			})
 		}
@@ -334,12 +334,12 @@ func hookTrustDiagnostic(plan HookPlan) Diagnostic {
 	return Diagnostic{
 		Category: CategoryApprovalRequired,
 		Severity: SeverityError,
-		Message:  "등록된 호스트 스크립트에 별도의 스크립트 신뢰 승인이 필요합니다. 승인 없이는 실행하지 않습니다.",
+		Message:  "등록된 호스트 스크립트에 별도의 스크립트 신뢰 승인이 필요. 승인 없이는 실행하지 않음.",
 		Detail:   strings.TrimRight(b.String(), "\n"),
 		NextActions: []string{
-			"경로·실행 시점·내용 식별자를 확인한 뒤 자동화에서는 --approve script_trust를 명시하세요.",
-			"대화형 화면에서는 같은 계획을 확인한 뒤 승인할 수 있습니다.",
-			"스크립트는 사용자 권한으로 프로젝트 폴더에서 실행되며, dcraft는 샌드박싱하거나 자동으로 되돌리지 않습니다.",
+			"경로·실행 시점·내용 식별자를 확인한 뒤 자동화에서는 --approve script_trust를 명시.",
+			"대화형 화면에서는 같은 계획을 확인한 뒤 승인 가능.",
+			"스크립트는 사용자 권한으로 프로젝트 폴더에서 실행되며, dcraft는 샌드박싱하거나 자동으로 되돌리지 않음.",
 		},
 	}
 }
@@ -360,8 +360,8 @@ func hookPlanText(plan HookPlan) string {
 		}
 		fmt.Fprintf(&b, "  - %s: %s\n    내용 식별자: sha256:%s\n    상태: %s\n", entry.Stage, entry.Path, entry.SHA256, state)
 	}
-	b.WriteString("스크립트는 사용자 권한으로 프로젝트 폴더에서 실행됩니다.\n")
-	b.WriteString("일부 외부 변경이 남을 수 있고, dcraft는 샌드박싱하거나 자동으로 되돌리지 않습니다.\n")
+	b.WriteString("스크립트는 사용자 권한으로 프로젝트 폴더에서 실행됨.\n")
+	b.WriteString("일부 외부 변경이 남을 수 있고, dcraft는 샌드박싱하거나 자동으로 되돌리지 않음.\n")
 	if plan.RequiresApproval {
 		b.WriteString("승인: 스크립트 신뢰 (script_trust) 필요")
 	}

@@ -4,11 +4,11 @@ package cli
 // English.
 const (
 	msgRootShort = "현재 폴더의 Docker Compose 스택을 돕는 도구"
-	msgRootLong  = "dcraft는 현재 폴더의 Docker Compose 스택을 조회하고 실행·중지·제거·재시작합니다.\n" +
-		"명령 없이 실행하면 대화형 화면을 열고, 명령을 지정하면 결과만 출력합니다."
+	msgRootLong  = "dcraft는 현재 폴더의 Docker Compose 스택을 조회하고 실행·중지·제거·재시작.\n" +
+		"명령 없이 실행하면 대화형 화면을 열고, 명령을 지정하면 결과만 출력."
 
-	msgFlagHelp        = "도움말을 표시합니다."
-	msgFlagJSON        = "기계 판독 가능한 JSON 결과를 출력합니다."
+	msgFlagHelp        = "도움말 표시."
+	msgFlagJSON        = "기계 판독 가능한 JSON 결과 출력."
 	msgFlagPath        = "대상 프로젝트 폴더 (기본: 현재 폴더)"
 	msgFlagFile        = "사용할 Compose 파일 (순서대로, 반복 가능)"
 	msgFlagEnvFile     = "Compose 환경 파일 (반복 가능)"
@@ -17,15 +17,15 @@ const (
 	msgFlagEnvironment = "실행환경 별칭 (.dcraft.yaml에 등록된 경우 필수)"
 	msgFlagApprove     = "명시적 승인 (install, script_trust, previous_version, data_restore, file_overwrite)"
 	msgFlagService     = "대상 Compose 서비스 (반복 가능)"
-	msgHelpShort       = "명령 도움말을 표시합니다."
+	msgHelpShort       = "명령 도움말 표시."
 
-	msgNonInteractive = "dcraft: 대화형 터미널이 아니어서 화면을 열지 않았습니다.\n" +
-		"다음처럼 명령을 지정해 실행하세요:\n"
-	msgNonInteractiveJSON  = "기계 판독 결과가 필요하면 --json을 추가하세요.\n"
+	msgNonInteractive = "dcraft: 대화형 터미널이 아니어서 화면을 열지 않았음.\n" +
+		"다음처럼 명령을 지정해 실행:\n"
+	msgNonInteractiveJSON  = "기계 판독 결과가 필요하면 --json을 추가.\n"
 	msgHelpHint            = "도움말: dcraft --help\n"
-	msgJSONNeedsCommand    = "오류: --json을 사용할 때는 명령을 지정해야 합니다. 예: dcraft status --json\n도움말: dcraft --help\n"
-	msgJSONLiveUnsupported = "오류: 실시간 로그는 하나의 JSON 결과로 표현할 수 없어 --json과 함께 실행할 수 없습니다.\n" +
-		" --json 없이 실행하고, 로그를 멈추려면 ctrl+c를 누르세요. 서비스는 중지되지 않습니다.\n" +
+	msgJSONNeedsCommand    = "오류: --json을 사용할 때는 명령 지정 필요. 예: dcraft status --json\n도움말: dcraft --help\n"
+	msgJSONLiveUnsupported = "오류: 실시간 로그는 하나의 JSON 결과로 표현할 수 없어 --json과 함께 실행 불가.\n" +
+		" --json 없이 실행하고, 로그를 멈추려면 ctrl+c를 누르기. 서비스는 중지되지 않음.\n" +
 		" 도움말: dcraft logs --help\n"
 )
 

@@ -243,7 +243,7 @@ func TestServiceSelectionCancelRunsNothing(t *testing.T) {
 	if stop.runs != 0 {
 		t.Fatal("esc ran the feature")
 	}
-	if !strings.Contains(m.View(), "아무것도 실행하지 않았습니다") {
+	if !strings.Contains(m.View(), "아무것도 실행하지 않았음") {
 		t.Fatalf("cancel notice missing:\n%s", m.View())
 	}
 
@@ -261,7 +261,7 @@ func TestServiceListFailureBlocksTheOperation(t *testing.T) {
 	catalog := newCatalogStatus(nil)
 	catalog.err = core.Fail(core.Diagnostic{
 		Category: core.CategoryEngineUnreachable, Severity: core.SeverityError,
-		Message: "스택을 읽지 못했습니다.",
+		Message: "스택 읽기 실패.",
 	})
 	stop := &serviceCaptureFeature{desc: serviceDescriptor("stop"), body: "중지 본문"}
 	m := newServiceModel(t, catalog, stop)
@@ -275,12 +275,12 @@ func TestServiceListFailureBlocksTheOperation(t *testing.T) {
 		t.Fatal("stop ran with an unreadable service list")
 	}
 	view := m.View()
-	for _, want := range []string{"작업 실패", "스택을 읽지 못했습니다"} {
+	for _, want := range []string{"작업 실패", "스택 읽기 실패"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("failure screen missing %q:\n%s", want, view)
 		}
 	}
-	if strings.Contains(view, "다음 작업을 실행할까요?") {
+	if strings.Contains(view, "다음 작업을 실행 확인") {
 		t.Fatalf("failure still offered a confirmation:\n%s", view)
 	}
 }

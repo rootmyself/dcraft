@@ -24,7 +24,7 @@ func (f *catalogFeature) Services(ctx context.Context, in core.Invocation) ([]co
 
 func serviceTargetFeature() *testFeature {
 	return &testFeature{desc: core.Descriptor{
-		Name: "stop", Title: "스택 중지", Summary: "스택을 중지합니다.",
+		Name: "stop", Title: "스택 중지", Summary: "스택 중지.",
 		Section: core.SectionOperate,
 		Usage:   "dcraft stop", RecordsHistory: true, SupportsServices: true,
 	}}
@@ -100,7 +100,7 @@ func TestEngineServicesRequiresACatalogWithoutInventingFacts(t *testing.T) {
 	if len(report.Diagnostics) != 1 || report.Diagnostics[0].Category != core.CategoryInternal {
 		t.Fatalf("diagnostics = %+v", report.Diagnostics)
 	}
-	if !strings.Contains(report.Diagnostics[0].Message, "서비스를 조회할 수 없습니다") {
+	if !strings.Contains(report.Diagnostics[0].Message, "서비스 조회 불가") {
 		t.Fatalf("message = %q", report.Diagnostics[0].Message)
 	}
 }
@@ -110,7 +110,7 @@ func TestEngineServicesPropagatesCatalogFailure(t *testing.T) {
 		testFeature: &testFeature{desc: readOnlyDescriptor("status")},
 		err: core.Fail(core.Diagnostic{
 			Category: core.CategoryEngineUnreachable, Severity: core.SeverityError,
-			Message: "Docker Engine에 연결할 수 없습니다.",
+			Message: "Docker Engine에 연결 불가.",
 		}),
 	}
 	engine, _ := newServiceCatalogHarness(t, catalog, serviceTargetFeature())

@@ -10,12 +10,12 @@ func sampleNav() Nav {
 		Title: "기능 · 4",
 		Sections: []NavSection{
 			{Title: "조회", Items: []NavItem{
-				{Title: "스택 상태", Summary: "서비스 상태를 확인합니다.", Selected: true},
+				{Title: "스택 상태", Summary: "서비스 상태 확인.", Selected: true},
 				{Title: "로그 보기", Summary: "로그를 따라봅니다."},
 			}},
 			{Title: "운영", Items: []NavItem{
-				{Title: "스택 시작", Summary: "스택을 시작합니다."},
-				{Title: "스택 제거", Summary: "스택을 제거합니다.", Danger: true},
+				{Title: "스택 시작", Summary: "스택 시작."},
+				{Title: "스택 제거", Summary: "스택 제거.", Danger: true},
 			}},
 		},
 	}
@@ -96,7 +96,7 @@ func TestSidebarShowsTheFocusedSummaryBand(t *testing.T) {
 	nav := sampleNav()
 	nav.Sections[0].Items[0].Selected = true
 	joined := strings.Join(Sidebar(Plain(), 30, 26, nav), "\n")
-	if !strings.Contains(joined, "서비스 상태를 확인합니다.") {
+	if !strings.Contains(joined, "서비스 상태 확인.") {
 		t.Fatalf("summary band missing:\n%s", joined)
 	}
 }
@@ -106,7 +106,7 @@ func TestSidebarDropsTheBandBeforeEntries(t *testing.T) {
 	th := Plain()
 	short := Sidebar(th, 30, 18, sampleNav())
 	joined := strings.Join(short, "\n")
-	if strings.Contains(joined, "서비스 상태를 확인합니다.") {
+	if strings.Contains(joined, "서비스 상태 확인.") {
 		t.Fatalf("short sidebar kept the band:\n%s", joined)
 	}
 	for _, want := range []string{"스택 상태", "스택 제거"} {
@@ -120,9 +120,9 @@ func TestSidebarDropsTheBandBeforeEntries(t *testing.T) {
 // empty box or a stale item. The sentence may wrap; it is never truncated
 // mid-word as if it were an identifier.
 func TestSidebarStatesAnEmptyFilter(t *testing.T) {
-	nav := Nav{Title: "기능 · 0", Empty: "조건에 맞는 기능이 없습니다."}
+	nav := Nav{Title: "기능 · 0", Empty: "조건에 맞는 기능이 없음."}
 	joined := strings.Join(Sidebar(Plain(), 34, 20, nav), "\n")
-	if !strings.Contains(joined, "조건에 맞는 기능이 없습니다.") {
+	if !strings.Contains(joined, "조건에 맞는 기능이 없음.") {
 		t.Fatalf("empty state missing:\n%s", joined)
 	}
 }
@@ -275,7 +275,7 @@ func TestSidebarNeverCutsTheRiskBadge(t *testing.T) {
 func TestBodyMenuNeverCutsTheRiskBadge(t *testing.T) {
 	nav := Nav{Title: "기능 · 2", Sections: []NavSection{{Title: "데이터", Items: []NavItem{
 		{Name: "restore", Title: "데이터 복원", Summary: strings.Repeat("아주 긴 설명 ", 6), Danger: true},
-		{Name: "backup", Title: "데이터 백업", Summary: "백업합니다."},
+		{Name: "backup", Title: "데이터 백업", Summary: "백업."},
 	}}}}
 	for width := 20; width <= 90; width++ {
 		joined := strings.Join(MenuLines(Plain(), width, nav, 10, true), "\n")

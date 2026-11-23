@@ -51,7 +51,7 @@ func (c *Controller) precheck(ctx context.Context, in core.Invocation, rec state
 				Category:    core.CategoryRollbackRecordInvalid,
 				Severity:    core.SeverityError,
 				Message:     msgRecordInvalid,
-				Detail:      fmt.Sprintf("기록된 서비스 %q가 기록된 Compose 설정에 없습니다.", svc.Service),
+				Detail:      fmt.Sprintf("기록된 서비스 %q가 기록된 Compose 설정에 없음.", svc.Service),
 				NextActions: []string{msgRecordAct1, msgRecordAct2},
 			})
 		}
@@ -132,7 +132,7 @@ func checkInputs(target core.Target) error {
 	if info, err := os.Stat(target.ProjectDir); err != nil {
 		problems = append(problems, "대상 폴더: "+target.ProjectDir)
 	} else if !info.IsDir() {
-		problems = append(problems, "대상 폴더가 폴더가 아닙니다: "+target.ProjectDir)
+		problems = append(problems, "대상 폴더가 폴더가 아님: "+target.ProjectDir)
 	}
 	for _, file := range target.Files {
 		if info, err := os.Stat(file); err != nil || !info.Mode().IsRegular() {
@@ -223,7 +223,7 @@ func (c *Controller) checkSecrets(ctx context.Context, target core.Target, rec s
 		}
 		name := strings.TrimSpace(ref.Name)
 		if name == "" {
-			problems = append(problems, "기록된 비밀값 참조에 이름이 없습니다 (service="+ref.Service+")")
+			problems = append(problems, "기록된 비밀값 참조에 이름이 없음 (service="+ref.Service+")")
 			continue
 		}
 		// Runtime and build-phase references are both re-checked for source
@@ -233,14 +233,14 @@ func (c *Controller) checkSecrets(ctx context.Context, target core.Target, rec s
 		switch phase {
 		case "", string(secretref.PhaseRuntime), string(secretref.PhaseBuild):
 		default:
-			problems = append(problems, fmt.Sprintf("기록된 비밀값 참조의 단계를 알 수 없습니다: %q (service=%s)", ref.Phase, ref.Service))
+			problems = append(problems, fmt.Sprintf("기록된 비밀값 참조의 단계를 알 수 없음: %q (service=%s)", ref.Phase, ref.Service))
 			continue
 		}
 		source := strings.ToLower(strings.TrimSpace(ref.Source))
 		switch source {
 		case "env":
 			if strings.TrimSpace(c.getenv(name)) == "" {
-				problems = append(problems, "환경변수 원본이 없습니다: "+name)
+				problems = append(problems, "환경변수 원본이 없음: "+name)
 			}
 		case "file":
 			path := name
@@ -248,7 +248,7 @@ func (c *Controller) checkSecrets(ctx context.Context, target core.Target, rec s
 				path = filepath.Join(target.ProjectDir, path)
 			}
 			if err := readableFile(path); err != nil {
-				problems = append(problems, "파일 원본을 읽을 수 없습니다: "+name)
+				problems = append(problems, "파일 원본을 읽을 수 없음: "+name)
 			}
 		case "aws":
 			awsRef := secretref.Reference{
@@ -260,10 +260,10 @@ func (c *Controller) checkSecrets(ctx context.Context, target core.Target, rec s
 				if ctxErr := ctx.Err(); ctxErr != nil {
 					return ctxErr
 				}
-				problems = append(problems, fmt.Sprintf("%s:%s AWS 원본을 확인할 수 없습니다: %s", ref.Service, name, diagnosticMessage(err)))
+				problems = append(problems, fmt.Sprintf("%s:%s AWS 원본 확인 불가: %s", ref.Service, name, diagnosticMessage(err)))
 			}
 		default:
-			problems = append(problems, fmt.Sprintf("지원하지 않는 비밀값 원본입니다: %q", ref.Source))
+			problems = append(problems, fmt.Sprintf("지원하지 않는 비밀값 원본: %q", ref.Source))
 		}
 	}
 
@@ -284,7 +284,7 @@ func (c *Controller) checkSecrets(ctx context.Context, target core.Target, rec s
 // reference as available.
 func (c *Controller) checkAWSReference(ctx context.Context, ref secretref.Reference) error {
 	if c.awsChecker == nil {
-		return errors.New("AWS 비밀값 조회 연결이 준비되지 않았습니다")
+		return errors.New("AWS 비밀값 조회 연결이 준비되지 않았음")
 	}
 	return c.awsChecker.CheckAWS(ctx, ref)
 }

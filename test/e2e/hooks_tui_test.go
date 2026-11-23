@@ -31,14 +31,14 @@ func TestHooksTUIShowsPlanTrustApprovalAndDeclineRunsNothing(t *testing.T) {
 		{wait: "scripts/pre.sh", send: ""},
 		{wait: "sha256:", send: ""},
 		{wait: "[enter] 실행", send: "\x1b"},
-		{wait: "아무것도 실행하지 않았습니다", send: ""},
+		{wait: "아무것도 실행하지 않았음", send: ""},
 	})
 	if code != 0 {
 		t.Fatalf("TUI exit = %d\n%s", code, output)
 	}
 	for _, want := range []string{
 		"스크립트 신뢰", "script_trust", "scripts/pre.sh", "sha256:",
-		"새 승인 필요", "아무것도 실행하지 않았습니다",
+		"새 승인 필요", "아무것도 실행하지 않았음",
 	} {
 		if !screenContains(output, want) {
 			t.Fatalf("TUI output missing %q:\n%s", want, output)

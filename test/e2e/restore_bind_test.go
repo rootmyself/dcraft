@@ -157,7 +157,7 @@ func TestRestoreBindCLIPathMismatchRequiresTheExplicitFlag(t *testing.T) {
 	if !report.PathMapping {
 		t.Fatalf("path mapping not reported: %+v", report)
 	}
-	if !containsDiagnosticWarning(report.Warnings, "경로가 백업과 다릅니다") {
+	if !containsDiagnosticWarning(report.Warnings, "경로가 백업과 다름") {
 		t.Fatalf("mapping warning missing: %v", report.Warnings)
 	}
 	if raw, err := os.ReadFile(filepath.Join(targetDir, "file.txt")); err != nil || string(raw) != "hello" {

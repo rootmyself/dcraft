@@ -62,7 +62,7 @@ func buildOverrideData(refs []Reference, pathFor func(Reference) (string, error)
 	}
 	data, err := yaml.Marshal(doc)
 	if err != nil {
-		return nil, applyError("dcraft 관리 빌드 secret override를 만들지 못했습니다.", err.Error())
+		return nil, applyError("dcraft 관리 빌드 secret override 만들지 못함.", err.Error())
 	}
 	return append([]byte(buildOverrideHead), data...), nil
 }
@@ -72,11 +72,11 @@ func buildOverrideData(refs []Reference, pathFor func(Reference) (string, error)
 // operations that have build-phase references.
 func (r *Runtime) BuildOverridePath(target core.Target) (string, error) {
 	if r == nil || r.dirs == nil {
-		return "", applyError("빌드 시점 비밀값 전달을 준비할 수 없습니다.", "state directories are not configured")
+		return "", applyError("빌드 시점 비밀값 전달 준비 불가.", "state directories are not configured")
 	}
 	stackDir, err := r.dirs.StackDir(target)
 	if err != nil {
-		return "", applyError("빌드 시점 비밀값 상태 폴더를 확인할 수 없습니다.", err.Error())
+		return "", applyError("빌드 시점 비밀값 상태 폴더 확인 불가.", err.Error())
 	}
 	return filepath.Join(stackDir, buildOverrideName), nil
 }
@@ -86,11 +86,11 @@ func (r *Runtime) BuildOverridePath(target core.Target) (string, error) {
 // private files so Compose build.secrets always reads a regular 0600 file.
 func (r *Runtime) BuildMaterializedPath(target core.Target, ref Reference) (string, error) {
 	if r == nil || r.dirs == nil {
-		return "", applyError("빌드 시점 비밀값 전달을 준비할 수 없습니다.", "state directories are not configured")
+		return "", applyError("빌드 시점 비밀값 전달 준비 불가.", "state directories are not configured")
 	}
 	stackDir, err := r.dirs.StackDir(target)
 	if err != nil {
-		return "", applyError("빌드 시점 비밀값 상태 폴더를 확인할 수 없습니다.", err.Error())
+		return "", applyError("빌드 시점 비밀값 상태 폴더 확인 불가.", err.Error())
 	}
 	return filepath.Join(stackDir, buildSecretsDir, materializedName(ref)), nil
 }
@@ -102,12 +102,12 @@ func (r *Runtime) writeBuildOverride(target core.Target, refs []Reference) error
 	}
 	if len(refs) == 0 {
 		if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return applyError("dcraft 관리 빌드 secret override를 정리하지 못했습니다.", err.Error())
+			return applyError("dcraft 관리 빌드 secret override 정리 실패.", err.Error())
 		}
 		return nil
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return applyError("빌드 시점 비밀값 상태 폴더를 만들지 못했습니다.", err.Error())
+		return applyError("빌드 시점 비밀값 상태 폴더 만들지 못함.", err.Error())
 	}
 	data, err := buildOverrideData(refs, func(ref Reference) (string, error) {
 		return r.BuildMaterializedPath(target, ref)
@@ -123,27 +123,27 @@ func (r *Runtime) writeBuildOverride(target core.Target, refs []Reference) error
 func writePrivateFile(path string, data []byte) error {
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".dcraft-secret-*.tmp")
 	if err != nil {
-		return applyError("dcraft 관리 비밀값 파일을 쓰지 못했습니다.", err.Error())
+		return applyError("dcraft 관리 비밀값 파일 쓰지 못함.", err.Error())
 	}
 	tmpName := tmp.Name()
 	defer func() { _ = os.Remove(tmpName) }()
 	if err := tmp.Chmod(0o600); err != nil {
 		_ = tmp.Close()
-		return applyError("dcraft 관리 비밀값 파일 권한을 설정하지 못했습니다.", err.Error())
+		return applyError("dcraft 관리 비밀값 파일 권한 설정 실패.", err.Error())
 	}
 	if _, err := tmp.Write(data); err != nil {
 		_ = tmp.Close()
-		return applyError("dcraft 관리 비밀값 파일을 쓰지 못했습니다.", err.Error())
+		return applyError("dcraft 관리 비밀값 파일 쓰지 못함.", err.Error())
 	}
 	if err := tmp.Sync(); err != nil {
 		_ = tmp.Close()
-		return applyError("dcraft 관리 비밀값 파일을 저장하지 못했습니다.", err.Error())
+		return applyError("dcraft 관리 비밀값 파일 저장 실패.", err.Error())
 	}
 	if err := tmp.Close(); err != nil {
-		return applyError("dcraft 관리 비밀값 파일을 닫지 못했습니다.", err.Error())
+		return applyError("dcraft 관리 비밀값 파일 닫지 못함.", err.Error())
 	}
 	if err := os.Rename(tmpName, path); err != nil {
-		return applyError("dcraft 관리 비밀값 파일을 적용하지 못했습니다.", err.Error())
+		return applyError("dcraft 관리 비밀값 파일 적용 실패.", err.Error())
 	}
 	return nil
 }
@@ -211,10 +211,10 @@ func (r *Runtime) PrepareBuild(ctx context.Context, target core.Target, services
 		return BuildSession{}, err
 	}
 	if r == nil || r.dirs == nil {
-		return BuildSession{}, applyError("빌드 시점 비밀값 전달을 준비할 수 없습니다.", "state directories are not configured")
+		return BuildSession{}, applyError("빌드 시점 비밀값 전달 준비 불가.", "state directories are not configured")
 	}
 	if strings.TrimSpace(target.ProjectDir) == "" {
-		return BuildSession{}, applyError("빌드 시점 비밀값 전달 대상 폴더를 확인할 수 없습니다.", "target has no project folder")
+		return BuildSession{}, applyError("빌드 시점 비밀값 전달 대상 폴더 확인 불가.", "target has no project folder")
 	}
 	cat, err := Load(target.ProjectDir)
 	if err != nil {
@@ -231,7 +231,7 @@ func (r *Runtime) PrepareBuild(ctx context.Context, target core.Target, services
 	}
 	stackDir, err := r.dirs.StackDir(target)
 	if err != nil {
-		return BuildSession{}, applyError("빌드 시점 비밀값 상태 폴더를 확인할 수 없습니다.", err.Error())
+		return BuildSession{}, applyError("빌드 시점 비밀값 상태 폴더 확인 불가.", err.Error())
 	}
 	if err := r.checkStateOutsideProject(target.ProjectDir, stackDir); err != nil {
 		return BuildSession{}, err
@@ -258,7 +258,7 @@ func (r *Runtime) PrepareBuild(ctx context.Context, target core.Target, services
 		case SourceAWS:
 			value, err = fetcher.fetch(ctx, ref)
 		default:
-			return BuildSession{}, applyError("지원하지 않는 빌드 비밀값 원본입니다.", string(ref.Source))
+			return BuildSession{}, applyError("지원하지 않는 빌드 비밀값 원본.", string(ref.Source))
 		}
 		if err != nil {
 			return BuildSession{}, err
@@ -271,7 +271,7 @@ func (r *Runtime) PrepareBuild(ctx context.Context, target core.Target, services
 
 	secretsDir := filepath.Join(stackDir, buildSecretsDir)
 	if err := os.MkdirAll(secretsDir, 0o700); err != nil {
-		return BuildSession{}, applyError("빌드 시점 비밀값 폴더를 만들지 못했습니다.", err.Error())
+		return BuildSession{}, applyError("빌드 시점 비밀값 폴더 만들지 못함.", err.Error())
 	}
 	for _, item := range items {
 		if err := ctx.Err(); err != nil {
@@ -373,7 +373,7 @@ func (s *BuildSession) materialize(path string, value []byte) error {
 	if info, err := os.Lstat(path); err == nil {
 		if !info.Mode().IsRegular() {
 			if err := os.Remove(path); err != nil {
-				return applyError("이전 빌드 비밀값 파일을 정리하지 못했습니다.", err.Error())
+				return applyError("이전 빌드 비밀값 파일 정리 실패.", err.Error())
 			}
 			s.state.created = append(s.state.created, path)
 		} else {
@@ -384,22 +384,22 @@ func (s *BuildSession) materialize(path string, value []byte) error {
 	}
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
-		return applyError("빌드 비밀값 전달 파일을 만들지 못했습니다.", err.Error())
+		return applyError("빌드 비밀값 전달 파일 만들지 못함.", err.Error())
 	}
 	if err := f.Chmod(0o600); err != nil {
 		_ = f.Close()
-		return applyError("빌드 비밀값 전달 파일 권한을 설정하지 못했습니다.", err.Error())
+		return applyError("빌드 비밀값 전달 파일 권한 설정 실패.", err.Error())
 	}
 	if _, err := f.Write(value); err != nil {
 		_ = f.Close()
-		return applyError("빌드 비밀값 전달 파일을 쓰지 못했습니다.", err.Error())
+		return applyError("빌드 비밀값 전달 파일 쓰지 못함.", err.Error())
 	}
 	if err := f.Sync(); err != nil {
 		_ = f.Close()
-		return applyError("빌드 비밀값 전달 파일을 저장하지 못했습니다.", err.Error())
+		return applyError("빌드 비밀값 전달 파일 저장 실패.", err.Error())
 	}
 	if err := f.Close(); err != nil {
-		return applyError("빌드 비밀값 전달 파일을 닫지 못했습니다.", err.Error())
+		return applyError("빌드 비밀값 전달 파일 닫지 못함.", err.Error())
 	}
 	return nil
 }

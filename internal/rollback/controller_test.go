@@ -489,7 +489,7 @@ func TestRunRepeatedRollbackKeepsSameVersion(t *testing.T) {
 	if !second.Rollback.AlreadyAtVersion {
 		t.Fatal("repeated rollback did not report that the recorded version is already running")
 	}
-	if !strings.Contains(strings.Join(second.Rollback.Notices, "\n"), "더 오래된 버전은 없습니다") {
+	if !strings.Contains(strings.Join(second.Rollback.Notices, "\n"), "더 오래된 버전은 없음") {
 		t.Fatalf("notices = %v", second.Rollback.Notices)
 	}
 	after, err := os.ReadFile(recordPath)
@@ -558,7 +558,7 @@ func TestRunMissingSecretSourceAbortsBeforeApply(t *testing.T) {
 		c.SetAWSSecretChecker(&fakeAWSChecker{err: core.Fail(core.Diagnostic{
 			Category: core.CategorySecretAWSAccessDenied,
 			Severity: core.SeverityError,
-			Message:  "AWS Secrets Manager 원본에 접근할 권한이 없습니다.",
+			Message:  "AWS Secrets Manager 원본에 접근할 권한이 없음.",
 		})})
 
 		_, err := c.Run(context.Background(), invocationFor(target), Options{Timeout: time.Second})
@@ -830,8 +830,8 @@ func TestPreviewDescribesRecordedRollback(t *testing.T) {
 	}
 	for _, want := range []string{
 		"이전 정상 버전 복원 계획", testImage, testTag, "previous_version",
-		"되돌리지 않는 것", "DB·볼륨 데이터", "훅은 다시 실행하지 않습니다", "짧은 중단",
-		"더 오래된 버전은 없습니다",
+		"되돌리지 않는 것", "DB·볼륨 데이터", "훅은 다시 실행하지 않음", "짧은 중단",
+		"더 오래된 버전은 없음",
 	} {
 		if !strings.Contains(p.Text, want) {
 			t.Fatalf("plan misses %q:\n%s", want, p.Text)

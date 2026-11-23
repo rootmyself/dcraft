@@ -123,7 +123,7 @@ func (f *Feature) generate(ctx context.Context, in core.Invocation) (any, error)
 		return nil, core.FailCause(err, core.Diagnostic{
 			Category:    core.CategoryGeneratorFailed,
 			Severity:    core.SeverityError,
-			Message:     "스크립트 파일을 저장하지 못했습니다.",
+			Message:     "스크립트 파일 저장 실패.",
 			Detail:      err.Error(),
 			NextActions: []string{msgWriteActionOne, msgWriteActionTwo},
 		})
@@ -245,11 +245,11 @@ func previewText(gen s3gen.Generated) string {
 	fmt.Fprintf(&b, "%s\n", msgPlanNext)
 	fmt.Fprintf(&b, "  dcraft hooks --add --stage pre --script %s\n", shellQuote(script))
 	fmt.Fprintf(&b, "  dcraft up --approve script_trust\n")
-	fmt.Fprintf(&b, "  스크립트 내용이 바뀌면 새 script_trust 승인이 필요합니다.\n\n")
+	fmt.Fprintf(&b, "  스크립트 내용이 바뀌면 새 script_trust 승인이 필요.\n\n")
 
 	fmt.Fprintf(&b, "%s\n", msgPlanApproval)
-	fmt.Fprintf(&b, "  이 작업은 file_overwrite 승인이 필요합니다(새 파일 생성 또는 기존 파일 교체). 자동화에서는 --approve file_overwrite를 명시하세요.\n")
-	fmt.Fprintf(&b, "  생성 승인과 첫 실행의 script_trust 승인은 별개입니다.\n\n")
+	fmt.Fprintf(&b, "  이 작업은 file_overwrite 승인이 필요(새 파일 생성 또는 기존 파일 교체). 자동화에서는 --approve file_overwrite를 명시.\n")
+	fmt.Fprintf(&b, "  생성 승인과 첫 실행의 script_trust 승인은 별개.\n\n")
 
 	fmt.Fprintf(&b, "%s\n", msgPlanInputs)
 	fmt.Fprintf(&b, "  S3 원본: %s\n", gen.Source)
@@ -269,9 +269,9 @@ func previewText(gen s3gen.Generated) string {
 	b.WriteString("\n")
 
 	fmt.Fprintf(&b, "%s\n", msgPlanExecution)
-	fmt.Fprintf(&b, "  훅으로 등록하면 dcraft가 프로젝트 폴더에서 실행합니다. 스크립트는 자기 위치에서 프로젝트 폴더를 계산합니다.\n")
+	fmt.Fprintf(&b, "  훅으로 등록하면 dcraft가 프로젝트 폴더에서 실행. 스크립트는 자기 위치에서 프로젝트 폴더를 계산.\n")
 	fmt.Fprintf(&b, "  %s\n", save)
-	fmt.Fprintf(&b, "  실행 권한 0755로 저장합니다. .dcraft.yaml은 이 단계에서 수정하지 않습니다.\n")
+	fmt.Fprintf(&b, "  실행 권한 0755로 저장. .dcraft.yaml은 이 단계에서 수정하지 않음.\n")
 	b.WriteString("\n")
 
 	fmt.Fprintf(&b, "%s\n", msgPlanEffects)
@@ -300,23 +300,23 @@ func commandPreview(gen s3gen.Generated) string {
 	dest := shellQuote(gen.Layout.Destination)
 	var b strings.Builder
 	if gen.Mode == s3gen.ModeTar {
-		fmt.Fprintf(&b, "  - 다음 단계를 임시 폴더에서 수행합니다(프로필 지정 시 --profile 추가).\n")
+		fmt.Fprintf(&b, "  - 다음 단계를 임시 폴더에서 수행(프로필 지정 시 --profile 추가).\n")
 		fmt.Fprintf(&b, "      aws s3 cp %s <임시 폴더>/artifact.tar.gz --only-show-errors --no-progress%s\n", source, profile)
 		fmt.Fprintf(&b, "      gzip -t <임시 폴더>/artifact.tar.gz\n")
 		fmt.Fprintf(&b, "      tar -tzf <임시 폴더>/artifact.tar.gz\n")
 		fmt.Fprintf(&b, "      tar -tvzf <임시 폴더>/artifact.tar.gz\n")
 		fmt.Fprintf(&b, "      tar -xzf <임시 폴더>/artifact.tar.gz -C <빈 임시 폴더>\n")
 		fmt.Fprintf(&b, "      cp -R <빈 임시 폴더>/. %s/\n", dest)
-		b.WriteString("  - 절대 경로, .. 경로, 밖을 가리키는 심볼릭/하드 링크, 지원하지 않는 파일 형식을 거부합니다.\n")
-		b.WriteString("  - 압축은 빈 임시 폴더에만 풀고, 검증 후 받을 폴더로 복사합니다. 받을 폴더에 심볼릭 링크가 있으면 복사하지 않습니다.\n")
-		b.WriteString("  - 원본에 없는 받을 폴더의 기존 파일은 삭제하지 않습니다.\n")
-		b.WriteString("  - 임시 파일과 임시 폴더는 스크립트 종료 시 정리합니다.\n")
+		b.WriteString("  - 절대 경로, .. 경로, 밖을 가리키는 심볼릭/하드 링크, 지원하지 않는 파일 형식을 거부.\n")
+		b.WriteString("  - 압축은 빈 임시 폴더에만 풀고, 검증 후 받을 폴더로 복사. 받을 폴더에 심볼릭 링크가 있으면 복사하지 않음.\n")
+		b.WriteString("  - 원본에 없는 받을 폴더의 기존 파일은 삭제하지 않음.\n")
+		b.WriteString("  - 임시 파일과 임시 폴더는 스크립트 종료 시 정리.\n")
 		return b.String()
 	}
-	fmt.Fprintf(&b, "  - 기존 AWS CLI 구성으로 다음 명령을 실행합니다(프로필 지정 시 --profile 추가).\n")
+	fmt.Fprintf(&b, "  - 기존 AWS CLI 구성으로 다음 명령을 실행(프로필 지정 시 --profile 추가).\n")
 	fmt.Fprintf(&b, "      aws s3 sync %s %s --only-show-errors --no-progress%s\n", source, dest, profile)
-	b.WriteString("  - 원본에 없는 받을 폴더의 기존 파일을 삭제하는 삭제 동기화 옵션은 넣지 않습니다.\n")
-	b.WriteString("  - 받을 폴더의 기존 파일은 그대로 남습니다. 받을 폴더가 프로젝트 밖을 가리키거나 심볼릭 링크면 중단합니다.\n")
+	b.WriteString("  - 원본에 없는 받을 폴더의 기존 파일을 삭제하는 삭제 동기화 옵션은 넣지 않음.\n")
+	b.WriteString("  - 받을 폴더의 기존 파일은 그대로 남음. 받을 폴더가 프로젝트 밖을 가리키거나 심볼릭 링크면 중단.\n")
 	return b.String()
 }
 
@@ -359,7 +359,7 @@ func inputError(err error) *core.Error {
 	return core.FailCause(err, core.Diagnostic{
 		Category:    core.CategoryGeneratorInputInvalid,
 		Severity:    core.SeverityError,
-		Message:     "생성 입력을 확인하지 못했습니다.",
+		Message:     "생성 입력 확인 실패.",
 		Detail:      err.Error(),
 		NextActions: []string{msgInputActionOne, msgInputActionTwo},
 	})
@@ -383,7 +383,7 @@ func presentLines(res core.Result) []core.ValueLine {
 		if ptr, ptrOK := res.Data.(*Payload); ptrOK && ptr != nil {
 			payload = *ptr
 		} else {
-			return []core.ValueLine{{{Text: "S3 스크립트 생성 결과를 표시할 수 없습니다."}}}
+			return []core.ValueLine{{{Text: "S3 스크립트 생성 결과 표시 불가."}}}
 		}
 	}
 	report := payload.Generator

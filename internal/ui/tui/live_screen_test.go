@@ -472,11 +472,11 @@ type chattyDiagnosticLive struct{ *fakeLiveFeature }
 func (f *chattyDiagnosticLive) CanceledDiagnostic() core.Diagnostic {
 	return core.Diagnostic{
 		Category: core.CategoryCanceled, Severity: core.SeverityWarning,
-		Message: "로그 스트림을 분리했습니다. 서비스는 계속 실행 중입니다. 이 문장은 관리 화면에서 여러 행을 차지하도록 길게 적었습니다.",
+		Message: "로그 스트림을 분리. 서비스는 계속 실행 중. 이 문장은 관리 화면에서 여러 행을 차지하도록 길게 적었음.",
 		NextActions: []string{
-			"dcraft status로 서비스가 계속 실행 중인지 확인하세요.",
-			"다시 따라보려면 dcraft logs를 실행하세요.",
-			"화면을 닫아도 컨테이너는 멈추지 않습니다.",
+			"dcraft status로 서비스가 계속 실행 중인지 확인.",
+			"다시 따라보려면 dcraft logs를 실행.",
+			"화면을 닫아도 컨테이너는 멈추지 않음.",
 		},
 	}
 }
@@ -536,7 +536,7 @@ func TestLiveLastOutputPanelYieldsRowsToTheResultWhenSmall(t *testing.T) {
 		<-ctx.Done()
 		return nil, ctx.Err()
 	})
-	other := &stubFeature{desc: sectionDescriptor("status", "스택 상태", "현재 스택 상태를 읽습니다.", core.SectionInspect, false, false), body: "상태"}
+	other := &stubFeature{desc: sectionDescriptor("status", "스택 상태", "현재 스택 상태를 읽음.", core.SectionInspect, false, false), body: "상태"}
 	m := newTestModel(t, &chattyDiagnosticLive{inner}, other)
 	m.theme = *plainTheme()
 	q := startCmds(m.Init())

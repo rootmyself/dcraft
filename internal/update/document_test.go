@@ -120,15 +120,15 @@ func TestUpdateUnverifiedIsNotHealthy(t *testing.T) {
 func TestUpdateFailedRecordIsStated(t *testing.T) {
 	report := baseReport()
 	report.RecordStatus = update.RecordFailed
-	report.RecordDetail = "디스크가 가득 찼습니다."
+	report.RecordDetail = "디스크가 가득 찼음."
 	joined := renderDoc(t, update.Document(updateResult(report)), 100)
-	if !strings.Contains(joined, "기록하지 못했습니다") {
+	if !strings.Contains(joined, "기록 실패") {
 		t.Fatalf("failed record not stated:\n%s", joined)
 	}
-	if !strings.Contains(joined, "디스크가 가득 찼습니다") {
+	if !strings.Contains(joined, "디스크가 가득 찼음") {
 		t.Fatalf("record detail lost:\n%s", joined)
 	}
-	if strings.Contains(joined, "직전 정상 버전을 기록했습니다") {
+	if strings.Contains(joined, "직전 정상 버전을 기록했") {
 		t.Fatalf("failed record claims success:\n%s", joined)
 	}
 }
@@ -156,7 +156,7 @@ func TestUpdateNoticesAreShown(t *testing.T) {
 	report := baseReport()
 	report.Scope = "services"
 	report.Services = []string{"api"}
-	report.Notices = []string{"서비스 선택 갱신입니다. 선택하지 않은 서비스는 변경하지 않았습니다."}
+	report.Notices = []string{"서비스 선택 갱신. 선택하지 않은 서비스는 변경하지 않았음."}
 	joined := renderDoc(t, update.Document(updateResult(report)), 100)
 	if !strings.Contains(joined, "api") {
 		t.Fatalf("selected service missing:\n%s", joined)

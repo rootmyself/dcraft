@@ -69,26 +69,26 @@ func wizardSteps() core.WizardSpec {
 		Title: "비밀값 연결 설정",
 		Steps: []core.WizardStep{
 			{
-				Name: "service", Title: "서비스 선택", Prompt: "서비스를 선택하세요.",
+				Name: "service", Title: "서비스 선택", Prompt: "서비스 선택.",
 				Options: []core.WizardOption{{Value: "web", Label: "web"}, {Value: "worker", Label: "worker"}},
 			},
 			{
-				Name: "phase", Title: "시점 선택", Prompt: "시점을 선택하세요.",
+				Name: "phase", Title: "시점 선택", Prompt: "시점 선택.",
 				Default: "runtime",
 				Options: []core.WizardOption{{Value: "runtime", Label: "실행 시점 (runtime)"}},
 			},
 			{
-				Name: "delivery", Title: "전달 방식", Prompt: "전달 방식을 선택하세요.",
+				Name: "delivery", Title: "전달 방식", Prompt: "전달 방식 선택.",
 				Default: "environment",
 				Options: []core.WizardOption{{Value: "environment", Label: "환경변수"}, {Value: "file", Label: "파일"}},
 			},
 			{
-				Name: "source", Title: "원본 종류", Prompt: "원본 종류를 선택하세요.",
+				Name: "source", Title: "원본 종류", Prompt: "원본 종류 선택.",
 				Default: "env",
 				Options: []core.WizardOption{{Value: "env", Label: "환경변수"}, {Value: "file", Label: "로컬 파일"}},
 			},
 			{
-				Name: "ref", Title: "원본 참조", Prompt: "원본 참조를 입력하세요.",
+				Name: "ref", Title: "원본 참조", Prompt: "원본 참조 입력.",
 				AllowCustom: true, CustomHint: "환경변수 이름 또는 파일 경로",
 			},
 		},
@@ -136,12 +136,12 @@ func TestWizardSkipsConditionalStepsAndAllowsOptionalEmptyAnswer(t *testing.T) {
 			Title: "조건 단계",
 			Steps: []core.WizardStep{
 				{
-					Name: "source", Title: "원본 종류", Prompt: "원본을 선택하세요.", Default: "env",
+					Name: "source", Title: "원본 종류", Prompt: "원본 선택.", Default: "env",
 					Options: []core.WizardOption{{Value: "env", Label: "환경변수"}, {Value: "aws", Label: "AWS"}},
 				},
-				{Name: "ref", Title: "참조", Prompt: "참조를 입력하세요.", AllowCustom: true},
+				{Name: "ref", Title: "참조", Prompt: "참조 입력.", AllowCustom: true},
 				{
-					Name: "field", Title: "field", Prompt: "field를 입력하세요.", AllowCustom: true,
+					Name: "field", Title: "field", Prompt: "field를 입력.", AllowCustom: true,
 					Optional: true, DependsOn: "source", DependsValue: "aws",
 				},
 			},
@@ -193,7 +193,7 @@ func TestWizardShowsEffectBeforeSaveAndDeclineSavesNothing(t *testing.T) {
 			Wizard:  true,
 		},
 		steps:   wizardSteps(),
-		preview: "저장할 비밀값 연결\n서비스: worker\n전달: 파일 /run/secrets/token\n효과: dcraft up 시 파일로 전달합니다.",
+		preview: "저장할 비밀값 연결\n서비스: worker\n전달: 파일 /run/secrets/token\n효과: dcraft up 시 파일로 전달.",
 	}
 	m := newWizardModel(t, wizard)
 	openWizard(t, m)
@@ -220,7 +220,7 @@ func TestWizardShowsEffectBeforeSaveAndDeclineSavesNothing(t *testing.T) {
 	if m.phase != phaseReady {
 		t.Fatalf("phase after decline = %v, want ready", m.phase)
 	}
-	if !stringsContains(m.View(), "저장된 내용은 없습니다") {
+	if !stringsContains(m.View(), "저장된 내용 없음") {
 		t.Fatalf("decline notice missing:\n%s", m.View())
 	}
 }
@@ -330,8 +330,8 @@ func (f *failingWizard) Run(ctx context.Context, in core.Invocation) (any, error
 	return nil, core.Fail(core.Diagnostic{
 		Category:    core.CategoryServiceUnknown,
 		Severity:    core.SeverityError,
-		Message:     "서비스를 확인할 수 없습니다.",
-		NextActions: []string{"Compose 설정을 확인하세요."},
+		Message:     "서비스 확인 불가.",
+		NextActions: []string{"Compose 설정 확인."},
 	})
 }
 func (f *failingWizard) WizardPreview(answers map[string]string) (string, error) { return "", nil }
@@ -342,12 +342,12 @@ func stringsContains(haystack, needle string) bool {
 
 func TestWizardMultiStepCollectsAMixedSelection(t *testing.T) {
 	wizard := &wizardStub{
-		desc: core.Descriptor{Name: "backup", Title: "백업", Summary: "백업합니다.", Usage: "dcraft backup", Section: core.SectionData, Wizard: true},
+		desc: core.Descriptor{Name: "backup", Title: "백업", Summary: "백업.", Usage: "dcraft backup", Section: core.SectionData, Wizard: true},
 		steps: core.WizardSpec{
 			Title: "백업 설정",
 			Steps: []core.WizardStep{
 				{
-					Name: "sources", Title: "데이터 선택", Prompt: "여러 항목을 고르세요.", Multi: true,
+					Name: "sources", Title: "데이터 선택", Prompt: "여러 항목을 고르.", Multi: true,
 					Options: []core.WizardOption{
 						{Value: "volume:data", Label: "볼륨 data"},
 						{Value: "bind:/srv/app", Label: "폴더 /srv/app"},
@@ -384,10 +384,10 @@ func TestWizardMultiStepCollectsAMixedSelection(t *testing.T) {
 
 func TestWizardMultiEnterWithoutTogglesSelectsTheHighlightedValue(t *testing.T) {
 	wizard := &wizardStub{
-		desc: core.Descriptor{Name: "backup", Title: "백업", Summary: "백업합니다.", Usage: "dcraft backup", Section: core.SectionData, Wizard: true},
+		desc: core.Descriptor{Name: "backup", Title: "백업", Summary: "백업.", Usage: "dcraft backup", Section: core.SectionData, Wizard: true},
 		steps: core.WizardSpec{Steps: []core.WizardStep{
 			{
-				Name: "sources", Title: "데이터 선택", Prompt: "고르세요.", Multi: true,
+				Name: "sources", Title: "데이터 선택", Prompt: "고르.", Multi: true,
 				Options: []core.WizardOption{{Value: "volume:data", Label: "볼륨 data"}},
 			},
 			{Name: "ref", Title: "출력", Prompt: "입력", AllowCustom: true, Default: "./out"},

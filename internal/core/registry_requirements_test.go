@@ -20,7 +20,7 @@ func (f *requirementFeature) Run(context.Context, core.Invocation) (any, error) 
 func TestRegistryRejectsUnknownPreflightRequirement(t *testing.T) {
 	reg := core.NewRegistry()
 	err := reg.Register(&requirementFeature{desc: core.Descriptor{
-		Name: "sample", Title: "샘플", Summary: "샘플입니다.", Usage: "dcraft sample",
+		Name: "sample", Title: "샘플", Summary: "샘플.", Usage: "dcraft sample",
 		Section:  core.SectionInspect,
 		ReadOnly: true,
 		Requires: core.Requirements{"docker"},
@@ -33,7 +33,7 @@ func TestRegistryRejectsUnknownPreflightRequirement(t *testing.T) {
 func TestRegistryAcceptsDeclaredRequirements(t *testing.T) {
 	reg := core.NewRegistry()
 	err := reg.Register(&requirementFeature{desc: core.Descriptor{
-		Name: "sample", Title: "샘플", Summary: "샘플입니다.", Usage: "dcraft sample",
+		Name: "sample", Title: "샘플", Summary: "샘플.", Usage: "dcraft sample",
 		Section:  core.SectionInspect,
 		Approval: core.ApprovalInstall,
 		Requires: core.Requirements{core.RequirementDockerCLI},

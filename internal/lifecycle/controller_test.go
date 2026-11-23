@@ -351,7 +351,7 @@ func TestBusyStackFailsWithoutWaitingAndNamesTheHolder(t *testing.T) {
 	if !strings.Contains(ce.Diagnostics[0].Detail, "down") && !strings.Contains(ce.Diagnostics[0].Message, "down") {
 		t.Fatalf("busy diagnostic does not name the holder: %+v", ce.Diagnostics[0])
 	}
-	if strings.Contains(strings.Join(ce.Diagnostics[0].NextActions, " "), "기다리") &&
+	if strings.Contains(strings.Join(ce.Diagnostics[0].NextActions, " "), "기다리기") &&
 		!strings.Contains(strings.Join(ce.Diagnostics[0].NextActions, " "), "끝난 뒤") {
 		t.Fatalf("next actions suggest unbounded waiting: %v", ce.Diagnostics[0].NextActions)
 	}
@@ -466,7 +466,7 @@ func TestActionFailureWithoutObservableStateStillReportsTheStage(t *testing.T) {
 	if !errors.As(err, &ce) || ce.Diagnostics[0].Category != core.CategoryLifecycleFailed {
 		t.Fatalf("err = %v", err)
 	}
-	if !strings.Contains(ce.Diagnostics[0].Message, "확인하지 못했습니다") {
+	if !strings.Contains(ce.Diagnostics[0].Message, "확인 실패") {
 		t.Fatalf("missing observation caveat: %+v", ce.Diagnostics[0])
 	}
 	rep := in.Reporter.(*reporter)
@@ -505,7 +505,7 @@ func TestObservationFailureDoesNotTurnACompletedChangeIntoFailure(t *testing.T) 
 	if payload.Lifecycle.State != nil {
 		t.Fatalf("state = %+v, want unknown", payload.Lifecycle.State)
 	}
-	if len(payload.Lifecycle.Notices) != 1 || !strings.Contains(payload.Lifecycle.Notices[0], "확인하지 못했습니다") {
+	if len(payload.Lifecycle.Notices) != 1 || !strings.Contains(payload.Lifecycle.Notices[0], "확인 실패") {
 		t.Fatalf("notices = %v", payload.Lifecycle.Notices)
 	}
 	if rep := in.Reporter.(*reporter); rep.status("observe") != core.StageFailed {
@@ -553,7 +553,7 @@ func TestConfigFailureStopsBeforeAllocation(t *testing.T) {
 	h := newHarness(t)
 	h.identity.configErr = core.Fail(core.Diagnostic{
 		Category: core.CategoryInvalidConfiguration, Severity: core.SeverityError,
-		Message: "Compose 설정을 읽을 수 없습니다.",
+		Message: "Compose 설정을 읽을 수 없음.",
 	})
 	_, err := h.run(t, lifecycle.ActionUp, invocation())
 	if category(err) != core.CategoryInvalidConfiguration {

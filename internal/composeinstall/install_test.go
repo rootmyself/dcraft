@@ -135,8 +135,8 @@ func TestPlanShowsSourceVersionDestinationPermissionAndEffect(t *testing.T) {
 	}
 	for _, want := range []string{
 		"출처", "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-darwin-aarch64",
-		"버전: v5.8.0", "대상 경로: " + dest, "관리자 권한(sudo)은 필요하지 않습니다",
-		"변경 내용", "Docker CLI·Engine·Desktop과 WSL 통합은 변경하지 않습니다",
+		"버전: v5.8.0", "대상 경로: " + dest, "관리자 권한(sudo)은 필요하지 않음",
+		"변경 내용", "Docker CLI·Engine·Desktop과 WSL 통합은 변경하지 않음",
 		"SHA-256",
 	} {
 		if !strings.Contains(plan.Text, want) {

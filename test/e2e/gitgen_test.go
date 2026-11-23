@@ -145,12 +145,12 @@ func TestGenerateGitHookHumanOutputShowsThePlanAndNextCommands(t *testing.T) {
 	if res.code != 0 {
 		t.Fatalf("exit = %d stderr=%q", res.code, res.stderr)
 	}
-	for _, want := range []string{"Git 호스트 스크립트 생성 계획", "원격 저장소에 접속하지 않습니다", "script_trust", "file_overwrite"} {
+	for _, want := range []string{"Git 호스트 스크립트 생성 계획", "원격 저장소에 접속하지 않음", "script_trust", "file_overwrite"} {
 		if !strings.Contains(res.stderr, want) {
 			t.Fatalf("plan missing %q:\n%s", want, res.stderr)
 		}
 	}
-	for _, want := range []string{"Git 호스트 스크립트를 저장했습니다", "dcraft hooks --add --stage pre", "script_trust"} {
+	for _, want := range []string{"Git 호스트 스크립트 저장", "dcraft hooks --add --stage pre", "script_trust"} {
 		if !strings.Contains(res.stdout, want) {
 			t.Fatalf("human output missing %q:\n%s", want, res.stdout)
 		}
@@ -162,7 +162,7 @@ func TestGenerateGitHookTUIWizardShowsThePreviewAndDeclineWritesNothing(t *testi
 	project := projectNamed(t, "gitgen-tui")
 	env := fake.env(t, t.TempDir())
 	steps := []lifecyclePTYStep{
-		{wait: "상태를 새로 고치려면", send: ""},
+		{wait: "상태 새로 고침", send: ""},
 		// The menu order is the registration order; compute the distance from
 		// status so another ticket's feature does not break this journey.
 		{wait: "[↑↓] 이동", send: strings.Repeat("\x1b[B", menuDownPresses(t, "generate-git-hook"))},
@@ -174,7 +174,7 @@ func TestGenerateGitHookTUIWizardShowsThePreviewAndDeclineWritesNothing(t *testi
 		lifecyclePTYStep{wait: "소스를 받을 폴더", send: "\r"},
 		lifecyclePTYStep{wait: "생성할 스크립트 파일 경로", send: "\r"},
 		lifecyclePTYStep{wait: "어느 시점에 실행할지", send: "\r"},
-		lifecyclePTYStep{wait: "원격 저장소에 접속하지 않습니다", send: ""},
+		lifecyclePTYStep{wait: "원격 저장소에 접속하지 않음", send: ""},
 		lifecyclePTYStep{wait: "파일 덮어쓰기", send: ""},
 		lifecyclePTYStep{wait: "file_overwrite", send: ""},
 		lifecyclePTYStep{wait: "dcraft hooks --add", send: "\x1b"},
@@ -184,7 +184,7 @@ func TestGenerateGitHookTUIWizardShowsThePreviewAndDeclineWritesNothing(t *testi
 	if code != 0 {
 		t.Fatalf("TUI exit = %d\n%s", code, output)
 	}
-	for _, want := range []string{"Git 호스트 스크립트 생성", "원격 저장소에 접속하지 않습니다", "file_overwrite", "script_trust"} {
+	for _, want := range []string{"Git 호스트 스크립트 생성", "원격 저장소에 접속하지 않음", "file_overwrite", "script_trust"} {
 		if !screenContains(output, want) {
 			t.Fatalf("TUI output missing %q:\n%s", want, output)
 		}

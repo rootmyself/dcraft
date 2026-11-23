@@ -126,7 +126,7 @@ func TestScopeTableEscCancelsWithoutWidening(t *testing.T) {
 	if len(m.req.Services) != 0 {
 		t.Fatalf("a canceled selection was kept: %v", m.req.Services)
 	}
-	if !strings.Contains(m.View(), "아무것도 실행하지 않았습니다") {
+	if !strings.Contains(m.View(), "아무것도 실행하지 않았음") {
 		t.Fatalf("cancel notice missing:\n%s", m.View())
 	}
 }

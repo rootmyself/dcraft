@@ -94,7 +94,7 @@ func TestStatusDocumentSnapshot(t *testing.T) {
 	if header < 0 {
 		header = strings.Index(joined, "서비스")
 	}
-	guidance := strings.Index(joined, "상태를 새로 고치려면")
+	guidance := strings.Index(joined, "상태 새로 고침")
 	for name, idx := range map[string]int{"badges": badges, "identity": identity, "table": header, "guidance": guidance} {
 		if idx < 0 {
 			t.Fatalf("%s block missing:\n%s", name, joined)
@@ -140,7 +140,7 @@ func TestStatusDocumentEmptyStackSnapshot(t *testing.T) {
 	if !strings.Contains(joined, "서비스 없음") {
 		t.Fatalf("empty stack has no badge:\n%s", joined)
 	}
-	if !strings.Contains(joined, "서비스가 없습니다") {
+	if !strings.Contains(joined, "서비스가 없음") {
 		t.Fatalf("empty stack is not explained:\n%s", joined)
 	}
 	if strings.Contains(joined, "작업 실패") {

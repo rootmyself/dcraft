@@ -440,7 +440,7 @@ func TestExecStoppedServiceFailsWithExitOne(t *testing.T) {
 	if res.code != 1 {
 		t.Fatalf("exit = %d, want 1 (stderr=%q)", res.code, res.stderr)
 	}
-	if !strings.Contains(res.stderr, "실행 중이 아닙니다") {
+	if !strings.Contains(res.stderr, "실행 중이 아님") {
 		t.Fatalf("stderr = %q", res.stderr)
 	}
 }

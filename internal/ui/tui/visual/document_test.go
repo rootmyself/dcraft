@@ -9,7 +9,7 @@ import (
 
 func warningTable(rows int) *core.Table {
 	t := &core.Table{
-		EmptyText: "서비스가 없습니다. Compose 파일에 services 항목이 있는지 확인하세요.",
+		EmptyText: "서비스가 없음. Compose 파일에 services 항목이 있는지 확인.",
 		Columns: []core.Column{
 			{Header: "서비스", Weight: 30, Min: 12, Max: 24},
 			{Header: "상태", Fixed: 11},
@@ -44,7 +44,7 @@ func allBlocksDocument() core.Document {
 		Title: "스택 상태",
 		Blocks: []core.Block{
 			{Kind: core.BlockHeading, Text: "요약"},
-			{Kind: core.BlockParagraph, Text: "현재 폴더 스택의 서비스 상태와 연결 정보를 확인합니다. 이 문장은 폭에 맞춰 줄바꿈되어야 합니다."},
+			{Kind: core.BlockParagraph, Text: "현재 폴더 스택의 서비스 상태와 연결 정보 확인. 이 문장은 폭에 맞춰 줄바꿈되어야 ."},
 			{Kind: core.BlockKeyValues, Pairs: []core.Pair{
 				{Key: "마지막 조회", Value: "13:22:46"},
 				{Key: "Compose 파일", Value: "/Users/npnl/Documents/work/an-extremely-long-project-folder-name/compose.yaml"},
@@ -55,7 +55,7 @@ func allBlocksDocument() core.Document {
 			}},
 			{Kind: core.BlockTable, Table: warningTable(3)},
 			{Kind: core.BlockDivider},
-			{Kind: core.BlockCallout, Callout: core.CalloutInfo, Text: "다음 행동\n1. 로그를 확인하세요.\n2. 컨테이너가 없는 서비스는 스택 시작으로 생성됩니다."},
+			{Kind: core.BlockCallout, Callout: core.CalloutInfo, Text: "다음 행동\n1. 로그 확인.\n2. 컨테이너가 없는 서비스는 스택 시작으로 생성됨."},
 		},
 	}
 }
@@ -79,7 +79,7 @@ func TestDocumentFitsEveryWidth(t *testing.T) {
 		joined := strings.Join(lines, "\n")
 		// Core labels survive every width; secondary columns are allowed to
 		// drop below the compact breakpoint.
-		for _, want := range []string{"요약", "서비스", "상태", "다음 행동", "로그를 확인하세요", "실행 중"} {
+		for _, want := range []string{"요약", "서비스", "상태", "다음 행동", "로그 확인", "실행 중"} {
 			if !strings.Contains(joined, want) {
 				t.Fatalf("width %d: missing %q:\n%s", width, want, joined)
 			}
@@ -291,7 +291,7 @@ func TestEmptyTableExplainsInsteadOfBlank(t *testing.T) {
 		t.Fatalf("empty table drew a header: %q", layout.Header)
 	}
 	text := strings.Join(layout.Lines(), "\n")
-	if !strings.Contains(text, "서비스가 없습니다") {
+	if !strings.Contains(text, "서비스가 없음") {
 		t.Fatalf("empty table not explained: %q", text)
 	}
 	if !layout.Empty() {
@@ -309,7 +309,7 @@ func TestEmptyTableExplainsInsteadOfBlank(t *testing.T) {
 func TestBlocksUseTheInjectedTheme(t *testing.T) {
 	ascii := Resolve(Inputs{ThemeSetting: "dark", NoColor: true, Profile: ProfileNone, DarkBackground: true, UTF8: false})
 	doc := core.Document{Blocks: []core.Block{
-		{Kind: core.BlockParagraph, Text: strings.Repeat("아주 긴 한국어 문장입니다 ", 8)},
+		{Kind: core.BlockParagraph, Text: strings.Repeat("아주 긴 한국어 문장 ", 8)},
 		{Kind: core.BlockDivider},
 	}}
 	lines := RenderDocument(ascii, doc, 40)

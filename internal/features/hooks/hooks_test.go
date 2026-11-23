@@ -184,7 +184,7 @@ func TestWizardPreviewDescribesTheEffectAndRejectsMissingFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"스크립트", "사전", "내용 식별자", "실행 위치", "되돌리지 않습니다"} {
+	for _, want := range []string{"스크립트", "사전", "내용 식별자", "실행 위치", "되돌리지 않음"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("preview missing %q:\n%s", want, text)
 		}

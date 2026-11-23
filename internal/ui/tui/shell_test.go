@@ -86,7 +86,7 @@ func TestCompact48x18KeepsTargetStageAndRisk(t *testing.T) {
 		t.Fatalf("phase = %v, want confirm", m.phase)
 	}
 	view := m.View()
-	for _, want := range []string{msgConfirmTitle, "대상", "스택 전체", "스택을 변경합니다", "[enter] 실행", "[esc] 취소"} {
+	for _, want := range []string{msgConfirmTitle, "대상", "스택 전체", "스택을 변경하는", "[enter] 실행", "[esc] 취소"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("48x18 confirmation missing %q:\n%s", want, view)
 		}
@@ -394,14 +394,14 @@ func TestCompactConfirmPinsRiskAboveThePanelBorder(t *testing.T) {
 	if bottom < 1 {
 		t.Fatalf("panel border missing:\n%s", strings.Join(lines, "\n"))
 	}
-	if !strings.Contains(lines[bottom-1], "스택을 변경합니다") {
+	if !strings.Contains(lines[bottom-1], "스택을 변경하는") {
 		t.Fatalf("risk is not the last row inside the panel: %q", lines[bottom-1])
 	}
 	if !strings.Contains(lines[17], "[enter] 실행") {
 		t.Fatalf("footer missing: %q", lines[17])
 	}
 	joined := strings.Join(lines, "\n")
-	if strings.Contains(joined, "생략했습니다") {
+	if strings.Contains(joined, "생략") {
 		t.Fatalf("the deleted truncation notice is still rendered:\n%s", joined)
 	}
 	if !strings.Contains(joined, "PgUp/PgDn") {

@@ -124,7 +124,7 @@ func TestGeneratedScriptsExplainKoreanInputsEffectsAndFailure(t *testing.T) {
 		for _, want := range []string{
 			"# 입력", "# 실행 위치", "# 하는 일", "# 변경되는 파일", "# 전제 조건", "# 실패 시", "# 수정 방법",
 			"기존 AWS CLI", "aws configure", "script_trust", "dcraft hooks --add --stage pre",
-			"이 스크립트는 도구를 자동 설치하지 않습니다",
+			"이 스크립트는 도구를 자동 설치하지 않음",
 		} {
 			if !strings.Contains(script, want) {
 				t.Fatalf("%s script missing Korean guidance %q:\n%s", tc.mode, want, script)

@@ -16,11 +16,11 @@ import (
 // exercised without the real registry.
 func navModel(t *testing.T) (*Model, *stubFeature) {
 	t.Helper()
-	primary := &stubFeature{desc: sectionDescriptor("status", "스택 상태", "상태를 확인합니다.", core.SectionInspect, true, false), body: "상태 본문"}
+	primary := &stubFeature{desc: sectionDescriptor("status", "스택 상태", "상태 확인.", core.SectionInspect, true, false), body: "상태 본문"}
 	logs := &stubFeature{desc: sectionDescriptor("logs", "로그 보기", "실시간 로그를 따라봅니다.", core.SectionInspect, false, false), body: "로그 본문"}
-	up := &stubFeature{desc: sectionDescriptor("up", "스택 시작", "현재 폴더 스택을 시작합니다.", core.SectionOperate, false, false), body: "시작 본문"}
-	restore := &stubFeature{desc: sectionDescriptor("restore", "데이터 복원", "백업에서 데이터를 되돌립니다.", core.SectionData, false, true), body: "복원 본문"}
-	secrets := &stubFeature{desc: sectionDescriptor("secrets", "비밀값 연결", "비밀값 참조를 관리합니다.", core.SectionConfig, false, false), body: "비밀값 본문"}
+	up := &stubFeature{desc: sectionDescriptor("up", "스택 시작", "현재 폴더 스택 시작.", core.SectionOperate, false, false), body: "시작 본문"}
+	restore := &stubFeature{desc: sectionDescriptor("restore", "데이터 복원", "백업에서 데이터를 되돌림.", core.SectionData, false, true), body: "복원 본문"}
+	secrets := &stubFeature{desc: sectionDescriptor("secrets", "비밀값 연결", "비밀값 참조를 관리.", core.SectionConfig, false, false), body: "비밀값 본문"}
 	m := newTestModel(t, primary, logs, up, restore, secrets)
 	m.theme = *plainTheme()
 	initModel(t, m)
@@ -92,7 +92,7 @@ func TestSidebarGroupsFeaturesWithOneLineSummaries(t *testing.T) {
 		}
 		last = idx
 	}
-	if !strings.Contains(view, "상태를 확인합니다.") {
+	if !strings.Contains(view, "상태 확인.") {
 		t.Fatalf("focused summary missing:\n%s", view)
 	}
 }
@@ -193,7 +193,7 @@ func TestFilterKeepsTheNarrowedMenuAfterEnter(t *testing.T) {
 func TestRiskBadgeFollowsTheDestructiveFieldOnly(t *testing.T) {
 	primary := &stubFeature{desc: sectionDescriptor("status", "스택 상태", "상태", core.SectionInspect, true, false), body: "상태"}
 	arbitrary := &stubFeature{desc: sectionDescriptor("danger-thing", "임의 위험 작업", "데이터를 지웁니다.", core.SectionData, false, true), body: "위험 본문"}
-	namesake := &stubFeature{desc: sectionDescriptor("restore", "데이터 복원", "복원합니다.", core.SectionData, false, false), body: "복원"}
+	namesake := &stubFeature{desc: sectionDescriptor("restore", "데이터 복원", "복원.", core.SectionData, false, false), body: "복원"}
 	m := newTestModel(t, primary, arbitrary, namesake)
 	m.theme = *plainTheme()
 	initModel(t, m)
@@ -403,7 +403,7 @@ func TestBodyMenuShowsTheOneLineSummary(t *testing.T) {
 	resize(t, m, 80, 40)
 	view := m.View()
 	// A non-selected row's summary is visible too.
-	for _, want := range []string{"실시간 로그를 따라봅니다.", "현재 폴더 스택을 시작합니다.", "비밀값 참조를 관리합니다."} {
+	for _, want := range []string{"실시간 로그를 따라봅니다.", "현재 폴더 스택 시작.", "비밀값 참조를 관리."} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("menu missing the summary %q:\n%s", want, view)
 		}
@@ -425,7 +425,7 @@ func TestSidebarPersistsAcrossScreens(t *testing.T) {
 	}
 	nm, _ := m.Update(resultMsg{res: core.Result{
 		SchemaVersion: core.SchemaVersion, Action: "status", Outcome: core.OutcomeFailure,
-		Diagnostics: []core.Diagnostic{{Category: core.CategoryInternal, Severity: core.SeverityError, Message: "실패했습니다.", NextActions: []string{"다시 실행하세요."}}},
+		Diagnostics: []core.Diagnostic{{Category: core.CategoryInternal, Severity: core.SeverityError, Message: "실패.", NextActions: []string{"다시 실행."}}},
 	}})
 	m = nm.(*Model)
 	if !strings.Contains(m.View(), "╭ 기능") {
@@ -694,7 +694,7 @@ func TestResizeAcrossTheBreakpointKeepsTheCursor(t *testing.T) {
 // A hidden content column must not delete prose: a wizard prompt and its
 // preview wrap at the content width instead of being truncated by the frame.
 func TestWizardProseWrapsInTheWideLayout(t *testing.T) {
-	long := strings.Repeat("아주 긴 안내 문장입니다. ", 8)
+	long := strings.Repeat("아주 긴 안내 문장. ", 8)
 	wizard := &stubWizard{stubFeature: &stubFeature{desc: core.Descriptor{
 		Name: "secrets", Title: "비밀값 연결", Summary: "요약", Usage: "dcraft secrets",
 		Section: core.SectionConfig, Wizard: true,
@@ -706,7 +706,7 @@ func TestWizardProseWrapsInTheWideLayout(t *testing.T) {
 	resize(t, m, 120, 36)
 	openWizard(t, m)
 	view := m.View()
-	if !strings.Contains(view, strings.TrimSpace(long)) && strings.Count(view, "아주 긴 안내 문장입니다.") < 4 {
+	if !strings.Contains(view, strings.TrimSpace(long)) && strings.Count(view, "아주 긴 안내 문장.") < 4 {
 		t.Fatalf("prompt did not wrap; it was cut:\n%s", view)
 	}
 	for i, line := range viewLines(t, m) {
