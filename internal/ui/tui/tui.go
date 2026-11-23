@@ -33,6 +33,8 @@ type Options struct {
 	MarqueeInterval time.Duration
 	// MarqueeTick schedules a tick; nil uses Bubble Tea's timer.
 	MarqueeTick func(time.Duration, func(time.Time) tea.Msg) tea.Cmd
+	// MouseNow supplies the clock used to detect double clicks.
+	MouseNow func() time.Time
 }
 
 // Run starts the interactive program. Normal quit (q or ctrl+c) does not touch
@@ -41,7 +43,7 @@ type Options struct {
 // canceled result.
 func Run(ctx context.Context, opts Options) error {
 	m := NewModel(ctx, opts)
-	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithContext(ctx))
+	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion(), tea.WithContext(ctx))
 	_, err := p.Run()
 	return err
 }
@@ -116,6 +118,9 @@ type Model struct {
 	marquee         marqueeState
 	marqueeInterval time.Duration
 	marqueeTick     func(time.Duration, func(time.Time) tea.Msg) tea.Cmd
+	mouseNow        func() time.Time
+	mouseTarget     string
+	mouseAt         time.Time
 
 	// theme is resolved once in NewModel and injected into every renderer.
 	// facts holds the last observed header values; neither is a global and
@@ -214,6 +219,10 @@ func NewModel(ctx context.Context, opts Options) *Model {
 	m.spinnerInterval = opts.SpinnerInterval
 	m.marqueeInterval = opts.MarqueeInterval
 	m.marqueeTick = opts.MarqueeTick
+	m.mouseNow = opts.MouseNow
+	if m.mouseNow == nil {
+		m.mouseNow = time.Now
+	}
 	if m.marqueeTick == nil {
 		m.marqueeTick = tea.Tick
 	}
@@ -302,6 +311,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.MouseMsg:
+		return m, m.updateMouse(msg)
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -628,12 +639,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "down", "j":
 				m.envAction = 1 - m.envAction
 			case "enter":
-				if m.envAction == 0 {
-					return m, m.startRunPath(m.active)
-				}
-				m.envSwitch = true
-				m.phase = phaseLoadingEnvironments
-				return m, m.listEnvironmentsCmd()
+				return m, m.chooseEnvironmentAction()
 			}
 			return m, nil
 		}
@@ -663,19 +669,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "end", "G":
 				m.envSelected = len(m.envs) - 1
 			case "enter":
-				if m.envSelected >= 0 && m.envSelected < len(m.envs) && m.primary != nil {
-					m.target.Environment = m.envs[m.envSelected].Name
-					if m.envSwitch {
-						m.envSwitch = false
-						m.facts.Environment = m.target.Environment
-						m.result = nil
-						m.resultDismissed = false
-						m.resetScrollState()
-						m.phase = phaseReady
-						return m, nil
-					}
-					return m, m.start(m.primary)
-				}
+				return m, m.chooseEnvironment()
 			}
 			return m, nil
 		}
@@ -732,6 +726,37 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return m, nil
+}
+
+// chooseEnvironment is Enter on an environment row: it either runs the primary
+// feature against the chosen target or, when the screen was opened to switch,
+// only changes the target. Mouse and keyboard share this one path so a switch
+// can never start a run.
+func (m *Model) chooseEnvironment() tea.Cmd {
+	if m.envSelected < 0 || m.envSelected >= len(m.envs) || m.primary == nil {
+		return nil
+	}
+	m.target.Environment = m.envs[m.envSelected].Name
+	if m.envSwitch {
+		m.envSwitch = false
+		m.facts.Environment = m.target.Environment
+		m.result = nil
+		m.resultDismissed = false
+		m.resetScrollState()
+		m.phase = phaseReady
+		return nil
+	}
+	return m.start(m.primary)
+}
+
+// chooseEnvironmentAction is Enter on the environment administration screen.
+func (m *Model) chooseEnvironmentAction() tea.Cmd {
+	if m.envAction == 0 {
+		return m.startRunPath(m.active)
+	}
+	m.envSwitch = true
+	m.phase = phaseLoadingEnvironments
+	return m.listEnvironmentsCmd()
 }
 
 func (m *Model) listEnvironmentsCmd() tea.Cmd {
@@ -1277,14 +1302,20 @@ const menuWindow = 7
 // budget bounds the rows so a long registry cannot push the notice or the
 // result off the body; zero means no coding yet.
 func (m *Model) menuView(budget int) string {
-	if budget <= 0 {
-		budget = menuWindow
-	}
-	lines := visual.MenuLines(m.theme, m.bodyWidth(), m.nav(), budget, !m.compact())
+	lines, _ := m.menuLines(budget)
 	if len(lines) == 0 {
 		return ""
 	}
 	return strings.Join(lines, "\n") + "\n"
+}
+
+// menuLines is menuView plus the drawn row of every entry, from one window
+// calculation.
+func (m *Model) menuLines(budget int) ([]string, []visual.NavHit) {
+	if budget <= 0 {
+		budget = menuWindow
+	}
+	return visual.MenuLinesWithHits(m.theme, m.bodyWidth(), m.nav(), budget, !m.compact())
 }
 
 // compactByHeight reports a terminal too short for the decorated layout. The
@@ -1380,6 +1411,18 @@ func (m *Model) serviceTable(compact bool) core.Table {
 // image or port, and keeping it visible means a narrowed scope can always be
 // widened again without scrolling back to the first row.
 func (m *Model) serviceScreen() screenLines {
+	return m.serviceScreenLayout().screen
+}
+
+// serviceScreenLayout is the scope screen plus the row of the whole-stack
+// selector inside Fixed. The renderer and the mouse targets read this one
+// layout, so the row a click resolves and the row the marker marks agree.
+type serviceScreenLayout struct {
+	screen   screenLines
+	wholeRow int
+}
+
+func (m *Model) serviceScreenLayout() serviceScreenLayout {
 	th := m.theme
 	width := m.bodyWidth()
 	compact := m.compact()
@@ -1396,7 +1439,9 @@ func (m *Model) serviceScreen() screenLines {
 	if !compact {
 		fixed = append(fixed, "", m.hintText(msgServiceSelectIntro))
 	}
-	fixed = append(fixed, "", m.wholeStackRow())
+	fixed = append(fixed, "")
+	wholeRow := len(fixed)
+	fixed = append(fixed, m.wholeStackRow())
 
 	table := m.serviceTable(compact)
 	tail := m.serviceTail(compact)
@@ -1406,7 +1451,7 @@ func (m *Model) serviceScreen() screenLines {
 		rows := visual.RenderDocument(th, core.Document{
 			Blocks: []core.Block{{Kind: core.BlockTable, Table: &table}},
 		}, 0)
-		return screenLines{Fixed: fixed, Band: rows, Tail: tail}
+		return serviceScreenLayout{screen: screenLines{Fixed: fixed, Band: rows, Tail: tail}, wholeRow: wholeRow}
 	}
 	layout := visual.LayoutTableOptions(th, table, width, visual.TableOptions{
 		Compact:        compact,
@@ -1418,7 +1463,7 @@ func (m *Model) serviceScreen() screenLines {
 	if layout.Header != "" {
 		fixed = append(fixed, layout.Header)
 	}
-	return screenLines{Fixed: fixed, Band: layout.Rows, Tail: tail}
+	return serviceScreenLayout{screen: screenLines{Fixed: fixed, Band: layout.Rows, Tail: tail}, wholeRow: wholeRow}
 }
 
 // serviceTail is the guidance below the table. Compact keeps only the

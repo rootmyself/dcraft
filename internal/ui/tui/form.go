@@ -172,28 +172,33 @@ func (m *Model) submitForm() (tea.Model, tea.Cmd) {
 	return m, m.beginRequest(feature, req)
 }
 
-// formView shows every field with its label and help, the value being typed,
-// and the exact values that will run. Nothing is sent to the engine until the
-// last field is confirmed. Guidance about a missing answer is drawn inline
-// under the field it belongs to, so the value to correct is on the same row.
-func (m *Model) formView() string {
+// formLines shows every field with its label and help, the value being typed,
+// and the exact values that will run. It returns the drawn rows and the field
+// and choice targets together, so a click resolves against what is on screen.
+// Nothing is sent to the engine until the last field is confirmed.
+func (m *Model) formLines() ([]string, []bodyHit) {
 	form := m.form
-	var b strings.Builder
-	b.WriteString(m.title(msgFormTitle))
-	b.WriteString("\n\n")
+	if form == nil {
+		return nil, nil
+	}
+	var lines []string
+	var hits []bodyHit
+	add := func(s string) { lines = append(lines, s) }
+	add(m.title(msgFormTitle))
+	add("")
 	if form.feature != nil {
 		desc := form.feature.Descriptor()
-		fmt.Fprintf(&b, "%s: %s (%s)\n", msgFormAction, desc.Title, desc.Name)
+		add(fmt.Sprintf("%s: %s (%s)", msgFormAction, desc.Title, desc.Name))
 	}
 	dir := m.target.Path
 	if dir == "" {
 		dir = msgConfirmTargetNow
 	}
-	fmt.Fprintf(&b, "%s: %s\n", msgConfirmTargetLabel, dir)
+	add(fmt.Sprintf("%s: %s", msgConfirmTargetLabel, dir))
 	if m.target.Environment != "" {
-		fmt.Fprintf(&b, "%s: %s\n", msgConfirmEnvironment, m.target.Environment)
+		add(fmt.Sprintf("%s: %s", msgConfirmEnvironment, m.target.Environment))
 	}
-	b.WriteString("\n")
+	add("")
 	for i, field := range form.fields {
 		marker := "  "
 		if i == form.focus {
@@ -205,18 +210,18 @@ func (m *Model) formView() string {
 			if len(field.Options) > 0 {
 				selected = field.Options[form.choices[field.Key]].Label
 			}
-			fmt.Fprintf(&b, "%s%s: %s\n", marker, field.Label, selected)
-			m.writeFormNotice(&b, form, i)
-			if field.Help != "" {
-				b.WriteString(m.helpLine(field.Help))
-			}
+			hits = append(hits, bodyHit{row: len(lines), kind: hitFormField, index: i})
+			add(fmt.Sprintf("%s%s: %s", marker, field.Label, selected))
+			lines = append(lines, m.formNoticeLines(form, i)...)
+			lines = append(lines, m.helpLines(field.Help)...)
 			if i == form.focus {
 				for j, option := range field.Options {
 					pointer := "   "
 					if j == form.choices[field.Key] {
 						pointer = " ◉ "
 					}
-					fmt.Fprintf(&b, "  %s%s\n", pointer, option.Label)
+					hits = append(hits, bodyHit{row: len(lines), kind: hitFormChoice, index: i, aux: j})
+					add("  " + pointer + option.Label)
 				}
 			}
 		default:
@@ -224,52 +229,57 @@ func (m *Model) formView() string {
 			if i == form.focus {
 				cursor = cursorGlyph
 			}
-			fmt.Fprintf(&b, "%s%s: %s%s\n", marker, field.Label, form.values[field.Key], cursor)
-			m.writeFormNotice(&b, form, i)
-			if field.Help != "" {
-				b.WriteString(m.helpLine(field.Help))
-			}
+			hits = append(hits, bodyHit{row: len(lines), kind: hitFormField, index: i})
+			add(fmt.Sprintf("%s%s: %s%s", marker, field.Label, form.values[field.Key], cursor))
+			lines = append(lines, m.formNoticeLines(form, i)...)
+			lines = append(lines, m.helpLines(field.Help)...)
 		}
 	}
-	b.WriteString("\n")
-	fmt.Fprintf(&b, "%s\n", m.title(msgFormRunTitle))
+	add("")
+	add(m.title(msgFormRunTitle))
 	for _, field := range form.fields {
 		value := form.reviewValue(field)
 		if value == "" {
 			value = msgFormEmpty
 		}
-		fmt.Fprintf(&b, "  %s: %s\n", field.Label, value)
+		add(fmt.Sprintf("  %s: %s", field.Label, value))
 	}
 	if form.notice != "" && form.noticeField < 0 {
-		b.WriteString("\n")
-		b.WriteString(m.noticeText(form.notice))
-		b.WriteString("\n")
+		add("")
+		add(m.noticeText(form.notice))
 	}
-	return strings.TrimRight(b.String(), "\n")
+	return lines, hits
 }
 
-// writeFormNotice draws the inline guidance for one field, wrapped to the body
+func (m *Model) formView() string {
+	lines, _ := m.formLines()
+	return strings.Join(lines, "\n")
+}
+
+// formNoticeLines draws the inline guidance for one field, wrapped to the body
 // width. It is called only for the field the notice belongs to.
-func (m *Model) writeFormNotice(b *strings.Builder, form *formState, field int) {
+func (m *Model) formNoticeLines(form *formState, field int) []string {
 	if form.notice == "" || form.noticeField != field {
-		return
+		return nil
 	}
+	var out []string
 	for _, line := range m.wrapTo(form.notice, m.bodyWidth()) {
-		b.WriteString(m.noticeText(line))
-		b.WriteString("\n")
+		out = append(out, m.noticeText(line))
 	}
+	return out
 }
 
-// helpLine renders a field's help under its control, indented to the field's
+// helpLines renders a field's help under its control, indented to the field's
 // value column. Help is a sentence, so it wraps instead of being cut.
-func (m *Model) helpLine(help string) string {
-	var b strings.Builder
-	for _, line := range m.wrapTo(help, m.bodyWidth()-4) {
-		b.WriteString("    ")
-		b.WriteString(m.hintText(line))
-		b.WriteString("\n")
+func (m *Model) helpLines(help string) []string {
+	if help == "" {
+		return nil
 	}
-	return b.String()
+	var out []string
+	for _, line := range m.wrapTo(help, m.bodyWidth()-4) {
+		out = append(out, "    "+m.hintText(line))
+	}
+	return out
 }
 
 // reviewValue is exactly what the feature will receive for a field: a choice
