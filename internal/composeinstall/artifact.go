@@ -130,8 +130,8 @@ func artifactError(cause error, detail string) error {
 		Message:  msgArtifactInvalid,
 		Detail:   detail,
 		NextActions: []string{
-			"다시 시도하고, 같은 오류가 반복되면 공식 릴리스 페이지에서 파일을 직접 확인하세요.",
-			"dcraft는 검증에 실패한 파일을 설치하지 않았습니다.",
+			"다시 시도하고, 같은 오류가 반복되면 공식 릴리스 페이지에서 파일을 직접 확인.",
+			"dcraft는 검증에 실패한 파일을 설치하지 않았음.",
 		},
 	})
 }
@@ -143,9 +143,9 @@ func archError(detail string) error {
 		Message:  msgArtifactArch,
 		Detail:   detail,
 		NextActions: []string{
-			"이 컴퓨터의 운영체제와 아키텍처(uname -m)를 확인하세요.",
-			"다시 시도하고, 같은 오류가 반복되면 공식 릴리스 페이지에서 맞는 파일을 직접 내려받으세요.",
-			"dcraft는 다른 아키텍처의 파일을 설치하지 않았습니다.",
+			"이 컴퓨터의 운영체제와 아키텍처(uname -m)를 확인.",
+			"다시 시도하고, 같은 오류가 반복되면 공식 릴리스 페이지에서 맞는 파일을 직접 내려받으.",
+			"dcraft는 다른 아키텍처의 파일을 설치하지 않았음.",
 		},
 	})
 }

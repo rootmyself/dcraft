@@ -122,7 +122,7 @@ func TestApplyRollbackUsesOnlyRecordedSecretReferences(t *testing.T) {
 	prep := &fakeSecretPreparer{session: secretref.Session{
 		Files:   []string{"/state/stacks/app/compose.secrets.yaml"},
 		Env:     []string{"DCRAFT_SECRET_1=value"},
-		Notices: []string{"비밀값 전달을 적용했습니다."},
+		Notices: []string{"비밀값 전달 적용."},
 	}}
 	runner := &execxtest.Runner{Handler: func(cmd execx.Command) (execx.Result, error) {
 		return execx.Result{Stdout: []byte("started")}, nil

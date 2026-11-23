@@ -253,7 +253,7 @@ volumes:
 	if !again.Data.Rollback.AlreadyAtVersion {
 		t.Fatal("repeated rollback did not report that the recorded version is already running")
 	}
-	if !strings.Contains(strings.Join(again.Data.Rollback.Notices, "\n"), "더 오래된 버전은 없습니다") {
+	if !strings.Contains(strings.Join(again.Data.Rollback.Notices, "\n"), "더 오래된 버전은 없음") {
 		t.Fatalf("notices = %v", again.Data.Rollback.Notices)
 	}
 	if got := composeInspect(t, s.env, s.project, s.composePath, "app"); got != appContainer {

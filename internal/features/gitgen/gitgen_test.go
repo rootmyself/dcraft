@@ -268,9 +268,9 @@ func TestPlanExplainsEffectsPrerequisitesAuthenticationAndNextSteps(t *testing.T
 		t.Fatalf("plan = %+v", report)
 	}
 	for _, want := range []string{
-		"Git 호스트 스크립트", "원격 저장소에 접속하지 않습니다", "clone", "fetch",
+		"Git 호스트 스크립트", "원격 저장소에 접속하지 않음", "clone", "fetch",
 		"git CLI", "credential helper", "SSH agent", "인증 정보",
-		"file_overwrite", "dcraft hooks --add", "script_trust", "자동 등록하지 않습니다",
+		"file_overwrite", "dcraft hooks --add", "script_trust", "자동 등록하지 않음",
 		"실패", "수정",
 	} {
 		if !strings.Contains(report.Text, want) {
@@ -331,7 +331,7 @@ func TestGitgenDocumentTagsPathsAndCommands(t *testing.T) {
 	res := core.Result{Outcome: core.OutcomeSuccess, Data: Payload{Generator: Report{
 		Script: "scripts/git-sync.sh", Destination: "src", Ref: "main", RefKind: "branch",
 		SHA256: "abc", NextCommands: []string{"dcraft hooks --add --stage pre"},
-		Notices: []string{"신뢰 승인이 필요합니다."},
+		Notices: []string{"신뢰 승인이 필요."},
 	}}}
 	doc := feature.Document(res)
 	if len(doc.Blocks) != 1 || doc.Blocks[0].Kind != core.BlockValueLines {

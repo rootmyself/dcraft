@@ -360,7 +360,7 @@ CMD ["sh", "-c", "sleep 120"]
 	}
 	assertNoSentinelIn(t, "warning update output", update.stdout+update.stderr, sentinel)
 	notices := strings.Join(parseUpdate(t, update.stdout).Data.Update.Notices, "\n")
-	for _, want := range []string{"Dockerfile", dockerfilePath, "--mount=type=secret,id=BUILD_TOKEN", "자동으로 수정하지 않습니다", "캐시"} {
+	for _, want := range []string{"Dockerfile", dockerfilePath, "--mount=type=secret,id=BUILD_TOKEN", "자동으로 수정하지 않음", "캐시"} {
 		if !strings.Contains(notices, want) {
 			t.Fatalf("notices missing %q:\n%s", want, notices)
 		}

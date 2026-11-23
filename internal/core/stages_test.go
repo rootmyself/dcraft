@@ -23,7 +23,7 @@ func TestPlannedStagesFollowTheEngineSequence(t *testing.T) {
 	}
 
 	hooked := &testFeature{desc: core.Descriptor{
-		Name: "up", Title: "스택 시작", Summary: "스택을 시작합니다.", Usage: "dcraft up",
+		Name: "up", Title: "스택 시작", Summary: "스택 시작.", Usage: "dcraft up",
 		Section: core.SectionOperate, RecordsHistory: true, Hooks: core.HookUpUpdate,
 	}}
 	if got, want := plannedNames(core.PlannedStages(hooked)),

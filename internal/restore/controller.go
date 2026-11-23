@@ -133,8 +133,8 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation) (any, error) {
 		return nil, core.FailCause(err, core.Diagnostic{
 			Category:    core.CategoryInternal,
 			Severity:    core.SeverityError,
-			Message:     "현재 작업 폴더를 확인하지 못했습니다.",
-			NextActions: []string{"dcraft를 실행한 폴더를 확인한 뒤 다시 실행하세요."},
+			Message:     "현재 작업 폴더 확인 실패.",
+			NextActions: []string{"dcraft를 실행한 폴더를 확인한 뒤 다시 실행."},
 		})
 	}
 
@@ -300,7 +300,7 @@ func (c *Controller) selectVolumeTarget(ctx context.Context, in core.Invocation,
 	var sel targetSelection
 	err := core.RunStage(in.Reporter, "select_target", msgStageSelect, func() error {
 		if strings.TrimSpace(in.Option("bind")) != "" {
-			return targetError(fmt.Errorf("%w: 이 백업은 연결 폴더가 아니라 이름 있는 볼륨 백업입니다. --volume을 사용하세요.", ErrTargetMismatch))
+			return targetError(fmt.Errorf("%w: 이 백업은 연결 폴더가 아니라 이름 있는 볼륨 백업. --volume을 사용.", ErrTargetMismatch))
 		}
 		discovery, err := backup.Discover(ctx, c.cfg.Backend, target, projectName)
 		if err != nil {
@@ -345,7 +345,7 @@ func (c *Controller) selectVolumeTarget(ctx context.Context, in core.Invocation,
 		}
 		usage, usageErr := dest.Usage(ctx)
 		if usageErr != nil {
-			sel.warnings = append(sel.warnings, fmt.Sprintf("현재 데이터 크기를 확인하지 못했습니다: %s", usageErr.Error()))
+			sel.warnings = append(sel.warnings, fmt.Sprintf("현재 데이터 크기 확인 실패: %s", usageErr.Error()))
 		} else {
 			sel.current = usage
 		}
@@ -377,7 +377,7 @@ func (c *Controller) selectBindTarget(ctx context.Context, in core.Invocation, t
 	var sel targetSelection
 	err := core.RunStage(in.Reporter, "select_target", msgStageSelect, func() error {
 		if strings.TrimSpace(in.Option("volume")) != "" {
-			return targetError(fmt.Errorf("%w: 이 백업은 이름 있는 볼륨이 아니라 연결 폴더 백업입니다. --bind를 사용하세요.", ErrTargetMismatch))
+			return targetError(fmt.Errorf("%w: 이 백업은 이름 있는 볼륨이 아니라 연결 폴더 백업. --bind를 사용.", ErrTargetMismatch))
 		}
 		discovery, err := backup.Discover(ctx, c.cfg.Backend, target, projectName)
 		if err != nil {
@@ -404,10 +404,10 @@ func (c *Controller) selectBindTarget(ctx context.Context, in core.Invocation, t
 			return locationError(err)
 		}
 		if within(artifact.Path, dest.currentPath()) {
-			return targetError(fmt.Errorf("%w: 복원 대상이 백업 보관 폴더 안에 있습니다", ErrTargetMismatch))
+			return targetError(fmt.Errorf("%w: 복원 대상이 백업 보관 폴더 안에 있음", ErrTargetMismatch))
 		}
 		if within(safetyDir, dest.currentPath()) {
-			return safetyLocationError(fmt.Errorf("%w: 복원 대상이 안전 백업 폴더 안에 있습니다", ErrSafetyInvalid))
+			return safetyLocationError(fmt.Errorf("%w: 복원 대상이 안전 백업 폴더 안에 있음", ErrSafetyInvalid))
 		}
 		if create {
 			safetyDir, err = resolveSafetyDir(in.Option("safety-output"), projectName, artifact.Path, cwd, true)
@@ -438,7 +438,7 @@ func (c *Controller) selectBindTarget(ctx context.Context, in core.Invocation, t
 		}
 		usage, usageErr := dest.Usage(ctx)
 		if usageErr != nil {
-			sel.warnings = append(sel.warnings, fmt.Sprintf("현재 폴더 크기를 확인하지 못했습니다: %s", usageErr.Error()))
+			sel.warnings = append(sel.warnings, fmt.Sprintf("현재 폴더 크기 확인 실패: %s", usageErr.Error()))
 		} else {
 			sel.current = usage
 		}
@@ -490,7 +490,7 @@ func selectBindSource(discovery backup.Discovery, requested string, manifest bac
 		}
 	}
 	sort.Strings(declared)
-	return data.DataSource{}, targetError(fmt.Errorf("%w: 백업 폴더 %q가 현재 스택에 선언되어 있지 않습니다. 선언된 폴더: %s. 다른 폴더로 복원하려면 --bind <폴더>와 --allow-path-mismatch를 함께 지정하세요.",
+	return data.DataSource{}, targetError(fmt.Errorf("%w: 백업 폴더 %q가 현재 스택에 선언되어 있지 않음. 선언된 폴더: %s. 다른 폴더로 복원하려면 --bind <폴더>와 --allow-path-mismatch를 함께 지정.",
 		ErrTargetMismatch, archived, strings.Join(declared, ", ")))
 }
 
@@ -582,7 +582,7 @@ func selectVolumeSource(sources []data.DataSource, requested string, manifest ba
 		Category:    core.CategoryRestoreTargetMismatch,
 		Severity:    core.SeverityError,
 		Message:     msgTargetMismatch,
-		Detail:      fmt.Sprintf("백업 볼륨 %q(%s)을 현재 스택에서 찾지 못했습니다. --volume으로 대상을 명시할 수 있습니다.", manifest.Source.VolumeKey, manifest.Source.VolumeName),
+		Detail:      fmt.Sprintf("백업 볼륨 %q(%s)을 현재 스택에서 찾지 못함. --volume으로 대상 명시 가능.", manifest.Source.VolumeKey, manifest.Source.VolumeName),
 		NextActions: []string{msgTargetMismatchAction},
 	})
 }
@@ -847,7 +847,7 @@ func (c *Controller) WizardSteps(ctx context.Context, in core.Invocation) (core.
 			Category:    core.CategoryRestoreVolumeUnknown,
 			Severity:    core.SeverityError,
 			Message:     msgVolumeUnknown,
-			Detail:      "현재 스택에 이름 있는 데이터 볼륨이나 연결 폴더가 없습니다.",
+			Detail:      "현재 스택에 이름 있는 데이터 볼륨이나 연결 폴더가 없음.",
 			NextActions: []string{msgVolumeUnknownAction},
 		})
 	}
@@ -914,8 +914,8 @@ func (c *Controller) WizardPreview(answers map[string]string) (string, error) {
 		return "", core.Fail(core.Diagnostic{
 			Category:    core.CategoryInternal,
 			Severity:    core.SeverityError,
-			Message:     "복원 설정을 다시 불러오지 못했습니다.",
-			NextActions: []string{"복원 화면을 다시 열어 주세요."},
+			Message:     "복원 설정 다시 불러오기 실패.",
+			NextActions: []string{"복원 화면 다시 열기."},
 		})
 	}
 	cwd, err := os.Getwd()
@@ -935,7 +935,7 @@ func (c *Controller) WizardPreview(answers map[string]string) (string, error) {
 	switch artifact.Manifest.Source.Kind {
 	case data.KindVolume:
 		if len(binds) > 0 {
-			return "", targetError(fmt.Errorf("%w: 이 백업은 연결 폴더가 아니라 볼륨 백업입니다. 대상 목록에서 볼륨을 선택하세요.", ErrTargetMismatch))
+			return "", targetError(fmt.Errorf("%w: 이 백업은 연결 폴더가 아니라 볼륨 백업. 대상 목록에서 볼륨 선택.", ErrTargetMismatch))
 		}
 		requested := ""
 		if len(volumes) > 0 {
@@ -944,7 +944,7 @@ func (c *Controller) WizardPreview(answers map[string]string) (string, error) {
 		source, err = selectVolumeSource(cache.discovery.Sources, requested, artifact.Manifest)
 	case data.KindBind:
 		if len(volumes) > 0 {
-			return "", targetError(fmt.Errorf("%w: 이 백업은 볼륨이 아니라 연결 폴더 백업입니다. 대상 목록에서 폴더를 선택하세요.", ErrTargetMismatch))
+			return "", targetError(fmt.Errorf("%w: 이 백업은 볼륨이 아니라 연결 폴더 백업. 대상 목록에서 폴더 선택.", ErrTargetMismatch))
 		}
 		requested := ""
 		if len(binds) > 0 {
@@ -983,10 +983,10 @@ func (c *Controller) WizardPreview(answers map[string]string) (string, error) {
 	}
 	if source.Kind == data.KindBind {
 		if within(artifact.Path, dest.Name()) {
-			return "", targetError(fmt.Errorf("%w: 복원 대상이 백업 보관 폴더 안에 있습니다", ErrTargetMismatch))
+			return "", targetError(fmt.Errorf("%w: 복원 대상이 백업 보관 폴더 안에 있음", ErrTargetMismatch))
 		}
 		if within(safetyDir, dest.Name()) {
-			return "", safetyLocationError(fmt.Errorf("%w: 복원 대상이 안전 백업 폴더 안에 있습니다", ErrSafetyInvalid))
+			return "", safetyLocationError(fmt.Errorf("%w: 복원 대상이 안전 백업 폴더 안에 있음", ErrSafetyInvalid))
 		}
 	}
 	sel := targetSelection{

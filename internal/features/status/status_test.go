@@ -222,7 +222,7 @@ func TestPresentShowsStackServicesInstancesConnectionsAndVerification(t *testing
 			t.Fatalf("status does not advertise the available %q action:\n%s", want, out)
 		}
 	}
-	if strings.Contains(out, "아직 제공되지 않습니다") || strings.Contains(out, "아직 구현되지 않았습니다") {
+	if strings.Contains(out, "아직 제공되지 않음") || strings.Contains(out, "아직 구현되지 않았음") {
 		t.Fatalf("status still claims a registered feature is unavailable:\n%s", out)
 	}
 }
@@ -244,7 +244,7 @@ func TestPresentShowsEmptyStack(t *testing.T) {
 	snap := stack.Snapshot{Backend: "compose", ProjectName: "empty", ProjectDir: "/work/empty", Services: []stack.Service{}}
 	res := successResult(t, snap)
 	out := f.Present(res, 0)
-	if !strings.Contains(out, "서비스가 없습니다") {
+	if !strings.Contains(out, "서비스가 없음") {
 		t.Fatalf("empty stack not explained:\n%s", out)
 	}
 }
@@ -284,7 +284,7 @@ func TestPresentHandlesMissingPayloadGracefully(t *testing.T) {
 	if out == "" {
 		t.Fatal("presenter returned empty output for missing payload")
 	}
-	if !strings.Contains(out, "상태 정보를 표시할 수 없습니다") {
+	if !strings.Contains(out, "상태 정보 표시 불가") {
 		t.Fatalf("missing payload not explained: %q", out)
 	}
 }

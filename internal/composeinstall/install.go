@@ -274,8 +274,8 @@ func (f *Feature) prepare(ctx context.Context) (prepared, error) {
 			Message:  msgNoDockerCLI,
 			Detail:   probeErr.Error(),
 			NextActions: []string{
-				"docker --version이 성공하는지 확인하고 새 터미널에서 다시 실행하세요.",
-				"dcraft는 Docker 자체를 설치하거나 교체하지 않습니다.",
+				"docker --version이 성공하는지 확인하고 새 터미널에서 다시 실행.",
+				"dcraft는 Docker 자체를 설치하거나 교체하지 않음.",
 			},
 		})
 	}
@@ -425,9 +425,9 @@ func sha256File(path string) (string, error) {
 
 func downloadActions() []string {
 	return []string{
-		"네트워크 연결과 GitHub 접근 가능 여부를 확인한 뒤 다시 시도하세요.",
-		"실패한 다운로드의 임시 파일은 정리되며 Compose 플러그인은 설치되지 않습니다.",
-		"계속 실패하면 공식 릴리스 페이지에서 직접 내려받아 수동으로 설치하세요.",
+		"네트워크 연결과 GitHub 접근 가능 여부를 확인한 뒤 다시 시도.",
+		"실패한 다운로드의 임시 파일은 정리되며 Compose 플러그인은 설치되지 않음.",
+		"계속 실패하면 공식 릴리스 페이지에서 직접 내려받아 수동으로 설치.",
 	}
 }
 
@@ -451,9 +451,9 @@ func checksumFailure(cause error, detail string) error {
 		Message:  msgChecksumMismatch,
 		Detail:   detail,
 		NextActions: []string{
-			"다시 시도하고, 같은 오류가 반복되면 네트워크 프록시나 공식 릴리스 페이지를 확인하세요.",
-			"dcraft는 체크섬이 맞지 않는 파일을 설치하지 않았습니다.",
-			"임시 다운로드 파일은 정리되었습니다.",
+			"다시 시도하고, 같은 오류가 반복되면 네트워크 프록시나 공식 릴리스 페이지 확인.",
+			"dcraft는 체크섬이 맞지 않는 파일을 설치하지 않았음.",
+			"임시 다운로드 파일은 정리되었음.",
 		},
 	})
 }
@@ -469,7 +469,7 @@ func canceledInstall(ctx context.Context) error {
 		NextActions: []string{
 			msgInstallCanceledActionOne,
 			msgInstallCanceledActionTwo,
-			"dcraft status로 Compose 사용 가능 여부를 확인하세요.",
+			"dcraft status로 Compose 사용 가능 여부 확인.",
 		},
 	})
 }
@@ -481,9 +481,9 @@ func existsFailure(dest string) error {
 		Message:  msgInstallExists,
 		Detail:   dest,
 		NextActions: []string{
-			"docker compose version으로 현재 설치를 확인하세요.",
-			"기존 Compose를 직접 업데이트하거나 제거한 뒤 다시 실행하세요. dcraft는 기존 설치를 덮어쓰지 않습니다.",
-			"dcraft는 과거 독립 실행형 docker-compose로 대체하지 않습니다.",
+			"docker compose version으로 현재 설치 확인.",
+			"기존 Compose를 직접 업데이트하거나 제거한 뒤 다시 실행. dcraft는 기존 설치를 덮어쓰지 않음.",
+			"dcraft는 과거 독립 실행형 docker-compose로 대체하지 않음.",
 		},
 	})
 }
@@ -502,9 +502,9 @@ func installFailure(err error, dir string) error {
 			Message:  msgInstallPermission,
 			Detail:   err.Error(),
 			NextActions: []string{
-				"설치 대상 폴더의 쓰기 권한을 확인하세요: " + dir,
-				"dcraft는 관리자 권한(sudo)을 요청하지 않습니다. 권한을 직접 조정한 뒤 다시 실행하세요.",
-				"변경된 내용은 없습니다. 임시 파일은 정리됩니다.",
+				"설치 대상 폴더의 쓰기 권한 확인: " + dir,
+				"dcraft는 관리자 권한(sudo)을 요청하지 않음. 권한을 직접 조정한 뒤 다시 실행.",
+				"변경된 내용은 없음. 임시 파일은 정리됨.",
 			},
 		})
 	}
@@ -514,9 +514,9 @@ func installFailure(err error, dir string) error {
 		Message:  msgInstallFailed,
 		Detail:   err.Error(),
 		NextActions: []string{
-			"대상 폴더의 상태와 여유 공간을 확인한 뒤 다시 시도하세요.",
-			"dcraft는 부분 설치 파일을 남기지 않도록 원자적으로 설치합니다.",
-			"계속 실패하면 공식 릴리스 페이지의 수동 설치 안내를 따르세요.",
+			"대상 폴더의 상태와 여유 공간을 확인한 뒤 다시 시도.",
+			"dcraft는 부분 설치 파일을 남기지 않도록 원자적으로 설치.",
+			"계속 실패하면 공식 릴리스 페이지의 수동 설치 안내를 따르.",
 		},
 	})
 }
@@ -528,9 +528,9 @@ func recheckFailure(detail string) error {
 		Message:  msgRecheckFailed,
 		Detail:   detail,
 		NextActions: []string{
-			"docker compose version을 직접 실행해 출력과 원인을 확인하세요.",
-			"DOCKER_CONFIG와 cli-plugins 경로가 일치하는지 확인하세요.",
-			"플러그인 파일은 설치되어 있을 수 있습니다. 임의로 삭제하기 전에 경로와 버전을 확인하세요.",
+			"docker compose version을 직접 실행해 출력과 원인 확인.",
+			"DOCKER_CONFIG와 cli-plugins 경로가 일치하는지 확인.",
+			"플러그인 파일은 설치되어 있을 수 있음. 임의로 삭제하기 전에 경로와 버전 확인.",
 		},
 	})
 }

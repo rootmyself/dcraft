@@ -187,16 +187,16 @@ func TestEnvironmentTUIWizardPreviewDeclineThenAccept(t *testing.T) {
 		{waitText: "Compose 파일", send: "\r"},
 		{waitText: "환경 파일", send: ".env.dev\r\r"},
 		{waitText: "Compose 프로필", send: "dev\r\r"},
-		{waitText: "다음 실행환경 별칭을 저장할까요?"},
+		{waitText: "실행환경 별칭 저장 확인"},
 		{waitText: "environments:"},
 		{send: "\x1b"},
-		{waitText: "저장된 내용은 없습니다"},
+		{waitText: "저장된 내용 없음"},
 		{send: "q"},
 	})
 	if code != 0 {
 		t.Fatalf("decline TUI exit = %d\n%s", code, output)
 	}
-	for _, want := range []string{"다음 실행환경 별칭을 저장할까요?", "compose.yaml", ".env.dev", "저장된 내용은 없습니다"} {
+	for _, want := range []string{"실행환경 별칭 저장 확인", "compose.yaml", ".env.dev", "저장된 내용 없음"} {
 		if !screenContains(output, want) {
 			t.Fatalf("decline TUI output missing %q:\n%s", want, output)
 		}
@@ -219,8 +219,8 @@ func TestEnvironmentTUIWizardPreviewDeclineThenAccept(t *testing.T) {
 		{waitText: "Compose 파일", send: "\r"},
 		{waitText: "환경 파일", send: ".env.dev\r\r"},
 		{waitText: "Compose 프로필", send: "dev\r\r"},
-		{waitText: "다음 실행환경 별칭을 저장할까요?", send: "\r"},
-		{waitText: "별칭을 저장했습니다"},
+		{waitText: "실행환경 별칭 저장 확인", send: "\r"},
+		{waitText: "별칭 저장"},
 		{waitText: "· dev"},
 		{send: "q"},
 	})

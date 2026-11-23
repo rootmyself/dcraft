@@ -212,7 +212,7 @@ func TestRollbackCLIAppliesRecordedImagesAndKeepsRecord(t *testing.T) {
 			t.Fatalf("image identity = %+v", img)
 		}
 	}
-	if !strings.Contains(strings.Join(report.Notices, "\n"), "더 오래된 버전은 없습니다") {
+	if !strings.Contains(strings.Join(report.Notices, "\n"), "더 오래된 버전은 없음") {
 		t.Fatalf("notices = %v", report.Notices)
 	}
 

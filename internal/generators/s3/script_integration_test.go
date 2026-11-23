@@ -177,7 +177,7 @@ func TestSyncScriptCopiesTheFixtureAndKeepsStaleFiles(t *testing.T) {
 			t.Fatalf("sync used --delete: %s", call)
 		}
 	}
-	if !strings.Contains(out, "삭제 동기화는 사용하지 않습니다") {
+	if !strings.Contains(out, "삭제 동기화는 사용하지 않음") {
 		t.Fatalf("sync output does not state the non-delete behavior:\n%s", out)
 	}
 }
@@ -281,7 +281,7 @@ func TestTarScriptDownloadsVerifiesExtractsAndKeepsStaleFiles(t *testing.T) {
 	if target, err := os.Readlink(filepath.Join(dest, "link")); err != nil || target != "app.txt" {
 		t.Fatalf("internal symlink target = %q, %v", target, err)
 	}
-	if !strings.Contains(out, "임시 파일과 임시 폴더는 이 스크립트 종료 시 정리됩니다") {
+	if !strings.Contains(out, "임시 파일과 임시 폴더는 이 스크립트 종료 시 정리됨") {
 		t.Fatalf("tar output does not state cleanup:\n%s", out)
 	}
 	shim.assertTempClean(t)
@@ -316,7 +316,7 @@ func TestTarScriptRejectsATruncatedArchiveBeforeTouchingTheDestination(t *testin
 	if code == 0 {
 		t.Fatalf("truncated archive accepted:\n%s", out)
 	}
-	if !strings.Contains(out, "gzip 무결성 검사에 실패했습니다") {
+	if !strings.Contains(out, "gzip 무결성 검사에 실패") {
 		t.Fatalf("truncation guidance missing:\n%s", out)
 	}
 	assertOnlyFile(t, dest, "sentinel.txt")
@@ -444,7 +444,7 @@ func TestMissingAWSCliFailsBeforeAnyDestinationWrite(t *testing.T) {
 	if code == 0 {
 		t.Fatalf("script succeeded without aws:\n%s", out)
 	}
-	if !strings.Contains(out, "aws CLI를 찾지 못했습니다") {
+	if !strings.Contains(out, "aws CLI 찾지 못함") {
 		t.Fatalf("missing aws guidance missing:\n%s", out)
 	}
 	if _, err := os.Stat(filepath.Join(shim.proj, "deploy")); !os.IsNotExist(err) {

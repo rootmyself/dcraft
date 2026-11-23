@@ -473,7 +473,7 @@ func TestStatusHumanOutputAndNoServiceChanges(t *testing.T) {
 	if res.code != 0 {
 		t.Fatalf("exit = %d, stderr=%q", res.code, res.stderr)
 	}
-	for _, want := range []string{"fake-project", "web", "api", "8080", "앱 확인 안 됨", "healthy", "dcraft status", "dcraft secrets", "자동 제거되지 않습니다"} {
+	for _, want := range []string{"fake-project", "web", "api", "8080", "앱 확인 안 됨", "healthy", "dcraft status", "dcraft secrets", "자동 제거되지 않음"} {
 		if !strings.Contains(res.stdout, want) {
 			t.Fatalf("stdout missing %q:\n%s", want, res.stdout)
 		}
@@ -598,7 +598,7 @@ func TestJSONWithoutCommandFails(t *testing.T) {
 	if res.code != 2 {
 		t.Fatalf("exit = %d, want 2", res.code)
 	}
-	if !strings.Contains(res.stderr, "명령을 지정") {
+	if !strings.Contains(res.stderr, "명령 지정") {
 		t.Fatalf("stderr = %q", res.stderr)
 	}
 }
@@ -758,7 +758,7 @@ func TestTUIEnterAndQuitDoesNotChangeServices(t *testing.T) {
 func TestTUIShowsDiagnosticsAndQuitsInEmptyFolder(t *testing.T) {
 	fake := newFakeDocker(t)
 	empty := t.TempDir()
-	output, code := runPTY(t, empty, fake.env(t, t.TempDir()), "Compose 설정을 찾지 못했습니다")
+	output, code := runPTY(t, empty, fake.env(t, t.TempDir()), "Compose 설정 찾지 못함")
 	if code != 0 {
 		t.Fatalf("TUI exit = %d\n%s", code, output)
 	}
@@ -780,7 +780,7 @@ func TestTUIHasNoStaleUnavailableActionClaim(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("TUI exit = %d\n%s", code, output)
 	}
-	for _, stale := range []string{"아직 제공되지 않습니다", "아직 구현되지 않았습니다"} {
+	for _, stale := range []string{"아직 제공되지 않음", "아직 구현되지 않았음"} {
 		if strings.Contains(output, stale) {
 			t.Fatalf("TUI still claims a registered feature is unavailable (%q):\n%s", stale, output)
 		}

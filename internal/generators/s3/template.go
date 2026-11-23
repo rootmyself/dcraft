@@ -67,45 +67,45 @@ SELF_DIR=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 say() { printf '%s\n' "$*"; }
 die() { printf '오류: %s\n' "$*" >&2; exit 1; }
 
-command -v aws >/dev/null 2>&1 || die "aws CLI를 찾지 못했습니다. AWS CLI를 설치한 뒤 PATH를 확인하세요. (이 스크립트는 도구를 자동 설치하지 않습니다.)"
+command -v aws >/dev/null 2>&1 || die "aws CLI 찾지 못함. AWS CLI를 설치한 뒤 PATH를 확인. (이 스크립트는 도구를 자동 설치하지 않음.)"
 
 check_source() {
-  [ -n "$SRC" ] || die "S3 원본 값이 비어 있습니다. 이 파일의 SRC를 확인하세요."
+  [ -n "$SRC" ] || die "S3 원본 값이 비어 있음. 이 파일의 SRC를 확인."
   case "$SRC" in
     s3://*) ;;
-    *) die "S3 원본은 s3://bucket/... 형식이어야 합니다. 이 파일의 SRC를 확인하세요." ;;
+    *) die "S3 원본은 s3://bucket/... 형식이어야 함. 이 파일의 SRC를 확인." ;;
   esac
   case "$SRC" in
-    *"?"*|*"#"*) die "S3 원본에 쿼리 문자열이나 미리 서명된 URL을 사용할 수 없습니다. 기존 AWS CLI 자격 증명을 사용하세요." ;;
+    *"?"*|*"#"*) die "S3 원본에 쿼리 문자열이나 미리 서명된 URL 사용 불가. 기존 AWS CLI 자격 증명 사용." ;;
   esac
   authority=${SRC#s3://}
   authority=${authority%%/*}
   case "$authority" in
-    ''|*@*) die "S3 원본의 버킷/인증 정보 형식이 올바르지 않습니다. 기존 AWS CLI 자격 증명을 사용하세요." ;;
+    ''|*@*) die "S3 원본의 버킷/인증 정보 형식이 올바르지 않음. 기존 AWS CLI 자격 증명 사용." ;;
   esac
   case "$SRC" in
-    *.tar.gz) die "이 스크립트는 sync 방식입니다. .tar.gz 객체는 tar 방식으로 생성하세요." ;;
+    *.tar.gz) die "이 스크립트는 sync 방식. .tar.gz 객체는 tar 방식으로 생성." ;;
   esac
 }
 
 refuse_destination_links() {
   local links
   if ! links=$(find "$DEST" -type l -print -quit 2>/dev/null); then
-    die "받을 폴더 안의 심볼릭 링크를 확인하지 못했습니다. 권한을 확인하세요: $DEST"
+    die "받을 폴더 안의 심볼릭 링크 확인 실패. 권한 확인: $DEST"
   fi
   if [ -n "$links" ]; then
-    die "받을 폴더 안에 심볼릭 링크가 있습니다. 심볼릭 링크 너머로 쓰지 않습니다: $DEST"
+    die "받을 폴더 안에 심볼릭 링크가 있음. 심볼릭 링크 너머로 쓰지 않음: $DEST"
   fi
 }
 
 prepare_destination() {
   local rel part cur
-  [ -d "$PROJECT_DIR" ] || die "프로젝트 폴더를 찾지 못했습니다: $PROJECT_DIR"
+  [ -d "$PROJECT_DIR" ] || die "프로젝트 폴더 찾지 못함: $PROJECT_DIR"
   if [ -L "$DEST" ]; then
-    die "받을 폴더가 심볼릭 링크입니다. 심볼릭 링크 너머로 쓰지 않습니다: $DEST"
+    die "받을 폴더가 심볼릭 링크. 심볼릭 링크 너머로 쓰지 않음: $DEST"
   fi
   if [ -e "$DEST" ] && [ ! -d "$DEST" ]; then
-    die "받을 폴더 경로에 폴더가 아닌 파일이 있습니다. 덮어쓰지 않습니다: $DEST"
+    die "받을 폴더 경로에 폴더가 아닌 파일이 있음. 덮어쓰지 않음: $DEST"
   fi
   rel=$DEST
   case "$rel" in
@@ -123,18 +123,18 @@ prepare_destination() {
     esac
     cur="$cur/$part"
     if [ -L "$cur" ]; then
-      die "받을 폴더 경로에 심볼릭 링크가 있습니다. 심볼릭 링크 너머로 쓰지 않습니다: $cur"
+      die "받을 폴더 경로에 심볼릭 링크가 있음. 심볼릭 링크 너머로 쓰지 않음: $cur"
     fi
   done
-  mkdir -p -- "$DEST" || die "받을 폴더를 만들지 못했습니다: $DEST"
-  DEST_REAL=$(CDPATH= cd -- "$DEST" && pwd -P) || die "받을 폴더의 실제 경로를 확인하지 못했습니다: $DEST"
-  [ "$DEST_REAL" != "$PROJECT_DIR" ] || die "받을 폴더가 프로젝트 폴더 자체입니다. 프로젝트 안의 별도 폴더를 사용하세요."
+  mkdir -p -- "$DEST" || die "받을 폴더 만들지 못함: $DEST"
+  DEST_REAL=$(CDPATH= cd -- "$DEST" && pwd -P) || die "받을 폴더의 실제 경로 확인 실패: $DEST"
+  [ "$DEST_REAL" != "$PROJECT_DIR" ] || die "받을 폴더가 프로젝트 폴더 자체. 프로젝트 안의 별도 폴더 사용."
   case "$DEST_REAL" in
     "$PROJECT_DIR"|"$PROJECT_DIR"/*) ;;
-    *) die "받을 폴더가 프로젝트 폴더 밖을 가리킵니다. 심볼릭 링크를 확인하세요: $DEST" ;;
+    *) die "받을 폴더가 프로젝트 폴더 밖을 가리킴. 심볼릭 링크 확인: $DEST" ;;
   esac
   case "$SELF_DIR" in
-    "$DEST_REAL"|"$DEST_REAL"/*) die "받을 폴더가 스크립트 폴더를 포함합니다. 배포 파일이 스크립트를 덮을 수 있어 중단합니다." ;;
+    "$DEST_REAL"|"$DEST_REAL"/*) die "받을 폴더가 스크립트 폴더를 포함. 배포 파일이 스크립트를 덮을 수 있어 중단." ;;
   esac
   refuse_destination_links
 }
@@ -144,19 +144,19 @@ prepare_destination
 
 say "S3 원본: $SRC"
 say "받을 폴더: $DEST"
-say "원본에 없는 기존 파일을 삭제하는 삭제 동기화는 사용하지 않습니다."
+say "원본에 없는 기존 파일을 삭제하는 삭제 동기화는 사용하지 않음."
 if [ -n "$PROFILE" ]; then
   say "AWS CLI 프로필: $PROFILE (기존 AWS CLI 구성)"
   if ! aws s3 sync "$SRC" "$DEST" --profile "$PROFILE" --only-show-errors --no-progress; then
-    die "동기화에 실패했습니다. 받을 폴더에 일부 파일이 남아 있을 수 있습니다. AWS CLI 오류 메시지는 사용자의 AWS CLI가 출력한 것입니다."
+    die "동기화에 실패. 받을 폴더에 일부 파일이 남아 있을 수 있음. AWS CLI 오류는 사용자의 AWS CLI 출력."
   fi
 else
   if ! aws s3 sync "$SRC" "$DEST" --only-show-errors --no-progress; then
-    die "동기화에 실패했습니다. 받을 폴더에 일부 파일이 남아 있을 수 있습니다. AWS CLI 오류 메시지는 사용자의 AWS CLI가 출력한 것입니다."
+    die "동기화에 실패. 받을 폴더에 일부 파일이 남아 있을 수 있음. AWS CLI 오류는 사용자의 AWS CLI 출력."
   fi
 fi
 say "완료: $DEST"
-say "받을 폴더에만 있는 기존 파일은 삭제하지 않았습니다."
+say "받을 폴더에만 있는 기존 파일은 삭제하지 않았음."
 `
 
 const tarScriptTemplate = `#!/usr/bin/env bash
@@ -230,48 +230,48 @@ SELF_DIR=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 say() { printf '%s\n' "$*"; }
 die() { printf '오류: %s\n' "$*" >&2; exit 1; }
 
-command -v aws >/dev/null 2>&1 || die "aws CLI를 찾지 못했습니다. AWS CLI를 설치한 뒤 PATH를 확인하세요. (이 스크립트는 도구를 자동 설치하지 않습니다.)"
-command -v tar >/dev/null 2>&1 || die "tar를 찾지 못했습니다. tar를 설치한 뒤 PATH를 확인하세요. (이 스크립트는 도구를 자동 설치하지 않습니다.)"
-command -v gzip >/dev/null 2>&1 || die "gzip을 찾지 못했습니다. gzip을 설치한 뒤 PATH를 확인하세요. (이 스크립트는 도구를 자동 설치하지 않습니다.)"
+command -v aws >/dev/null 2>&1 || die "aws CLI 찾지 못함. AWS CLI를 설치한 뒤 PATH를 확인. (이 스크립트는 도구를 자동 설치하지 않음.)"
+command -v tar >/dev/null 2>&1 || die "tar 찾지 못함. tar를 설치한 뒤 PATH를 확인. (이 스크립트는 도구를 자동 설치하지 않음.)"
+command -v gzip >/dev/null 2>&1 || die "gzip 찾지 못함. gzip을 설치한 뒤 PATH를 확인. (이 스크립트는 도구를 자동 설치하지 않음.)"
 
 check_source() {
-  [ -n "$SRC" ] || die "S3 원본 값이 비어 있습니다. 이 파일의 SRC를 확인하세요."
+  [ -n "$SRC" ] || die "S3 원본 값이 비어 있음. 이 파일의 SRC를 확인."
   case "$SRC" in
     s3://*) ;;
-    *) die "S3 원본은 s3://bucket/... 형식이어야 합니다. 이 파일의 SRC를 확인하세요." ;;
+    *) die "S3 원본은 s3://bucket/... 형식이어야 함. 이 파일의 SRC를 확인." ;;
   esac
   case "$SRC" in
-    *"?"*|*"#"*) die "S3 원본에 쿼리 문자열이나 미리 서명된 URL을 사용할 수 없습니다. 기존 AWS CLI 자격 증명을 사용하세요." ;;
+    *"?"*|*"#"*) die "S3 원본에 쿼리 문자열이나 미리 서명된 URL 사용 불가. 기존 AWS CLI 자격 증명 사용." ;;
   esac
   authority=${SRC#s3://}
   authority=${authority%%/*}
   case "$authority" in
-    ''|*@*) die "S3 원본의 버킷/인증 정보 형식이 올바르지 않습니다. 기존 AWS CLI 자격 증명을 사용하세요." ;;
+    ''|*@*) die "S3 원본의 버킷/인증 정보 형식이 올바르지 않음. 기존 AWS CLI 자격 증명 사용." ;;
   esac
   case "$SRC" in
     *.tar.gz) ;;
-    *) die "이 스크립트는 tar 방식입니다. .tar.gz 객체 경로가 필요합니다. 이 파일의 SRC를 확인하세요." ;;
+    *) die "이 스크립트는 tar 방식. .tar.gz 객체 경로가 필요. 이 파일의 SRC를 확인." ;;
   esac
 }
 
 refuse_destination_links() {
   local links
   if ! links=$(find "$DEST" -type l -print -quit 2>/dev/null); then
-    die "받을 폴더 안의 심볼릭 링크를 확인하지 못했습니다. 권한을 확인하세요: $DEST"
+    die "받을 폴더 안의 심볼릭 링크 확인 실패. 권한 확인: $DEST"
   fi
   if [ -n "$links" ]; then
-    die "받을 폴더 안에 심볼릭 링크가 있습니다. 심볼릭 링크 너머로 쓰지 않습니다: $DEST"
+    die "받을 폴더 안에 심볼릭 링크가 있음. 심볼릭 링크 너머로 쓰지 않음: $DEST"
   fi
 }
 
 validate_destination() {
   local rel part cur
-  [ -d "$PROJECT_DIR" ] || die "프로젝트 폴더를 찾지 못했습니다: $PROJECT_DIR"
+  [ -d "$PROJECT_DIR" ] || die "프로젝트 폴더 찾지 못함: $PROJECT_DIR"
   case "$DEST" in
     "$PROJECT_DIR"/*) ;;
-    *) die "받을 폴더는 프로젝트 폴더 안이어야 합니다. 이 파일의 DEST를 확인하세요." ;;
+    *) die "받을 폴더는 프로젝트 폴더 안이어야 함. 이 파일의 DEST를 확인." ;;
   esac
-  [ "$DEST" != "$PROJECT_DIR" ] || die "받을 폴더가 프로젝트 폴더 자체입니다. 프로젝트 안의 별도 폴더를 사용하세요."
+  [ "$DEST" != "$PROJECT_DIR" ] || die "받을 폴더가 프로젝트 폴더 자체. 프로젝트 안의 별도 폴더 사용."
   rel=${DEST#"$PROJECT_DIR"/}
   cur=$PROJECT_DIR
   while [ -n "$rel" ]; do
@@ -281,27 +281,27 @@ validate_destination() {
     esac
     case "$part" in
       ''|'.') continue ;;
-      '..') die "받을 폴더 경로에 ..를 사용할 수 없습니다. 이 파일의 DEST를 확인하세요." ;;
+      '..') die "받을 폴더 경로에 .. 사용 불가. 이 파일의 DEST를 확인." ;;
     esac
     cur="$cur/$part"
     if [ -L "$cur" ]; then
-      die "받을 폴더 경로에 심볼릭 링크가 있습니다. 심볼릭 링크 너머로 쓰지 않습니다: $cur"
+      die "받을 폴더 경로에 심볼릭 링크가 있음. 심볼릭 링크 너머로 쓰지 않음: $cur"
     fi
   done
   if [ -L "$DEST" ]; then
-    die "받을 폴더가 심볼릭 링크입니다. 심볼릭 링크 너머로 쓰지 않습니다: $DEST"
+    die "받을 폴더가 심볼릭 링크. 심볼릭 링크 너머로 쓰지 않음: $DEST"
   fi
   if [ -e "$DEST" ] && [ ! -d "$DEST" ]; then
-    die "받을 폴더 경로에 폴더가 아닌 파일이 있습니다. 덮어쓰지 않습니다: $DEST"
+    die "받을 폴더 경로에 폴더가 아닌 파일이 있음. 덮어쓰지 않음: $DEST"
   fi
   case "$SELF_DIR" in
-    "$DEST"|"$DEST"/*) die "받을 폴더가 스크립트 폴더를 포함합니다. 배포 파일이 스크립트를 덮을 수 있어 중단합니다." ;;
+    "$DEST"|"$DEST"/*) die "받을 폴더가 스크립트 폴더를 포함. 배포 파일이 스크립트를 덮을 수 있어 중단." ;;
   esac
   if [ -d "$DEST" ]; then
-    DEST_REAL=$(CDPATH= cd -- "$DEST" && pwd -P) || die "받을 폴더의 실제 경로를 확인하지 못했습니다: $DEST"
+    DEST_REAL=$(CDPATH= cd -- "$DEST" && pwd -P) || die "받을 폴더의 실제 경로 확인 실패: $DEST"
     case "$DEST_REAL" in
       "$PROJECT_DIR"|"$PROJECT_DIR"/*) ;;
-      *) die "받을 폴더가 프로젝트 폴더 밖을 가리킵니다. 심볼릭 링크를 확인하세요: $DEST" ;;
+      *) die "받을 폴더가 프로젝트 폴더 밖을 가리킴. 심볼릭 링크 확인: $DEST" ;;
     esac
     refuse_destination_links
   fi
@@ -309,14 +309,14 @@ validate_destination() {
 
 prepare_destination() {
   validate_destination
-  mkdir -p -- "$DEST" || die "받을 폴더를 만들지 못했습니다: $DEST"
-  DEST_REAL=$(CDPATH= cd -- "$DEST" && pwd -P) || die "받을 폴더의 실제 경로를 확인하지 못했습니다: $DEST"
+  mkdir -p -- "$DEST" || die "받을 폴더 만들지 못함: $DEST"
+  DEST_REAL=$(CDPATH= cd -- "$DEST" && pwd -P) || die "받을 폴더의 실제 경로 확인 실패: $DEST"
   case "$DEST_REAL" in
     "$PROJECT_DIR"|"$PROJECT_DIR"/*) ;;
-    *) die "받을 폴더가 프로젝트 폴더 밖을 가리킵니다. 심볼릭 링크를 확인하세요: $DEST" ;;
+    *) die "받을 폴더가 프로젝트 폴더 밖을 가리킴. 심볼릭 링크 확인: $DEST" ;;
   esac
   case "$SELF_DIR" in
-    "$DEST_REAL"|"$DEST_REAL"/*) die "받을 폴더가 스크립트 폴더를 포함합니다. 배포 파일이 스크립트를 덮을 수 있어 중단합니다." ;;
+    "$DEST_REAL"|"$DEST_REAL"/*) die "받을 폴더가 스크립트 폴더를 포함. 배포 파일이 스크립트를 덮을 수 있어 중단." ;;
   esac
   refuse_destination_links
 }
@@ -324,7 +324,7 @@ prepare_destination() {
 check_source
 validate_destination
 
-WORK=$(mktemp -d "${TMPDIR:-/tmp}/dcraft-s3-hook.XXXXXX") || die "임시 폴더를 만들지 못했습니다. TMPDIR과 남은 공간을 확인하세요."
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/dcraft-s3-hook.XXXXXX") || die "임시 폴더 만들지 못함. TMPDIR과 남은 공간 확인."
 cleanup() {
   case "${WORK:-}" in
     '') return 0 ;;
@@ -335,43 +335,43 @@ trap cleanup EXIT
 trap 'exit 130' HUP INT TERM
 ARCHIVE=$WORK/artifact.tar.gz
 STAGE=$WORK/stage
-mkdir -m 700 -- "$STAGE" || die "빈 임시 폴더를 만들지 못했습니다: $STAGE"
+mkdir -m 700 -- "$STAGE" || die "빈 임시 폴더 만들지 못함: $STAGE"
 
 say "S3 원본: $SRC"
 say "받을 폴더: $DEST"
-say "임시 파일로 내려받아 무결성과 경로를 검증한 뒤 복사합니다."
+say "임시 파일로 내려받아 무결성과 경로를 검증한 뒤 복사."
 if [ -n "$PROFILE" ]; then
   say "AWS CLI 프로필: $PROFILE (기존 AWS CLI 구성)"
   if ! aws s3 cp "$SRC" "$ARCHIVE" --profile "$PROFILE" --only-show-errors --no-progress; then
-    die "다운로드에 실패했습니다. 받을 폴더는 변경하지 않았습니다. 임시 파일은 정리합니다. AWS CLI 오류 메시지는 사용자의 AWS CLI가 출력한 것입니다."
+    die "다운로드에 실패. 받을 폴더는 변경하지 않았음. 임시 파일은 정리. AWS CLI 오류는 사용자의 AWS CLI 출력."
   fi
 else
   if ! aws s3 cp "$SRC" "$ARCHIVE" --only-show-errors --no-progress; then
-    die "다운로드에 실패했습니다. 받을 폴더는 변경하지 않았습니다. 임시 파일은 정리합니다. AWS CLI 오류 메시지는 사용자의 AWS CLI가 출력한 것입니다."
+    die "다운로드에 실패. 받을 폴더는 변경하지 않았음. 임시 파일은 정리. AWS CLI 오류는 사용자의 AWS CLI 출력."
   fi
 fi
-[ -s "$ARCHIVE" ] || die "내려받은 파일이 비어 있습니다. 받을 폴더는 변경하지 않았습니다."
+[ -s "$ARCHIVE" ] || die "내려받은 파일이 비어 있음. 받을 폴더는 변경하지 않았음."
 if ! gzip -t "$ARCHIVE"; then
-  die "gzip 무결성 검사에 실패했습니다(잘린 파일일 수 있음). 받을 폴더는 변경하지 않았습니다."
+  die "gzip 무결성 검사에 실패(잘린 파일일 수 있음). 받을 폴더는 변경하지 않았음."
 fi
 
 ENTRIES=$WORK/entries.txt
 if ! tar -tzf "$ARCHIVE" > "$ENTRIES" 2>/dev/null; then
-  die "tar 항목 목록을 읽지 못했습니다. 아카이브 형식을 확인하세요. 받을 폴더는 변경하지 않았습니다."
+  die "tar 항목 목록 읽지 못함. 아카이브 형식 확인. 받을 폴더는 변경하지 않았음."
 fi
-[ -s "$ENTRIES" ] || die "아카이브에 항목이 없습니다. 받을 폴더는 변경하지 않았습니다."
+[ -s "$ENTRIES" ] || die "아카이브에 항목이 없음. 받을 폴더는 변경하지 않았음."
 
 validate_entry() {
   local entry check rest part
   entry=$1
   case "$entry" in
-    /*) die "아카이브에 절대 경로 항목이 있습니다. 받지 않습니다." ;;
+    /*) die "아카이브에 절대 경로 항목이 있음. 받지 않음." ;;
   esac
   check=$entry
   case "$check" in
     */) check=${check%/} ;;
   esac
-  [ -n "$check" ] || die "아카이브에 빈 경로 항목이 있습니다. 받지 않습니다."
+  [ -n "$check" ] || die "아카이브에 빈 경로 항목이 있음. 받지 않음."
   rest=$check
   while [ -n "$rest" ]; do
     case "$rest" in
@@ -379,8 +379,8 @@ validate_entry() {
       *) part=$rest; rest='' ;;
     esac
     case "$part" in
-      '') die "아카이브 항목에 빈 경로 구성 요소가 있습니다. 받지 않습니다." ;;
-      '..') die "아카이브 항목에 .. 경로가 있습니다. 받지 않습니다." ;;
+      '') die "아카이브 항목에 빈 경로 구성 요소가 있음. 받지 않음." ;;
+      '..') die "아카이브 항목에 .. 경로가 있음. 받지 않음." ;;
     esac
   done
 }
@@ -390,27 +390,27 @@ done < "$ENTRIES"
 
 VERBOSE=$WORK/entries.verbose
 if ! tar -tvzf "$ARCHIVE" > "$VERBOSE" 2>/dev/null; then
-  die "tar 항목 정보를 읽지 못했습니다. 받을 폴더는 변경하지 않았습니다."
+  die "tar 항목 정보 읽지 못함. 받을 폴더는 변경하지 않았음."
 fi
 while IFS= read -r line; do
   [ -n "$line" ] || continue
   kind=${line%"${line#?}"}
   case "$kind" in
     -|d|l) ;;
-    h) die "아카이브에 하드 링크 항목이 있습니다. 밖을 가리키는 링크를 막기 위해 하드 링크는 받지 않습니다." ;;
-    *) die "아카이브에 지원하지 않는 파일 형식(장치·FIFO·소켓 등)이 있습니다. 받지 않습니다." ;;
+    h) die "아카이브에 하드 링크 항목이 있음. 밖을 가리키는 링크를 막기 위해 하드 링크는 받지 않음." ;;
+    *) die "아카이브에 지원하지 않는 파일 형식(장치·FIFO·소켓 등)이 있음. 받지 않음." ;;
   esac
   case "$line" in
     *" -> "*)
       if [ "$kind" = "-" ]; then
-        die "아카이브에 하드 링크 항목이 있습니다. 밖을 가리키는 링크를 막기 위해 하드 링크는 받지 않습니다."
+        die "아카이브에 하드 링크 항목이 있음. 밖을 가리키는 링크를 막기 위해 하드 링크는 받지 않음."
       fi
       ;;
   esac
 done < "$VERBOSE"
 
 if ! tar -xzf "$ARCHIVE" -C "$STAGE"; then
-  die "압축 해제에 실패했습니다. 받을 폴더는 변경하지 않았습니다. 임시 폴더는 정리합니다."
+  die "압축 해제에 실패. 받을 폴더는 변경하지 않았음. 임시 폴더는 정리."
 fi
 
 target_inside() {
@@ -448,30 +448,30 @@ target_inside() {
 
 TREE=$WORK/tree.bin
 if ! find "$STAGE" -print0 > "$TREE" 2>/dev/null; then
-  die "압축 해제 결과를 확인하지 못했습니다. 받을 폴더는 변경하지 않았습니다."
+  die "압축 해제 결과 확인 실패. 받을 폴더는 변경하지 않았음."
 fi
 while IFS= read -r -d '' path; do
   case "$path" in
-    *$'\n'*|*$'\r'*) die "아카이브 항목 이름에 줄바꿈/CR 문자가 있습니다. 받지 않습니다." ;;
+    *$'\n'*|*$'\r'*) die "아카이브 항목 이름에 줄바꿈/CR 문자가 있음. 받지 않음." ;;
   esac
   if [ -L "$path" ]; then
-    target=$(readlink -- "$path") || die "심볼릭 링크 대상을 읽지 못했습니다. 받을 폴더는 변경하지 않았습니다."
+    target=$(readlink -- "$path") || die "심볼릭 링크 대상 읽지 못함. 받을 폴더는 변경하지 않았음."
     case "$target" in
-      /*) die "절대 경로를 가리키는 심볼릭 링크가 있습니다. 받지 않습니다." ;;
+      /*) die "절대 경로를 가리키는 심볼릭 링크가 있음. 받지 않음." ;;
     esac
     if ! target_inside "$path" "$target"; then
-      die "임시 폴더 밖을 가리키는 심볼릭 링크가 있습니다. 받지 않습니다: $path -> $target"
+      die "임시 폴더 밖을 가리키는 심볼릭 링크가 있음. 받지 않음: $path -> $target"
     fi
   elif [ ! -f "$path" ] && [ ! -d "$path" ]; then
-    die "지원하지 않는 파일 형식이 있습니다. 받지 않습니다: $path"
+    die "지원하지 않는 파일 형식이 있음. 받지 않음: $path"
   fi
 done < "$TREE"
 
 prepare_destination
 if ! cp -R "$STAGE"/. "$DEST"/; then
-  die "검증된 파일을 받을 폴더로 복사하지 못했습니다. 일부 파일이 남아 있을 수 있습니다. dcraft는 자동으로 되돌리지 않습니다."
+  die "검증된 파일을 받을 폴더로 복사 실패. 일부 파일이 남아 있을 수 있음. dcraft는 자동으로 되돌리지 않음."
 fi
 say "완료: $DEST"
-say "원본에 없는 받을 폴더의 기존 파일은 삭제하지 않았습니다."
-say "임시 파일과 임시 폴더는 이 스크립트 종료 시 정리됩니다."
+say "원본에 없는 받을 폴더의 기존 파일은 삭제하지 않았음."
+say "임시 파일과 임시 폴더는 이 스크립트 종료 시 정리됨."
 `

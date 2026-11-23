@@ -112,13 +112,13 @@ func TestExitCodesAreUnchanged(t *testing.T) {
 		{name: "environment failure", feat: &stubFeature{desc: descriptor("status"), run: func(ctx context.Context, in core.Invocation) (any, error) {
 			return nil, core.Fail(core.Diagnostic{
 				Category: core.CategoryEngineUnreachable, Severity: core.SeverityError,
-				Message: "Docker Engine에 연결할 수 없습니다.",
+				Message: "Docker Engine에 연결 불가.",
 			})
 		}}, args: []string{"status"}, want: 1},
 		{name: "decision error", feat: &stubFeature{desc: descriptor("status"), run: func(ctx context.Context, in core.Invocation) (any, error) {
 			return nil, core.Fail(core.Diagnostic{
 				Category: core.CategoryInvalidOption, Severity: core.SeverityError,
-				Message: "알 수 없는 옵션입니다.",
+				Message: "알 수 없는 옵션.",
 			})
 		}}, args: []string{"status"}, want: 2},
 		{name: "canceled", feat: &stubFeature{desc: descriptor("status"), run: func(ctx context.Context, in core.Invocation) (any, error) {
@@ -192,9 +192,9 @@ func TestSharedFailureWordingIsPinned(t *testing.T) {
 		Stages:        []core.Stage{{Name: "resolve_target", Title: "대상 확인", Status: core.StageSucceeded}},
 		Diagnostics: []core.Diagnostic{{
 			Category: core.CategoryEngineUnreachable, Severity: core.SeverityError,
-			Message: "Docker Engine에 연결할 수 없습니다.",
+			Message: "Docker Engine에 연결 불가.",
 			NextActions: []string{
-				"Docker Desktop을 시작하세요.",
+				"Docker Desktop을 시작.",
 			},
 		}},
 	}
@@ -203,9 +203,9 @@ func TestSharedFailureWordingIsPinned(t *testing.T) {
 		"작업 실패: up",
 		"대상: /work/acme-platform",
 		"작업 ID: op_cli_invariant",
-		"문제: Docker Engine에 연결할 수 없습니다.",
+		"문제: Docker Engine에 연결 불가.",
 		"다음 행동:",
-		"1. Docker Desktop을 시작하세요.",
+		"1. Docker Desktop을 시작.",
 		"단계:",
 		"✓ 대상 확인 (완료)",
 	} {

@@ -125,8 +125,8 @@ func (e *Engine) Services(ctx context.Context, req Request, sink Sink) (report S
 		report.Diagnostics = append(report.Diagnostics, Diagnostic{
 			Category:    CategoryInternal,
 			Severity:    SeverityError,
-			Message:     fmt.Sprintf("등록되지 않은 작업입니다: %s", req.Feature),
-			NextActions: []string{"dcraft --help로 사용 가능한 명령을 확인하세요."},
+			Message:     fmt.Sprintf("등록되지 않은 작업: %s", req.Feature),
+			NextActions: []string{"dcraft --help로 사용 가능한 명령 확인."},
 		})
 		return report
 	}

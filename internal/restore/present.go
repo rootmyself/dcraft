@@ -13,7 +13,7 @@ import (
 func Present(res core.Result, width int) string {
 	payload, ok := payloadFrom(res.Data)
 	if !ok {
-		return "복원 결과를 표시할 수 없습니다."
+		return "복원 결과 표시 불가."
 	}
 	report := payload.Restore
 	var b strings.Builder

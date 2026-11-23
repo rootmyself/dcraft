@@ -33,7 +33,7 @@ func (s *cliHookService) Execute(context.Context, core.HookRequest) (core.HookEx
 func hookUpFeature(ran *bool) *stubFeature {
 	return &stubFeature{
 		desc: core.Descriptor{
-			Name: "up", Title: "시작", Summary: "스택을 시작합니다.", Usage: "dcraft up",
+			Name: "up", Title: "시작", Summary: "스택 시작.", Usage: "dcraft up",
 			Section:        core.SectionOperate,
 			RecordsHistory: true, Hooks: core.HookUpUpdate,
 		},

@@ -131,7 +131,7 @@ func TestModalPinsTheRiskBandAndKeepsTheRestReachable(t *testing.T) {
 		frame := modalFrame(th, tc.w, tc.h)
 		spec := panelSpec(9, 0)
 		for i := 0; i < 9; i++ {
-			spec.Risk = append(spec.Risk, fmt.Sprintf("위험 문장 %d: 복원이 끝나면 되돌릴 수 없습니다 끝%d", i+1, i+1))
+			spec.Risk = append(spec.Risk, fmt.Sprintf("위험 문장 %d: 복원이 끝나면 되돌릴 수 없음 끝%d", i+1, i+1))
 		}
 		out := ComposeModal(th, tc.w, tc.h, frame, spec)
 		_, bottom, _, _ := panelBounds(t, out, th)

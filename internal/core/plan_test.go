@@ -22,7 +22,7 @@ func installDescriptor() core.Descriptor {
 		Name:     "install-compose",
 		Section:  core.SectionConfig,
 		Title:    "Compose 설치",
-		Summary:  "누락된 Compose를 설치합니다.",
+		Summary:  "누락된 Compose를 설치.",
 		Usage:    "dcraft install-compose --approve install",
 		Approval: core.ApprovalInstall,
 		Requires: core.Requirements{core.RequirementDockerCLI},
@@ -133,8 +133,8 @@ func TestEnginePlanFailureKeepsDiagnosticsAndSkipsRun(t *testing.T) {
 			return core.Plan{}, core.Fail(core.Diagnostic{
 				Category:    core.CategoryComposeReleaseUnavailable,
 				Severity:    core.SeverityError,
-				Message:     "릴리스 정보를 확인하지 못했습니다.",
-				NextActions: []string{"네트워크 연결을 확인한 뒤 다시 시도하세요."},
+				Message:     "릴리스 정보 확인 실패.",
+				NextActions: []string{"네트워크 연결을 확인한 뒤 다시 시도."},
 			})
 		},
 	}
@@ -167,7 +167,7 @@ func TestEnginePlanPreflightFailureSkipsPlanner(t *testing.T) {
 	h.preflight.report = core.PreflightReport{
 		Diagnostics: []core.Diagnostic{{
 			Category: core.CategoryDockerMissing, Severity: core.SeverityError,
-			Message: "Docker CLI를 찾을 수 없습니다.",
+			Message: "Docker CLI를 찾을 수 없음.",
 		}},
 	}
 	report := h.engine.Plan(context.Background(), core.Request{Feature: "install-compose"}, nil)

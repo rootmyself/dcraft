@@ -14,16 +14,16 @@ func TestTUIServiceScopeStopsOnlyTheSelectedService(t *testing.T) {
 	project := projectNamed(t, "hello-world")
 	env := fake.env(t, t.TempDir())
 	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
-		{wait: "상태를 새로 고치려면", send: ""},
+		{wait: "상태 새로 고침", send: ""},
 		{wait: "[↑↓] 이동", send: menuDown(t, "stop")},
 		{wait: "▸ 스택 중지", send: "\r"},
 		{wait: "서비스 선택", send: "down"}, // 전체 → api (Compose order)
 		{wait: "▸[ ] api", send: "down"},
 		{wait: "▸[ ] web", send: " "},
 		{wait: "[x] web", send: "\r"},
-		{wait: "다음 작업을 실행할까요?", send: ""},
+		{wait: "작업 실행 확인", send: ""},
 		{wait: "범위:", send: "\r"},
-		{wait: "스택을 중지했습니다.", send: ""},
+		{wait: "스택 중지.", send: ""},
 	})
 	// The chosen scope is echoed on the confirmation panel.
 	if row, ok := screenRowWith(output, "범위:"); !ok || !strings.Contains(row, "web") {
@@ -49,13 +49,13 @@ func TestTUIServiceScopeWholeStackKeepsThePreviousBehavior(t *testing.T) {
 	project := projectNamed(t, "hello-world")
 	env := fake.env(t, t.TempDir())
 	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
-		{wait: "상태를 새로 고치려면", send: ""},
+		{wait: "상태 새로 고침", send: ""},
 		{wait: "[↑↓] 이동", send: menuDown(t, "stop")},
 		{wait: "▸ 스택 중지", send: "\r"},
 		{wait: "서비스 선택", send: "\r"},
-		{wait: "다음 작업을 실행할까요?", send: ""},
+		{wait: "작업 실행 확인", send: ""},
 		{wait: "범위:", send: "\r"},
-		{wait: "스택을 중지했습니다.", send: ""},
+		{wait: "스택 중지.", send: ""},
 	})
 	if code != 0 {
 		t.Fatalf("TUI exit = %d\n%s", code, output)
@@ -74,12 +74,12 @@ func TestTUIServiceScopeCancelChangesNothing(t *testing.T) {
 	project := projectNamed(t, "hello-world")
 	env := fake.env(t, t.TempDir())
 	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
-		{wait: "상태를 새로 고치려면", send: ""},
+		{wait: "상태 새로 고침", send: ""},
 		{wait: "[↑↓] 이동", send: menuDown(t, "stop")},
 		{wait: "▸ 스택 중지", send: "\r"},
 		{wait: "서비스 선택", send: "down"},
 		{wait: "▸[ ] api", send: "\x1b"}, // esc
-		{wait: "아무것도 실행하지 않았습니다", send: ""},
+		{wait: "아무것도 실행하지 않았음", send: ""},
 	})
 	if code != 0 {
 		t.Fatalf("TUI exit = %d\n%s", code, output)

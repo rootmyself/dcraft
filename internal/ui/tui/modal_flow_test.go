@@ -119,7 +119,7 @@ func TestConfirmModalKeepsTheApprovedFieldOrder(t *testing.T) {
 		view := m.View()
 		// The risk badge is decoration and may sit in the top border; the
 		// approved order is about the fields and the pinned risk statement.
-		order := []string{"작업:", "대상:", "실행환경:", "Compose 파일:", "프로필:", "프로젝트 이름:", "범위:", "효과:", "스택을 변경합니다"}
+		order := []string{"작업:", "대상:", "실행환경:", "Compose 파일:", "프로필:", "프로젝트 이름:", "범위:", "효과:", "스택을 변경하는"}
 		last := -1
 		for _, needle := range order {
 			idx := strings.Index(view, needle)
@@ -149,7 +149,7 @@ func TestConfirmModalKeepsRiskTargetAndScopeAt48(t *testing.T) {
 	view := m.View()
 	// The target path is shortened from its end with an explicit marker (a
 	// path must not wrap); the label and a readable prefix stay.
-	for _, want := range []string{"대상:", "/Users/", "범위:", "스택 전체", "위험", "스택을 변경합니다"} {
+	for _, want := range []string{"대상:", "/Users/", "범위:", "스택 전체", "위험", "스택을 변경하는"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("48x20 modal missing %q:\n%s", want, view)
 		}
@@ -229,7 +229,7 @@ func TestDecliningTheModalLeavesANothingWasRunResult(t *testing.T) {
 		t.Fatalf("declining started another plan: %d -> %d", planRuns, install.planRuns)
 	}
 	view := m.View()
-	if !strings.Contains(view, "아무것도 실행하지 않았습니다") || !strings.Contains(view, "변경된 내용은 없습니다") {
+	if !strings.Contains(view, "아무것도 실행하지 않았음") || !strings.Contains(view, "변경 내용 없음") {
 		t.Fatalf("decline left no result:\n%s", view)
 	}
 	if strings.Contains(view, "승인 확인") {
@@ -443,7 +443,7 @@ func TestResizeWhileTheModalIsOpenKeepsTheFrame(t *testing.T) {
 		if top, bottom := modalBorders(m.theme, lines, size[0]); top != 1 || bottom != 1 {
 			t.Fatalf("%dx%d: panel borders top=%d bottom=%d:\n%s", size[0], size[1], top, bottom, strings.Join(lines, "\n"))
 		}
-		if !strings.Contains(m.View(), "스택을 변경합니다") {
+		if !strings.Contains(m.View(), "스택을 변경하는") {
 			t.Fatalf("%dx%d: risk was lost on resize:\n%s", size[0], size[1], m.View())
 		}
 		if !strings.Contains(m.View(), "대상") || !strings.Contains(m.View(), "범위") {
@@ -521,7 +521,7 @@ func TestConfirmModalKeepsRiskEvenWhenVeryShort(t *testing.T) {
 				t.Fatalf("%dx%d row %d too wide: %q", size[0], size[1], i, line)
 			}
 		}
-		if !strings.Contains(m.View(), "스택을 변경합니다") {
+		if !strings.Contains(m.View(), "스택을 변경하는") {
 			t.Fatalf("%dx%d: risk disappeared:\n%s", size[0], size[1], m.View())
 		}
 	}
@@ -597,7 +597,7 @@ func TestConfirmModalDimsOnlyTheBodyOnTheRealFrame(t *testing.T) {
 	dangerBold := fmt.Sprintf("\x1b[0;1;38;2;%d;%d;%d;48;2;%d;%d;%dm", r, g, b, sr, sg, sb)
 	riskRow := ""
 	for _, line := range modalFrame {
-		if strings.Contains(ansi.Strip(line), "스택을 변경합니다") {
+		if strings.Contains(ansi.Strip(line), "스택을 변경하는") {
 			riskRow = line
 			break
 		}
@@ -605,7 +605,7 @@ func TestConfirmModalDimsOnlyTheBodyOnTheRealFrame(t *testing.T) {
 	if riskRow == "" {
 		t.Fatalf("risk row not found:\n%s", strings.Join(modalFrame, "\n"))
 	}
-	if !strings.Contains(riskRow, dangerBold+"위험 이 작업은") {
+	if !strings.Contains(riskRow, dangerBold+"위험 스택을 변경하는") {
 		t.Fatalf("risk label and sentence are not one danger-bold span:\n%q", riskRow)
 	}
 }
@@ -619,7 +619,7 @@ func TestHelpNeverStealsATypedQuestionMark(t *testing.T) {
 			Section: core.SectionConfig, Wizard: true,
 		},
 		steps: core.WizardSpec{Title: "비밀값 연결 설정", Steps: []core.WizardStep{{
-			Name: "ref", Title: "원본 참조", Prompt: "참조를 입력하세요.", AllowCustom: true,
+			Name: "ref", Title: "원본 참조", Prompt: "참조 입력.", AllowCustom: true,
 		}}},
 	}
 	m := newWizardModel(t, stub)
@@ -644,7 +644,7 @@ func TestHelpNeverStealsATypedQuestionMark(t *testing.T) {
 			Section: core.SectionConfig, Wizard: true,
 		},
 		steps: core.WizardSpec{Title: "비밀값 연결 설정", Steps: []core.WizardStep{{
-			Name: "service", Title: "서비스 선택", Prompt: "서비스를 선택하세요.",
+			Name: "service", Title: "서비스 선택", Prompt: "서비스 선택.",
 			Options: []core.WizardOption{{Value: "web", Label: "web"}},
 		}}},
 	}

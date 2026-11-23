@@ -241,7 +241,7 @@ func TestLogsRejectsAnUnknownServiceWithoutStreaming(t *testing.T) {
 func TestLogsReportsBackendFailureInTheSelectionStage(t *testing.T) {
 	reporter := &fakeReporter{}
 	f := New(&fakeBackend{err: core.Fail(core.Diagnostic{
-		Category: core.CategoryNoConfiguration, Severity: core.SeverityError, Message: "Compose 설정을 찾지 못했습니다.",
+		Category: core.CategoryNoConfiguration, Severity: core.SeverityError, Message: "Compose 설정 찾기 실패.",
 	})}, &fakeStreamer{})
 	_, err := f.Run(context.Background(), invocation(nil, nil, core.IO{Stdout: &strings.Builder{}}, reporter))
 	if err == nil {

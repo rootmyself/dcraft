@@ -150,14 +150,14 @@ func TestAddRejectsInvalidInput(t *testing.T) {
 		{"invalid name", core.Environment{Name: "Dev", Files: []string{base}}, "별칭"},
 		{"long name", core.Environment{Name: longName, Files: []string{base}}, "별칭"},
 		{"duplicate", core.Environment{Name: "dev", Files: []string{base}}, "이미"},
-		{"missing compose", core.Environment{Name: "staging", Files: []string{filepath.Join(dir, "missing.yaml")}}, "찾을 수 없습니다"},
-		{"missing env file", core.Environment{Name: "staging", EnvFiles: []string{filepath.Join(dir, "missing.env")}}, "찾을 수 없습니다"},
+		{"missing compose", core.Environment{Name: "staging", Files: []string{filepath.Join(dir, "missing.yaml")}}, "찾을 수 없음"},
+		{"missing env file", core.Environment{Name: "staging", EnvFiles: []string{filepath.Join(dir, "missing.env")}}, "찾을 수 없음"},
 		{"compose is directory", core.Environment{Name: "staging", Files: []string{dir}}, "일반 파일"},
 		{"empty profile", core.Environment{Name: "staging", Profiles: []string{""}}, "빈 값"},
 		{"space profile", core.Environment{Name: "staging", Profiles: []string{"dev tools"}}, "공백"},
 		{"duplicate profile", core.Environment{Name: "staging", Profiles: []string{"dev", "dev"}}, "중복"},
 		{"duplicate file", core.Environment{Name: "staging", Files: []string{base, "./compose.yaml"}}, "중복"},
-		{"no inputs", core.Environment{Name: "staging"}, "모두 없습니다"},
+		{"no inputs", core.Environment{Name: "staging"}, "모두 없음"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -35,7 +35,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer, getenv func(s
 		Getenv: getenv,
 	})
 	if err != nil {
-		fmt.Fprintf(stderr, "오류: dcraft를 초기화하지 못했습니다: %v\n", err)
+		fmt.Fprintf(stderr, "오류: dcraft 초기화 실패: %v\n", err)
 		return 1
 	}
 

@@ -98,7 +98,7 @@ func goldenWizardExamples(t *testing.T) *Model {
 	if err != nil {
 		t.Fatal(err)
 	}
-	desc := core.Descriptor{Name: "secrets", Title: "실행환경 별칭", Summary: "실행환경 별칭을 만듭니다.", Usage: "dcraft environments", Section: core.SectionConfig, Wizard: true}
+	desc := core.Descriptor{Name: "secrets", Title: "실행환경 별칭", Summary: "실행환경 별칭을 만듦.", Usage: "dcraft environments", Section: core.SectionConfig, Wizard: true}
 	stub := &wizardStub{desc: desc, steps: payload.(core.WizardSpec)}
 	m := newGoldenModel(t, replaceFeature(goldenBaseFeatures(), "secrets", stub)...)
 	if err := chooseFeatureNamed(t, m, "secrets"); err != nil {
@@ -314,24 +314,24 @@ type goldenDescriptorSpec struct {
 }
 
 var goldenRegistryOrder = []goldenDescriptorSpec{
-	{name: "backup", title: "데이터 백업", summary: "볼륨과 폴더를 백업합니다.", section: core.SectionData},
-	{name: "down", title: "스택 제거", summary: "컨테이너와 네트워크를 제거합니다.", section: core.SectionOperate, destructive: true},
-	{name: "environments", title: "실행환경 별칭", summary: "이름 붙은 실행환경을 관리합니다.", section: core.SectionConfig},
-	{name: "exec", title: "서비스 접속", summary: "실행 중인 서비스에 접속합니다.", section: core.SectionInspect, readOnly: true},
-	{name: "generate-git-hook", title: "Git 호스트 스크립트 생성", summary: "Git 훅 스크립트를 만듭니다.", section: core.SectionConfig},
-	{name: "hooks", title: "호스트 스크립트", summary: "호스트 스크립트를 등록합니다.", section: core.SectionConfig},
-	{name: "install-compose", title: "Compose 설치", summary: "Compose 실행 파일을 설치합니다.", section: core.SectionConfig},
+	{name: "backup", title: "데이터 백업", summary: "볼륨과 폴더 백업.", section: core.SectionData},
+	{name: "down", title: "스택 제거", summary: "컨테이너와 네트워크 제거.", section: core.SectionOperate, destructive: true},
+	{name: "environments", title: "실행환경 별칭", summary: "이름 붙은 실행환경을 관리.", section: core.SectionConfig},
+	{name: "exec", title: "서비스 접속", summary: "실행 중인 서비스에 접속.", section: core.SectionInspect, readOnly: true},
+	{name: "generate-git-hook", title: "Git 호스트 스크립트 생성", summary: "Git 훅 스크립트를 만듦.", section: core.SectionConfig},
+	{name: "hooks", title: "호스트 스크립트", summary: "호스트 스크립트 등록.", section: core.SectionConfig},
+	{name: "install-compose", title: "Compose 설치", summary: "Compose 실행 파일 설치.", section: core.SectionConfig},
 	{name: "logs", title: "로그 보기", summary: "서비스 로그를 따라봅니다.", section: core.SectionInspect, readOnly: true},
-	{name: "restart", title: "스택 재시작", summary: "스택을 다시 시작합니다.", section: core.SectionOperate},
-	{name: "restore", title: "데이터 복원", summary: "백업에서 데이터를 되돌립니다.", section: core.SectionData, destructive: true},
-	{name: "rollback", title: "이전 버전 복원", summary: "마지막 정상 버전으로 되돌립니다.", section: core.SectionData, destructive: true},
-	{name: "generate-s3-hook", title: "S3 호스트 스크립트 생성", summary: "S3 훅 스크립트를 만듭니다.", section: core.SectionConfig},
-	{name: "secrets", title: "비밀값 연결", summary: "비밀값 참조를 등록합니다.", section: core.SectionConfig},
-	{name: "status", title: "스택 상태", summary: "현재 스택과 서비스 상태를 보여줍니다.", section: core.SectionInspect, readOnly: true},
-	{name: "stop", title: "스택 중지", summary: "선택한 서비스나 스택을 중지합니다.", section: core.SectionOperate},
-	{name: "up", title: "스택 시작", summary: "현재 폴더 스택을 시작합니다.", section: core.SectionOperate},
-	{name: "update", title: "갱신", summary: "이미지를 갱신하고 변경을 적용합니다.", section: core.SectionOperate},
-	{name: "init", title: "최초 구성", summary: "Compose 파일과 .env를 생성합니다.", section: core.SectionConfig},
+	{name: "restart", title: "스택 재시작", summary: "스택을 다시 시작.", section: core.SectionOperate},
+	{name: "restore", title: "데이터 복원", summary: "백업에서 데이터를 되돌림.", section: core.SectionData, destructive: true},
+	{name: "rollback", title: "이전 버전 복원", summary: "마지막 정상 버전으로 되돌림.", section: core.SectionData, destructive: true},
+	{name: "generate-s3-hook", title: "S3 호스트 스크립트 생성", summary: "S3 훅 스크립트를 만듦.", section: core.SectionConfig},
+	{name: "secrets", title: "비밀값 연결", summary: "비밀값 참조 등록.", section: core.SectionConfig},
+	{name: "status", title: "스택 상태", summary: "현재 스택과 서비스 상태를 보여 줌.", section: core.SectionInspect, readOnly: true},
+	{name: "stop", title: "스택 중지", summary: "선택한 서비스나 스택 중지.", section: core.SectionOperate},
+	{name: "up", title: "스택 시작", summary: "현재 폴더 스택 시작.", section: core.SectionOperate},
+	{name: "update", title: "갱신", summary: "이미지를 갱신하고 변경 적용.", section: core.SectionOperate},
+	{name: "init", title: "최초 구성", summary: "Compose 파일과 .env를 생성.", section: core.SectionConfig},
 }
 
 func goldenDescriptor(spec goldenDescriptorSpec, primary bool) core.Descriptor {
@@ -560,7 +560,7 @@ func (f *goldenApprovalPlanner) Plan(ctx context.Context, in core.Invocation) (c
 		"출처: https://github.com/docker/compose/releases",
 		"버전: v2.39.1",
 		"대상 경로: /Users/me/.docker/cli-plugins/docker-compose",
-		"무결성: sha256 확인 후 원자적으로 교체합니다.",
+		"무결성: sha256 확인 후 원자적으로 교체.",
 	}, "\n")}, nil
 }
 
@@ -568,7 +568,7 @@ func goldenConfirmModal(t *testing.T) *Model {
 	t.Helper()
 	spec := goldenDescriptorSpec{
 		name: "install-compose", title: "Compose 설치",
-		summary: "dcraft가 Docker Compose 실행 파일을 설치합니다.",
+		summary: "dcraft가 Docker Compose 실행 파일 설치.",
 		section: core.SectionConfig,
 	}
 	d := goldenDescriptor(spec, false)
@@ -624,7 +624,7 @@ func goldenProgress(t *testing.T) *Model {
 func goldenWizard(t *testing.T) *Model {
 	t.Helper()
 	desc := core.Descriptor{
-		Name: "secrets", Title: "비밀값 연결", Summary: "비밀값 참조를 등록합니다.",
+		Name: "secrets", Title: "비밀값 연결", Summary: "비밀값 참조 등록.",
 		Usage: "dcraft secrets", Section: core.SectionConfig, Wizard: true,
 	}
 	stub := &wizardStub{desc: desc, steps: goldenWizardSpec(), preview: goldenWizardPreviewText()}
@@ -661,7 +661,7 @@ func goldenWizardSpec() core.WizardSpec {
 		Title: "비밀값 연결 설정",
 		Steps: []core.WizardStep{
 			{
-				Name: "service", Title: "서비스 선택", Prompt: "비밀값을 연결할 서비스를 선택하세요.",
+				Name: "service", Title: "서비스 선택", Prompt: "비밀값을 연결할 서비스 선택.",
 				Options: []core.WizardOption{
 					{Value: "api", Label: "api · platform-api"},
 					{Value: "worker", Label: "worker · platform-worker"},
@@ -669,13 +669,13 @@ func goldenWizardSpec() core.WizardSpec {
 				},
 			},
 			{
-				Name: "delivery", Title: "전달 방식", Prompt: "실행 시점에 값을 어떻게 전달할까요?", Default: "environment",
+				Name: "delivery", Title: "전달 방식", Prompt: "실행 시점에 값을 어떻게 전달 확인", Default: "environment",
 				Options: []core.WizardOption{
 					{Value: "environment", Label: "환경변수"},
 					{Value: "file", Label: "파일"},
 				},
 			},
-			{Name: "ref", Title: "원본 참조", Prompt: "원본 참조를 입력하세요.", AllowCustom: true, CustomHint: "환경변수 이름 또는 파일 경로"},
+			{Name: "ref", Title: "원본 참조", Prompt: "원본 참조 입력.", AllowCustom: true, CustomHint: "환경변수 이름 또는 파일 경로"},
 		},
 	}
 }
@@ -685,7 +685,7 @@ func goldenWizardPreviewText() string {
 		"저장할 비밀값 연결",
 		"서비스: api",
 		"전달: 환경변수 (실행 시점)",
-		"효과: dcraft up 시 컨테이너 환경변수로 전달합니다.",
+		"효과: dcraft up 시 컨테이너 환경변수로 전달.",
 	}, "\n")
 }
 
@@ -694,7 +694,7 @@ func goldenWizardPreviewText() string {
 func goldenFailure(t *testing.T) *Model {
 	t.Helper()
 	d := goldenDescriptor(goldenDescriptorSpec{
-		name: "up", title: "스택 시작", summary: "현재 폴더 스택을 시작합니다.",
+		name: "up", title: "스택 시작", summary: "현재 폴더 스택 시작.",
 		section: core.SectionOperate,
 	}, false)
 	d.Hooks = core.HookUpUpdate
@@ -736,11 +736,11 @@ func goldenFailure(t *testing.T) *Model {
 		Stages: observed,
 		Diagnostics: []core.Diagnostic{{
 			Category: core.CategoryLifecycleFailed, Severity: core.SeverityError,
-			Message: "스택을 시작하지 못했습니다.",
+			Message: "스택을 시작 실패.",
 			Detail:  "Container acme-platform-api-1 exited with code 1",
 			NextActions: []string{
-				"dcraft logs -s api로 서비스 로그를 확인하세요.",
-				"Docker Desktop이 실행 중인지 확인한 뒤 다시 시도하세요.",
+				"dcraft logs -s api로 서비스 로그 확인.",
+				"Docker Desktop이 실행 중인지 확인한 뒤 다시 시도.",
 			},
 		}},
 	}

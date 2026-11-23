@@ -270,7 +270,7 @@ func TestGeneratedScriptFailsWithGuidanceWhenGitIsMissing(t *testing.T) {
 	if err == nil {
 		t.Fatalf("script succeeded without git:\n%s", out)
 	}
-	if !strings.Contains(string(out), "git CLI를 찾지 못했습니다") {
+	if !strings.Contains(string(out), "git CLI 찾지 못함") {
 		t.Fatalf("missing git guidance:\n%s", out)
 	}
 	// The guidance must be reachable without any external command: an empty

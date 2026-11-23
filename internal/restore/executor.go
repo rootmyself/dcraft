@@ -211,7 +211,7 @@ func (e *Executor) Execute(ctx context.Context, in core.Invocation, req Executio
 	err = core.RunStage(in.Reporter, "safety_check", msgStageSafetyCheck, func() error {
 		usage, usageErr := req.Destination.Usage(ctx)
 		if usageErr != nil {
-			report.Warnings = append(report.Warnings, fmt.Sprintf("현재 데이터 크기를 확인하지 못했습니다: %s", redact(usageErr.Error())))
+			report.Warnings = append(report.Warnings, fmt.Sprintf("현재 데이터 크기 확인 실패: %s", redact(usageErr.Error())))
 			return nil
 		}
 		report.CurrentContent = usage
@@ -221,7 +221,7 @@ func (e *Executor) Execute(ctx context.Context, in core.Invocation, req Executio
 		}
 		available, spaceErr := checker.AvailableBytes(req.SafetyDir)
 		if spaceErr != nil {
-			report.Warnings = append(report.Warnings, fmt.Sprintf("안전 백업 공간을 확인하지 못했습니다: %s", redact(spaceErr.Error())))
+			report.Warnings = append(report.Warnings, fmt.Sprintf("안전 백업 공간 확인 실패: %s", redact(spaceErr.Error())))
 			return nil
 		}
 		if needed := requiredSpace(usage); available < needed {
@@ -380,9 +380,9 @@ func busyError(busy *state.BusyError) error {
 	return core.Fail(core.Diagnostic{
 		Category:    core.CategoryStackBusy,
 		Severity:    core.SeverityError,
-		Message:     "다른 dcraft 작업이 같은 스택을 변경하고 있습니다. 복원을 시작하지 않았습니다.",
+		Message:     "다른 dcraft 작업이 같은 스택을 변경하고 있음. 복원을 시작하지 않았음.",
 		Detail:      busy.Error(),
-		NextActions: []string{"진행 중인 작업이 끝난 뒤 다시 실행하세요.", "dcraft status로 현재 상태를 확인하세요."},
+		NextActions: []string{"진행 중인 작업이 끝난 뒤 다시 실행.", "dcraft status로 현재 상태 확인."},
 	})
 }
 
@@ -390,9 +390,9 @@ func stateError(err error) core.Diagnostic {
 	return core.Diagnostic{
 		Category:    core.CategoryStateFailed,
 		Severity:    core.SeverityError,
-		Message:     "스택 잠금 상태를 확인하지 못했습니다.",
+		Message:     "스택 잠금 상태 확인 실패.",
 		Detail:      err.Error(),
-		NextActions: []string{"상태 폴더(DCRAFT_STATE_DIR)의 권한과 남은 공간을 확인하세요."},
+		NextActions: []string{"상태 폴더(DCRAFT_STATE_DIR)의 권한과 남은 공간 확인."},
 	}
 }
 

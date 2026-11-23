@@ -18,7 +18,7 @@ const (
 	msgDangerBadge = " 위험"
 
 	// Document renderer vocabulary.
-	msgEmptyTable = "표시할 항목이 없습니다."
+	msgEmptyTable = "표시할 항목이 없음."
 	// Badge fallbacks: the approved shortening cascade when a state label does
 	// not fit its column.
 	msgBadgeNotCreated = " 미생성"

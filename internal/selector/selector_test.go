@@ -103,7 +103,7 @@ func TestSelectRejectsUnknownServiceWithAvailableList(t *testing.T) {
 	if d.Category != core.CategoryServiceUnknown {
 		t.Fatalf("category = %q", d.Category)
 	}
-	if !strings.Contains(d.Message, "cache") || !strings.Contains(d.Message, "찾을 수 없습니다") {
+	if !strings.Contains(d.Message, "cache") || !strings.Contains(d.Message, "찾을 수 없음") {
 		t.Fatalf("message = %q", d.Message)
 	}
 	for _, name := range []string{"db", "web"} {
@@ -179,7 +179,7 @@ func TestOneRunningRejectsServiceWithoutRunningInstance(t *testing.T) {
 	if d.Category != core.CategoryInstanceStopped {
 		t.Fatalf("category = %q", d.Category)
 	}
-	if !strings.Contains(d.Message, "job") || !strings.Contains(d.Message, "실행 중이 아닙니다") {
+	if !strings.Contains(d.Message, "job") || !strings.Contains(d.Message, "실행 중이 아님") {
 		t.Fatalf("message = %q", d.Message)
 	}
 	if len(d.NextActions) == 0 {

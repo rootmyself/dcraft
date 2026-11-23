@@ -49,11 +49,11 @@ func (s *Service) Execute(ctx context.Context, req core.HookRequest) (core.HookE
 		return core.HookExecution{}, core.Fail(core.Diagnostic{
 			Category: core.CategoryHookContentChanged,
 			Severity: core.SeverityError,
-			Message:  fmt.Sprintf("승인 이후 스크립트 내용이 바뀌었습니다: %s (%s). 이전 승인을 재사용하지 않습니다.", req.Entry.Path, req.Entry.Stage),
+			Message:  fmt.Sprintf("승인 이후 스크립트 내용이 바뀌었음: %s (%s). 이전 승인을 재사용하지 않음.", req.Entry.Path, req.Entry.Stage),
 			Detail:   fmt.Sprintf("approved_sha256=%s current_sha256=%s", req.Entry.SHA256, sha),
 			NextActions: []string{
-				"스크립트 내용을 확인한 뒤 다시 실행해 스크립트 신뢰를 승인하세요.",
-				"dcraft는 이 스크립트를 실행하지 않았습니다.",
+				"스크립트 내용을 확인한 뒤 다시 실행해 스크립트 신뢰를 승인.",
+				"dcraft는 이 스크립트를 실행하지 않았음.",
 			},
 		})
 	}
@@ -160,8 +160,8 @@ func nonExecutable(path, resolved string) *core.Error {
 		Message:  fmt.Sprintf(msgScriptNotExecutable, path),
 		Detail:   resolved,
 		NextActions: []string{
-			"chmod +x로 실행 권한을 부여한 뒤 다시 실행하세요.",
-			"dcraft는 인터프리터를 추측해 대신 실행하지 않습니다.",
+			"chmod +x로 실행 권한을 부여한 뒤 다시 실행.",
+			"dcraft는 인터프리터를 추측해 대신 실행하지 않음.",
 		},
 	})
 }
@@ -170,9 +170,9 @@ func startError(path string, err error) *core.Error {
 	return core.FailCause(err, core.Diagnostic{
 		Category:    core.CategoryHookInvalid,
 		Severity:    core.SeverityError,
-		Message:     fmt.Sprintf("스크립트를 실행 형식으로 시작하지 못했습니다: %s — 실행 권한과 첫 줄 셔뱅을 확인하세요.", path),
+		Message:     fmt.Sprintf("스크립트를 실행 형식으로 시작 실패: %s — 실행 권한과 첫 줄 셔뱅 확인.", path),
 		Detail:      err.Error(),
-		NextActions: []string{"스크립트의 실행 권한과 첫 줄(셔뱅)을 확인하세요.", "dcraft는 인터프리터를 추측하지 않습니다."},
+		NextActions: []string{"스크립트의 실행 권한과 첫 줄(셔뱅)을 확인.", "dcraft는 인터프리터를 추측하지 않음."},
 	})
 }
 

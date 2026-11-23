@@ -162,7 +162,7 @@ func TestExplicitInputIsRequired(t *testing.T) {
 		{"two actions", map[string]string{"add": "true", "list": "true", "name": "dev"}, core.Target{Files: []string{base}}, "하나"},
 		{"missing name", map[string]string{"add": "true"}, core.Target{Files: []string{base}}, "별칭"},
 		{"invalid name", map[string]string{"add": "true", "name": "Dev"}, core.Target{Files: []string{base}}, "별칭"},
-		{"missing inputs", map[string]string{"add": "true", "name": "dev"}, core.Target{}, "모두 없습니다"},
+		{"missing inputs", map[string]string{"add": "true", "name": "dev"}, core.Target{}, "모두 없음"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -232,7 +232,7 @@ func TestWizardCollectsAndPreviewsCreation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("preview: %v", err)
 	}
-	for _, want := range []string{"environments:", "dev:", "compose.yaml", "compose,extra.yaml", "compose.dev.yaml", ".env.dev", "profiles", "격리하지 않습니다"} {
+	for _, want := range []string{"environments:", "dev:", "compose.yaml", "compose,extra.yaml", "compose.dev.yaml", ".env.dev", "profiles", "격리하지 않음"} {
 		if !strings.Contains(preview, want) {
 			t.Fatalf("preview missing %q:\n%s", want, preview)
 		}

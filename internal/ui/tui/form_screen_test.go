@@ -23,10 +23,10 @@ func openExecForm(t *testing.T) execFormModel {
 		desc: inputDescriptor("attach"),
 		mode: core.LiveAttach,
 	}, fields: []core.InputField{
-		{Key: "instance", Label: "서비스 인스턴스", Help: "실행 중인 인스턴스를 고르세요.",
+		{Key: "instance", Label: "서비스 인스턴스", Help: "실행 중인 인스턴스를 고르.",
 			Kind: core.InputChoice, Required: true,
 			Options: []core.InputOption{{Value: "web|1", Label: "web · proj-web-2"}}},
-		{Key: "command", Label: "명령", Help: "이미지 안에서 실행할 명령입니다.",
+		{Key: "command", Label: "명령", Help: "이미지 안에서 실행할 명령.",
 			Kind: core.InputText, Required: true},
 	}}
 	m := newTestModel(t, primary, input)
@@ -49,8 +49,8 @@ func TestFormShowsEveryLabelAndItsHelp(t *testing.T) {
 	form := openExecForm(t)
 	view := form.m.View()
 	for _, want := range []string{
-		"실행 전 확인", "서비스 인스턴스", "실행 중인 인스턴스를 고르세요.",
-		"명령", "이미지 안에서 실행할 명령입니다.",
+		"실행 전 확인", "서비스 인스턴스", "실행 중인 인스턴스를 고르.",
+		"명령", "이미지 안에서 실행할 명령.",
 	} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("form missing %q:\n%s", want, view)
@@ -113,7 +113,7 @@ func TestFormRequiredTextBlocksSubmissionInline(t *testing.T) {
 			fieldRow = i
 			continue
 		}
-		if fieldRow >= 0 && strings.Contains(line, "명령 항목을 입력하세요.") {
+		if fieldRow >= 0 && strings.Contains(line, "명령 항목 입력.") {
 			noticeRow = i
 			break
 		}
@@ -124,7 +124,7 @@ func TestFormRequiredTextBlocksSubmissionInline(t *testing.T) {
 	}
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("date")})
 	m = nm.(*Model)
-	if strings.Contains(m.View(), "명령 항목을 입력하세요.") {
+	if strings.Contains(m.View(), "명령 항목 입력.") {
 		t.Fatalf("typing did not clear the guidance:\n%s", m.View())
 	}
 }

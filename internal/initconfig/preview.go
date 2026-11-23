@@ -19,7 +19,7 @@ func previewText(p *prepared) string {
 	}
 	pathLine := p.dest.Path
 	if p.overwrite {
-		pathLine += " (기존 파일을 덮어씁니다)"
+		pathLine += " (기존 파일을 덮어씀)"
 	}
 	fmt.Fprintf(&b, "%s: %s\n", msgPreviewPath, pathLine)
 	fmt.Fprintf(&b, "%s: %s\n", msgPreviewName, p.validation.ProjectName)
@@ -46,7 +46,7 @@ func previewText(p *prepared) string {
 		}
 	}
 	if p.overwrite {
-		fmt.Fprintf(&b, "%s: %s (file_overwrite) — 자동화에서는 --approve file_overwrite를 명시하세요.\n", msgPreviewApproval, msgApprovalOverwrite)
+		fmt.Fprintf(&b, "%s: %s (file_overwrite) — 자동화에서는 --approve file_overwrite를 명시.\n", msgPreviewApproval, msgApprovalOverwrite)
 	}
 	if len(p.notices) > 0 {
 		b.WriteString("\n")

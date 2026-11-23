@@ -105,7 +105,7 @@ func New(opts Options) *cobra.Command {
 			if len(args) > 0 {
 				found, _, err := root.Find(args)
 				if err != nil || found == nil {
-					fmt.Fprintf(opts.Stderr, "오류: 알 수 없는 명령입니다: %s\n", strings.Join(args, " "))
+					fmt.Fprintf(opts.Stderr, "오류: 알 수 없는 명령: %s\n", strings.Join(args, " "))
 					return &ExitError{Code: 2}
 				}
 				target = found
@@ -212,7 +212,7 @@ func newFeatureCommand(opts Options, tf *targetFlags, feature core.Feature) *cob
 			JSON: tf.json,
 		}
 		if opts.Engine == nil {
-			fmt.Fprint(opts.Stderr, "오류: 작업 엔진이 준비되지 않았습니다.\n")
+			fmt.Fprint(opts.Stderr, "오류: 작업 엔진이 준비되지 않았음.\n")
 			return &ExitError{Code: 1}
 		}
 		if !tf.json {
@@ -334,7 +334,7 @@ func parseApprovals(values []string) ([]core.ApprovalKind, error) {
 		case "file_overwrite":
 			kind = core.ApprovalFileOverwrite
 		default:
-			return nil, fmt.Errorf("알 수 없는 승인 종류입니다: %s (install, script_trust, previous_version, data_restore, file_overwrite)", v)
+			return nil, fmt.Errorf("알 수 없는 승인 종류: %s (install, script_trust, previous_version, data_restore, file_overwrite)", v)
 		}
 		out = append(out, kind)
 	}
@@ -347,12 +347,12 @@ func renderResult(stdout, stderr io.Writer, feature core.Feature, res core.Resul
 		// never leaves partial JSON on stdout.
 		data, err := json.MarshalIndent(res, "", "  ")
 		if err != nil {
-			fmt.Fprintf(stderr, "오류: 결과를 JSON으로 출력하지 못했습니다: %v\n", err)
+			fmt.Fprintf(stderr, "오류: 결과를 JSON으로 출력 실패: %v\n", err)
 			return err
 		}
 		data = append(data, '\n')
 		if _, err := stdout.Write(data); err != nil {
-			fmt.Fprintf(stderr, "오류: 결과를 출력하지 못했습니다: %v\n", err)
+			fmt.Fprintf(stderr, "오류: 결과 출력 실패: %v\n", err)
 			return err
 		}
 		return nil

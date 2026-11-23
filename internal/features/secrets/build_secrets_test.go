@@ -70,7 +70,7 @@ func TestAddBuildPhaseRequiresBuildService(t *testing.T) {
 		t.Fatalf("build override not written: %v", err)
 	}
 	notices := strings.Join(report.Notices, "\n")
-	for _, want := range []string{"캐시", "--no-cache", "Dockerfile", "자동으로 수정하지 않습니다"} {
+	for _, want := range []string{"캐시", "--no-cache", "Dockerfile", "자동으로 수정하지 않음"} {
 		if !strings.Contains(notices, want) {
 			t.Fatalf("notices missing %q:\n%s", want, notices)
 		}
@@ -135,7 +135,7 @@ func TestWizardOffersBuildAndFixesDeliveryToBuildKit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("preview: %v", err)
 	}
-	for _, want := range []string{"api", "BuildKit", "BUILD_TOKEN", "캐시", "--no-cache", "자동으로 수정하지 않습니다"} {
+	for _, want := range []string{"api", "BuildKit", "BUILD_TOKEN", "캐시", "--no-cache", "자동으로 수정하지 않음"} {
 		if !strings.Contains(preview, want) {
 			t.Fatalf("preview missing %q:\n%s", want, preview)
 		}

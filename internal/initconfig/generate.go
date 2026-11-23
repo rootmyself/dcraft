@@ -99,7 +99,7 @@ func buildSpec(projectDir string, input Input, dest Destination) (*Spec, error) 
 				abs := filepath.Clean(filepath.Join(projectDir, volume.Source))
 				rel, relErr := relativePath(dest.Dir, abs)
 				if relErr != nil {
-					return nil, inputErrDetail(msgVolumeInvalid, fmt.Sprintf("볼륨: %q (저장 위치 기준 상대 경로를 만들 수 없습니다)", raw))
+					return nil, inputErrDetail(msgVolumeInvalid, fmt.Sprintf("볼륨: %q (저장 위치 기준 상대 경로를 만들 수 없음)", raw))
 				}
 				bind.HostPath = abs
 				emitted = joinVolume(rel, volume.Target, volume.Mode)
@@ -111,7 +111,7 @@ func buildSpec(projectDir string, input Input, dest Destination) (*Spec, error) 
 		}
 		if volume.Source == "" {
 			spec.Resources = append(spec.Resources, Resource{
-				Kind: "anonymous_volume", Name: volume.Target, Detail: "dcraft up 시 Compose가 익명 볼륨을 만들 수 있습니다",
+				Kind: "anonymous_volume", Name: volume.Target, Detail: "dcraft up 시 Compose가 익명 볼륨을 만들 수 있음",
 			})
 		}
 		service.Volumes = append(service.Volumes, emitted)
@@ -184,13 +184,13 @@ func buildSpec(projectDir string, input Input, dest Destination) (*Spec, error) 
 	})
 	for _, name := range spec.NamedVolumes {
 		spec.Resources = append(spec.Resources, Resource{
-			Kind: "named_volume", Name: name, Detail: "dcraft up 시 Compose가 생성할 수 있으며 dcraft init은 만들지 않습니다",
+			Kind: "named_volume", Name: name, Detail: "dcraft up 시 Compose가 생성할 수 있으며 dcraft init은 만들지 않음",
 		})
 	}
 	for _, bind := range spec.Binds {
-		detail := "호스트 경로를 사용하며 dcraft는 만들지 않습니다. 없으면 Compose/Docker가 실행 시 만들 수 있습니다"
+		detail := "호스트 경로를 사용하며 dcraft는 만들지 않음. 없으면 Compose/Docker가 실행 시 만들 수 있음"
 		if bind.Home {
-			detail = "~ 경로는 Compose가 홈 디렉터리로 확장하며 dcraft는 만들지 않습니다"
+			detail = "~ 경로는 Compose가 홈 디렉터리로 확장하며 dcraft는 만들지 않음"
 		}
 		spec.Resources = append(spec.Resources, Resource{
 			Kind: "bind", Name: bind.HostPath, Detail: detail,

@@ -29,7 +29,7 @@ func approvalDescriptor(name string) core.Descriptor {
 		Name:     name,
 		Section:  core.SectionInspect,
 		Title:    "설치 " + name,
-		Summary:  "설치합니다.",
+		Summary:  "설치.",
 		Usage:    "dcraft " + name,
 		Approval: core.ApprovalInstall,
 		Primary:  true,
@@ -73,7 +73,7 @@ func TestDecliningApprovalRunsNothing(t *testing.T) {
 		t.Fatalf("declining started another plan: %d", install.planRuns)
 	}
 	view := m.View()
-	if !strings.Contains(view, "아무것도 실행하지 않았습니다") {
+	if !strings.Contains(view, "아무것도 실행하지 않았음") {
 		t.Fatalf("decline result missing:\n%s", view)
 	}
 }
@@ -119,15 +119,15 @@ func TestPlanFailureIsShownInsteadOfConfirmation(t *testing.T) {
 			return core.Plan{}, core.Fail(core.Diagnostic{
 				Category:    core.CategoryComposeReleaseUnavailable,
 				Severity:    core.SeverityError,
-				Message:     "공식 릴리스 정보를 확인하지 못했습니다.",
-				NextActions: []string{"네트워크 연결을 확인하세요."},
+				Message:     "공식 릴리스 정보 확인 실패.",
+				NextActions: []string{"네트워크 연결 확인."},
 			})
 		},
 	}
 	m := newTestModel(t, install)
 	initModel(t, m)
 	view := m.View()
-	if !strings.Contains(view, "작업 실패") || !strings.Contains(view, "릴리스 정보를 확인하지 못했습니다") {
+	if !strings.Contains(view, "작업 실패") || !strings.Contains(view, "릴리스 정보 확인 실패") {
 		t.Fatalf("plan failure not shown:\n%s", view)
 	}
 	if strings.Contains(view, "[space] 승인") {
@@ -145,7 +145,7 @@ func TestOrdinaryPlannerShowsPlanAndRunsWithoutApproval(t *testing.T) {
 	upd := &stubPlanner{
 		stubFeature: &stubFeature{
 			desc: core.Descriptor{
-				Name: "update", Title: "갱신", Summary: "현재 설정을 적용합니다.",
+				Name: "update", Title: "갱신", Summary: "현재 설정 적용.",
 				Section: core.SectionOperate,
 				Usage:   "dcraft update", RecordsHistory: true,
 			},
@@ -167,7 +167,7 @@ func TestOrdinaryPlannerShowsPlanAndRunsWithoutApproval(t *testing.T) {
 	feed(t, m, execute(t, cmd))
 
 	view := m.View()
-	for _, want := range []string{"예정 작업", "이미지 취득", "다음 작업", "[enter] 실행", "[esc] 취소"} {
+	for _, want := range []string{"예정 작업", "이미지 취득", "작업 실행 확인", "[enter] 실행", "[esc] 취소"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("preview confirmation missing %q:\n%s", want, view)
 		}
@@ -202,7 +202,7 @@ func TestPreviousVersionApprovalUsesTheGenericScreen(t *testing.T) {
 	rb := &stubPlanner{
 		stubFeature: &stubFeature{
 			desc: core.Descriptor{
-				Name: "rollback", Title: "이전 버전 복원", Summary: "직전 정상 버전으로 돌아갑니다.",
+				Name: "rollback", Title: "이전 버전 복원", Summary: "직전 정상 버전으로 돌아감.",
 				Section:  core.SectionData,
 				Usage:    "dcraft rollback --approve previous_version",
 				Approval: core.ApprovalPreviousGood, RecordsHistory: true, Primary: true,

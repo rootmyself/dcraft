@@ -38,7 +38,7 @@ func (p *planningStub) Run(ctx context.Context, in core.Invocation) (any, error)
 
 func approvalFeature(stub *planningStub) *planningStub {
 	stub.desc = core.Descriptor{
-		Name: "install-compose", Title: "설치", Summary: "설치합니다.", Usage: "dcraft install-compose",
+		Name: "install-compose", Title: "설치", Summary: "설치.", Usage: "dcraft install-compose",
 		Section:  core.SectionConfig,
 		Approval: core.ApprovalInstall,
 	}
@@ -150,8 +150,8 @@ func TestPlanFailureStopsTheCommandBeforeRun(t *testing.T) {
 		planErr: core.Fail(core.Diagnostic{
 			Category:    core.CategoryComposeReleaseUnavailable,
 			Severity:    core.SeverityError,
-			Message:     "공식 릴리스 정보를 확인하지 못했습니다.",
-			NextActions: []string{"네트워크 연결을 확인하세요."},
+			Message:     "공식 릴리스 정보 확인 실패.",
+			NextActions: []string{"네트워크 연결 확인."},
 		}),
 	})
 	h := newHarness(t, feature)
@@ -162,7 +162,7 @@ func TestPlanFailureStopsTheCommandBeforeRun(t *testing.T) {
 	if feature.ran {
 		t.Fatal("feature ran after a failed plan")
 	}
-	if !strings.Contains(h.stderr.String(), "릴리스 정보를 확인하지 못했습니다") {
+	if !strings.Contains(h.stderr.String(), "릴리스 정보 확인 실패") {
 		t.Fatalf("stderr = %q", h.stderr.String())
 	}
 }

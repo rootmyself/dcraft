@@ -119,12 +119,12 @@ func TestLifecycleDocumentUnreadStateIsAWarning(t *testing.T) {
 			t.Fatalf("unread state rendered a table:\n%s", joined)
 		}
 	}
-	if !strings.Contains(joined, "확인하지 못했습니다") {
+	if !strings.Contains(joined, "확인 실패") {
 		t.Fatalf("unread state not explained:\n%s", joined)
 	}
 	var callout core.CalloutKind
 	for _, b := range doc.Blocks {
-		if b.Kind == core.BlockCallout && strings.Contains(b.Text, "확인하지 못했습니다") {
+		if b.Kind == core.BlockCallout && strings.Contains(b.Text, "확인 실패") {
 			callout = b.Callout
 		}
 	}
@@ -158,7 +158,7 @@ func TestLifecycleDocumentFitsEveryWidth(t *testing.T) {
 	for _, width := range []int{40, 80, 120} {
 		doc := lifecycle.Document(lifecycleResult("up", ptrSnapshot()))
 		joined := renderDoc(t, doc, width)
-		for _, want := range []string{"스택을 시작했습니다", "프로젝트", "서비스"} {
+		for _, want := range []string{"스택 시작", "프로젝트", "서비스"} {
 			if !strings.Contains(joined, want) {
 				t.Fatalf("width %d: missing %q:\n%s", width, want, joined)
 			}
@@ -175,7 +175,7 @@ func ptrSnapshot() *stack.Snapshot {
 func TestLifecycleCLIPresenterUnchanged(t *testing.T) {
 	snap := snapshot()
 	out := lifecycle.Present(lifecycleResult("up", &snap), 0)
-	for _, want := range []string{"스택을 시작했습니다.", "프로젝트:", "다음 행동"} {
+	for _, want := range []string{"스택 시작.", "프로젝트:", "다음 행동"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("CLI output lost %q:\n%s", want, out)
 		}

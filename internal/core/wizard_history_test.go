@@ -11,7 +11,7 @@ func wizardFeatureDescriptor() core.Descriptor {
 		Name:           "backup",
 		Section:        core.SectionData,
 		Title:          "데이터 백업",
-		Summary:        "데이터를 백업합니다.",
+		Summary:        "데이터 백업.",
 		Usage:          "dcraft backup",
 		RecordsHistory: true,
 		Wizard:         true,

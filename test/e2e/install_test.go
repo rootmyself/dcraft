@@ -283,7 +283,7 @@ func TestTUIConfirmationShowsPlanDeclinesAndInstallsAfterApproval(t *testing.T) 
 	session := startInstallPTY(t, project, env)
 	defer session.stop()
 
-	session.waitFor("Docker Compose를 사용할 수 없습니다", 20*time.Second)
+	session.waitFor("Docker Compose 사용 불가", 20*time.Second)
 	presses := installComposeMenuSteps(t)
 	for i := 0; i < presses; i++ {
 		session.send("\x1b[B") // down arrow
@@ -297,7 +297,7 @@ func TestTUIConfirmationShowsPlanDeclinesAndInstallsAfterApproval(t *testing.T) 
 	}
 
 	session.send("\x1b") // esc = decline
-	session.waitFor("아무것도 실행하지 않았습니다", 20*time.Second)
+	session.waitFor("아무것도 실행하지 않았음", 20*time.Second)
 	if _, err := os.Stat(filepath.Join(pluginDir, "docker-compose")); !os.IsNotExist(err) {
 		t.Fatalf("declining created a plugin: %v", err)
 	}

@@ -52,7 +52,7 @@ func statusDoc() core.Document {
 	return core.Document{Blocks: []core.Block{
 		{Kind: core.BlockBadges, Badges: []core.Badge{{Kind: core.BadgeRunning, Text: "실행 중 2"}}},
 		{Kind: core.BlockTable, Table: &core.Table{
-			EmptyText: "서비스가 없습니다.",
+			EmptyText: "서비스가 없음.",
 			Columns: []core.Column{
 				{Header: "서비스", Weight: 30, Min: 12, Max: 24},
 				{Header: "상태", Fixed: 11},
@@ -105,7 +105,7 @@ func TestFeatureWithoutPresenterUsesTheSharedFallback(t *testing.T) {
 	m.theme = *plainTheme()
 	initModel(t, m)
 	resize(t, m, 80, 24)
-	if !strings.Contains(m.View(), "작업을 완료했습니다") {
+	if !strings.Contains(m.View(), "작업 완료") {
 		t.Fatalf("fallback missing:\n%s", m.View())
 	}
 }
@@ -195,7 +195,7 @@ func TestStatusTableScrollsToTheLastServiceWithAFixedHeader(t *testing.T) {
 
 func bigStackDocument(n int) core.Document {
 	table := &core.Table{
-		EmptyText: "서비스가 없습니다.",
+		EmptyText: "서비스가 없음.",
 		Columns: []core.Column{
 			{Header: "서비스", Weight: 30, Min: 12, Max: 24},
 			{Header: "상태", Fixed: 11},
@@ -329,7 +329,7 @@ func TestDetailViewShowsTheFullTruncatedValue(t *testing.T) {
 func TestEmptyStackDiffersFromReadFailure(t *testing.T) {
 	empty := &documentOnlyFeature{desc: descriptor("status", true), doc: core.Document{Blocks: []core.Block{
 		{Kind: core.BlockTable, Table: &core.Table{
-			EmptyText: "서비스가 없습니다. Compose 파일에 services 항목이 있는지 확인하세요.",
+			EmptyText: "서비스가 없음. Compose 파일에 services 항목이 있는지 확인.",
 			Columns:   []core.Column{{Header: "서비스"}, {Header: "상태"}},
 		}},
 	}}}
@@ -338,7 +338,7 @@ func TestEmptyStackDiffersFromReadFailure(t *testing.T) {
 	initModel(t, m)
 	resize(t, m, 80, 24)
 	emptyView := m.View()
-	if !strings.Contains(emptyView, "서비스가 없습니다") {
+	if !strings.Contains(emptyView, "서비스가 없음") {
 		t.Fatalf("empty stack not explained:\n%s", emptyView)
 	}
 	if strings.Contains(emptyView, "작업 실패") {
@@ -354,7 +354,7 @@ func TestEmptyStackDiffersFromReadFailure(t *testing.T) {
 	if !strings.Contains(failView, "작업 실패") {
 		t.Fatalf("read failure not rendered as a failure:\n%s", failView)
 	}
-	if strings.Contains(failView, "서비스가 없습니다") {
+	if strings.Contains(failView, "서비스가 없음") {
 		t.Fatalf("read failure claims the stack is empty:\n%s", failView)
 	}
 	if failView == emptyView {

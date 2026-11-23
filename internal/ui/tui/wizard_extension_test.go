@@ -86,7 +86,7 @@ func TestWizardSkipsStepsWhoseConditionIsNotMet(t *testing.T) {
 		Title: "구성 방식",
 		Steps: []core.WizardStep{
 			{
-				Name: "from", Title: "방식", Prompt: "방식을 선택하세요.",
+				Name: "from", Title: "방식", Prompt: "방식 선택.",
 				Default: "dockerfile",
 				Options: []core.WizardOption{
 					{Value: "dockerfile", Label: "Dockerfile"},
@@ -168,7 +168,7 @@ func TestWizardOptionalStepAcceptsEmptyAndRequiredStepDoesNot(t *testing.T) {
 	if m.phase != phaseWizardStep {
 		t.Fatalf("required empty input advanced to %v", m.phase)
 	}
-	if !strings.Contains(m.View(), "값을 입력한 뒤 enter") {
+	if !strings.Contains(m.View(), "값 입력 후 enter") {
 		t.Fatalf("required empty input did not explain, view:\n%s", m.View())
 	}
 	feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("value")}})
@@ -195,7 +195,7 @@ func TestWizardPreviewShowsAndPassesIndependentApprovals(t *testing.T) {
 			},
 			RequiredApprovals: []core.ApprovalKind{core.ApprovalFileOverwrite},
 		},
-		preview: "기존 파일을 덮어씁니다.",
+		preview: "기존 파일을 덮어씀.",
 		needs:   core.ApprovalFileOverwrite,
 	}
 	m := newExtendedWizardModel(t, wizard)
@@ -205,7 +205,7 @@ func TestWizardPreviewShowsAndPassesIndependentApprovals(t *testing.T) {
 	if m.phase != phaseWizardPreview {
 		t.Fatalf("phase = %v, want preview", m.phase)
 	}
-	for _, want := range []string{"기존 파일을 덮어씁니다.", "파일 덮어쓰기", "file_overwrite"} {
+	for _, want := range []string{"기존 파일을 덮어씀.", "파일 덮어쓰기", "file_overwrite"} {
 		if !strings.Contains(m.View(), want) {
 			t.Fatalf("preview missing %q:\n%s", want, m.View())
 		}
@@ -249,8 +249,8 @@ func TestWizardPreviewErrorShowsTheDetailedKoreanGuidance(t *testing.T) {
 		previewErr: core.Fail(core.Diagnostic{
 			Category: core.CategoryInitInputInvalid,
 			Severity: core.SeverityError,
-			Message:  "생성 내용을 확인할 수 없습니다.",
-			Detail:   "Dockerfile: /project/Dockerfile을 찾지 못했습니다.",
+			Message:  "생성 내용 확인 불가.",
+			Detail:   "Dockerfile: /project/Dockerfile 찾기 실패.",
 		}),
 	}
 	m := newExtendedWizardModel(t, wizard)
@@ -260,7 +260,7 @@ func TestWizardPreviewErrorShowsTheDetailedKoreanGuidance(t *testing.T) {
 	if m.phase != phaseWizardPreview {
 		t.Fatalf("phase = %v, want preview", m.phase)
 	}
-	for _, want := range []string{"생성 내용을 확인할 수 없습니다.", "Dockerfile: /project/Dockerfile을 찾지 못했습니다."} {
+	for _, want := range []string{"생성 내용 확인 불가.", "Dockerfile: /project/Dockerfile 찾기 실패."} {
 		if !strings.Contains(m.View(), want) {
 			t.Fatalf("preview error missing %q:\n%s", want, m.View())
 		}
@@ -309,7 +309,7 @@ func TestWizardCancelDuringApplyKeepsTheCanceledResultVisible(t *testing.T) {
 		Stages:        []core.Stage{},
 		Diagnostics: []core.Diagnostic{{
 			Category: core.CategoryCanceled, Severity: core.SeverityWarning,
-			Message: "저장 단계가 시작된 뒤라면 파일이 이미 바뀌었을 수 있습니다.",
+			Message: "저장 단계가 시작된 뒤라면 파일이 이미 바뀌었을 수 있음.",
 		}},
 	}
 	canceled.Target.Normalize()

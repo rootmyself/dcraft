@@ -309,10 +309,10 @@ func TestPlanExplainsEffectsPrerequisitesAuthenticationAndNextSteps(t *testing.T
 		t.Fatalf("plan = %+v", report)
 	}
 	for _, want := range []string{
-		"S3 호스트 스크립트", "S3에 접속하지 않습니다", "aws s3 sync",
+		"S3 호스트 스크립트", "S3에 접속하지 않음", "aws s3 sync",
 		"aws CLI", "기존 AWS CLI", "자격 증명", "삭제 동기화",
-		"file_overwrite", "dcraft hooks --add", "script_trust", "자동 등록하지 않습니다",
-		"실패", "수정", "남습니다",
+		"file_overwrite", "dcraft hooks --add", "script_trust", "자동 등록하지 않음",
+		"실패", "수정", "남음",
 	} {
 		if !strings.Contains(report.Text, want) {
 			t.Fatalf("plan missing %q:\n%s", want, report.Text)
@@ -336,7 +336,7 @@ func TestTarPlanShowsTheVerificationAndExtractionSteps(t *testing.T) {
 	if report.Failed() {
 		t.Fatalf("plan = %+v", report)
 	}
-	for _, want := range []string{"aws s3 cp", "gzip -t", "tar -tzf", "빈 임시 폴더", "심볼릭 링크", "삭제하지 않습니다", "정리"} {
+	for _, want := range []string{"aws s3 cp", "gzip -t", "tar -tzf", "빈 임시 폴더", "심볼릭 링크", "삭제하지 않음", "정리"} {
 		if !strings.Contains(report.Text, want) {
 			t.Fatalf("tar plan missing %q:\n%s", want, report.Text)
 		}

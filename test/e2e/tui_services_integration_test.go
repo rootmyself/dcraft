@@ -70,13 +70,13 @@ func TestIntegrationTUIServiceScopeSelectsOnlyOneService(t *testing.T) {
 	s.waitFor("[↑↓] 이동", 30*time.Second)
 	s.pressMenuDown(menuDownPresses(t, "stop"))
 	selectWebScope(s)
-	s.waitFor("다음 작업을 실행할까요?", 15*time.Second)
+	s.waitFor("작업 실행 확인", 15*time.Second)
 	s.waitFor("범위:", 15*time.Second)
 	if row, ok := screenRowWith(s.out.String(), "범위:"); !ok || !strings.Contains(row, "web") {
 		t.Fatalf("confirmation did not echo the chosen scope:\n%s", s.out.String())
 	}
 	s.press("\r")
-	s.waitFor("스택을 중지했습니다.", 60*time.Second)
+	s.waitFor("스택 중지.", 60*time.Second)
 	s.send("q")
 	if code := s.wait(); code != 0 {
 		t.Fatalf("stop TUI exit = %d\n%s", code, s.out.String())
@@ -106,13 +106,13 @@ func TestIntegrationTUIServiceScopeSelectsOnlyOneService(t *testing.T) {
 	s.waitFor("[↑↓] 이동", 30*time.Second)
 	s.pressMenuDown(menuDownPresses(t, "restart"))
 	selectWebScope(s)
-	s.waitFor("다음 작업을 실행할까요?", 15*time.Second)
+	s.waitFor("작업 실행 확인", 15*time.Second)
 	s.waitFor("범위:", 15*time.Second)
 	if row, ok := screenRowWith(s.out.String(), "범위:"); !ok || !strings.Contains(row, "web") {
 		t.Fatalf("restart confirmation did not echo the chosen scope:\n%s", s.out.String())
 	}
 	s.press("\r")
-	s.waitFor("스택을 재시작했습니다.", 60*time.Second)
+	s.waitFor("스택 재시작.", 60*time.Second)
 	s.send("q")
 	if code := s.wait(); code != 0 {
 		t.Fatalf("restart TUI exit = %d\n%s", code, s.out.String())
@@ -139,7 +139,7 @@ func TestIntegrationTUIServiceScopeSelectsOnlyOneService(t *testing.T) {
 	s.waitFor("[↑↓] 이동", 30*time.Second)
 	s.pressMenuDown(menuDownPresses(t, "update"))
 	selectWebScope(s)
-	s.waitFor("다음 작업을 실행할까요?", 30*time.Second)
+	s.waitFor("작업 실행 확인", 30*time.Second)
 	s.waitFor("범위:", 15*time.Second)
 	if !strings.Contains(s.out.String(), "서비스: web") {
 		t.Fatalf("update plan does not carry the selected service:\n%s", s.out.String())

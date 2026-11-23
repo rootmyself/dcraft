@@ -59,10 +59,10 @@ func TestInvariantFailureWordingMatchesTheSharedKoreanText(t *testing.T) {
 		Target:        core.Target{ProjectDir: "/work/acme-platform"},
 		Diagnostics: []core.Diagnostic{{
 			Category: core.CategoryEngineUnreachable, Severity: core.SeverityError,
-			Message: "Docker Engine에 연결할 수 없습니다.",
+			Message: "Docker Engine에 연결 불가.",
 			Detail:  "failed to connect",
 			NextActions: []string{
-				"Docker Desktop을 시작하세요.",
+				"Docker Desktop을 시작.",
 			},
 		}},
 	}
@@ -72,7 +72,7 @@ func TestInvariantFailureWordingMatchesTheSharedKoreanText(t *testing.T) {
 
 	// The TUI's text for the same result.
 	d := goldenDescriptor(goldenDescriptorSpec{
-		name: "up", title: "스택 시작", summary: "현재 폴더 스택을 시작합니다.",
+		name: "up", title: "스택 시작", summary: "현재 폴더 스택 시작.",
 		section: core.SectionOperate,
 	}, false)
 	d.Hooks = core.HookUpUpdate
@@ -91,10 +91,10 @@ func TestInvariantFailureWordingMatchesTheSharedKoreanText(t *testing.T) {
 		"작업 실패: up",
 		"대상: /work/acme-platform",
 		"작업 ID: op_invariant",
-		"문제: Docker Engine에 연결할 수 없습니다.",
+		"문제: Docker Engine에 연결 불가.",
 		"failed to connect",
 		"다음 행동:",
-		"1. Docker Desktop을 시작하세요.",
+		"1. Docker Desktop을 시작.",
 	} {
 		if !strings.Contains(cliText, want) {
 			t.Fatalf("the CLI text changed; missing %q:\n%s", want, cliText)
@@ -208,7 +208,7 @@ func TestInvariantQuitSafetyWhileMutating(t *testing.T) {
 	if cmd != nil && isQuit(t, cmd) {
 		t.Fatal("q quit during a mutating run")
 	}
-	if !strings.Contains(m.View(), "일부 변경이 남을 수 있습니다") {
+	if !strings.Contains(m.View(), "일부 변경이 남을 수 있음") {
 		t.Fatalf("the quit refusal does not explain the risk:\n%s", m.View())
 	}
 
@@ -217,7 +217,7 @@ func TestInvariantQuitSafetyWhileMutating(t *testing.T) {
 	if cmd != nil && isQuit(t, cmd) {
 		t.Fatal("ctrl+c quit instead of requesting cancellation")
 	}
-	if !strings.Contains(m.View(), "중단을 요청했습니다") {
+	if !strings.Contains(m.View(), "중단 요청됨") {
 		t.Fatalf("cancellation was not reported:\n%s", m.View())
 	}
 }

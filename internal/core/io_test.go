@@ -66,7 +66,7 @@ func TestEngineInputsResolvesWithoutRunningOrWritingHistory(t *testing.T) {
 			Name:     "attach",
 			Section:  core.SectionInspect,
 			Title:    "접속",
-			Summary:  "서비스에 접속합니다.",
+			Summary:  "서비스에 접속.",
 			Usage:    "dcraft attach",
 			ReadOnly: true,
 		}},
@@ -116,7 +116,7 @@ func TestEngineInputsUsesTheReadOnlyProjectIdentity(t *testing.T) {
 		Name:     "attach",
 		Section:  core.SectionInspect,
 		Title:    "접속",
-		Summary:  "서비스에 접속합니다.",
+		Summary:  "서비스에 접속.",
 		Usage:    "dcraft attach",
 		ReadOnly: true,
 	}}}
@@ -144,7 +144,7 @@ func TestEngineInputsReportsResolutionFailureWithoutCallingFeature(t *testing.T)
 	h.resolver.err = core.Fail(core.Diagnostic{
 		Category: core.CategoryNoConfiguration,
 		Severity: core.SeverityError,
-		Message:  "Compose 설정을 찾지 못했습니다.",
+		Message:  "Compose 설정 찾기 실패.",
 	})
 	report := h.engine.Inputs(context.Background(), core.Request{Feature: "attach"}, nil)
 	if !report.Failed() {
@@ -181,8 +181,8 @@ func (f *cancelFeature) CanceledDiagnostic() core.Diagnostic {
 	return core.Diagnostic{
 		Category:    core.CategoryLogsFailed, // normalized by the engine
 		Severity:    core.SeverityError,
-		Message:     "로그 스트림을 분리했습니다. 서비스는 계속 실행 중입니다.",
-		NextActions: []string{"dcraft status로 상태를 확인하세요."},
+		Message:     "로그 스트림을 분리. 서비스는 계속 실행 중.",
+		NextActions: []string{"dcraft status로 상태 확인."},
 	}
 }
 
@@ -207,7 +207,7 @@ func TestEngineUsesAFeaturesCanceledEffectWhileKeepingExit130(t *testing.T) {
 			canceled = d
 		}
 	}
-	if canceled.Message != "로그 스트림을 분리했습니다. 서비스는 계속 실행 중입니다." {
+	if canceled.Message != "로그 스트림을 분리. 서비스는 계속 실행 중." {
 		t.Fatalf("canceled diagnostic = %+v", res.Diagnostics)
 	}
 	if canceled.Severity != core.SeverityWarning {
@@ -220,7 +220,7 @@ func TestDiagnosticExitCodeIsMachineReadableWhenPresent(t *testing.T) {
 	diag := core.Diagnostic{
 		Category: ctxCategoryForTest(),
 		Severity: core.SeverityError,
-		Message:  "원격 명령이 종료 코드 7로 실패했습니다.",
+		Message:  "원격 명령이 종료 코드 7로 실패.",
 		ExitCode: &code,
 	}
 	data, err := json.Marshal(diag)
