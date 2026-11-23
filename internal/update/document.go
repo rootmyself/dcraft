@@ -78,15 +78,15 @@ func documentBadges(report Report) []core.Badge {
 }
 
 func documentPairs(res core.Result, report Report) []core.Pair {
-	pairs := []core.Pair{{Key: msgSuccessProject, Value: report.ProjectName}}
+	pairs := []core.Pair{{Key: msgSuccessProject, Value: report.ProjectName, Kind: core.ValueProject}}
 	if res.Target.ProjectDir != "" {
-		pairs = append(pairs, core.Pair{Key: msgSuccessFolder, Value: res.Target.ProjectDir})
+		pairs = append(pairs, core.Pair{Key: msgSuccessFolder, Value: res.Target.ProjectDir, Kind: core.ValuePath})
 	}
 	files := strings.Join(res.Target.Files, ", ")
 	if files == "" {
 		files = msgSuccessNone
 	}
-	pairs = append(pairs, core.Pair{Key: msgSuccessFiles, Value: files})
+	pairs = append(pairs, core.Pair{Key: msgSuccessFiles, Value: files, Kind: core.ValuePath})
 	if res.Target.Environment != "" {
 		pairs = append(pairs, core.Pair{Key: msgSuccessEnv, Value: res.Target.Environment})
 	}

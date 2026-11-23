@@ -19,6 +19,7 @@ func RenderDocument(th Theme, doc core.Document, width int) []string {
 type DetailEntry struct {
 	Label string
 	Value string
+	Kind  core.ValueKind
 }
 
 // DocumentDetails returns the full value of everything the body had to cut. It
@@ -32,7 +33,7 @@ func DocumentDetails(doc core.Document, width int) []DetailEntry {
 			keyWidth := pairKeyWidth(block.Pairs, width)
 			for _, p := range block.Pairs {
 				if Width(p.Value) > max(width-keyWidth-2, 0) {
-					out = append(out, DetailEntry{Label: p.Key, Value: p.Value})
+					out = append(out, DetailEntry{Label: p.Key, Value: p.Value, Kind: p.Kind})
 				}
 			}
 		case core.BlockTable:
@@ -53,7 +54,7 @@ func RenderDetails(th Theme, entries []DetailEntry, width int) []string {
 	for _, entry := range entries {
 		lines = append(lines, th.Bold(TokenMuted, Truncate(entry.Label, width, th.Ellipsis())))
 		for _, line := range Wrap(entry.Value, max(width-2, 1)) {
-			lines = append(lines, "  "+line)
+			lines = append(lines, "  "+paintValue(th, entry.Kind, line))
 		}
 	}
 	return trimTrailingBlank(lines)
@@ -206,14 +207,17 @@ func LayoutTableOptions(th Theme, table core.Table, width int, opts TableOptions
 				if p.orig != 0 && lead != "" {
 					label = lead + " · " + p.col.Header
 				}
-				layout.Truncations = append(layout.Truncations, DetailEntry{Label: label, Value: value})
+				layout.Truncations = append(layout.Truncations, DetailEntry{Label: label, Value: value, Kind: cell.Kind})
 			}
 			cells[i] = alignCell(p.col.Align, text, widths[i], ell)
+			if cell.Badge != core.BadgeNone {
+				_, token := badgeGlyph(th, cell.Badge)
+				cells[i] = th.Paint(token, cells[i])
+			} else if !row.Selectable {
+				cells[i] = th.Paint(TokenMuted, cells[i])
+			}
 		}
 		line := strings.Join(cells, " ")
-		if !row.Selectable {
-			line = th.Paint(TokenMuted, line)
-		}
 		if opts.CursorRow > 0 && rowIndex == opts.CursorRow-1 {
 			// The approved selection marker is the gutter glyph plus bold. Bold
 			// is an attribute rather than a color, but a colorless theme still
@@ -499,19 +503,40 @@ func renderPairs(th Theme, pairs []core.Pair, width int) []string {
 			indent = 2
 			valueWidth = width - indent
 			for _, value := range Wrap(p.Value, valueWidth) {
-				lines = append(lines, strings.Repeat(" ", indent)+value)
+				lines = append(lines, strings.Repeat(" ", indent)+paintValue(th, p.Kind, value))
 			}
 			continue
 		}
 		for i, value := range Wrap(p.Value, valueWidth) {
 			if i == 0 {
-				lines = append(lines, th.Paint(TokenMuted, key)+"  "+value)
+				lines = append(lines, th.Paint(TokenMuted, key)+"  "+paintValue(th, p.Kind, value))
 			} else {
-				lines = append(lines, strings.Repeat(" ", indent)+value)
+				lines = append(lines, strings.Repeat(" ", indent)+paintValue(th, p.Kind, value))
 			}
 		}
 	}
 	return lines
+}
+
+func paintValue(th Theme, kind core.ValueKind, value string) string {
+	switch kind {
+	case core.ValuePath:
+		return th.Paint(TokenInfo, value)
+	case core.ValueURL:
+		return th.Paint(TokenURL, value)
+	case core.ValueImage:
+		return th.Paint(TokenCode, value)
+	case core.ValueCommand:
+		return th.Paint(TokenCommand, value)
+	case core.ValueTime:
+		return th.Paint(TokenMuted, value)
+	case core.ValueService:
+		return th.Paint(TokenName, value)
+	case core.ValueProject:
+		return th.Paint(TokenProject, value)
+	default:
+		return value
+	}
 }
 
 // pairKeyWidth keeps the label column to at most a third of the row (and never

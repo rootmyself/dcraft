@@ -59,10 +59,10 @@ func documentBadges(action Action, report Report) []core.Badge {
 
 func documentPairs(res core.Result, report Report, action Action) []core.Pair {
 	pairs := []core.Pair{
-		{Key: msgProjectLabel, Value: report.ProjectName + " (" + nameSourceLabel(report.ProjectNameSource) + ")"},
+		{Key: msgProjectLabel, Value: report.ProjectName + " (" + nameSourceLabel(report.ProjectNameSource) + ")", Kind: core.ValueProject},
 	}
 	if res.Target.ProjectDir != "" {
-		pairs = append(pairs, core.Pair{Key: msgFolderLabel, Value: res.Target.ProjectDir})
+		pairs = append(pairs, core.Pair{Key: msgFolderLabel, Value: res.Target.ProjectDir, Kind: core.ValuePath})
 	}
 	if report.Scope == "services" && len(report.Services) > 0 {
 		pairs = append(pairs, core.Pair{Key: msgScopeLabel, Value: strings.Join(report.Services, ", ") + " (" + msgScopeServices + ")"})
@@ -95,11 +95,11 @@ func StateTable(snap stack.Snapshot) *core.Table {
 		table.Rows = append(table.Rows, core.Row{
 			Selectable: svc.Configured,
 			Cells: []core.Cell{
-				{Text: svc.Name, Detail: svc.Name},
+				{Text: svc.Name, Detail: svc.Name, Kind: core.ValueService},
 				{Text: present.StateLabel(svc.State), Badge: present.StateBadge(svc.State)},
 				{Text: fmt.Sprintf("%d", len(svc.Instances))},
 				{Text: present.HealthLabel(svc.Health), Badge: present.HealthBadge(svc.Health)},
-				{Text: svc.Image, Detail: svc.Image},
+				{Text: svc.Image, Detail: svc.Image, Kind: core.ValueImage},
 				{Text: portText(svc), Detail: portDetail(svc)},
 			},
 		})

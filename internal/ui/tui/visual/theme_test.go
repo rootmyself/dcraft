@@ -54,9 +54,9 @@ func TestResolveThemeTable(t *testing.T) {
 			palette: "dark", color: false, ascii: false, accentHex: "#7aa2f7",
 		},
 		{
-			name:    "16-color terminal degrades to no color",
+			name:    "16-color terminal keeps color",
 			in:      Inputs{ThemeSetting: "auto", Profile: Profile16, DarkBackground: true, UTF8: true},
-			palette: "dark", color: false, ascii: false, accentHex: "#7aa2f7",
+			palette: "dark", color: true, ascii: false, accentHex: "#7aa2f7",
 		},
 		{
 			name:    "256-color terminal keeps color",
@@ -112,11 +112,13 @@ func TestPaletteUsesApprovedHex(t *testing.T) {
 		Name: "dark", Dark: true, BG: "#10131a", FG: "#d8dee9",
 		Accent: "#7aa2f7", Success: "#5fd08a", Warning: "#e5b567",
 		Danger: "#f07178", Muted: "#9aa5b8", Surface: "#1b2130",
+		Info: "#5fd7ff", URL: "#5f5fff", Code: "#ffff55", Command: "#ff5555", NameColor: "#55ff77", Project: "#ff55ff",
 	}
 	wantLight := Palette{
 		Name: "light", Dark: false, BG: "#ffffff", FG: "#1f2430",
 		Accent: "#2f5bd1", Success: "#1b7a43", Warning: "#8a5a00",
 		Danger: "#b4232f", Muted: "#5b6472", Surface: "#f1f4f9",
+		Info: "#005f87", URL: "#003faf", Code: "#875f00", Command: "#af0000", NameColor: "#008700", Project: "#8700af",
 	}
 	if dark != wantDark {
 		t.Fatalf("dark palette = %+v, want %+v", dark, wantDark)

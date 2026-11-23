@@ -77,19 +77,19 @@ func documentPairs(res core.Result, snap stack.Snapshot) []core.Pair {
 	// unknown fact and a dangling label would suggest it was read as empty.
 	var pairs []core.Pair
 	if at := observedAt(res); at != "" {
-		pairs = append(pairs, core.Pair{Key: msgPairObserved, Value: at})
+		pairs = append(pairs, core.Pair{Key: msgPairObserved, Value: at, Kind: core.ValueTime})
 	}
 	files := res.Target.Files
 	value := strings.Join(files, ", ")
 	if len(files) == 0 {
 		value = msgNone
 	}
-	pairs = append(pairs, core.Pair{Key: msgPairComposeFile, Value: value})
+	pairs = append(pairs, core.Pair{Key: msgPairComposeFile, Value: value, Kind: core.ValuePath})
 	name := snap.ProjectName
 	if name == "" {
 		name = msgUnknownProject
 	}
-	pairs = append(pairs, core.Pair{Key: msgPairProject, Value: name})
+	pairs = append(pairs, core.Pair{Key: msgPairProject, Value: name, Kind: core.ValueProject})
 	return pairs
 }
 
@@ -119,11 +119,11 @@ func documentTable(snap stack.Snapshot) *core.Table {
 		table.Rows = append(table.Rows, core.Row{
 			Selectable: svc.Configured,
 			Cells: []core.Cell{
-				{Text: svc.Name, Detail: svc.Name},
+				{Text: svc.Name, Detail: svc.Name, Kind: core.ValueService},
 				{Text: present.StateLabel(svc.State), Badge: present.StateBadge(svc.State)},
 				{Text: fmt.Sprintf("%d", len(svc.Instances))},
 				{Text: present.HealthLabel(svc.Health), Badge: present.HealthBadge(svc.Health)},
-				{Text: imageText(svc), Detail: imageText(svc)},
+				{Text: imageText(svc), Detail: imageText(svc), Kind: core.ValueImage},
 				{Text: portText(svc), Detail: portDetail(svc)},
 			},
 		})
