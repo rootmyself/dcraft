@@ -173,7 +173,20 @@ func (m *Model) timelineView(observed, plan []core.Stage) []string {
 		out = append(out, m.hintText(fmt.Sprintf(msgMenuMoreAbove, m.theme.Glyphs.Ell)))
 	}
 	for _, row := range rows[start:end] {
-		out = append(out, m.timelineRowLine(row))
+		line := m.timelineRowLine(row)
+		width := m.bodyWidth()
+		if width <= 4 {
+			out = append(out, line)
+			continue
+		}
+		wrapped := visual.Wrap(strings.TrimPrefix(line, "  "), width-4)
+		for i, part := range wrapped {
+			if i == 0 {
+				out = append(out, "  "+part)
+			} else {
+				out = append(out, "    "+part)
+			}
+		}
 	}
 	if end < len(rows) {
 		out = append(out, m.hintText(fmt.Sprintf(msgMenuMoreBelow, m.theme.Glyphs.Ell)))

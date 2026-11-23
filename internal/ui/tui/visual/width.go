@@ -79,50 +79,9 @@ func Wrap(text string, w int) []string {
 	if text == "" {
 		return []string{""}
 	}
-	var out []string
-	for _, paragraph := range strings.Split(text, "\n") {
-		out = append(out, wrapLine(paragraph, w)...)
-	}
-	return out
+	return strings.Split(ansi.Wrap(text, w, ""), "\n")
 }
 
-func wrapLine(text string, w int) []string {
-	text = strings.TrimSpace(text)
-	if text == "" {
-		return []string{""}
-	}
-	var out []string
-	cur := ""
-	flush := func() {
-		out = append(out, cur)
-		cur = ""
-	}
-	for _, word := range strings.Fields(text) {
-		if cur != "" && Width(cur)+1+Width(word) <= w {
-			cur += " " + word
-			continue
-		}
-		if cur != "" {
-			flush()
-		}
-		for Width(word) > w {
-			head, rest := splitCells(word, w)
-			out = append(out, head)
-			word = rest
-		}
-		cur = word
-	}
-	if cur != "" {
-		flush()
-	}
-	if len(out) == 0 {
-		return []string{""}
-	}
-	return out
-}
-
-// splitCells cuts s after n display cells, returning the head and the rest. A
-// wide rune that does not fit in n cells ends the head one cell early.
 func splitCells(s string, n int) (string, string) {
 	width := 0
 	for i, r := range s {
