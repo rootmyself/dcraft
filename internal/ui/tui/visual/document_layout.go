@@ -48,9 +48,7 @@ func RenderDocumentLayout(th Theme, doc core.Document, width int) DocumentLayout
 // itself stays width- and mode-free: a feature describes what it has, and the
 // screen decides how much of it fits.
 type RenderOptions struct {
-	// Compact drops the secondary detail a narrow screen cannot afford: the
-	// key-value block and the multi-line guidance. Badges and the table stay,
-	// because they are the reason the screen exists.
+	// Compact omits decorative dividers and folds tables to their leading columns.
 	Compact bool
 	// Scrollbar reserves the last content cell of the scrolling table for the
 	// approved one-cell scrollbar gutter. Only the table loses the cell: the
@@ -91,7 +89,9 @@ func RenderDocumentLayoutOptions(th Theme, doc core.Document, width int, opts Re
 	}
 
 	if strings.TrimSpace(doc.Title) != "" {
-		lines = append(lines, th.Bold(TokenAccent, Truncate(doc.Title, width, th.Ellipsis())))
+		for _, line := range Wrap(doc.Title, width) {
+			lines = append(lines, th.Bold(TokenAccent, line))
+		}
 	}
 
 	layout := DocumentLayout{}
@@ -118,7 +118,11 @@ func RenderDocumentLayoutOptions(th Theme, doc core.Document, width int, opts Re
 		}
 		switch block.Kind {
 		case core.BlockHeading:
-			add([]string{th.Bold(TokenAccent, Truncate(block.Text, width, th.Ellipsis()))})
+			var heading []string
+			for _, line := range Wrap(block.Text, width) {
+				heading = append(heading, th.Bold(TokenAccent, line))
+			}
+			add(heading)
 		case core.BlockParagraph:
 			add(Wrap(block.Text, width))
 		case core.BlockKeyValues:
@@ -133,11 +137,7 @@ func RenderDocumentLayoutOptions(th Theme, doc core.Document, width int, opts Re
 		case core.BlockDivider:
 			add([]string{divider(th, width)})
 		case core.BlockCallout:
-			text := block.Text
-			if opts.Compact {
-				text = firstLine(text)
-			}
-			add(renderCallout(th, block.Callout, text, width))
+			add(renderCallout(th, block.Callout, block.Text, width))
 		default:
 			continue
 		}
@@ -157,17 +157,9 @@ func RenderDocumentLayoutOptions(th Theme, doc core.Document, width int, opts Re
 	return layout
 }
 
-// compactDrops reports whether compact mode omits a block. The key-value block
-// is identity detail, and a divider is pure decoration; the badges, the table
-// and the guidance are the screen's substance.
+// compactDrops omits purely decorative blocks in compact mode.
 func compactDrops(kind core.BlockKind) bool {
-	return kind == core.BlockKeyValues || kind == core.BlockDivider
-}
-
-// firstLine keeps the leading sentence of a multi-line guidance block.
-func firstLine(text string) string {
-	line, _, _ := strings.Cut(strings.TrimSpace(text), "\n")
-	return line
+	return kind == core.BlockDivider
 }
 
 // unlaidDocument renders a document without any width decisions: text stays

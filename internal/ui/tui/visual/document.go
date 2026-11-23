@@ -7,10 +7,9 @@ import (
 )
 
 // RenderDocument renders a neutral document for the TUI at the given width.
-// Every returned line fits the width; a value that cannot fit is cut with the
-// theme's explicit marker and its full text stays available as a detail entry
-// (see DocumentDetails). The renderer reads only the injected theme: no color,
-// glyph or width decision comes from package state.
+// Text wraps to the available width; table cells retain their explicit
+// truncation marker and full text in the detail view. The renderer reads only
+// the injected theme.
 func RenderDocument(th Theme, doc core.Document, width int) []string {
 	return RenderDocumentLayout(th, doc, width).Lines
 }
@@ -494,8 +493,23 @@ func renderPairs(th Theme, pairs []core.Pair, width int) []string {
 	for _, p := range pairs {
 		key := Pad(Truncate(p.Key, keyWidth, th.Ellipsis()), keyWidth)
 		valueWidth := max(width-keyWidth-2, 1)
-		value := Fit(p.Value, valueWidth, th.Ellipsis())
-		lines = append(lines, th.Paint(TokenMuted, key)+"  "+value)
+		indent := keyWidth + 2
+		if valueWidth < 12 && width > 2 {
+			lines = append(lines, th.Paint(TokenMuted, key))
+			indent = 2
+			valueWidth = width - indent
+			for _, value := range Wrap(p.Value, valueWidth) {
+				lines = append(lines, strings.Repeat(" ", indent)+value)
+			}
+			continue
+		}
+		for i, value := range Wrap(p.Value, valueWidth) {
+			if i == 0 {
+				lines = append(lines, th.Paint(TokenMuted, key)+"  "+value)
+			} else {
+				lines = append(lines, strings.Repeat(" ", indent)+value)
+			}
+		}
 	}
 	return lines
 }
@@ -539,10 +553,17 @@ func renderBadges(th Theme, badges []core.Badge, width int) []string {
 		}
 		if Width(next) > width && cur != "" {
 			lines = append(lines, cur)
-			cur = chip
-			continue
+			cur = ""
 		}
-		cur = next
+		if cur == "" && Width(chip) > width {
+			wrapped := Wrap(chip, width)
+			lines = append(lines, wrapped[:len(wrapped)-1]...)
+			cur = wrapped[len(wrapped)-1]
+		} else if cur == "" {
+			cur = chip
+		} else {
+			cur = next
+		}
 	}
 	if cur != "" {
 		lines = append(lines, cur)

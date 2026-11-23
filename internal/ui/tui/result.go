@@ -68,7 +68,7 @@ func (m *Model) resultScreenWith(bar bool) screenLines {
 		// Korean text the CLI prints. The stage rows are the TUI's own
 		// timeline, so a failed stage stays next to the stages that never
 		// ran instead of disappearing with the failure summary.
-		lines := strings.Split(view.FailureText(*m.result), "\n")
+		lines := wrapDiagnosticLines(view.FailureText(*m.result), m.bodyWidth())
 		if stages := m.timelineView(m.result.Stages, m.planStages); len(stages) > 0 {
 			lines = append(lines, "", m.sectionLabel(msgStageTimeline))
 			lines = append(lines, stages...)
@@ -89,9 +89,26 @@ func (m *Model) resultScreenWith(bar bool) screenLines {
 	}
 	if warnings := view.Warnings(m.result.Diagnostics); len(warnings) > 0 {
 		out.Tail = append(out.Tail, "")
-		out.Tail = append(out.Tail, strings.Split(view.Diagnostics(warnings), "\n")...)
+		out.Tail = append(out.Tail, wrapDiagnosticLines(view.Diagnostics(warnings), m.bodyWidth())...)
 	}
 	return out
+}
+
+func wrapDiagnosticLines(text string, width int) []string {
+	if width <= 2 {
+		return strings.Split(text, "\n")
+	}
+	var lines []string
+	for _, line := range strings.Split(text, "\n") {
+		wrapped := visual.Wrap(line, width-2)
+		for i, part := range wrapped {
+			if i > 0 {
+				part = "  " + part
+			}
+			lines = append(lines, part)
+		}
+	}
+	return lines
 }
 
 // fitViewport reserves one row for the scroll hint when the band overflows, so

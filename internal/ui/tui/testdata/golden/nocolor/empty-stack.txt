@@ -5,29 +5,37 @@
 
 === 40x18 ===
  dcraft · acme-platform · staging
-스택 상태
+스택 상태                        1-13/15
 
 ○ 서비스 없음
+
+마지막 조회   09:14:05
+Compose 파일  /work/acme-
+              platform/compose.yaml,
+              /work/acme-
+              platform/compose.staging.y
+              aml
+프로젝트      acme-platform
 
 서비스가 없습니다. Compose 파일에 servi…
 
 안내
-  Compose 파일에 services 항목을 정의한
-  뒤 r로 다시 읽으세요.
-작업
-조회
-  서비스 접속
-  로그 보기
-▸ 스택 상태
-
-
-[↑↓] 이동  [enter] 실행  [q] 종료
+               ↓ 2개 더 있음 · PgUp/PgDn
+[esc] 메뉴  [↑↓] 스크롤  [q] 종료
 
 === 40x30 ===
  dcraft · acme-platform · staging
 스택 상태
 
 ○ 서비스 없음
+
+마지막 조회   09:14:05
+Compose 파일  /work/acme-
+              platform/compose.yaml,
+              /work/acme-
+              platform/compose.staging.y
+              aml
+프로젝트      acme-platform
 
 서비스가 없습니다. Compose 파일에 servi…
 
@@ -45,14 +53,6 @@
   스택 재시작
   스택 중지
   스택 시작
-  갱신
-
-데이터
-  데이터 백업
-  데이터 복원 ▲ 위험
-  이전 버전 복원 ▲ 위험
-
-
 [↑↓] 이동  [enter] 실행  [q] 종료
 
 === 40x50 ===
@@ -60,6 +60,14 @@
 스택 상태
 
 ○ 서비스 없음
+
+마지막 조회   09:14:05
+Compose 파일  /work/acme-
+              platform/compose.yaml,
+              /work/acme-
+              platform/compose.staging.y
+              aml
+프로젝트      acme-platform
 
 서비스가 없습니다. Compose 파일에 servi…
 
@@ -97,14 +105,6 @@
 
 
 
-
-
-
-
-
-
-
-
 [↑↓] 이동  [enter] 실행  [q] 종료
 
 === 80x18 ===
@@ -115,7 +115,8 @@
 ○ 서비스 없음
 
 마지막 조회   09:14:05
-Compose 파일  /work/acme-platform/compose.yaml, /work/acme-platform/compose.sta…
+Compose 파일  /work/acme-platform/compose.yaml, /work/acme-
+              platform/compose.staging.yaml
 프로젝트      acme-platform
 
 서비스가 없습니다. Compose 파일에 services 항목이 있는지 확인하세요.
@@ -123,7 +124,6 @@ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-platform/compose.st
 안내
   Compose 파일에 services 항목을 정의한 뒤 r로 다시 읽으세요.
 작업
-  로그 보기 (logs) · 서비스 로그를 따라봅니다.
 ▸ 스택 상태 (status) · 현재 스택과 서비스 상태를 보여줍니다.
 [↑↓] 이동  [enter] 실행  [q] 종료  [?] 도움말  [d] 상세
 
@@ -135,7 +135,8 @@ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-platform/compose.st
 ○ 서비스 없음
 
 마지막 조회   09:14:05
-Compose 파일  /work/acme-platform/compose.yaml, /work/acme-platform/compose.sta…
+Compose 파일  /work/acme-platform/compose.yaml, /work/acme-
+              platform/compose.staging.yaml
 프로젝트      acme-platform
 
 서비스가 없습니다. Compose 파일에 services 항목이 있는지 확인하세요.
@@ -155,8 +156,7 @@ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-platform/compose.st
   스택 시작 (up) · 현재 폴더 스택을 시작합니다.
   갱신 (update) · 이미지를 갱신하고 변경을 적용합니다.
 
-데이터
-  데이터 백업 (backup) · 볼륨과 폴더를 백업합니다.
+
 [↑↓] 이동  [enter] 실행  [q] 종료  [?] 도움말  [d] 상세
 
 === 80x50 ===
@@ -167,7 +167,8 @@ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-platform/compose.st
 ○ 서비스 없음
 
 마지막 조회   09:14:05
-Compose 파일  /work/acme-platform/compose.yaml, /work/acme-platform/compose.sta…
+Compose 파일  /work/acme-platform/compose.yaml, /work/acme-
+              platform/compose.staging.yaml
 프로젝트      acme-platform
 
 서비스가 없습니다. Compose 파일에 services 항목이 있는지 확인하세요.
@@ -200,7 +201,6 @@ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-platform/compose.st
   S3 호스트 스크립트 생성 (generate-s3-hook) · S3 훅 스크립트를 만듭니다.
   비밀값 연결 (secrets) · 비밀값 참조를 등록합니다.
   최초 구성 (init) · Compose 파일과 .env를 생성합니다.
-
 
 
 

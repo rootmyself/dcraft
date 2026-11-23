@@ -12,6 +12,36 @@ import (
 	"github.com/rootmyself/dcraft/internal/ui/tui/visual"
 )
 
+func TestTimelineShowsCompleteLongStage(t *testing.T) {
+	status := &stubFeature{desc: descriptor("status", true), body: "상태"}
+	m := newTestModel(t, status)
+	m.theme = *plainTheme()
+	initModel(t, m)
+	resize(t, m, 40, 30)
+	title := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	lines := m.timelineView([]core.Stage{{Name: "long", Title: title, Status: core.StageStarted}}, nil)
+	joined := strings.ReplaceAll(strings.Join(lines, ""), " ", "")
+	if !strings.Contains(joined, title) {
+		t.Fatalf("stage title lost: %q", lines)
+	}
+	for _, line := range lines {
+		if visual.Width(line) > m.bodyWidth() {
+			t.Fatalf("line exceeds body width: %q", line)
+		}
+	}
+}
+
+func TestFailureDiagnosticWrappingPreservesLines(t *testing.T) {
+	long := strings.Repeat("abcdefghij", 9)
+	lines := wrapDiagnosticLines("first\n"+long+"\nlast", 40)
+	if lines[0] != "first" || lines[len(lines)-1] != "last" {
+		t.Fatalf("explicit lines lost: %q", lines)
+	}
+	if !strings.HasPrefix(lines[2], "  ") || strings.ReplaceAll(strings.Join(lines[1:len(lines)-1], ""), " ", "") != long {
+		t.Fatalf("diagnostic continuation lost: %q", lines)
+	}
+}
+
 // The loading screen is a timeline: a completed stage, the stage that is
 // running, and the stages that are still ahead each carry their own mark. The
 // reader must be able to tell them apart without color.

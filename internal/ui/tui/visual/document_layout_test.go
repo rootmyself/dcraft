@@ -4,8 +4,78 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/rootmyself/dcraft/internal/core"
 )
+
+func TestDocumentWrapsLongPairWithoutLosingValue(t *testing.T) {
+	value := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	doc := core.Document{Blocks: []core.Block{{Kind: core.BlockKeyValues, Pairs: []core.Pair{{Key: "path", Value: value}}}}}
+	lines := RenderDocument(Plain(), doc, 40)
+	if len(lines) < 2 {
+		t.Fatalf("expected wrapped value: %q", lines)
+	}
+	if !strings.HasPrefix(lines[1], "      ") {
+		t.Fatalf("continuation is not aligned with value: %q", lines)
+	}
+	if strings.ReplaceAll(strings.Join(lines, ""), " ", "") != "path"+value {
+		t.Fatalf("value lost while wrapping: %q", lines)
+	}
+}
+
+func TestDocumentWrapsHeadingsAndANSISpans(t *testing.T) {
+	text := strings.Repeat("가", 30)
+	doc := core.Document{Title: text, Blocks: []core.Block{{Kind: core.BlockHeading, Text: text}}}
+	lines := RenderDocument(Plain(), doc, 40)
+	if len(lines) != 4 {
+		t.Fatalf("heading rows = %q", lines)
+	}
+	for _, line := range lines {
+		if strings.Contains(line, "…") || Width(line) > 40 {
+			t.Fatalf("heading was truncated: %q", line)
+		}
+	}
+	colored := "\x1b[31m" + strings.Repeat("x", 45) + "\x1b[0m"
+	wrapped := Wrap(colored, 20)
+	if ansi.Strip(strings.Join(wrapped, "")) != ansi.Strip(colored) {
+		t.Fatalf("ANSI span damaged: %q", wrapped)
+	}
+	for _, line := range wrapped {
+		if Width(line) > 20 {
+			t.Fatalf("ANSI line too wide: %q", line)
+		}
+	}
+}
+
+func TestDocumentWrapsAtBodyWidths(t *testing.T) {
+	for _, width := range []int{40, 80, 120, 200} {
+		value := strings.Repeat("abcdefghij", 24)
+		doc := core.Document{Blocks: []core.Block{
+			{Kind: core.BlockParagraph, Text: value},
+			{Kind: core.BlockKeyValues, Pairs: []core.Pair{{Key: "path", Value: value}}},
+			{Kind: core.BlockCallout, Text: value},
+		}}
+		layout := RenderDocumentLayout(Plain(), doc, width)
+		for _, line := range layout.Lines {
+			if Width(line) > width || strings.Contains(line, "…") {
+				t.Fatalf("width %d: truncated or overflowing line %q", width, line)
+			}
+		}
+		if len(layout.Band()) != len(layout.Lines) {
+			t.Fatalf("width %d: wrapped rows not counted in band", width)
+		}
+	}
+}
+
+func TestNarrowPairUsesHangingIndent(t *testing.T) {
+	doc := core.Document{Blocks: []core.Block{{
+		Kind: core.BlockKeyValues, Pairs: []core.Pair{{Key: "long label", Value: "abcdefghijklmnopqrst"}},
+	}}}
+	lines := RenderDocument(Plain(), doc, 15)
+	if len(lines) < 3 || !strings.HasPrefix(lines[1], "  ") || !strings.HasPrefix(lines[2], "  ") {
+		t.Fatalf("narrow pair does not use two-cell indent: %q", lines)
+	}
+}
 
 // The table header is fixed while its rows scroll; the summary above and the
 // callout below never scroll at all.

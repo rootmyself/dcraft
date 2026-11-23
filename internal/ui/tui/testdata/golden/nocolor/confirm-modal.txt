@@ -17,7 +17,7 @@
 │                 Compose 실행 파일을  │
 │                 설치합니다.          │
 │                                      │
-│  1/33 · PgUp/PgDn                    │
+│  1/32 · PgUp/PgDn                    │
 │──────────────────────────────────────│
 │  위험 이 작업은 스택을 변경합니다.…  │
 ╰──────────────────────────────────────╯
@@ -41,13 +41,13 @@
 │  https://github.com/docker/compose/  │
 │  releases                            │
 │  버전: v2.39.1                       │
-│  대상 경로:                          │
-│  /Users/me/.docker/cli-plugins/dock  │
-│  er-compose                          │
+│  대상 경로: /Users/me/.docker/cli-   │
+│  plugins/docker-compose              │
 │  무결성: sha256 확인 후 원자적으로   │
 │  교체합니다.                         │
 │                                      │
-│  1/29 · PgUp/PgDn                    │
+│  단계                                │
+│  1/28 · PgUp/PgDn                    │
 │──────────────────────────────────────│
 │  위험 이 작업은 스택을 변경합니다.   │
 │       중단하면 일부 변경이 남을 수   │
@@ -63,6 +63,7 @@ Compose 설치
 조회
   서비스 접속
   로그 보기
+  스택 상태
 ╭─ 승인 확인 ──────────────────── 위험 ╮
 │  작업:          Compose 설치 (inst…  │
 │  대상:          /work/acme-platform  │
@@ -79,9 +80,8 @@ Compose 설치
 │  https://github.com/docker/compose/  │
 │  releases                            │
 │  버전: v2.39.1                       │
-│  대상 경로:                          │
-│  /Users/me/.docker/cli-plugins/dock  │
-│  er-compose                          │
+│  대상 경로: /Users/me/.docker/cli-   │
+│  plugins/docker-compose              │
 │  무결성: sha256 확인 후 원자적으로   │
 │  교체합니다.                         │
 │                                      │
