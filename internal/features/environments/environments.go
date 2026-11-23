@@ -184,6 +184,9 @@ func nonNil(values []string) []string {
 func (f *Feature) wizardSteps(in core.Invocation) core.WizardSpec {
 	return core.WizardSpec{
 		Title: msgWizardTitle,
+		// A successful apply issues the alias named by this step, so the TUI
+		// selects it without branching on the feature.
+		EnvironmentAnswer: "name",
 		Steps: []core.WizardStep{
 			{
 				Name: "name", Title: msgWizardNameTitle, Prompt: msgWizardNamePrompt,

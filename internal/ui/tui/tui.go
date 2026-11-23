@@ -498,8 +498,8 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		created := ""
-		if m.wizardApplying && res.Outcome == core.OutcomeSuccess && m.wizardFeature != nil && m.wizardFeature.Descriptor().EnvironmentAdmin {
-			created = strings.TrimSpace(m.wizardAnswers["name"])
+		if m.wizardApplying && res.Outcome == core.OutcomeSuccess && m.wizardSpec.EnvironmentAnswer != "" {
+			created = strings.TrimSpace(m.wizardAnswers[m.wizardSpec.EnvironmentAnswer])
 		}
 		if m.wizardApplying {
 			m.wizardApplying = false

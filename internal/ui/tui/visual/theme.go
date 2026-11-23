@@ -236,8 +236,9 @@ func (t Theme) Resolved() bool { return t.Palette.Name != "" }
 // Ellipsis is the explicit truncation marker for this theme.
 func (t Theme) Ellipsis() string { return t.Glyphs.Ell }
 
-// DarkPalette targets a dark terminal background. All six tokens clear 4.5:1
-// contrast on both BG and Surface.
+// DarkPalette targets a dark terminal background. The six state tokens clear
+// 4.5:1 contrast on both BG and Surface; the value-classification tokens are
+// decorative and are not held to that floor.
 func DarkPalette() Palette {
 	return Palette{
 		Name: "dark", Dark: true, BG: "#10131a", FG: "#d8dee9",
@@ -247,8 +248,9 @@ func DarkPalette() Palette {
 	}
 }
 
-// LightPalette targets a light terminal background. All six tokens clear
-// 4.5:1 contrast on both BG and Surface.
+// LightPalette targets a light terminal background. The six state tokens clear
+// 4.5:1 contrast on both BG and Surface; the value-classification tokens are
+// decorative and are not held to that floor.
 func LightPalette() Palette {
 	return Palette{
 		Name: "light", Dark: false, BG: "#ffffff", FG: "#1f2430",

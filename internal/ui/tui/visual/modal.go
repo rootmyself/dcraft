@@ -82,26 +82,13 @@ func ComposeModal(th Theme, width, height int, frame []string, spec ModalSpec) [
 	if width <= 0 || height <= 0 || len(frame) < 3 {
 		return sizelessModal(th, frame, spec)
 	}
-	panel := renderModalPanel(th, width, height, spec)
+	l := layoutModal(th, width, height, spec)
+	panel := renderModalPanelAt(th, l, spec)
 	if len(panel) == 0 {
 		return frame
 	}
-	mw := ModalWidth(width)
-	bottom := height - 1
-	top := 1 + (height-2-len(panel))/2
-	if top < 1 {
-		top = 1
-	}
-	if top+len(panel) > bottom {
-		top = bottom - len(panel)
-	}
-	if top < 1 {
-		top = 1
-	}
-	left := (width - mw) / 2
-	if left < 0 {
-		left = 0
-	}
+	place := placeModal(width, height, l)
+	left, mw := place.left, place.width
 
 	out := make([]string, len(frame))
 	copy(out, frame)
@@ -109,7 +96,7 @@ func ComposeModal(th Theme, width, height int, frame []string, spec ModalSpec) [
 		out[i] = dimLine(th, frame[i], width)
 	}
 	for i, row := range panel {
-		y := top + i
+		y := place.top + i
 		if y <= 0 || y >= len(out)-1 {
 			continue
 		}
@@ -293,10 +280,44 @@ func ModalMetrics(th Theme, width, height int, spec ModalSpec) (visible, maxTop 
 	return l.visible, l.maxTop()
 }
 
-// renderModalPanel builds the panel as wide as the approved formula says and as
-// tall as the body allows.
-func renderModalPanel(th Theme, width, height int, spec ModalSpec) []string {
-	l := layoutModal(th, width, height, spec)
+// rows is how many terminal rows the panel draws: the two borders, the visible
+// scroll band, the position row, the action row, the danger rule and the
+// pinned risk rows.
+func (l modalLayout) rows() int {
+	return 2 + l.visible + btoi(l.pos) + btoi(l.buttons) + btoi(len(l.pinned) > 0) + len(l.pinned)
+}
+
+// modalPlacement is where one panel sits in the frame: its first drawn row, its
+// left cell and its width.
+type modalPlacement struct {
+	top, left, width int
+}
+
+// placeModal centers the panel in the body region and keeps it inside the
+// frame. ComposeModal draws with it and ModalButtonRects resolves clicks with
+// it, so a click cannot drift from the drawn panel.
+func placeModal(width, height int, l modalLayout) modalPlacement {
+	rows := l.rows()
+	bottom := height - 1
+	top := 1 + (height-2-rows)/2
+	if top < 1 {
+		top = 1
+	}
+	if top+rows > bottom {
+		top = bottom - rows
+	}
+	if top < 1 {
+		top = 1
+	}
+	left := (width - l.width) / 2
+	if left < 0 {
+		left = 0
+	}
+	return modalPlacement{top: top, left: left, width: l.width}
+}
+
+// renderModalPanelAt draws the panel of one geometry pass.
+func renderModalPanelAt(th Theme, l modalLayout, spec ModalSpec) []string {
 	top := spec.ScrollTop
 	if top < 0 {
 		top = 0
@@ -305,7 +326,7 @@ func renderModalPanel(th Theme, width, height int, spec ModalSpec) []string {
 		top = max
 	}
 
-	panel := make([]string, 0, l.visible+5)
+	panel := make([]string, 0, l.rows())
 	panel = append(panel, modalTopBorder(th, l.width, spec.Title, spec.Badge))
 	for i := 0; i < l.visible; i++ {
 		panel = append(panel, modalContentRow(th, l.width, l.content, l.scroll[top+i]))
@@ -360,31 +381,16 @@ type ModalButtonRect struct {
 }
 
 // ModalButtonRects reports the exact cells of the pinned buttons, using the
-// same geometry pass as renderModalPanel. An empty result means the panel has
-// no button row.
+// same geometry pass and placement as ComposeModal. An empty result means the
+// panel has no button row.
 func ModalButtonRects(th Theme, width, height int, spec ModalSpec) []ModalButtonRect {
 	if width <= 0 || height <= 0 || len(spec.Buttons) == 0 {
 		return nil
 	}
 	l := layoutModal(th, width, height, spec)
-	panelRows := 1 + l.visible + btoi(l.pos) + btoi(l.buttons) + btoi(len(l.pinned) > 0) + len(l.pinned) + 1
-	bottom := height - 1
-	top := 1 + (height-2-panelRows)/2
-	if top < 1 {
-		top = 1
-	}
-	if top+panelRows > bottom {
-		top = bottom - panelRows
-	}
-	if top < 1 {
-		top = 1
-	}
-	left := (width - l.width) / 2
-	if left < 0 {
-		left = 0
-	}
-	row := top + 1 + l.visible + btoi(l.pos)
-	x := left + 3 // border plus the panel's two-cell padding
+	place := placeModal(width, height, l)
+	row := place.top + 1 + l.visible + btoi(l.pos)
+	x := place.left + 3 // border plus the panel's two-cell padding
 	out := make([]ModalButtonRect, 0, len(spec.Buttons))
 	for i, label := range spec.Buttons {
 		text := "[ " + label + " ]"

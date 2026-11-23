@@ -31,6 +31,11 @@ type WizardSpec struct {
 	// the feature must implement core.Planner. The engine still enforces them.
 	// Empty means none.
 	RequiredApprovals []ApprovalKind `json:"required_approvals,omitempty"`
+	// EnvironmentAnswer names the step whose answer becomes the current
+	// environment after a successful apply. It lets the TUI select the newly
+	// issued alias without knowing the feature or its step names. Empty means
+	// the apply does not issue an environment.
+	EnvironmentAnswer string `json:"environment_answer,omitempty"`
 }
 
 // WizardStep is one question. Options are rendered as a keyboard-selectable

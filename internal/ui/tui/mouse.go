@@ -35,10 +35,6 @@ const (
 	hitModalCancel
 )
 
-// hitWizardNewItem is the input row of a list question; it shares the list
-// row action with the typed-value row.
-const hitWizardNewItem = hitWizardInput
-
 // hitTarget is one resolved click region in terminal cells. index and aux name
 // the item inside the screen (feature, environment, field, option).
 type hitTarget struct {

@@ -203,6 +203,46 @@ func TestModalPositionRowOnlyWhenContentScrolls(t *testing.T) {
 	}
 }
 
+// The clickable button cells and the drawn button text come from one placement
+// helper, so every returned rect must overlap the "[ label ]" text it claims.
+// A second size proves the geometry is not tuned to one terminal.
+func TestModalButtonRectsMatchTheDrawnButtons(t *testing.T) {
+	th := Plain()
+	for _, size := range [][2]int{{80, 24}, {40, 18}} {
+		w, h := size[0], size[1]
+		spec := panelSpec(9, 1)
+		spec.Buttons = []string{"승인", "취소"}
+		out := ComposeModal(th, w, h, modalFrame(th, w, h), spec)
+		rects := ModalButtonRects(th, w, h, spec)
+		if len(rects) != len(spec.Buttons) {
+			t.Fatalf("%dx%d: %d rects, want %d", w, h, len(rects), len(spec.Buttons))
+		}
+		for _, rect := range rects {
+			if rect.Y < 0 || rect.Y >= h {
+				t.Fatalf("%dx%d: button %d row %d outside the frame", w, h, rect.Index, rect.Y)
+			}
+			line := ansi.Strip(out[rect.Y])
+			if rect.X < 0 || rect.X+rect.Width > Width(line) {
+				t.Fatalf("%dx%d: button %d spans %d..%d of a %d-cell row",
+					w, h, rect.Index, rect.X, rect.X+rect.Width, Width(line))
+			}
+			cell := cellsAt(line, rect.X, rect.Width)
+			want := "[ " + spec.Buttons[rect.Index] + " ]"
+			if cell != want {
+				t.Fatalf("%dx%d: button %d covers %q, want %q\n%s",
+					w, h, rect.Index, cell, want, strings.Join(out, "\n"))
+			}
+		}
+	}
+}
+
+// cellsAt returns the drawn cells [start, start+width) of a plain row.
+func cellsAt(line string, start, width int) string {
+	_, rest := splitCells(line, start)
+	part, _ := splitCells(rest, width)
+	return part
+}
+
 // The dim contract: the body keeps its text but loses its colors; the header
 // and the keycap footer keep their original contrast.
 func TestComposeModalDimsOnlyTheBody(t *testing.T) {
