@@ -165,6 +165,14 @@ const noWidthLimit = 1 << 20
 // it the band disappears before any entry does.
 const sidebarBandMinRows = 22
 
+// NavHit is one selectable navigation row and its offset from the top of the
+// pane or list that drew it. The renderer and the mouse targets read the same
+// window, so a click can never land on a row the screen did not draw.
+type NavHit struct {
+	Name string
+	Row  int
+}
+
 // Sidebar renders the persistent navigation for the wide layout as exactly
 // height lines of exactly width cells. The frame is inside the body region, so
 // it never includes the header or the keycap footer.
@@ -173,12 +181,20 @@ const sidebarBandMinRows = 22
 // summary. A sidebar too short for both keeps its entries and drops the band:
 // the menu is the reason the pane exists.
 func Sidebar(th Theme, width, height int, nav Nav) []string {
+	lines, _ := SidebarWithHits(th, width, height, nav)
+	return lines
+}
+
+// SidebarWithHits is the single sidebar layout pass. Lines and hit rows are
+// returned together so the drawn rows and the mouse targets cannot disagree.
+func SidebarWithHits(th Theme, width, height int, nav Nav) ([]string, []NavHit) {
 	if width <= 0 || height <= 0 {
-		return nil
+		return nil, nil
 	}
 	ell := th.Glyphs.Ell
 	if width < 8 || height < 4 {
-		return padLines(navTextLines(th, nav, width), width, height, ell)
+		lines := padLines(navTextLines(th, nav, width), width, height, ell)
+		return lines, navRowHits(navRows(nav), 0)
 	}
 	inner := width - 2
 	inside := height - 2
@@ -216,7 +232,20 @@ func Sidebar(th Theme, width, height int, nav Nav) []string {
 		out = append(out, th.Paint(TokenMuted, th.Glyphs.V)+Fit(line, inner, ell)+th.Paint(TokenMuted, th.Glyphs.V))
 	}
 	out = append(out, th.Paint(TokenMuted, th.Glyphs.BL+strings.Repeat(th.Glyphs.H, inner)+th.Glyphs.BR))
-	return out
+	// The top border is row 0, so a rendered interior row is offset by one.
+	return out, navRowHits(rows, 1)
+}
+
+// navRowHits returns the drawn row of every feature entry. Rows are 1:1 with
+// renderNavRows, which draws one line per navRow.
+func navRowHits(rows []navRow, offset int) []NavHit {
+	hits := make([]NavHit, 0, len(rows))
+	for i, row := range rows {
+		if row.kind == navRowItem {
+			hits = append(hits, NavHit{Name: row.item.Name, Row: offset + i})
+		}
+	}
+	return hits
 }
 
 func summaryWindow(text string, offset, width int) string {
@@ -326,20 +355,29 @@ func wrapMuted(th Theme, text string, width int) []string {
 // A width of zero means the first WindowSizeMsg has not arrived yet; the rows
 // are still rendered so the menu is never missing from the first frame.
 func MenuLines(th Theme, width int, nav Nav, maxRows int, showName bool) []string {
+	lines, _ := MenuLinesWithHits(th, width, nav, maxRows, showName)
+	return lines
+}
+
+// MenuLinesWithHits draws the single-column menu and returns the row of every
+// feature entry in the same pass, so a press resolves against the rows the
+// screen actually shows.
+func MenuLinesWithHits(th Theme, width int, nav Nav, maxRows int, showName bool) ([]string, []NavHit) {
 	if nav.Count() == 0 {
 		if nav.Empty == "" {
-			return nil
+			return nil, nil
 		}
 		if width <= 0 {
-			return []string{nav.Empty}
+			return []string{nav.Empty}, nil
 		}
-		return wrapMuted(th, nav.Empty, width)
+		return wrapMuted(th, nav.Empty, width), nil
 	}
 	rows := windowRows(navRows(nav), maxRows)
+	hits := navRowHits(rows, 0)
 	if width <= 0 {
-		return renderNavRows(th, rows, 0, showName)
+		return renderNavRows(th, rows, 0, showName), hits
 	}
-	return renderNavRows(th, rows, width, showName)
+	return renderNavRows(th, rows, width, showName), hits
 }
 
 // renderNavRows draws the windowed rows. Sidebar rows indent by two cells; the

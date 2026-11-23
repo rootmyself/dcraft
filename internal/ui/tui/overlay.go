@@ -72,6 +72,7 @@ func (m *Model) confirmSpec() visual.ModalSpec {
 		Badge:     msgConfirmRiskLabel,
 		RiskLabel: msgConfirmRiskLabel,
 		Risk:      []string{msgConfirmRisk},
+		Buttons:   []string{msgModalApprove, msgModalCancel},
 		ScrollTop: m.confirmScroll,
 	}
 	if len(m.pendingApprovals) > 0 {

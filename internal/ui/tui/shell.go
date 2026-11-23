@@ -230,11 +230,14 @@ func (m *Model) compact() bool {
 }
 
 // bodyLayout is one composed body: the rows in reading order plus the viewport
-// that describes the scrollable band (when there is one).
+// that describes the scrollable band (when there is one). hits are in the same
+// body coordinates as lines, so a press resolves against the rows actually
+// drawn.
 type bodyLayout struct {
 	lines    []string
 	viewport visual.Viewport
 	scrolls  bool
+	hits     []bodyHit
 }
 
 // bandGeometry is the one row-accounting decision for a screen with a fixed
@@ -303,6 +306,7 @@ func (m *Model) navRowCount() int {
 // title block, the phase body and the notice scroll together.
 func (m *Model) wholeBody() bodyLayout {
 	var lines []string
+	var hits []bodyHit
 	add := func(s string) {
 		s = strings.TrimRight(s, "\n")
 		if s == "" {
@@ -316,11 +320,66 @@ func (m *Model) wholeBody() bodyLayout {
 	if title := m.screenTitle(); title != "" {
 		lines = append(lines, m.titleRow(title, ""), "")
 	}
-	add(m.phaseBody())
+	part, partHits := m.phaseBodyWithHits()
+	base := len(lines)
+	for _, hit := range partHits {
+		hit.row += base
+		hits = append(hits, hit)
+	}
+	lines = append(lines, part...)
 	if m.notice != "" {
 		add(m.noticeText(m.notice))
 	}
-	return m.fitWhole(lines)
+	lay := m.fitWhole(lines)
+	if lay.scrolls {
+		start, _ := lay.viewport.Window()
+		hits = shiftBodyHits(hits, -start)
+	}
+	lay.hits = clipBodyHits(hits, len(lay.lines))
+	return lay
+}
+
+// phaseBodyWithHits is the single body builder for the one-band screens. It
+// returns the exact lines and the targets drawn on them; the two are produced
+// together so a click cannot land on a row that moved.
+func (m *Model) phaseBodyWithHits() ([]string, []bodyHit) {
+	switch m.phase {
+	case phaseSelectingEnvironment:
+		return m.environmentLines()
+	case phaseForm:
+		return m.formLines()
+	}
+	body := m.phaseBody()
+	if body == "" {
+		return nil, nil
+	}
+	return strings.Split(strings.TrimRight(body, "\n"), "\n"), nil
+}
+
+func shiftBodyHits(hits []bodyHit, delta int) []bodyHit {
+	out := make([]bodyHit, 0, len(hits))
+	for _, hit := range hits {
+		hit.row += delta
+		out = append(out, hit)
+	}
+	return out
+}
+
+func clipBodyHits(hits []bodyHit, rows int) []bodyHit {
+	out := make([]bodyHit, 0, len(hits))
+	for _, hit := range hits {
+		if hit.row < 0 || hit.row >= rows {
+			continue
+		}
+		if hit.h <= 0 {
+			hit.h = 1
+		}
+		if hit.row+hit.h > rows {
+			hit.h = rows - hit.row
+		}
+		out = append(out, hit)
+	}
+	return out
 }
 
 // resultBody is the result screen: the navigation row, the title block with the
@@ -328,6 +387,7 @@ func (m *Model) wholeBody() bodyLayout {
 func (m *Model) resultBody() bodyLayout {
 	lay := m.resultGeometry()
 	var lines []string
+	var hits []bodyHit
 	if navLine := m.navLine(); navLine != "" {
 		lines = append(lines, navLine)
 	}
@@ -347,7 +407,14 @@ func (m *Model) resultBody() bodyLayout {
 		// The status table is one of the two scrolling content lists the
 		// contract gives a scrollbar; the detail view is a plain band and
 		// states its position in the hint alone.
-		lines = append(lines, m.drawBand(lay.screen, lay.band, lay.bar)...)
+		bandStart := len(lines)
+		drawn := m.drawBand(lay.screen, lay.band, lay.bar)
+		lines = append(lines, drawn...)
+		if !m.detailOpen && m.hasDetail() {
+			// A double click on any drawn result row opens the full-value
+			// view; a single click does nothing.
+			hits = append(hits, bodyHit{row: bandStart, h: len(drawn), kind: hitResultRow})
+		}
 	}
 
 	// The full list is drawn wherever the navigation is not already a list:
@@ -366,12 +433,20 @@ func (m *Model) resultBody() bodyLayout {
 			// Everything the body has left after the lines already written.
 			budget = visual.BodyRows(m.height) - len(lines)
 		}
-		lines = append(lines, strings.Split(strings.TrimRight(m.menuView(budget), "\n"), "\n")...)
+		menuLines, navHits := m.menuLines(budget)
+		base := len(lines)
+		for _, nav := range navHits {
+			if index := m.featureIndex(nav.Name); index >= 0 {
+				hits = append(hits, bodyHit{row: base + nav.Row, kind: hitNavItem, index: index})
+			}
+		}
+		lines = append(lines, menuLines...)
 	}
 	return bodyLayout{
 		lines:    trimTrailingBlank(lines),
 		viewport: lay.viewport,
 		scrolls:  lay.scrolls,
+		hits:     hits,
 	}
 }
 
@@ -433,8 +508,10 @@ func (m *Model) resultGeometryWith(bar bool) resultLayout {
 // serviceBody is the service scope screen: the title block, the pinned heading
 // and whole-stack row, the scrolling service rows and the guidance.
 func (m *Model) serviceBody() bodyLayout {
-	geom := m.serviceGeometry()
+	screen := m.serviceScreenLayout()
+	geom := m.fitBand(m.navRowCount()+m.titleRows(), screen.screen)
 	var lines []string
+	var hits []bodyHit
 	if navLine := m.navLine(); navLine != "" {
 		lines = append(lines, navLine)
 	}
@@ -445,7 +522,10 @@ func (m *Model) serviceBody() bodyLayout {
 		}
 		lines = append(lines, m.titleRow(title, counter), "")
 	}
-	lines = append(lines, m.drawBand(m.serviceScreen(), geom, false)...)
+	base := len(lines)
+	drawn := m.drawBand(screen.screen, geom, false)
+	lines = append(lines, drawn...)
+	hits = append(hits, m.serviceHits(screen, geom, base)...)
 	if m.notice != "" {
 		lines = append(lines, "", m.noticeText(m.notice))
 	}
@@ -453,7 +533,48 @@ func (m *Model) serviceBody() bodyLayout {
 		lines:    trimTrailingBlank(lines),
 		viewport: geom.viewport,
 		scrolls:  geom.scrolls,
+		hits:     hits,
 	}
+}
+
+// serviceHits maps the drawn service rows and the whole-stack row back to the
+// row each selector occupies. The band window is the same one drawBand used.
+func (m *Model) serviceHits(screen serviceScreenLayout, geom bandGeometry, base int) []bodyHit {
+	fixed := screen.screen.Fixed
+	start, end := 0, len(fixed)+len(screen.screen.Band)
+	if geom.whole {
+		start, end = geom.viewport.Window()
+	}
+	var hits []bodyHit
+	if screen.wholeRow >= start && screen.wholeRow < end {
+		row := screen.wholeRow
+		if geom.whole {
+			row -= start
+		}
+		hits = append(hits, bodyHit{row: base + row, kind: hitServiceRow, index: -1})
+	}
+	bandStart, bandEnd := 0, len(screen.screen.Band)
+	if !geom.whole {
+		bandStart, bandEnd = geom.viewport.Window()
+	}
+	for i := range m.serviceOptions {
+		source := len(fixed) + i
+		row := 0
+		switch {
+		case geom.whole:
+			if source < start || source >= end {
+				continue
+			}
+			row = source - start
+		default:
+			if i < bandStart || i >= bandEnd {
+				continue
+			}
+			row = len(fixed) + (i - bandStart)
+		}
+		hits = append(hits, bodyHit{row: base + row, kind: hitServiceRow, index: i})
+	}
+	return hits
 }
 
 // serviceGeometry is the one row-accounting decision for the scope screen.
@@ -465,6 +586,7 @@ func (m *Model) serviceGeometry() bandGeometry {
 // cards scroll as whole cards. wizardBandData is that one geometry.
 func (m *Model) wizardBody() bodyLayout {
 	var lines []string
+	var hits []bodyHit
 	if navLine := m.navLine(); navLine != "" {
 		lines = append(lines, navLine)
 	}
@@ -475,6 +597,8 @@ func (m *Model) wizardBody() bodyLayout {
 		}
 		lines = append(lines, m.titleRow(title, counter), "")
 	}
+	base := len(lines)
+	hits = append(hits, m.wizardHits(base)...)
 	lines = append(lines, m.wizardStepLines()...)
 	if m.notice != "" {
 		lines = append(lines, "", m.noticeText(m.notice))
@@ -483,6 +607,7 @@ func (m *Model) wizardBody() bodyLayout {
 		lines:    trimTrailingBlank(lines),
 		viewport: m.wizardViewport(),
 		scrolls:  m.wizardStepScrolls(),
+		hits:     hits,
 	}
 }
 
@@ -765,23 +890,27 @@ func (m *Model) phaseBody() string {
 	}
 }
 
-// environmentView lists named environments; nothing is preselected.
-func (m *Model) environmentView() string {
-	var b strings.Builder
-	b.WriteString(m.title(msgEnvSelectTitle))
-	b.WriteString("\n")
-	b.WriteString(msgEnvSelectIntro)
-	b.WriteString("\n")
+// environmentLines lists named environments; nothing is preselected. Each row
+// carries its index so a click selects the same environment the marker names.
+func (m *Model) environmentLines() ([]string, []bodyHit) {
+	lines := []string{m.title(msgEnvSelectTitle), msgEnvSelectIntro}
+	hits := make([]bodyHit, 0, len(m.envs))
 	for i, env := range m.envs {
 		marker := "  "
 		if i == m.envSelected {
 			marker = "> "
 		}
-		b.WriteString(marker + env.Name + " — " + environmentSummary(env) + "\n")
+		lines = append(lines, marker+env.Name+" — "+environmentSummary(env))
+		hits = append(hits, bodyHit{row: len(lines) - 1, kind: hitEnvItem, index: i})
 	}
-	b.WriteString(m.hintText(msgEnvIsolationNote))
-	b.WriteString("\n")
-	return b.String()
+	lines = append(lines, m.hintText(msgEnvIsolationNote))
+	return lines, hits
+}
+
+// environmentView lists named environments; nothing is preselected.
+func (m *Model) environmentView() string {
+	lines, _ := m.environmentLines()
+	return strings.Join(lines, "\n") + "\n"
 }
 
 // minResultRows is the floor the kept-output panel must leave for the result it

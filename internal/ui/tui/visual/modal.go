@@ -39,6 +39,11 @@ type ModalSpec struct {
 	RiskLabel string
 	Risk      []string
 
+	// Buttons is the pinned action row above the danger rule. Labels are drawn
+	// as bracketed buttons; the row is omitted when empty. The confirmation
+	// panel uses it, the help panel does not.
+	Buttons []string
+
 	// ScrollTop is the first visible scroll-band row.
 	ScrollTop int
 }
@@ -179,6 +184,8 @@ type modalLayout struct {
 	// deducted when it is needed.
 	visible int
 	pos     bool
+	// buttons reports the pinned action row above the danger rule.
+	buttons bool
 }
 
 // maxTop is the largest scroll position that still fills the band.
@@ -230,28 +237,34 @@ func layoutModal(th Theme, width, height int, spec ModalSpec) modalLayout {
 		}
 	}
 
-	// Borders take 2 rows; the danger rule above the risk takes one row when
-	// there is a risk. The position row and the pinned band share the rest.
+	// Borders take 2 rows; the pinned action row takes one when present, and
+	// the danger rule above the risk takes one row when there is a risk. The
+	// position row and the pinned band share the rest.
 	//
 	// When the body is too short for all of that, decoration yields in a fixed
 	// order: first the danger rule, then the scrolling band, then further
-	// pinned risk rows. The risk statement is never the part that is dropped
+	// pinned risk rows. The buttons and the risk statement are never dropped
 	// before the frame's own rows are.
+	buttons := len(spec.Buttons) > 0
+	buttonRows := 0
+	if buttons {
+		buttonRows = 1
+	}
 	rule := 0
 	if len(pinned) > 0 {
 		rule = 1
 	}
-	if budget := bodyRows - 2 - rule - len(pinned); budget < 1 && rule == 1 {
+	if budget := bodyRows - 2 - rule - buttonRows - len(pinned); budget < 1 && rule == 1 {
 		rule = 0
 	}
-	if limit := bodyRows - 2 - rule; len(pinned) > limit {
+	if limit := bodyRows - 2 - rule - buttonRows; len(pinned) > limit {
 		if limit < 0 {
 			limit = 0
 		}
 		pinned = pinned[:limit]
 		cut = true
 	}
-	available := bodyRows - 2 - rule - len(pinned)
+	available := bodyRows - 2 - rule - buttonRows - len(pinned)
 	if available < 0 {
 		available = 0
 	}
@@ -266,7 +279,7 @@ func layoutModal(th Theme, width, height int, spec ModalSpec) modalLayout {
 	}
 	return modalLayout{
 		width: mw, content: content, scroll: scroll, pinned: pinned,
-		cut: cut, visible: visible, pos: pos,
+		cut: cut, visible: visible, pos: pos, buttons: buttons,
 	}
 }
 
@@ -300,6 +313,9 @@ func renderModalPanel(th Theme, width, height int, spec ModalSpec) []string {
 	if l.pos {
 		panel = append(panel, modalContentRow(th, l.width, l.content, modalPositionLine(top+1, len(l.scroll))))
 	}
+	if l.buttons {
+		panel = append(panel, modalContentRow(th, l.width, l.content, modalButtonLine(spec.Buttons)))
+	}
 	if len(l.pinned) > 0 {
 		panel = append(panel, modalRule(th, l.width, TokenDanger))
 		for i, line := range l.pinned {
@@ -315,6 +331,74 @@ func renderModalPanel(th Theme, width, height int, spec ModalSpec) []string {
 	}
 	panel = append(panel, modalBottomBorder(th, l.width))
 	return panel
+}
+
+// modalButtonLine renders the pinned action row: bracketed labels separated by
+// three cells. The brackets are the non-color channel; the first (approve)
+// button carries the accent, the second stays muted so it never competes.
+func modalButtonLine(labels []string) modalLine {
+	line := make(modalLine, 0, len(labels)*2)
+	for i, label := range labels {
+		if i > 0 {
+			line = append(line, modalSpan{Text: "   "})
+		}
+		token := TokenMuted
+		if i == 0 {
+			token = TokenAccent
+		}
+		line = append(line, modalSpan{Text: "[ " + label + " ]", Token: token, Bold: true})
+	}
+	return line
+}
+
+// ModalButtonRect is one drawn panel button in terminal cells.
+type ModalButtonRect struct {
+	Index  int
+	X, Y   int
+	Width  int
+	Height int
+}
+
+// ModalButtonRects reports the exact cells of the pinned buttons, using the
+// same geometry pass as renderModalPanel. An empty result means the panel has
+// no button row.
+func ModalButtonRects(th Theme, width, height int, spec ModalSpec) []ModalButtonRect {
+	if width <= 0 || height <= 0 || len(spec.Buttons) == 0 {
+		return nil
+	}
+	l := layoutModal(th, width, height, spec)
+	panelRows := 1 + l.visible + btoi(l.pos) + btoi(l.buttons) + btoi(len(l.pinned) > 0) + len(l.pinned) + 1
+	bottom := height - 1
+	top := 1 + (height-2-panelRows)/2
+	if top < 1 {
+		top = 1
+	}
+	if top+panelRows > bottom {
+		top = bottom - panelRows
+	}
+	if top < 1 {
+		top = 1
+	}
+	left := (width - l.width) / 2
+	if left < 0 {
+		left = 0
+	}
+	row := top + 1 + l.visible + btoi(l.pos)
+	x := left + 3 // border plus the panel's two-cell padding
+	out := make([]ModalButtonRect, 0, len(spec.Buttons))
+	for i, label := range spec.Buttons {
+		text := "[ " + label + " ]"
+		out = append(out, ModalButtonRect{Index: i, X: x, Y: row, Width: Width(text), Height: 1})
+		x += Width(text) + 3
+	}
+	return out
+}
+
+func btoi(v bool) int {
+	if v {
+		return 1
+	}
+	return 0
 }
 
 // riskContinuation is the approved heading for the part of the risk that the

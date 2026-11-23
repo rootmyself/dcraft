@@ -313,6 +313,38 @@ func (m *Model) wizardCounter() string {
 	return m.wizardViewport().Counter()
 }
 
+// wizardHits maps every drawn card and, for a list step, the new-item input row
+// back to the question index it stands for. base is the body line of the first
+// drawn question row.
+func (m *Model) wizardHits(base int) []bodyHit {
+	if m.phase != phaseWizardStep || m.wizardStep < 0 || m.wizardStep >= len(m.wizardSpec.Steps) {
+		return nil
+	}
+	step := m.wizardSpec.Steps[m.wizardStep]
+	band := m.wizardBandData()
+	if band.Total == 0 {
+		return nil
+	}
+	hits := make([]bodyHit, 0, len(band.Spans)+1)
+	cardBase := base + len(band.Fixed)
+	for _, span := range band.Spans {
+		if span.Rows <= 0 {
+			continue
+		}
+		hits = append(hits, bodyHit{
+			row: cardBase + span.Start, h: span.Rows,
+			kind: hitWizardCard, index: span.Index,
+		})
+	}
+	if step.List {
+		hits = append(hits, bodyHit{
+			row:  cardBase + len(band.Cards),
+			kind: hitWizardInput,
+		})
+	}
+	return hits
+}
+
 // wizardStepLines draws the current question: the pinned rows, the whole cards
 // the window contains, the rows below them and the scroll hint when cards are
 // outside the window.
@@ -360,7 +392,11 @@ func (m *Model) wizardBandData() wizardStepBandData {
 		// same rows; guessing a small window would hide options needlessly.
 		band.Top = 0
 		band.Visible = band.Total
-		band.Cards = append(band.Cards, screen.cards...)
+		for i, r := range screen.ranges {
+			start := len(band.Cards)
+			band.Cards = append(band.Cards, screen.cards[r[0]:r[1]]...)
+			band.Spans = append(band.Spans, wizardCardSpan{Index: i, Start: start, Rows: len(band.Cards) - start})
+		}
 		return band
 	}
 	band.Top = m.cardTop(band.Total, rows, available)
@@ -372,9 +408,20 @@ func (m *Model) wizardBandData() wizardStepBandData {
 	band.Scrolls = band.Top > 0 || band.Top+band.Visible < band.Total
 	for i := band.Top; i < band.Top+band.Visible; i++ {
 		r := screen.ranges[i]
+		start := len(band.Cards)
 		band.Cards = append(band.Cards, screen.cards[r[0]:r[1]]...)
+		band.Spans = append(band.Spans, wizardCardSpan{Index: i, Start: start, Rows: len(band.Cards) - start})
 	}
 	return band
+}
+
+// wizardCardSpan is one drawn card: its question index, the row it starts on
+// inside Cards, and how many rows it covers. The mouse targets read the same
+// spans the renderer drew.
+type wizardCardSpan struct {
+	Index int
+	Start int
+	Rows  int
 }
 
 // wizardStepBandData is one computed question layout: the pinned rows, the
@@ -383,6 +430,7 @@ type wizardStepBandData struct {
 	Fixed   []string
 	Cards   []string
 	Tail    []string
+	Spans   []wizardCardSpan
 	Top     int
 	Visible int
 	Total   int
