@@ -259,7 +259,7 @@ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-platform/compose.st
 │  S3 호스트 스크립트 …  │
 │────────────────────────│
 │ ▸ 스택 상태            │
-│ 현재 스택과 서비스 상… │
+│ 현재 스택과 서비스 상  │
 ╰────────────────────────╯
 [↑↓] 이동  [enter] 실행  [q] 종료  [/] 찾기  [tab] 메뉴  [r] 새로고침  [?] 도움말
 
@@ -311,7 +311,7 @@ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-platform/compose.st
 │                        │
 │────────────────────────│
 │ ▸ 스택 상태            │
-│ 현재 스택과 서비스 상… │
+│ 현재 스택과 서비스 상  │
 ╰────────────────────────╯
 [↑↓] 이동  [enter] 실행  [q] 종료  [/] 찾기  [tab] 메뉴  [r] 새로고침  [?] 도움말
 
@@ -363,7 +363,7 @@ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-platform/compose.st
 │  S3 호스트 스크립트 생성   │
 │────────────────────────────│
 │ ▸ 스택 상태                │
-│ 현재 스택과 서비스 상태를… │
+│ 현재 스택과 서비스 상태를  │
 ╰────────────────────────────╯
 [↑↓] 이동  [enter] 실행  [q] 종료  [/] 찾기  [tab] 메뉴  [r] 새로고침  [?] 도움말
 
@@ -415,6 +415,6 @@ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-platform/compose.st
 │                            │
 │────────────────────────────│
 │ ▸ 스택 상태                │
-│ 현재 스택과 서비스 상태를… │
+│ 현재 스택과 서비스 상태를  │
 ╰────────────────────────────╯
 [↑↓] 이동  [enter] 실행  [q] 종료  [/] 찾기  [tab] 메뉴  [r] 새로고침  [?] 도움말

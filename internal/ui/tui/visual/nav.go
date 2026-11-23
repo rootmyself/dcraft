@@ -3,6 +3,8 @@ package visual
 import (
 	"fmt"
 	"strings"
+
+	"github.com/rivo/uniseg"
 )
 
 // NavItem is one feature in the navigation. The TUI builds it from
@@ -37,6 +39,8 @@ type Nav struct {
 	// way so the narrowed list never looks like a short registry.
 	FilterActive bool
 	Empty        string
+	// SummaryOffset is the sidebar description's left edge in display cells.
+	SummaryOffset int
 }
 
 // Count returns the number of items across all sections.
@@ -185,7 +189,7 @@ func Sidebar(th Theme, width, height int, nav Nav) []string {
 			band = []string{
 				th.Paint(TokenMuted, strings.Repeat(th.Glyphs.H, inner)),
 				th.Bold(TokenAccent, " "+th.Glyphs.Sel+" "+Truncate(item.Title, inner-4, ell)),
-				th.Paint(TokenMuted, " "+Fit(item.Summary, inner-2, ell)),
+				th.Paint(TokenMuted, " "+summaryWindow(item.Summary, nav.SummaryOffset, inner-2)),
 			}
 		}
 	}
@@ -213,6 +217,27 @@ func Sidebar(th Theme, width, height int, nav Nav) []string {
 	}
 	out = append(out, th.Paint(TokenMuted, th.Glyphs.BL+strings.Repeat(th.Glyphs.H, inner)+th.Glyphs.BR))
 	return out
+}
+
+func summaryWindow(text string, offset, width int) string {
+	var out strings.Builder
+	position := 0
+	graphemes := uniseg.NewGraphemes(text)
+	for graphemes.Next() {
+		cluster := graphemes.Str()
+		w := Width(cluster)
+		end := position + w
+		if position < offset && end > offset {
+			out.WriteString(strings.Repeat(" ", end-offset))
+		} else if position >= offset && end <= offset+width {
+			out.WriteString(cluster)
+		}
+		if end > offset+width {
+			break
+		}
+		position = end
+	}
+	return Pad(out.String(), width)
 }
 
 // sidebarLabel is the title-bar text: the feature count on the left and the

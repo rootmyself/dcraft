@@ -259,7 +259,7 @@ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/�
 │  S3 호스트 스크립트 …  │ api-1  | 2026-11-20T09:14:56.392Z INFO  request completed method=GET path=/v1/health status…█
 │────────────────────────│ api-1  | 2026-11-20T09:14:57.399Z INFO  request completed method=GET path=/v1/health status…█
 │ ▸ 스택 상태            │ api-1  | 2026-11-20T09:14:58.406Z INFO  request completed method=GET path=/v1/health status…█
-│ 현재 스택과 서비스 상… │ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/health status…█
+│ 현재 스택과 서비스 상  │ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/health status…█
 ╰────────────────────────╯ 41-60/60                                                                      PgUp/PgDn · g/G
 [q] 화면 닫기  [ctrl+c] 중단  [PgUp/PgDn] 스크롤  [g/G] 처음/끝  [?] 도움말
 
@@ -311,7 +311,7 @@ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/�
 │                        │ api-1  | 2026-11-20T09:14:56.392Z INFO  request completed method=GET path=/v1/health status…█
 │────────────────────────│ api-1  | 2026-11-20T09:14:57.399Z INFO  request completed method=GET path=/v1/health status…█
 │ ▸ 스택 상태            │ api-1  | 2026-11-20T09:14:58.406Z INFO  request completed method=GET path=/v1/health status…█
-│ 현재 스택과 서비스 상… │ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/health status…█
+│ 현재 스택과 서비스 상  │ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/health status…█
 ╰────────────────────────╯ 21-60/60                                                                      PgUp/PgDn · g/G
 [q] 화면 닫기  [ctrl+c] 중단  [PgUp/PgDn] 스크롤  [g/G] 처음/끝  [?] 도움말
 
@@ -363,7 +363,7 @@ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/�
 │  S3 호스트 스크립트 생성   │ api-1  | 2026-11-20T09:14:56.392Z INFO  request completed method=GET path=/v1/health status=200 duration=4ms                                                            █
 │────────────────────────────│ api-1  | 2026-11-20T09:14:57.399Z INFO  request completed method=GET path=/v1/health status=200 duration=5ms                                                            █
 │ ▸ 스택 상태                │ api-1  | 2026-11-20T09:14:58.406Z INFO  request completed method=GET path=/v1/health status=200 duration=6ms                                                            █
-│ 현재 스택과 서비스 상태를… │ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/health status=200 duration=7ms                                                            █
+│ 현재 스택과 서비스 상태를  │ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/health status=200 duration=7ms                                                            █
 ╰────────────────────────────╯ 41-60/60                                                                                                                                                  PgUp/PgDn · g/G
 [q] 화면 닫기  [ctrl+c] 중단  [PgUp/PgDn] 스크롤  [g/G] 처음/끝  [?] 도움말
 
@@ -415,6 +415,6 @@ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/�
 │                            │ api-1  | 2026-11-20T09:14:56.392Z INFO  request completed method=GET path=/v1/health status=200 duration=4ms                                                            █
 │────────────────────────────│ api-1  | 2026-11-20T09:14:57.399Z INFO  request completed method=GET path=/v1/health status=200 duration=5ms                                                            █
 │ ▸ 스택 상태                │ api-1  | 2026-11-20T09:14:58.406Z INFO  request completed method=GET path=/v1/health status=200 duration=6ms                                                            █
-│ 현재 스택과 서비스 상태를… │ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/health status=200 duration=7ms                                                            █
+│ 현재 스택과 서비스 상태를  │ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/health status=200 duration=7ms                                                            █
 ╰────────────────────────────╯ 21-60/60                                                                                                                                                  PgUp/PgDn · g/G
 [q] 화면 닫기  [ctrl+c] 중단  [PgUp/PgDn] 스크롤  [g/G] 처음/끝  [?] 도움말

@@ -29,6 +29,10 @@ type Options struct {
 	// short interval and drive the tick deterministically; production keeps the
 	// default.
 	SpinnerInterval time.Duration
+	// MarqueeInterval overrides the sidebar animation cadence.
+	MarqueeInterval time.Duration
+	// MarqueeTick schedules a tick; nil uses Bubble Tea's timer.
+	MarqueeTick func(time.Duration, func(time.Time) tea.Msg) tea.Cmd
 }
 
 // Run starts the interactive program. Normal quit (q or ctrl+c) does not touch
@@ -105,6 +109,9 @@ type Model struct {
 	// test can advance the animation without waiting on a wall clock.
 	spinnerFrame    int
 	spinnerInterval time.Duration
+	marquee         marqueeState
+	marqueeInterval time.Duration
+	marqueeTick     func(time.Duration, func(time.Time) tea.Msg) tea.Cmd
 
 	// theme is resolved once in NewModel and injected into every renderer.
 	// facts holds the last observed header values; neither is a global and
@@ -199,6 +206,14 @@ func NewModel(ctx context.Context, opts Options) *Model {
 		facts: initialFacts(opts.Target),
 	}
 	m.spinnerInterval = opts.SpinnerInterval
+	m.marqueeInterval = opts.MarqueeInterval
+	m.marqueeTick = opts.MarqueeTick
+	if m.marqueeTick == nil {
+		m.marqueeTick = tea.Tick
+	}
+	if m.marqueeInterval <= 0 {
+		m.marqueeInterval = 100 * time.Millisecond
+	}
 	if m.spinnerInterval <= 0 {
 		m.spinnerInterval = defaultSpinnerInterval
 	}
@@ -264,6 +279,22 @@ func (m *Model) Init() tea.Cmd {
 }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if tick, ok := msg.(marqueeTickMsg); ok {
+		m.advanceMarquee(tick)
+		return m, m.scheduleMarquee()
+	}
+	model, cmd := m.update(msg)
+	next := m.scheduleMarquee()
+	if cmd == nil {
+		return model, next
+	}
+	if next == nil {
+		return model, cmd
+	}
+	return model, tea.Batch(cmd, next)
+}
+
+func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
