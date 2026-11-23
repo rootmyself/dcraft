@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/rootmyself/dcraft/internal/core"
 )
 
@@ -36,7 +37,7 @@ func TestDocumentWrapsHeadingsAndANSISpans(t *testing.T) {
 	}
 	colored := "\x1b[31m" + strings.Repeat("x", 45) + "\x1b[0m"
 	wrapped := Wrap(colored, 20)
-	if strings.ReplaceAll(strings.Join(wrapped, ""), "\n", "") != colored {
+	if ansi.Strip(strings.Join(wrapped, "")) != ansi.Strip(colored) {
 		t.Fatalf("ANSI span damaged: %q", wrapped)
 	}
 	for _, line := range wrapped {

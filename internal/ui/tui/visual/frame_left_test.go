@@ -1,9 +1,46 @@
 package visual
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 )
+
+func TestWrappedColorSurvivesComposeAndPartialViewport(t *testing.T) {
+	body := Wrap("\x1b[31m"+strings.Repeat("x", 50)+"\x1b[0m", 20)
+	for _, start := range []int{0, 1} {
+		frame := Compose(Plain(), 25, 5, Frame{
+			Header: "h", Footer: "f",
+			Left: []string{"\x1b[34mPANE\x1b[0m", "\x1b[34mPANE\x1b[0m", "\x1b[34mPPNE\x1b[0m"},
+			Body: body[start:],
+		})
+		for _, row := range frame[1 : 1+len(body)-start] {
+			// Walk the SGR state at the rendered cells, not the bytes of Wrap.
+			color := ""
+			for _, part := range regexp.MustCompile(`\x1b\[[0-9;]*m|.`).FindAllString(row, -1) {
+				switch part {
+				case "\x1b[31m":
+					color = "red"
+				case "\x1b[34m":
+					color = "blue"
+				case "\x1b[0m":
+					color = ""
+				case "x":
+					if color != "red" {
+						t.Fatalf("viewport %d: content lost red in %q", start, row)
+					}
+				case "P", "A", "N", "E":
+					if color != "blue" {
+						t.Fatalf("viewport %d: sidebar color leaked in %q", start, row)
+					}
+				}
+			}
+			if color != "" {
+				t.Fatalf("viewport %d: style leaks past row %q", start, row)
+			}
+		}
+	}
+}
 
 // A left pane shares the body region: header and footer still span the full
 // width, and the content keeps exactly the remaining cells.

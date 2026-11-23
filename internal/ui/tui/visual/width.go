@@ -79,7 +79,29 @@ func Wrap(text string, w int) []string {
 	if text == "" {
 		return []string{""}
 	}
-	return strings.Split(ansi.Wrap(text, w, ""), "\n")
+	lines := strings.Split(ansi.Wrap(text, w, ""), "\n")
+	var sgr string
+	for i, line := range lines {
+		prefix := sgr
+		var state byte
+		for rest := line; len(rest) > 0; {
+			seq, _, n, next := ansi.DecodeSequence(rest, state, nil)
+			state = next
+			rest = rest[n:]
+			if (strings.HasPrefix(seq, "\x1b[") || strings.HasPrefix(seq, "\x9b")) && strings.HasSuffix(seq, "m") {
+				if seq == "\x1b[m" || seq == "\x1b[0m" || seq == "\x9bm" || seq == "\x9b0m" {
+					sgr = ""
+				} else {
+					sgr += seq
+				}
+			}
+		}
+		lines[i] = prefix + line
+		if sgr != "" {
+			lines[i] += "\x1b[0m"
+		}
+	}
+	return lines
 }
 
 func splitCells(s string, n int) (string, string) {
