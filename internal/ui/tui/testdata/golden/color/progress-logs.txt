@@ -1,0 +1,420 @@
+# dcraft TUI golden snapshot
+# screen: progress-logs
+# theme: color
+# regenerate: go test ./internal/ui/tui -run TestGolden -update
+
+=== 40x18 ===
+ dcraft · acme-platform · staging
+스택 시작
+
+작업을 실행하는 중…
+  … 위에 더 있음
+  ✓ 입력 재확인 (완료)
+  ◐ 작업 실행 (진행 중)
+  · 사후 스크립트 (예정)
+  … 아래에 더 있음
+api-1  | Container api-1  Creating
+api-1  | Container api-1  Created
+cache-1 | Container cache-1  Starting
+web-1  | Container web-1  Starting
+api-1  | Container api-1  Starting
+cache-1 | Container cache-1  Started
+web-1  | Container web-1  Started
+api-1  | Container api-1  Started
+[ctrl+c] 안전 취소  [q] 종료 불가
+
+=== 40x30 ===
+ dcraft · acme-platform · staging
+스택 시작
+
+작업을 실행하는 중…
+  ✓ 대상 확인 (완료)
+  ✓ 환경 확인 (완료)
+  ✓ 사전 스크립트 (완료)
+  ✓ 입력 재확인 (완료)
+  ◐ 작업 실행 (진행 중)
+  · 사후 스크립트 (예정)
+  · 이력 기록 (예정)
+web-1  | 9a0f2d3c4b5a Extracting 1.2MB
+web-1  | 9a0f2d3c4b5a Pull complete
+api-1  | Building 42.1s (5/7)
+api-1  | 7c1b0e2d4f3a CACHED
+api-1  | exporting to image
+api-1  | naming to docker.io/library/ac…
+cache-1 | Container cache-1  Creating
+cache-1 | Container cache-1  Created
+web-1  | Container web-1  Creating
+web-1  | Container web-1  Created
+api-1  | Container api-1  Creating
+api-1  | Container api-1  Created
+cache-1 | Container cache-1  Starting
+web-1  | Container web-1  Starting
+api-1  | Container api-1  Starting
+cache-1 | Container cache-1  Started
+web-1  | Container web-1  Started
+api-1  | Container api-1  Started
+[ctrl+c] 안전 취소  [q] 종료 불가
+
+=== 40x50 ===
+ dcraft · acme-platform · staging
+스택 시작
+
+작업을 실행하는 중…
+  ✓ 대상 확인 (완료)
+  ✓ 환경 확인 (완료)
+  ✓ 사전 스크립트 (완료)
+  ✓ 입력 재확인 (완료)
+  ◐ 작업 실행 (진행 중)
+  · 사후 스크립트 (예정)
+  · 이력 기록 (예정)
+web-1  | Pulling nginx:alpine
+web-1  | 9a0f2d3c4b5a Pulling fs layer
+web-1  | 9a0f2d3c4b5a Downloading 12.4MB
+web-1  | 9a0f2d3c4b5a Extracting 1.2MB
+web-1  | 9a0f2d3c4b5a Pull complete
+api-1  | Building 42.1s (5/7)
+api-1  | 7c1b0e2d4f3a CACHED
+api-1  | exporting to image
+api-1  | naming to docker.io/library/ac…
+cache-1 | Container cache-1  Creating
+cache-1 | Container cache-1  Created
+web-1  | Container web-1  Creating
+web-1  | Container web-1  Created
+api-1  | Container api-1  Creating
+api-1  | Container api-1  Created
+cache-1 | Container cache-1  Starting
+web-1  | Container web-1  Starting
+api-1  | Container api-1  Starting
+cache-1 | Container cache-1  Started
+web-1  | Container web-1  Started
+api-1  | Container api-1  Started
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[ctrl+c] 안전 취소  [q] 종료 불가
+
+=== 80x18 ===
+ dcraft · acme-platform · staging        Docker 29.10.0 · Compose 2.39.1 · 로컬
+스택 시작
+
+작업을 실행하는 중…
+  … 위에 더 있음
+  ✓ 입력 재확인 (완료)
+  ◐ 작업 실행 (진행 중)
+  · 사후 스크립트 (예정)
+  … 아래에 더 있음
+api-1  | Container api-1  Creating
+api-1  | Container api-1  Created
+cache-1 | Container cache-1  Starting
+web-1  | Container web-1  Starting
+api-1  | Container api-1  Starting
+cache-1 | Container cache-1  Started
+web-1  | Container web-1  Started
+api-1  | Container api-1  Started
+[ctrl+c] 안전 취소  [q] 종료 불가  [PgUp/PgDn] 스크롤  [g/G] 처음/끝
+
+=== 80x30 ===
+ dcraft · acme-platform · staging        Docker 29.10.0 · Compose 2.39.1 · 로컬
+스택 시작
+
+작업을 실행하는 중…
+  ✓ 대상 확인 (완료)
+  ✓ 환경 확인 (완료)
+  ✓ 사전 스크립트 (완료)
+  ✓ 입력 재확인 (완료)
+  ◐ 작업 실행 (진행 중)
+  · 사후 스크립트 (예정)
+  · 이력 기록 (예정)
+web-1  | 9a0f2d3c4b5a Extracting 1.2MB
+web-1  | 9a0f2d3c4b5a Pull complete
+api-1  | Building 42.1s (5/7)
+api-1  | 7c1b0e2d4f3a CACHED
+api-1  | exporting to image
+api-1  | naming to docker.io/library/acme-api
+cache-1 | Container cache-1  Creating
+cache-1 | Container cache-1  Created
+web-1  | Container web-1  Creating
+web-1  | Container web-1  Created
+api-1  | Container api-1  Creating
+api-1  | Container api-1  Created
+cache-1 | Container cache-1  Starting
+web-1  | Container web-1  Starting
+api-1  | Container api-1  Starting
+cache-1 | Container cache-1  Started
+web-1  | Container web-1  Started
+api-1  | Container api-1  Started
+[ctrl+c] 안전 취소  [q] 종료 불가  [PgUp/PgDn] 스크롤  [g/G] 처음/끝
+
+=== 80x50 ===
+ dcraft · acme-platform · staging        Docker 29.10.0 · Compose 2.39.1 · 로컬
+스택 시작
+
+작업을 실행하는 중…
+  ✓ 대상 확인 (완료)
+  ✓ 환경 확인 (완료)
+  ✓ 사전 스크립트 (완료)
+  ✓ 입력 재확인 (완료)
+  ◐ 작업 실행 (진행 중)
+  · 사후 스크립트 (예정)
+  · 이력 기록 (예정)
+web-1  | Pulling nginx:alpine
+web-1  | 9a0f2d3c4b5a Pulling fs layer
+web-1  | 9a0f2d3c4b5a Downloading 12.4MB
+web-1  | 9a0f2d3c4b5a Extracting 1.2MB
+web-1  | 9a0f2d3c4b5a Pull complete
+api-1  | Building 42.1s (5/7)
+api-1  | 7c1b0e2d4f3a CACHED
+api-1  | exporting to image
+api-1  | naming to docker.io/library/acme-api
+cache-1 | Container cache-1  Creating
+cache-1 | Container cache-1  Created
+web-1  | Container web-1  Creating
+web-1  | Container web-1  Created
+api-1  | Container api-1  Creating
+api-1  | Container api-1  Created
+cache-1 | Container cache-1  Starting
+web-1  | Container web-1  Starting
+api-1  | Container api-1  Starting
+cache-1 | Container cache-1  Started
+web-1  | Container web-1  Started
+api-1  | Container api-1  Started
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[ctrl+c] 안전 취소  [q] 종료 불가
+
+=== 120x18 ===
+ dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
+╭ 기능 · 18 ─── esc 닫기 ╮ 스택 시작
+│조회                    │
+│  서비스 접속           │ 작업을 실행하는 중…
+│  로그 보기             │   … 위에 더 있음
+│▸ 스택 상태             │   ✓ 입력 재확인 (완료)
+│                        │   ◐ 작업 실행 (진행 중)
+│운영                    │   · 사후 스크립트 (예정)
+│  스택 제거 ▲ 위험      │   … 아래에 더 있음
+│  스택 재시작           │ api-1  | Container api-1  Creating
+│  스택 중지             │ api-1  | Container api-1  Created
+│  스택 시작             │ cache-1 | Container cache-1  Starting
+│  갱신                  │ web-1  | Container web-1  Starting
+│                        │ api-1  | Container api-1  Starting
+│데이터                  │ cache-1 | Container cache-1  Started
+│  데이터 백업           │ web-1  | Container web-1  Started
+╰────────────────────────╯ api-1  | Container api-1  Started
+[ctrl+c] 안전 취소  [q] 종료 불가  [PgUp/PgDn] 스크롤  [g/G] 처음/끝
+
+=== 120x30 ===
+ dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
+╭ 기능 · 18 ─── esc 닫기 ╮ 스택 시작
+│조회                    │
+│  서비스 접속           │ 작업을 실행하는 중…
+│  로그 보기             │   ✓ 대상 확인 (완료)
+│▸ 스택 상태             │   ✓ 환경 확인 (완료)
+│                        │   ✓ 사전 스크립트 (완료)
+│운영                    │   ✓ 입력 재확인 (완료)
+│  스택 제거 ▲ 위험      │   ◐ 작업 실행 (진행 중)
+│  스택 재시작           │   · 사후 스크립트 (예정)
+│  스택 중지             │   · 이력 기록 (예정)
+│  스택 시작             │ web-1  | 9a0f2d3c4b5a Extracting 1.2MB
+│  갱신                  │ web-1  | 9a0f2d3c4b5a Pull complete
+│                        │ api-1  | Building 42.1s (5/7)
+│데이터                  │ api-1  | 7c1b0e2d4f3a CACHED
+│  데이터 백업           │ api-1  | exporting to image
+│  데이터 복원 ▲ 위험    │ api-1  | naming to docker.io/library/acme-api
+│  이전 버전 복… ▲ 위험  │ cache-1 | Container cache-1  Creating
+│                        │ cache-1 | Container cache-1  Created
+│설정                    │ web-1  | Container web-1  Creating
+│  실행환경 별칭         │ web-1  | Container web-1  Created
+│  Git 호스트 스크립트…  │ api-1  | Container api-1  Creating
+│  호스트 스크립트       │ api-1  | Container api-1  Created
+│  Compose 설치          │ cache-1 | Container cache-1  Starting
+│  S3 호스트 스크립트 …  │ web-1  | Container web-1  Starting
+│────────────────────────│ api-1  | Container api-1  Starting
+│ ▸ 스택 상태            │ cache-1 | Container cache-1  Started
+│ 현재 스택과 서비스 상  │ web-1  | Container web-1  Started
+╰────────────────────────╯ api-1  | Container api-1  Started
+[ctrl+c] 안전 취소  [q] 종료 불가  [PgUp/PgDn] 스크롤  [g/G] 처음/끝
+
+=== 120x50 ===
+ dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
+╭ 기능 · 18 ─── esc 닫기 ╮ 스택 시작
+│조회                    │
+│  서비스 접속           │ 작업을 실행하는 중…
+│  로그 보기             │   ✓ 대상 확인 (완료)
+│▸ 스택 상태             │   ✓ 환경 확인 (완료)
+│                        │   ✓ 사전 스크립트 (완료)
+│운영                    │   ✓ 입력 재확인 (완료)
+│  스택 제거 ▲ 위험      │   ◐ 작업 실행 (진행 중)
+│  스택 재시작           │   · 사후 스크립트 (예정)
+│  스택 중지             │   · 이력 기록 (예정)
+│  스택 시작             │ web-1  | Pulling nginx:alpine
+│  갱신                  │ web-1  | 9a0f2d3c4b5a Pulling fs layer
+│                        │ web-1  | 9a0f2d3c4b5a Downloading 12.4MB
+│데이터                  │ web-1  | 9a0f2d3c4b5a Extracting 1.2MB
+│  데이터 백업           │ web-1  | 9a0f2d3c4b5a Pull complete
+│  데이터 복원 ▲ 위험    │ api-1  | Building 42.1s (5/7)
+│  이전 버전 복… ▲ 위험  │ api-1  | 7c1b0e2d4f3a CACHED
+│                        │ api-1  | exporting to image
+│설정                    │ api-1  | naming to docker.io/library/acme-api
+│  실행환경 별칭         │ cache-1 | Container cache-1  Creating
+│  Git 호스트 스크립트…  │ cache-1 | Container cache-1  Created
+│  호스트 스크립트       │ web-1  | Container web-1  Creating
+│  Compose 설치          │ web-1  | Container web-1  Created
+│  S3 호스트 스크립트 …  │ api-1  | Container api-1  Creating
+│  비밀값 연결           │ api-1  | Container api-1  Created
+│  최초 구성             │ cache-1 | Container cache-1  Starting
+│                        │ web-1  | Container web-1  Starting
+│                        │ api-1  | Container api-1  Starting
+│                        │ cache-1 | Container cache-1  Started
+│                        │ web-1  | Container web-1  Started
+│                        │ api-1  | Container api-1  Started
+│                        │
+│                        │
+│                        │
+│                        │
+│                        │
+│                        │
+│                        │
+│                        │
+│                        │
+│                        │
+│                        │
+│                        │
+│                        │
+│────────────────────────│
+│ ▸ 스택 상태            │
+│ 현재 스택과 서비스 상  │
+╰────────────────────────╯
+[ctrl+c] 안전 취소  [q] 종료 불가
+
+=== 200x18 ===
+ dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
+╭ 기능 · 18 ─────── esc 닫기 ╮ 스택 시작
+│조회                        │
+│  서비스 접속               │ 작업을 실행하는 중…
+│  로그 보기                 │   … 위에 더 있음
+│▸ 스택 상태                 │   ✓ 입력 재확인 (완료)
+│                            │   ◐ 작업 실행 (진행 중)
+│운영                        │   · 사후 스크립트 (예정)
+│  스택 제거 ▲ 위험          │   … 아래에 더 있음
+│  스택 재시작               │ api-1  | Container api-1  Creating
+│  스택 중지                 │ api-1  | Container api-1  Created
+│  스택 시작                 │ cache-1 | Container cache-1  Starting
+│  갱신                      │ web-1  | Container web-1  Starting
+│                            │ api-1  | Container api-1  Starting
+│데이터                      │ cache-1 | Container cache-1  Started
+│  데이터 백업               │ web-1  | Container web-1  Started
+╰────────────────────────────╯ api-1  | Container api-1  Started
+[ctrl+c] 안전 취소  [q] 종료 불가  [PgUp/PgDn] 스크롤  [g/G] 처음/끝
+
+=== 200x30 ===
+ dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
+╭ 기능 · 18 ─────── esc 닫기 ╮ 스택 시작
+│조회                        │
+│  서비스 접속               │ 작업을 실행하는 중…
+│  로그 보기                 │   ✓ 대상 확인 (완료)
+│▸ 스택 상태                 │   ✓ 환경 확인 (완료)
+│                            │   ✓ 사전 스크립트 (완료)
+│운영                        │   ✓ 입력 재확인 (완료)
+│  스택 제거 ▲ 위험          │   ◐ 작업 실행 (진행 중)
+│  스택 재시작               │   · 사후 스크립트 (예정)
+│  스택 중지                 │   · 이력 기록 (예정)
+│  스택 시작                 │ web-1  | 9a0f2d3c4b5a Extracting 1.2MB
+│  갱신                      │ web-1  | 9a0f2d3c4b5a Pull complete
+│                            │ api-1  | Building 42.1s (5/7)
+│데이터                      │ api-1  | 7c1b0e2d4f3a CACHED
+│  데이터 백업               │ api-1  | exporting to image
+│  데이터 복원 ▲ 위험        │ api-1  | naming to docker.io/library/acme-api
+│  이전 버전 복원 ▲ 위험     │ cache-1 | Container cache-1  Creating
+│                            │ cache-1 | Container cache-1  Created
+│설정                        │ web-1  | Container web-1  Creating
+│  실행환경 별칭             │ web-1  | Container web-1  Created
+│  Git 호스트 스크립트 생성  │ api-1  | Container api-1  Creating
+│  호스트 스크립트           │ api-1  | Container api-1  Created
+│  Compose 설치              │ cache-1 | Container cache-1  Starting
+│  S3 호스트 스크립트 생성   │ web-1  | Container web-1  Starting
+│────────────────────────────│ api-1  | Container api-1  Starting
+│ ▸ 스택 상태                │ cache-1 | Container cache-1  Started
+│ 현재 스택과 서비스 상태를  │ web-1  | Container web-1  Started
+╰────────────────────────────╯ api-1  | Container api-1  Started
+[ctrl+c] 안전 취소  [q] 종료 불가  [PgUp/PgDn] 스크롤  [g/G] 처음/끝
+
+=== 200x50 ===
+ dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
+╭ 기능 · 18 ─────── esc 닫기 ╮ 스택 시작
+│조회                        │
+│  서비스 접속               │ 작업을 실행하는 중…
+│  로그 보기                 │   ✓ 대상 확인 (완료)
+│▸ 스택 상태                 │   ✓ 환경 확인 (완료)
+│                            │   ✓ 사전 스크립트 (완료)
+│운영                        │   ✓ 입력 재확인 (완료)
+│  스택 제거 ▲ 위험          │   ◐ 작업 실행 (진행 중)
+│  스택 재시작               │   · 사후 스크립트 (예정)
+│  스택 중지                 │   · 이력 기록 (예정)
+│  스택 시작                 │ web-1  | Pulling nginx:alpine
+│  갱신                      │ web-1  | 9a0f2d3c4b5a Pulling fs layer
+│                            │ web-1  | 9a0f2d3c4b5a Downloading 12.4MB
+│데이터                      │ web-1  | 9a0f2d3c4b5a Extracting 1.2MB
+│  데이터 백업               │ web-1  | 9a0f2d3c4b5a Pull complete
+│  데이터 복원 ▲ 위험        │ api-1  | Building 42.1s (5/7)
+│  이전 버전 복원 ▲ 위험     │ api-1  | 7c1b0e2d4f3a CACHED
+│                            │ api-1  | exporting to image
+│설정                        │ api-1  | naming to docker.io/library/acme-api
+│  실행환경 별칭             │ cache-1 | Container cache-1  Creating
+│  Git 호스트 스크립트 생성  │ cache-1 | Container cache-1  Created
+│  호스트 스크립트           │ web-1  | Container web-1  Creating
+│  Compose 설치              │ web-1  | Container web-1  Created
+│  S3 호스트 스크립트 생성   │ api-1  | Container api-1  Creating
+│  비밀값 연결               │ api-1  | Container api-1  Created
+│  최초 구성                 │ cache-1 | Container cache-1  Starting
+│                            │ web-1  | Container web-1  Starting
+│                            │ api-1  | Container api-1  Starting
+│                            │ cache-1 | Container cache-1  Started
+│                            │ web-1  | Container web-1  Started
+│                            │ api-1  | Container api-1  Started
+│                            │
+│                            │
+│                            │
+│                            │
+│                            │
+│                            │
+│                            │
+│                            │
+│                            │
+│                            │
+│                            │
+│                            │
+│                            │
+│────────────────────────────│
+│ ▸ 스택 상태                │
+│ 현재 스택과 서비스 상태를  │
+╰────────────────────────────╯
+[ctrl+c] 안전 취소  [q] 종료 불가

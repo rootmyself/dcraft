@@ -22,6 +22,11 @@ type IO struct {
 	// the child pseudo-terminal; zero means "derive from Stdin or 80x24".
 	Width  int
 	Height int
+	// Progress is an opt-in stream for a long operation's own tool output
+	// (currently `up`). It is separate from Stdout/Stderr so a normal capture
+	// result and a live terminal feature keep their existing meaning. Nil means
+	// capture-only: the CLI never sets it, so its output is unchanged.
+	Progress io.Writer
 }
 
 // WithDefaults fills unset streams with the process standard streams. Tests

@@ -71,6 +71,10 @@ type Descriptor struct {
 	Wizard bool
 	// EnvironmentAdmin offers alias issuance and target switching in the TUI.
 	EnvironmentAdmin bool
+	// StreamsProgress marks a feature that can report its own tool output
+	// (currently `up`) through Invocation.IO.Progress while it runs. The CLI
+	// never supplies that writer, so its captured output is unchanged.
+	StreamsProgress bool
 	// Hooks declares the registered host-script attachment point. The zero
 	// value runs no scripts. HookUpUpdate is only valid on `up` and `update`;
 	// read-only features may never declare it.

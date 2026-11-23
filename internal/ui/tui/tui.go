@@ -178,6 +178,12 @@ type Model struct {
 	// readable while the reader walks back through the log.
 	liveTop    int
 	liveFollow bool
+	// progress is the opt-in output of a long `up` run. It is cleared when the
+	// run completes: there is no post-run log panel.
+	progress       *progressState
+	progressCh     chan string
+	progressTop    int
+	progressFollow bool
 	// lastLive keeps the tail of the last live output so the management view
 	// still shows what the process printed after the screen closes.
 	lastLive []string
@@ -271,6 +277,8 @@ type inputsMsg struct {
 }
 
 type liveLineMsg struct{ line string }
+
+type progressLineMsg struct{ line string }
 
 type environmentListMsg struct {
 	envs []core.Environment
@@ -451,6 +459,12 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.live.append(msg.line)
 		return m, waitLiveCmd(m.liveCh)
+	case progressLineMsg:
+		if m.progress == nil {
+			return m, nil
+		}
+		m.progress.append(msg.line)
+		return m, waitProgressCmd(m.progressCh)
 	case resultMsg:
 		if m.wizardCanceled {
 			// A canceled wizard step run may deliver its result after the
@@ -475,6 +489,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.runCancel = nil
 			m.runCtx = nil
 		}
+		// The running log belongs to the run. It is dropped before the result
+		// is drawn, so no stale pane competes with the result document.
+		m.closeProgress()
 		if m.wizardAwaiting {
 			m.wizardAwaiting = false
 			m.beginWizardSteps(res)
@@ -530,6 +547,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.live != nil {
 			return m.updateLiveKey(msg)
+		}
+		if m.updateProgressKey(msg) {
+			return m, nil
 		}
 		// Body scrolling runs before the phase handlers: PgUp/PgDn, Home/End
 		// and g/G have no other meaning on a result screen. The detail view
@@ -1120,6 +1140,7 @@ func (m *Model) resetRunState() {
 	m.helpOpen = false
 	m.confirmScroll = 0
 	m.closeLive()
+	m.closeProgress()
 	m.form = nil
 	m.lastLive = nil
 	if m.runCancel != nil {
@@ -1137,9 +1158,15 @@ func (m *Model) launchRun(f core.Feature, approvals []core.ApprovalKind, options
 		m.setPlan(core.PlannedStages(f))
 	}
 	m.runCtx, m.runCancel = context.WithCancel(m.ctx)
+	if f != nil && f.Descriptor().StreamsProgress {
+		m.setupProgress()
+	}
 	cmds := []tea.Cmd{m.runCmd(f, approvals, options, m.events, m.runCtx), waitStageCmd(m.events)}
 	if m.live != nil {
 		cmds = append(cmds, waitLiveCmd(m.liveCh))
+	}
+	if m.progressCh != nil {
+		cmds = append(cmds, waitProgressCmd(m.progressCh))
 	}
 	if spin := m.spinnerCmd(); spin != nil {
 		cmds = append(cmds, spin)

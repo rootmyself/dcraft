@@ -207,6 +207,7 @@ for a in "$@"; do
 done
 case "$sub" in
   up)
+    if [ -n "${DOCKER_FAKE_UP_LINES:-}" ]; then printf '%s\n' "$DOCKER_FAKE_UP_LINES"; fi
     if [ -n "$DOCKER_FAKE_SLEEP_UP" ]; then exec sleep "$DOCKER_FAKE_SLEEP_UP"; fi
     if [ -n "${DOCKER_FAKE_ECHO_ENV:-}" ]; then echo "container env: $(printenv "$DOCKER_FAKE_ECHO_ENV")"; fi
     if [ -n "${DOCKER_FAKE_FAIL_UP:-}" ]; then echo "container failed" >&2; exit 1; fi

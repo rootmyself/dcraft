@@ -185,7 +185,16 @@ func (m *Model) screenKeycaps() []visual.Keycap {
 		}
 		return items
 	}
-	return m.resultScrollKeycaps(visual.FooterItems(m.footerPhase()))
+	items := m.resultScrollKeycaps(visual.FooterItems(m.footerPhase()))
+	if m.progressScrolls() {
+		// The log viewport is the only surface PgUp/PgDn move while a run is
+		// in flight; state the keys next to the mandatory cancel/quit chips.
+		items = append(items,
+			visual.Keycap{Key: "PgUp/PgDn", Label: msgKeyScroll, Priority: 2},
+			visual.Keycap{Key: "g/G", Label: msgKeyEnds, Priority: 3},
+		)
+	}
+	return items
 }
 
 // withoutHelp drops the help chip from a row for a screen that cannot open the
@@ -291,6 +300,14 @@ func (m *Model) layoutBody() bodyLayout {
 		return m.serviceBody()
 	case phaseWizardStep:
 		return m.wizardBody()
+	case phaseLoading:
+		// A long `up` splits the running body into the stage timeline and a
+		// log viewport. When the viewport cannot get three rows the ordinary
+		// timeline body stays exactly as it was.
+		if body, ok := m.progressBody(); ok {
+			return body
+		}
+		return m.wholeBody()
 	default:
 		return m.wholeBody()
 	}

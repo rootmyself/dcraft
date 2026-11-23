@@ -77,6 +77,7 @@ func goldenScreens() []goldenScreen {
 		{name: "service-selection", build: goldenServiceSelection},
 		{name: "confirm-modal", build: goldenConfirmModal},
 		{name: "progress", build: goldenProgress},
+		{name: "progress-logs", build: goldenProgressLogs},
 		{name: "wizard", build: goldenWizard},
 		{name: "wizard-list", build: goldenWizardList},
 		{name: "wizard-examples", build: goldenWizardExamples},
@@ -616,6 +617,41 @@ func goldenProgress(t *testing.T) *Model {
 	running := core.Stage{Name: plan[4].Name, Title: plan[4].Title, Status: core.StageStarted}
 	m.observeStage(running)
 	m.currentStage = &running
+	return m
+}
+
+// goldenProgressLogs is the split running screen: the stage timeline keeps its
+// third and the compose progress lines fill the rest in a tail viewport.
+func goldenProgressLogs(t *testing.T) *Model {
+	t.Helper()
+	m := goldenProgress(t)
+	lines := []string{
+		"web-1  | Pulling nginx:alpine",
+		"web-1  | 9a0f2d3c4b5a Pulling fs layer",
+		"web-1  | 9a0f2d3c4b5a Downloading 12.4MB",
+		"web-1  | 9a0f2d3c4b5a Extracting 1.2MB",
+		"web-1  | 9a0f2d3c4b5a Pull complete",
+		"api-1  | Building 42.1s (5/7)",
+		"api-1  | 7c1b0e2d4f3a CACHED",
+		"api-1  | exporting to image",
+		"api-1  | naming to docker.io/library/acme-api",
+		"cache-1 | Container cache-1  Creating",
+		"cache-1 | Container cache-1  Created",
+		"web-1  | Container web-1  Creating",
+		"web-1  | Container web-1  Created",
+		"api-1  | Container api-1  Creating",
+		"api-1  | Container api-1  Created",
+		"cache-1 | Container cache-1  Starting",
+		"web-1  | Container web-1  Starting",
+		"api-1  | Container api-1  Starting",
+		"cache-1 | Container cache-1  Started",
+		"web-1  | Container web-1  Started",
+		"api-1  | Container api-1  Started",
+	}
+	ch := make(chan string, 1)
+	m.progress = &progressState{writer: &liveWriter{ch: ch}, lines: lines}
+	m.progressCh = ch
+	m.progressFollow = true
 	return m
 }
 
