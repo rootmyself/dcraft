@@ -662,7 +662,9 @@ func plateSpan(th Theme, tok Token, bold bool, s string) string {
 	if !ok {
 		return s
 	}
-	return sgr(hex, th.Palette.Surface, bold) + s + "\x1b[0m"
+	// Route through the theme: a 16-color terminal must map the token to the
+	// nearest basic color instead of receiving a 24-bit sequence.
+	return th.sgr(hex, th.Palette.Surface, bold) + s + "\x1b[0m"
 }
 
 // renderModalContent is the plain span list of the scroll band, used when no

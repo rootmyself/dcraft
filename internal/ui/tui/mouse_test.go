@@ -450,3 +450,146 @@ func TestMouseHelpHasNoButtonsAndFooterIsNotClickable(t *testing.T) {
 		t.Fatal("wheel closed the help panel")
 	}
 }
+
+// A list step is a selectable list: its items have no options and allow a
+// custom value, so it looks like a text field to the wizard, but the wheel
+// must move the cursor over the items plus the new-item row instead of
+// scrolling the body. A plain text field keeps the wheel for the body.
+func TestMouseWheelMovesTheListEditorCursor(t *testing.T) {
+	desc := descriptor("secrets", false)
+	desc.Wizard = true
+	wiz := &wizardStub{desc: desc, preview: "OK", steps: core.WizardSpec{
+		Title: "목록",
+		Steps: []core.WizardStep{{
+			Name: "items", Title: "항목", List: true, AllowCustom: true, Optional: true,
+			Default: "alpha\nbeta\ngamma",
+		}},
+	}}
+	m := newWizardModel(t, wiz)
+	m.theme = *plainTheme()
+	openWizard(t, m)
+	resize(t, m, 120, 36)
+	if m.phase != phaseWizardStep || len(m.wizardItems) != 3 || !m.wizardSpec.Steps[0].List {
+		t.Fatalf("fixture is not a 3-item list step: phase=%v items=%v", m.phase, m.wizardItems)
+	}
+	// The list starts on the new-item row, below the last item.
+	if m.wizardChoice != len(m.wizardItems) {
+		t.Fatalf("cursor starts at %d, want the new-item row %d", m.wizardChoice, len(m.wizardItems))
+	}
+
+	// Up moves one item at a time, the same direction the keyboard takes.
+	wheel(t, m, 10, 8, false)
+	if m.wizardChoice != 2 {
+		t.Fatalf("wheel up left the cursor at %d, want 2", m.wizardChoice)
+	}
+	wheel(t, m, 10, 8, true)
+	if m.wizardChoice != 3 {
+		t.Fatalf("wheel down left the cursor at %d, want the new-item row 3", m.wizardChoice)
+	}
+
+	// Both ends clamp: the wheel never wraps past the first item or the
+	// new-item row, exactly like Up/Down on the same list.
+	for i := 0; i < 5; i++ {
+		wheel(t, m, 10, 8, false)
+	}
+	if m.wizardChoice != 0 {
+		t.Fatalf("wheel up wrapped past the first item to %d, want 0", m.wizardChoice)
+	}
+	for i := 0; i < 6; i++ {
+		wheel(t, m, 10, 8, true)
+	}
+	if m.wizardChoice != len(m.wizardItems) {
+		t.Fatalf("wheel down wrapped past the new-item row to %d, want %d", m.wizardChoice, len(m.wizardItems))
+	}
+
+	// A plain text field keeps the wheel for body scrolling: the cursor is not
+	// a list position there.
+	text := &wizardStub{desc: desc, preview: "OK", steps: core.WizardSpec{
+		Title: "참조",
+		Steps: []core.WizardStep{{
+			Name: "ref", Title: "원본 참조", Prompt: "원본 참조 입력.", AllowCustom: true,
+		}},
+	}}
+	m2 := newWizardModel(t, text)
+	m2.theme = *plainTheme()
+	openWizard(t, m2)
+	resize(t, m2, 120, 36)
+	if !m2.wizardTextInput() || m2.wizardSpec.Steps[0].List {
+		t.Fatalf("fixture is not a plain text field: %+v", m2.wizardSpec.Steps[0])
+	}
+	choice := m2.wizardChoice
+	wheel(t, m2, 10, 8, true)
+	if m2.wizardChoice != choice {
+		t.Fatalf("wheel moved the cursor of a text field: %d -> %d", choice, m2.wizardChoice)
+	}
+}
+
+// While a list item is being edited the keyboard blocks Up/Down, so a card
+// click must not move the selection either: Enter would otherwise write the
+// buffer into a different item than the one the user was editing. The click is
+// ignored, exactly like the keys.
+func TestMouseCardClickDoesNotMoveTheSelectionWhileEditing(t *testing.T) {
+	desc := descriptor("secrets", false)
+	desc.Wizard = true
+	wiz := &wizardStub{desc: desc, preview: "OK", steps: core.WizardSpec{
+		Title: "목록",
+		Steps: []core.WizardStep{{
+			Name: "items", Title: "항목", List: true, AllowCustom: true, Optional: true,
+			Default: "alpha\nbeta\ngamma",
+		}},
+	}}
+	m := newWizardModel(t, wiz)
+	m.theme = *plainTheme()
+	openWizard(t, m)
+	resize(t, m, 120, 36)
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	// Enter edit on item 0: select it, then double click to open the field.
+	clickRow(t, m, "* alpha", now)
+	clickRow(t, m, "* alpha", now.Add(100*time.Millisecond))
+	if !m.wizardEditing || m.wizardChoice != 0 {
+		t.Fatalf("fixture did not enter edit on item 0: editing=%v choice=%d", m.wizardEditing, m.wizardChoice)
+	}
+	typeKeys(t, m, "-edited")
+
+	// A single click on item 2 must leave the selection on item 0.
+	clickRow(t, m, "* gamma", now.Add(time.Second))
+	if m.wizardChoice != 0 {
+		t.Fatalf("card click moved the edit selection to %d, want 0", m.wizardChoice)
+	}
+	if !m.wizardEditing {
+		t.Fatal("card click cancelled the edit instead of ignoring it")
+	}
+
+	// The second press of a double click is ignored for the same reason, so the
+	// edit stays on item 0 until Enter.
+	clickRow(t, m, "* gamma", now.Add(time.Second+100*time.Millisecond))
+	if !m.wizardEditing || m.wizardChoice != 0 {
+		t.Fatalf("double click escaped the edit on item 0: editing=%v choice=%d", m.wizardEditing, m.wizardChoice)
+	}
+	if got := m.wizardItems[2]; got != "gamma" {
+		t.Fatalf("item 2 = %q, want it unchanged", got)
+	}
+
+	// The new-item row is the same list cursor: clicking it while editing would
+	// point the cursor past the items, and Enter would index out of range.
+	clickRow(t, m, cursorGlyph, now.Add(2*time.Second))
+	if m.wizardChoice != 0 {
+		t.Fatalf("new-item click moved the edit cursor to %d, want 0", m.wizardChoice)
+	}
+
+	pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
+	if got := m.wizardItems[0]; got != "alpha-edited" {
+		t.Fatalf("item 0 = %q, want the edited buffer", got)
+	}
+	if got := m.wizardItems[2]; got != "gamma" {
+		t.Fatalf("item 2 = %q, want it unchanged", got)
+	}
+
+	// Outside an edit the new-item row is still clickable: the cursor moves
+	// there and a typed value adds an item.
+	clickRow(t, m, cursorGlyph, now.Add(2*time.Second))
+	if m.wizardChoice != len(m.wizardItems) {
+		t.Fatalf("new-item click left the cursor at %d, want %d", m.wizardChoice, len(m.wizardItems))
+	}
+}

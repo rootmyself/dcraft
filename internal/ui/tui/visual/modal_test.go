@@ -337,3 +337,44 @@ func TestComposeModalGuttersNeverOverflowOnStraddlingWideGlyphs(t *testing.T) {
 		}
 	}
 }
+
+// On a 16-color terminal the panel must paint with the nearest basic color:
+// plateSpan used the package-level 24-bit sgr and leaked `38;2`/`48;2` codes
+// into every row of the panel, buttons included.
+func TestModalPanelUses16ColorCodesOnA16ColorTerminal(t *testing.T) {
+	th := Resolve(Inputs{ThemeSetting: "dark", Profile: Profile16, DarkBackground: true, UTF8: true})
+	if !th.Color {
+		t.Fatal("the 16-color theme has color off; the test proves nothing")
+	}
+	w, h := 80, 24
+	spec := panelSpec(9, 1)
+	spec.Buttons = []string{"승인", "취소"}
+	out := ComposeModal(th, w, h, modalFrame(th, w, h), spec)
+	joined := strings.Join(out, "\n")
+	for _, leak := range []string{"38;2;", "48;2;"} {
+		if strings.Contains(joined, leak) {
+			for i, line := range out {
+				if strings.Contains(line, leak) {
+					t.Fatalf("row %d leaks a 24-bit code %q on a 16-color terminal:\n%q", i, leak, line)
+				}
+			}
+		}
+	}
+	// The panel really is painted: a 16-color SGR must be present, or the test
+	// would pass on a colorless frame.
+	buttons := ModalButtonRects(th, w, h, spec)
+	if len(buttons) == 0 {
+		t.Fatal("the panel has no buttons; the button row is not covered")
+	}
+	for _, rect := range buttons {
+		if !strings.Contains(out[rect.Y], "\x1b[") {
+			t.Fatalf("button row %d is not painted at all: %q", rect.Y, out[rect.Y])
+		}
+	}
+	top, bottom, _, _ := panelBounds(t, out, th)
+	for i := top; i <= bottom; i++ {
+		if !strings.Contains(out[i], "\x1b[") {
+			t.Fatalf("panel row %d is not painted at all: %q", i, out[i])
+		}
+	}
+}

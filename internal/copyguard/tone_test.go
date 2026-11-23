@@ -17,21 +17,29 @@ import (
 // ends in a fragment, never in a formal sentence ending. It reads production Go
 // sources only, so tests and comments are out of scope.
 func TestProductCopyTone(t *testing.T) {
-	root := repoRoot(t)
-	violations := scanRoot(t, root)
-	if len(violations) == 0 {
-		return
-	}
-	for _, v := range violations {
-		t.Errorf("%s:%d formal sentence ending in product copy: %s", v.file, v.line, v.text)
-	}
-	t.Fatalf("%d product copy strings still use a formal ending; see docs/copy-tone.md", len(violations))
+	requireNoMatch(t, formalEnding, "formal sentence ending")
+}
+
+// TestProductCopyDetailsAreComplete guards the second half of rule 1: a
+// parenthesised detail is a fragment, so it must end with a word. A space
+// before the closing parenthesis means an ending was cut out and left a bare
+// particle behind (`…닫아야 )`), which reads as a broken sentence instead of a
+// detail. The rule is one character wide on purpose: every such string is a
+// lost word, never a deliberate space.
+func TestProductCopyDetailsAreComplete(t *testing.T) {
+	requireNoMatch(t, danglingDetail, "parenthesised detail ending in a space")
 }
 
 // formalEnding matches the endings the guide forbids. "세요" covers ~하세요,
 // ~으세요, and ~세요; "십시오" covers the honorific imperative; the question
 // endings keep a new prompt from becoming a sentence again.
 var formalEnding = regexp.MustCompile(`(니다|세요|십시오|까요|나요)`)
+
+// danglingDetail matches a parenthesised detail that ends with whitespace
+// before `)`, the shape a deleted ending leaves behind: `(…닫아야 )` and
+// `(…어야 )` are the observed cases. A detail is a fragment, so it never
+// deliberately ends in a space.
+var danglingDetail = regexp.MustCompile(`[ \t]\)`)
 
 // toneAllowlist names strings that may keep a formal ending because they quote
 // another tool's output or show an exact command/example. Keep each entry next
@@ -44,7 +52,22 @@ type violation struct {
 	text string
 }
 
-func scanRoot(t *testing.T, root string) []violation {
+// requireNoMatch fails the build when any production string matches rule. Every
+// violation is reported with its file, line and the line of the literal, so the
+// fix is local.
+func requireNoMatch(t *testing.T, rule *regexp.Regexp, what string) {
+	t.Helper()
+	violations := scanRoot(t, repoRoot(t), rule)
+	if len(violations) == 0 {
+		return
+	}
+	for _, v := range violations {
+		t.Errorf("%s:%d %s in product copy: %s", v.file, v.line, what, v.text)
+	}
+	t.Fatalf("%d product copy strings have a %s; see docs/copy-tone.md", len(violations), what)
+}
+
+func scanRoot(t *testing.T, root string, rule *regexp.Regexp) []violation {
 	t.Helper()
 	var out []violation
 	for _, dir := range []string{"internal", "cmd"} {
@@ -66,7 +89,7 @@ func scanRoot(t *testing.T, root string) []violation {
 			if err != nil {
 				return err
 			}
-			out = append(out, scanFile(t, path, filepath.ToSlash(rel))...)
+			out = append(out, scanFile(t, path, filepath.ToSlash(rel), rule)...)
 			return nil
 		})
 		if err != nil {
@@ -76,7 +99,7 @@ func scanRoot(t *testing.T, root string) []violation {
 	return out
 }
 
-func scanFile(t *testing.T, path, rel string) []violation {
+func scanFile(t *testing.T, path, rel string, rule *regexp.Regexp) []violation {
 	t.Helper()
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, path, nil, 0)
@@ -104,7 +127,7 @@ func scanFile(t *testing.T, path, rel string) []violation {
 			if isScript && strings.HasPrefix(strings.TrimSpace(line), "#") {
 				continue
 			}
-			if formalEnding.MatchString(line) {
+			if rule.MatchString(line) {
 				out = append(out, violation{file: rel, line: start + i, text: strings.TrimSpace(line)})
 			}
 		}

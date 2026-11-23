@@ -154,7 +154,7 @@ func (m *Model) screenKeycaps() []visual.Keycap {
 			{Key: "q", Label: msgKeyQuit, Priority: 0},
 			{Key: "?", Label: msgKeyHelp, Priority: 3},
 		}
-		if m.wizardTextInput() && m.wizardSpec.Steps[m.wizardStep].List {
+		if m.wizardStepIsList() {
 			esc := msgListCancel
 			if m.wizardEditing {
 				esc = msgListCancelEdit
@@ -858,8 +858,15 @@ func (m *Model) featureListVisible() bool {
 	return m.navMenuVisible() && !m.sidebarVisible() && !m.menuHidden()
 }
 
+// selectionVisible reports whether a menu entry is drawn, so the selection keys
+// and Enter act only on what the renderer shows. A filter that matches no entry
+// draws the empty state instead of a cursor; the predicate reads the same
+// filtered grouping the renderer draws, so the two cannot disagree.
 func (m *Model) selectionVisible() bool {
-	return m.navMenuVisible() && (m.sidebarVisible() || m.navLine() != "" || m.featureListVisible())
+	if !m.navMenuVisible() || len(m.navIndexes()) == 0 {
+		return false
+	}
+	return m.sidebarVisible() || m.navLine() != "" || m.featureListVisible()
 }
 
 // screenTitle is the current feature's title. The stack identity lives in the

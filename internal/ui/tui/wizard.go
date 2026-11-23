@@ -100,6 +100,15 @@ func (m *Model) wizardStepIsMulti() bool {
 	return len(step.Options) > 0 && step.Multi
 }
 
+// wizardStepIsList reports whether the current question edits a selectable
+// list: its items, plus the row that adds one. The keyboard and the wheel both
+// ask this, so a list is one kind of answer in exactly one place. It is not
+// wizardTextInput: a list accepts custom text too, but its cursor moves over
+// rows.
+func (m *Model) wizardStepIsList() bool {
+	return m.wizardTextInput() && m.wizardSpec.Steps[m.wizardStep].List
+}
+
 // wizardStepIsOptional reports whether the current question may be answered
 // with an empty value.
 func (m *Model) wizardStepIsOptional() bool {

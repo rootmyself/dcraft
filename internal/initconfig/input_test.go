@@ -270,3 +270,45 @@ func TestOutputPathValidationRejectsDirectoriesAndSymlinks(t *testing.T) {
 		t.Fatalf("relative destination: %v", err)
 	}
 }
+
+// Every port rejection states the cause as a complete detail. The five branches
+// below are the ones whose wording was broken by a copy rewrite: each once
+// ended in a dangling particle before `)`, which reads as a truncated sentence
+// instead of the next thing to fix.
+func TestPortInvalidDetailsAreComplete(t *testing.T) {
+	cases := []struct {
+		port  string
+		wants []string
+	}{
+		// An unterminated IPv6 bracket cannot be read at all.
+		{"[::1", []string{"IPv6 주소는 [주소] 형식"}},
+		// A valid bracket with no colon after it.
+		{"[::1]8080:80", []string{"IPv6 주소 뒤에 :가 필요"}},
+		// A bracket form with more than host and container after the IP.
+		{"[::1]:8080:80:90", []string{"[IPv6]:호스트:컨테이너 형식"}},
+		// One endpoint is a range and the other a single port.
+		{"8000-8005:80", []string{"둘 다 범위 또는 둘 다 단일 값"}},
+		// Both ranges, but of different lengths.
+		{"8000-8005:80-90", []string{"범위 길이가 같아야 함"}},
+		// The port is outside the only legal interval.
+		{"70000:80", []string{"1-65535 범위"}},
+	}
+	for _, tc := range cases {
+		err := validatePort(tc.port)
+		ce, ok := err.(*core.Error)
+		if !ok || len(ce.Diagnostics) == 0 {
+			t.Fatalf("port %q: error = %T %v, want *core.Error", tc.port, err, err)
+		}
+		detail := ce.Diagnostics[0].Detail
+		for _, want := range tc.wants {
+			if !strings.Contains(detail, want) {
+				t.Fatalf("port %q detail = %q, want it to state %q", tc.port, detail, want)
+			}
+		}
+		// The broken shape: an ending was cut, leaving the detail without a
+		// final word. Assert the closing detail is a whole fragment.
+		if strings.Contains(detail, " )") || strings.HasSuffix(detail, "(") {
+			t.Fatalf("port %q detail is a truncated fragment: %q", tc.port, detail)
+		}
+	}
+}

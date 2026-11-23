@@ -1040,6 +1040,9 @@ click cannot land somewhere the screen did not draw, and an overlay owns every
 click while it is open. The footer keycaps stay labels: they are not clickable,
 so the advertised keys are the only way to act from the footer.
 
+Mouse drags are the terminal's, not the TUI's: copy with `Shift` drag (most
+terminals) or `Option` drag (iTerm2).
+
 #### Approval: one key, on purpose
 
 The approved decision sheet's confirm footer says `[enter] 실행`. The shipped
@@ -1078,16 +1081,16 @@ Approval flow (generic, engine-enforced):
 
 #### Verification
 
-`internal/ui/tui/testdata/golden` commits the layout contract: thirteen main
+`internal/ui/tui/testdata/golden` commits the layout contract: fifteen main
 screens (menu+status, service selection, confirmation panel, progress,
 progress-logs, wizard, wizard-list, wizard-examples, environment-actions,
-environment-switch, failure, empty stack, logs) at 40/80/120/200 columns ×
-18/30/50 rows, once with the painted theme and once with the colorless one. The
-committed text has escape sequences stripped, so a diff is a layout change rather
-than an ANSI byte change; `TestGoldenStructureDoesNotDependOnPaint` asserts that
-stripping the painted frame yields the colorless frame byte for byte, which is
-the NO_COLOR proof. The matrix is one table-driven list, so adding a screen is
-one entry.
+environment-switch, failure, empty stack, logs, detail, long value) at
+40/80/120/200 columns × 18/30/50 rows, once with the painted theme and once with
+the colorless one. The committed text has escape sequences stripped, so a diff is
+a layout change rather than an ANSI byte change;
+`TestGoldenStructureDoesNotDependOnPaint` asserts that stripping the painted
+frame yields the colorless frame byte for byte, which is the NO_COLOR proof. The
+matrix is one table-driven list, so adding a screen is one entry.
 
 Regenerate with:
 
@@ -2596,22 +2599,22 @@ Tested seams:
   remote non-zero mapping with `exit_code`, missing command and stopped service;
 - execx streaming: piped and pty modes, input forwarding, output capture and
   context cancellation, and terminal restoration after success and failure;
-- TUI visual system: golden snapshot matrix of thirteen main screens (menu+status,
+- TUI visual system: golden snapshot matrix of fifteen main screens (menu+status,
   service selection, confirmation panel, progress, progress-logs, wizard,
   wizard-list, wizard-examples, environment-actions, environment-switch, failure,
-  empty stack, logs) at 40/80/120/200 columns × 18/30/50 rows, committed once
-  with the painted theme and once colorless, with the colorless set asserted to
-  be the stripped painted set byte for byte; 40-column frame integrity on every
-  screen; Korean display-cell width (a syllable is two cells, never split by
-  truncation); long path truncation with an explicit marker and the full value in
-  the detail view; a 25-service stack scrolled end to end with a header that
-  never moves; the theme decision as a pure function of `DCRAFT_THEME`,
-  `NO_COLOR`, `TERM`, profile, background and locale; the modal gutter never
-  widening a row on a straddling wide glyph. CLI invariants are pinned
-  structurally: `internal/ui/cli` and `internal/ui/view` have no dependency on
-  the TUI or its visual layer, `--json` keeps schema `1` and its exact key set,
-  exit codes stay 0/1/2/130, and the shared Korean failure text is identical in
-  both interfaces.
+  empty stack, logs, detail, long value) at 40/80/120/200 columns × 18/30/50
+  rows, committed once with the painted theme and once colorless, with the
+  colorless set asserted to be the stripped painted set byte for byte;
+  40-column frame integrity on every screen; Korean display-cell width (a
+  syllable is two cells, never split by truncation); long path truncation with
+  an explicit marker and the full value in the detail view; a 25-service stack
+  scrolled end to end with a header that never moves; the theme decision as a
+  pure function of `DCRAFT_THEME`, `NO_COLOR`, `TERM`, profile, background and
+  locale; the modal gutter never widening a row on a straddling wide glyph. CLI
+  invariants are pinned structurally: `internal/ui/cli` and `internal/ui/view`
+  have no dependency on the TUI or its visual layer, `--json` keeps schema `1`
+  and its exact key set, exit codes stay 0/1/2/130, and the shared Korean
+  failure text is identical in both interfaces.
 - pty process tests for the TUI layout: SIGWINCH resize reflowing across the
   100-column breakpoint with no row wider than the terminal, returning to a
   screen with the cursor and the last result intact, raw-mode restoration after

@@ -325,7 +325,7 @@ func validatePort(raw string) error {
 	if strings.HasPrefix(s, "[") {
 		end := strings.Index(s, "]")
 		if end < 0 || end == 1 {
-			return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (IPv6 주소는 [주소] 형식으로 닫아야 )", raw))
+			return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (IPv6 주소는 [주소] 형식)", raw))
 		}
 		hostIP = s[1:end]
 		if net.ParseIP(hostIP) == nil {
@@ -338,7 +338,7 @@ func validatePort(raw string) error {
 		rest = rest[1:]
 		parts := strings.Split(rest, ":")
 		if len(parts) != 2 {
-			return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q ([IPv6]:호스트:컨테이너 형식이어야 )", raw))
+			return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q ([IPv6]:호스트:컨테이너 형식)", raw))
 		}
 		return validatePortParts(parts[0], parts[1], true, raw)
 	}
@@ -391,10 +391,10 @@ func validatePortParts(host, container string, allowEmptyHost bool, raw string) 
 		return err
 	}
 	if hRange.isRange() != cRange.isRange() {
-		return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (호스트와 컨테이너 포트는 둘 다 범위이거나 둘 다 단일 값이어야 )", raw))
+		return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (호스트·컨테이너 포트는 둘 다 범위 또는 둘 다 단일 값)", raw))
 	}
 	if hRange.isRange() && (hRange.end-hRange.start) != (cRange.end-cRange.start) {
-		return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (호스트와 컨테이너 포트 범위 길이가 같아야 )", raw))
+		return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (호스트·컨테이너 포트 범위 길이가 같아야 함)", raw))
 	}
 	_ = proto
 	return nil
@@ -422,7 +422,7 @@ func parsePortRange(raw, full string) (portRange, error) {
 	}
 	start, err := strconv.Atoi(m[1])
 	if err != nil || start < 1 || start > 65535 {
-		return portRange{}, inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (포트는 1-65535 범위여야 )", full))
+		return portRange{}, inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (포트는 1-65535 범위)", full))
 	}
 	end := start
 	if m[2] != "" {

@@ -56,6 +56,11 @@ Only the final ending changes.
 under `internal/` and `cmd/`. It ignores comments, tests, `testdata`, and shell
 comment lines inside generated-script literals.
 
+It enforces two shapes: no formal sentence ending, and no parenthesised detail
+ending in a space (`(…닫아야 )`). The second one catches a copy rewrite that
+deleted an ending and left a bare particle behind, which reads as a truncated
+sentence rather than a cause.
+
 `toneAllowlist` in that test names the only exceptions: a string that quotes
 another tool's output or reproduces an exact command/example. Add an entry only
 with the reason next to it.

@@ -220,6 +220,12 @@ func (m *Model) activateHit(hit hitTarget, double bool) tea.Cmd {
 		if m.phase != phaseWizardStep {
 			return nil
 		}
+		// The new-item row is part of the same list cursor. While a list item
+		// is being edited, moving the cursor there would commit the buffer to
+		// an index past the items, so the click is ignored like Up/Down.
+		if m.wizardEditing {
+			return nil
+		}
 		m.wizardChoice = len(m.wizardItems)
 		m.followWizardCursor()
 		if double {
@@ -293,6 +299,12 @@ func (m *Model) clickWizardCard(index int, double bool) tea.Cmd {
 	step := m.wizardSpec.Steps[m.wizardStep]
 	if step.List {
 		if index < 0 || index >= len(m.wizardItems) {
+			return nil
+		}
+		// The keyboard blocks Up/Down while editing, so a click must not move
+		// the selection either: the next Enter would write the buffer into a
+		// different item. The click is ignored, the same as the keys.
+		if m.wizardEditing {
 			return nil
 		}
 		m.wizardChoice = index
@@ -392,17 +404,31 @@ func (m *Model) updateWheel(msg tea.MouseMsg) tea.Cmd {
 		}
 		return nil
 	}
-	if m.phase == phaseWizardStep && !m.wizardTextInput() && m.wizardStep < len(m.wizardSpec.Steps) && !m.wizardEditing {
+	if m.phase == phaseWizardStep && m.wizardStep < len(m.wizardSpec.Steps) && !m.wizardEditing {
 		step := m.wizardSpec.Steps[m.wizardStep]
-		total := len(step.Options)
-		if step.List {
-			total = len(m.wizardItems) + 1
-		}
-		if total > 0 {
-			m.wizardChoice = (m.wizardChoice + delta + total) % total
+		if m.wizardStepIsList() {
+			// A list is a selectable list for the wheel: items plus the
+			// new-item row, clamped instead of wrapping like the arrows.
+			total := len(m.wizardItems) + 1
+			next := m.wizardChoice + delta
+			if next < 0 {
+				next = 0
+			}
+			if next >= total {
+				next = total - 1
+			}
+			m.wizardChoice = next
 			m.followWizardCursor()
+			return nil
 		}
-		return nil
+		if !m.wizardTextInput() {
+			total := len(step.Options)
+			if total > 0 {
+				m.wizardChoice = (m.wizardChoice + delta + total) % total
+				m.followWizardCursor()
+			}
+			return nil
+		}
 	}
 	if m.bodyScrolls() {
 		m.applyScroll(func(v *visual.Viewport) { v.Move(delta * mouseWheelRows) })

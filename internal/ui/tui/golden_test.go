@@ -86,6 +86,8 @@ func goldenScreens() []goldenScreen {
 		{name: "failure", build: goldenFailure},
 		{name: "empty-stack", build: goldenEmptyStack},
 		{name: "logs", build: goldenLogs},
+		{name: "detail", build: goldenDetailView},
+		{name: "long-value", build: goldenLongValue},
 	}
 }
 
@@ -823,4 +825,35 @@ func goldenLogs(t *testing.T) *Model {
 	m.liveCh = ch
 	m.liveFollow = true
 	return m
+}
+
+// goldenDetailView is the full-value screen: the status table's cut cells shown
+// whole with a hanging indent. It reuses the menu fixture and opens the view the
+// `d` key opens, so the snapshot photographs the screen a reader reaches.
+func goldenDetailView(t *testing.T) *Model {
+	t.Helper()
+	m := goldenMenuStatus(t)
+	if !m.hasDetail() {
+		t.Fatal("the fixture result has nothing cut; the detail view would be empty")
+	}
+	m.openDetail()
+	return m
+}
+
+// goldenLongValue is a long prose value at a narrow width: the callout wraps
+// across rows instead of being cut, which is the pair to the table's explicit
+// ellipsis. The template is the status feature's own callout text, repeated so
+// it cannot fit one row at any approved width.
+func goldenLongValue(t *testing.T) *Model {
+	t.Helper()
+	long := "Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행. "
+	doc := core.Document{
+		Title: "긴 값",
+		Blocks: []core.Block{
+			{Kind: core.BlockParagraph, Text: strings.TrimSpace(strings.Repeat(long, 6))},
+			{Kind: core.BlockCallout, Callout: core.CalloutInfo, Text: strings.TrimSpace(strings.Repeat(long, 3))},
+		},
+	}
+	f := &documentOnlyFeature{desc: descriptor("status", true), doc: doc}
+	return newGoldenModel(t, f)
 }
