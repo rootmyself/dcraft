@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/rootmyself/dcraft/internal/core"
 	"github.com/rootmyself/dcraft/internal/ui/tui/visual"
 )
@@ -71,7 +72,18 @@ func (m *Model) wizardStepScreen(step core.WizardStep) wizardStepScreen {
 		if m.wizardChoice == len(m.wizardItems) || m.wizardEditing {
 			marker = "> "
 		}
-		screen.tail = append(screen.tail, marker+m.wizardInput+cursorGlyph)
+		input := m.wizardInput
+		available := width - visual.Width(marker) - visual.Width(cursorGlyph)
+		if width > 0 && visual.Width(input) > available {
+			ell := m.theme.Glyphs.Ell
+			available -= visual.Width(ell)
+			if available < 0 {
+				available = 0
+			}
+			inputWidth := visual.Width(input)
+			input = ell + ansi.Cut(input, inputWidth-available, inputWidth)
+		}
+		screen.tail = append(screen.tail, marker+input+cursorGlyph)
 		for _, line := range m.wrapTo(fmt.Sprintf(msgListHint, len(m.wizardItems)), width) {
 			screen.tail = append(screen.tail, m.hintText(line))
 		}

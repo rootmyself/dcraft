@@ -147,6 +147,30 @@ func TestWizardListOversizedItemRemainsSelectable(t *testing.T) {
 	}
 }
 
+func TestWizardListLongEditShowsInputEnd(t *testing.T) {
+	f := &wizardStub{desc: descriptor("wizard", false), steps: core.WizardSpec{Steps: []core.WizardStep{
+		{Name: "items", Title: "Items", List: true, AllowCustom: true, Optional: true},
+	}}}
+	f.desc.Wizard = true
+	m := newWizardModel(t, f)
+	openWizard(t, m)
+	resize(t, m, 40, 24)
+	feed(t, m, []tea.Msg{
+		tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(strings.Repeat("a", 800) + "ENDMARK")},
+		tea.KeyMsg{Type: tea.KeyEnter},
+		tea.KeyMsg{Type: tea.KeyUp},
+		tea.KeyMsg{Type: tea.KeyEnter},
+		tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("EDITMARK")},
+	})
+	if view := m.View(); !strings.Contains(view, "ENDMARKEDITMARK_") {
+		t.Fatalf("editing input end is hidden:\n%s", view)
+	}
+	feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeyBackspace}})
+	if view := m.View(); !strings.Contains(view, "ENDMARKEDITMAR_") {
+		t.Fatalf("edited input end after backspace is hidden:\n%s", view)
+	}
+}
+
 func TestWizardListOptionalEmpty(t *testing.T) {
 	f := &wizardStub{desc: descriptor("wizard", false), steps: core.WizardSpec{Steps: []core.WizardStep{
 		{Name: "items", Title: "Items", List: true, AllowCustom: true, Optional: true},
