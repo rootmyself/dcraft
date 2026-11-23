@@ -44,6 +44,99 @@ func TestUpUsesDetachAfterGlobalFlagsAndKeepsServiceOrder(t *testing.T) {
 	}
 }
 
+func TestUpProgressStreamsPlainOutputWhileUpKeepsCapture(t *testing.T) {
+	var gotStream execx.Stream
+	runner := &execxtest.Runner{StreamHandler: func(cmd execx.Command, stream execx.Stream) (execx.Result, error) {
+		gotStream = stream
+		_, _ = stream.Stdout.Write([]byte("Container web-1 Started\n"))
+		_, _ = stream.Stderr.Write([]byte("Network hello_default Created\n"))
+		return execx.Result{}, nil
+	}}
+	var progress strings.Builder
+	_, err, calls := runLifecycle(t, runner, func(c *Compose) (stack.OpResult, error) {
+		return c.UpProgress(context.Background(), lifecycleTarget(), []string{"web"}, &progress)
+	})
+	if err != nil {
+		t.Fatalf("UpProgress: %v", err)
+	}
+	want := "docker compose -f /p/compose.yaml -f /p/compose.override.yaml --env-file /p/custom.env --profile dev -p hello-world --progress plain --ansi never up --detach web"
+	if len(calls) != 1 || calls[0] != want {
+		t.Fatalf("calls = %v\nwant  %s", calls, want)
+	}
+	if gotStream.TTY {
+		t.Fatal("progress stream allocated a terminal")
+	}
+	for _, line := range []string{"Container web-1 Started", "Network hello_default Created"} {
+		if !strings.Contains(progress.String(), line) {
+			t.Fatalf("progress = %q, missing %q", progress.String(), line)
+		}
+	}
+
+	// The capture path is unchanged: no progress flags and no live writer.
+	plain := &execxtest.Runner{Handler: func(execx.Command) (execx.Result, error) {
+		return execx.Result{}, nil
+	}}
+	_, err, calls = runLifecycle(t, plain, func(c *Compose) (stack.OpResult, error) {
+		return c.Up(context.Background(), lifecycleTarget(), []string{"web"})
+	})
+	if err != nil {
+		t.Fatalf("Up: %v", err)
+	}
+	captured := "docker compose -f /p/compose.yaml -f /p/compose.override.yaml --env-file /p/custom.env --profile dev -p hello-world up --detach web"
+	if calls[0] != captured {
+		t.Fatalf("capture call = %q, want %q", calls[0], captured)
+	}
+}
+
+func TestUpProgressFallsBackToCaptureWhenTheRunnerCannotStream(t *testing.T) {
+	runner := &captureOnlyRunner{result: execx.Result{Stdout: []byte("captured")}}
+	var progress strings.Builder
+	c := New(runner, nil)
+	res, err := c.UpProgress(context.Background(), lifecycleTarget(), nil, &progress)
+	if err != nil {
+		t.Fatalf("UpProgress: %v", err)
+	}
+	if progress.Len() != 0 {
+		t.Fatalf("non-streaming runner wrote progress %q", progress.String())
+	}
+	if !strings.Contains(res.Output, "captured") {
+		t.Fatalf("output = %q", res.Output)
+	}
+	if len(runner.calls) != 1 || !strings.Contains(runner.calls[0], " --progress plain --ansi never up --detach") {
+		t.Fatalf("calls = %v", runner.calls)
+	}
+}
+
+// captureOnlyRunner deliberately omits execx.Streamer.
+type captureOnlyRunner struct {
+	result execx.Result
+	calls  []string
+}
+
+func (r *captureOnlyRunner) LookPath(file string) (string, error) { return file, nil }
+
+func (r *captureOnlyRunner) Run(_ context.Context, cmd execx.Command) (execx.Result, error) {
+	r.calls = append(r.calls, strings.TrimSpace(cmd.Name+" "+strings.Join(cmd.Args, " ")))
+	return r.result, nil
+}
+
+func TestUpProgressReturnsToolOutputForDiagnostics(t *testing.T) {
+	runner := &execxtest.Runner{StreamHandler: func(_ execx.Command, stream execx.Stream) (execx.Result, error) {
+		_, _ = stream.Stderr.Write([]byte("port is already allocated\n"))
+		return execx.Result{Stderr: []byte("port is already allocated"), ExitCode: 1}, nil
+	}}
+	var progress strings.Builder
+	res, err, _ := runLifecycle(t, runner, func(c *Compose) (stack.OpResult, error) {
+		return c.UpProgress(context.Background(), lifecycleTarget(), nil, &progress)
+	})
+	if err == nil {
+		t.Fatal("non-zero Compose exit was not an error")
+	}
+	if !strings.Contains(res.Output, "port is already allocated") {
+		t.Fatalf("output = %q", res.Output)
+	}
+}
+
 func TestStopPassesServicesAfterTheSubcommand(t *testing.T) {
 	runner := &execxtest.Runner{Handler: func(execx.Command) (execx.Result, error) {
 		return execx.Result{}, nil

@@ -132,7 +132,9 @@ func TestServiceFeatureShowsTheCurrentStackBeforeRunning(t *testing.T) {
 	catalog := newCatalogStatus(defaultServiceCatalog())
 	stop := &serviceCaptureFeature{desc: serviceDescriptor("stop"), body: "중지 본문"}
 	m := newServiceModel(t, catalog, stop)
+	m.theme = *plainTheme()
 	initModel(t, m)
+	resize(t, m, 80, 24)
 
 	chooseFeature(t, m, "stop")
 	if m.phase != phaseSelectingServices {
@@ -146,10 +148,10 @@ func TestServiceFeatureShowsTheCurrentStackBeforeRunning(t *testing.T) {
 	}
 	view := m.View()
 	for _, want := range []string{
-		"서비스 선택", "전체 (스택 전체)", "[x] 전체",
-		"api", "실행 중", "healthy", "인스턴스 1개",
-		"web", "중지됨", "인스턴스 2개",
-		"space", "enter", "esc", "q 종료",
+		"서비스 선택", "전체 (스택 전체)", "▸[x] 전체",
+		"선택", "서비스", "상태", "인스턴스", "health", "이미지", "포트",
+		"api", "✓ 실행 중", "정상", "web", "■ 중지됨", "없음",
+		"space", "[enter] 실행", "[esc] 취소", "[q] 종료",
 	} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("service screen missing %q:\n%s", want, view)
@@ -164,11 +166,13 @@ func TestServiceSelectionTogglesAndRunsOnlySelectedServices(t *testing.T) {
 	catalog := newCatalogStatus(defaultServiceCatalog())
 	stop := &serviceCaptureFeature{desc: serviceDescriptor("stop"), body: "중지 본문"}
 	m := newServiceModel(t, catalog, stop)
+	m.theme = *plainTheme()
 	initModel(t, m)
+	resize(t, m, 80, 24)
 	chooseFeature(t, m, "stop")
 
 	press(m, tea.KeyMsg{Type: tea.KeyDown}) // whole -> api
-	if view := m.View(); !strings.Contains(view, "> [ ] api") {
+	if view := m.View(); !strings.Contains(view, "▸[ ] api") {
 		t.Fatalf("cursor is not on api:\n%s", view)
 	}
 	pressSpace(m)
@@ -186,7 +190,9 @@ func TestServiceSelectionTogglesAndRunsOnlySelectedServices(t *testing.T) {
 		t.Fatalf("phase = %v, want confirmation; view:\n%s", m.phase, m.View())
 	}
 	view := m.View()
-	for _, want := range []string{"범위: api, web", "다음 작업"} {
+	// The confirmation is now a panel; the scope row and the title are its
+	// fields, so the same facts are asserted on the panel.
+	for _, want := range []string{"범위:", "api, web", msgConfirmTitle} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("confirmation missing %q:\n%s", want, view)
 		}
@@ -211,7 +217,7 @@ func TestServiceSelectionWholeStackKeepsPreviousBehavior(t *testing.T) {
 	chooseFeature(t, m, "stop")
 
 	feedCmd(t, m, press(m, tea.KeyMsg{Type: tea.KeyEnter}))
-	if !strings.Contains(m.View(), "범위: 스택 전체") {
+	if !strings.Contains(m.View(), "스택 전체") || !strings.Contains(m.View(), "범위:") {
 		t.Fatalf("whole-stack scope not shown:\n%s", m.View())
 	}
 	feedCmd(t, m, press(m, tea.KeyMsg{Type: tea.KeyEnter}))
@@ -237,7 +243,7 @@ func TestServiceSelectionCancelRunsNothing(t *testing.T) {
 	if stop.runs != 0 {
 		t.Fatal("esc ran the feature")
 	}
-	if !strings.Contains(m.View(), "아무것도 실행하지 않았습니다") {
+	if !strings.Contains(m.View(), "아무것도 실행하지 않았음") {
 		t.Fatalf("cancel notice missing:\n%s", m.View())
 	}
 
@@ -255,7 +261,7 @@ func TestServiceListFailureBlocksTheOperation(t *testing.T) {
 	catalog := newCatalogStatus(nil)
 	catalog.err = core.Fail(core.Diagnostic{
 		Category: core.CategoryEngineUnreachable, Severity: core.SeverityError,
-		Message: "스택을 읽지 못했습니다.",
+		Message: "스택 읽기 실패.",
 	})
 	stop := &serviceCaptureFeature{desc: serviceDescriptor("stop"), body: "중지 본문"}
 	m := newServiceModel(t, catalog, stop)
@@ -269,12 +275,12 @@ func TestServiceListFailureBlocksTheOperation(t *testing.T) {
 		t.Fatal("stop ran with an unreadable service list")
 	}
 	view := m.View()
-	for _, want := range []string{"작업 실패", "스택을 읽지 못했습니다"} {
+	for _, want := range []string{"작업 실패", "스택 읽기 실패"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("failure screen missing %q:\n%s", want, view)
 		}
 	}
-	if strings.Contains(view, "다음 작업을 실행할까요?") {
+	if strings.Contains(view, "다음 작업을 실행 확인") {
 		t.Fatalf("failure still offered a confirmation:\n%s", view)
 	}
 }
@@ -341,7 +347,7 @@ func TestServiceSelectionFeedsTheUpdatePlan(t *testing.T) {
 		t.Fatalf("plan services = %q, want api", got)
 	}
 	view := m.View()
-	for _, want := range []string{"계획: api 이미지 취득 후 적용", "범위: api"} {
+	for _, want := range []string{"계획: api 이미지 취득 후 적용", "범위:", "api"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("plan confirmation missing %q:\n%s", want, view)
 		}
@@ -362,7 +368,9 @@ func TestUnconfiguredServiceFactsCannotBeSelected(t *testing.T) {
 	catalog := newCatalogStatus(services)
 	stop := &serviceCaptureFeature{desc: serviceDescriptor("stop"), body: "중지 본문"}
 	m := newServiceModel(t, catalog, stop)
+	m.theme = *plainTheme()
 	initModel(t, m)
+	resize(t, m, 80, 24)
 	chooseFeature(t, m, "stop")
 
 	// whole -> api -> web -> old

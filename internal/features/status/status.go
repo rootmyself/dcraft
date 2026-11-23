@@ -9,6 +9,7 @@ import (
 
 	"github.com/rootmyself/dcraft/internal/core"
 	"github.com/rootmyself/dcraft/internal/stack"
+	"github.com/rootmyself/dcraft/internal/stack/present"
 )
 
 // Feature is the registered status command.
@@ -29,6 +30,7 @@ func (f *Feature) Descriptor() core.Descriptor {
 		Title:    msgTitle,
 		Summary:  msgSummary,
 		Usage:    msgUsage,
+		Section:  core.SectionInspect,
 		ReadOnly: true,
 		Primary:  true,
 	}
@@ -78,6 +80,8 @@ func (f *Feature) Services(ctx context.Context, in core.Invocation) ([]core.Serv
 			Health:     string(svc.Health),
 			Instances:  len(svc.Instances),
 			Configured: svc.Configured,
+			Image:      imageText(svc),
+			Ports:      portText(svc),
 		})
 	}
 	return services, nil
@@ -216,7 +220,7 @@ func writeSummary(b *strings.Builder, snap stack.Snapshot) {
 
 func writeService(b *strings.Builder, svc stack.Service) {
 	fmt.Fprintf(b, "%s\n", svc.Name)
-	state := stateLabel(svc.State)
+	state := present.StateLabel(svc.State)
 	health := healthLabel(svc)
 	fmt.Fprintf(b, "  상태: %s", state)
 	if health != "" {
@@ -267,7 +271,7 @@ func writeCompactService(b *strings.Builder, svc stack.Service, width int) {
 		}
 		rest = append(rest, fmt.Sprintf("인스턴스 %d개: %s", len(names), strings.Join(names, ", ")))
 	}
-	rest = append(rest, stateLabel(svc.State))
+	rest = append(rest, present.StateLabel(svc.State))
 	if health := healthLabel(svc); health != "" {
 		rest = append(rest, health)
 	}
@@ -367,28 +371,6 @@ func healthLabel(svc stack.Service) string {
 		return msgHealthcheckConfigured
 	default:
 		return ""
-	}
-}
-
-func stateLabel(state stack.ServiceState) string {
-	switch state {
-	case stack.StateRunning:
-		return "실행 중"
-	case stack.StateExited:
-		return "중지됨"
-	case stack.StatePaused:
-		return "일시정지됨"
-	case stack.StateRestarting:
-		return "재시작 중"
-	case stack.StateCreated:
-		return "생성됨"
-	case stack.StateNotCreated:
-		return "컨테이너 없음"
-	default:
-		if state == "" {
-			return "상태 알 수 없음"
-		}
-		return string(state)
 	}
 }
 

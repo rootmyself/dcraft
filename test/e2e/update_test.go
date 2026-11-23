@@ -274,12 +274,12 @@ func TestUpdateCLIReportsPlanFlagsAndReadiness(t *testing.T) {
 	// The ordinary CLI shows the target/planned work once, before running, on
 	// stderr, without asking for another approval. The success output does not
 	// repeat the plan.
-	for _, want := range []string{"갱신 대상", "예정 작업", "캐시 사용 안 함", "강제 재생성", "정확한 미래 상태 diff가 아닙니다"} {
+	for _, want := range []string{"갱신 대상", "예정 작업", "캐시 사용 안 함", "강제 재생성", "정확한 미래 상태 diff가 아님"} {
 		if !strings.Contains(res.stderr, want) {
 			t.Fatalf("pre-run preview misses %q on stderr:\n%s", want, res.stderr)
 		}
 	}
-	if strings.Contains(res.stdout, "예정 작업") || strings.Contains(res.stdout, "정확한 미래 상태 diff가 아닙니다") {
+	if strings.Contains(res.stdout, "예정 작업") || strings.Contains(res.stdout, "정확한 미래 상태 diff가 아님") {
 		t.Fatalf("the plan was printed twice (success output repeats it):\n%s", res.stdout)
 	}
 

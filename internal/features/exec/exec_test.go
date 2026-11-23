@@ -218,7 +218,7 @@ func TestExecRejectsAStoppedServiceWithExitOne(t *testing.T) {
 	if d.Category != core.CategoryInstanceStopped {
 		t.Fatalf("category = %q", d.Category)
 	}
-	if !strings.Contains(d.Message, "실행 중이 아닙니다") || len(d.NextActions) == 0 {
+	if !strings.Contains(d.Message, "실행 중이 아님") || len(d.NextActions) == 0 {
 		t.Fatalf("diagnostic = %+v", d)
 	}
 	if streamer.callCount() != 0 {
@@ -322,7 +322,7 @@ func TestExecExplainsAMissingCommandWithoutAssumingAShell(t *testing.T) {
 	if d.Category != core.CategoryExecFailed {
 		t.Fatalf("category = %q", d.Category)
 	}
-	if !strings.Contains(d.Message, "nosuch") || !strings.Contains(d.Message, "없습니다") {
+	if !strings.Contains(d.Message, "nosuch") || !strings.Contains(d.Message, "없음") {
 		t.Fatalf("message = %q", d.Message)
 	}
 	joined := strings.Join(d.NextActions, " ")
@@ -336,7 +336,7 @@ func TestExecExplainsAServiceThatStoppedAfterSelection(t *testing.T) {
 	f := New(&fakeBackend{snap: scaledSnapshot()}, streamer)
 	_, err := f.Run(context.Background(), invocation([]string{"db"}, []string{"date"}, nil, core.IO{Stdout: &strings.Builder{}}, &fakeReporter{}))
 	d := diagnosticOf(t, err)
-	if d.Category != core.CategoryExecFailed || !strings.Contains(d.Message, "실행 중이 아닙니다") {
+	if d.Category != core.CategoryExecFailed || !strings.Contains(d.Message, "실행 중이 아님") {
 		t.Fatalf("diagnostic = %+v", d)
 	}
 }
@@ -437,6 +437,35 @@ func TestExecInputsFailWhenNothingIsRunning(t *testing.T) {
 	d := diagnosticOf(t, err)
 	if d.Category != core.CategoryInstanceStopped {
 		t.Fatalf("category = %q", d.Category)
+	}
+}
+
+// The document declares the service and the command so the TUI can paint them;
+// the CLI text is the same line body.
+func TestExecDocumentTagsServiceAndCommand(t *testing.T) {
+	f := New(&fakeBackend{}, &fakeStreamer{})
+	payload := Payload{Exec: Report{
+		Service: "web", Instance: "p-web-2", Index: 1,
+		Command: []string{"printf", "hi"}, ExitCode: 0,
+	}}
+	res := core.Result{Outcome: core.OutcomeSuccess, Data: payload}
+	doc := f.Document(res)
+	if len(doc.Blocks) != 1 || doc.Blocks[0].Kind != core.BlockValueLines {
+		t.Fatalf("document = %+v", doc)
+	}
+	kinds := map[core.ValueKind]int{}
+	var text []string
+	for _, line := range doc.Blocks[0].Lines {
+		text = append(text, line.Text())
+		for _, run := range line {
+			kinds[run.Kind]++
+		}
+	}
+	if kinds[core.ValueService] != 1 || kinds[core.ValueCommand] != 1 {
+		t.Fatalf("kinds = %v, want one service and one command", kinds)
+	}
+	if got, want := strings.Join(text, "\n"), f.Present(res, 0); got != want {
+		t.Fatalf("document text = %q, want presenter text %q", got, want)
 	}
 }
 

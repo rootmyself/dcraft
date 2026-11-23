@@ -278,7 +278,7 @@ func TestLifecycleExplicitNameCollisionExits2WithoutMutation(t *testing.T) {
 		t.Fatalf("conflict message = %q", parsed.Diagnostics[0].Message)
 	}
 	target := strings.Join(parsed.Diagnostics[0].NextActions, " ")
-	if !strings.Contains(target, "project-name") || !strings.Contains(target, "조작하지 않습니다") {
+	if !strings.Contains(target, "project-name") || !strings.Contains(target, "조작하지 않음") {
 		t.Fatalf("conflict guidance = %v", parsed.Diagnostics[0].NextActions)
 	}
 	after := fake.calls(t)
@@ -521,7 +521,7 @@ func runLifecyclePTYSteps(t *testing.T, dir string, env []string, steps []lifecy
 	waitFor := func(text string) {
 		t.Helper()
 		deadline := time.Now().Add(20 * time.Second)
-		for !strings.Contains(out.String(), text) {
+		for !screenContains(out.String(), text) {
 			if time.Now().After(deadline) {
 				t.Fatalf("TUI did not render %q; output:\n%s", text, out.String())
 			}
@@ -543,7 +543,7 @@ func runLifecyclePTYSteps(t *testing.T, dir string, env []string, steps []lifecy
 		// being coalesced into one read.
 		time.Sleep(80 * time.Millisecond)
 	}
-	waitFor("q 종료")
+	waitFor("[q] 종료")
 	waitDone := make(chan error, 1)
 	go func() { waitDone <- cmd.Wait() }()
 	for attempt := 0; attempt < 4; attempt++ {
@@ -573,17 +573,17 @@ func TestLifecycleTUIMenuSelectsStopAndQuitsWithoutChangingServices(t *testing.T
 	project := projectNamed(t, "hello-world")
 	env := fake.env(t, t.TempDir())
 	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
-		{wait: "상태를 새로 고치려면", send: ""},
-		{wait: "> 스택 상태 (status)", send: "down"},
-		{wait: "> 스택 중지 (stop)", send: "\r"},
+		{wait: "상태 새로 고침", send: ""},
+		{wait: "[↑↓] 이동", send: menuDown(t, "stop")},
+		{wait: "▸ 스택 중지", send: "\r"},
 		{wait: "서비스 선택", send: "\r"},
-		{wait: "다음 작업을 실행할까요?", send: ""},
+		{wait: "작업 실행 확인", send: ""},
 	})
 	if code != 0 {
 		t.Fatalf("TUI exit = %d\n%s", code, output)
 	}
-	for _, want := range []string{"스택 중지", "대상", "효과", "esc 취소"} {
-		if !strings.Contains(output, want) {
+	for _, want := range []string{"스택 중지", "대상", "효과", "[esc] 취소"} {
+		if !screenContains(output, want) {
 			t.Fatalf("confirmation missing %q:\n%s", want, output)
 		}
 	}
@@ -595,19 +595,18 @@ func TestLifecycleTUIRunsUpThroughTheSameEngine(t *testing.T) {
 	project := projectNamed(t, "hello-world")
 	env := fake.env(t, t.TempDir())
 	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
-		{wait: "상태를 새로 고치려면", send: ""},
-		{wait: "> 스택 상태 (status)", send: "down"},
-		{wait: "> 스택 중지 (stop)", send: "down"},
-		{wait: "> 스택 시작 (up)", send: "\r"},
+		{wait: "상태 새로 고침", send: ""},
+		{wait: "[↑↓] 이동", send: menuDown(t, "up")},
+		{wait: "▸ 스택 시작", send: "\r"},
 		{wait: "서비스 선택", send: "\r"},
-		{wait: "다음 작업을 실행할까요?", send: "\r"},
-		{wait: "스택을 시작했습니다.", send: ""},
+		{wait: "작업 실행 확인", send: "\r"},
+		{wait: "스택 시작.", send: ""},
 	})
 	if code != 0 {
 		t.Fatalf("TUI exit = %d\n%s", code, output)
 	}
-	for _, want := range []string{"스택을 시작했습니다.", "자동 배정", "hello-world"} {
-		if !strings.Contains(output, want) {
+	for _, want := range []string{"스택 시작.", "자동 배정", "hello-world"} {
+		if !screenContains(output, want) {
 			t.Fatalf("result missing %q:\n%s", want, output)
 		}
 	}
@@ -667,10 +666,10 @@ func TestLifecycleHelpExplainsEffectsInKorean(t *testing.T) {
 	fake := lifecycleFake(t)
 	env := fake.env(t, t.TempDir())
 	cases := map[string][]string{
-		"up":      {"스택 컨테이너를 시작", "--service", "중단"},
+		"up":      {"스택 컨테이너 시작", "--service", "중단"},
 		"stop":    {"중지", "dcraft up", "데이터"},
 		"down":    {"데이터 볼륨은 삭제하지 않", "프로젝트 전체"},
-		"restart": {"새 설정이나 새 이미지를 적용하지 않습니다", "dcraft up"},
+		"restart": {"새 설정이나 새 이미지를 적용하지 않음", "dcraft up"},
 	}
 	for command, wants := range cases {
 		res := runProcess(t, t.TempDir(), env, strings.NewReader(""), command, "--help")

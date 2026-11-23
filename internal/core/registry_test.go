@@ -18,6 +18,7 @@ func (f descriptorOnlyFeature) Run(ctx context.Context, in core.Invocation) (any
 func validDescriptor(name string) core.Descriptor {
 	return core.Descriptor{
 		Name:     name,
+		Section:  core.SectionInspect,
 		Title:    "제목",
 		Summary:  "요약",
 		Usage:    "dcraft " + name,

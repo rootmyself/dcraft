@@ -111,8 +111,8 @@ func TestEngineResolveFailureUsesEnvironmentExitCodeAndSkipsPreflight(t *testing
 	resolver := &fakeResolver{err: core.Fail(core.Diagnostic{
 		Category:    core.CategoryEnvironmentRequired,
 		Severity:    core.SeverityError,
-		Message:     "실행환경을 선택해야 합니다. 사용 가능한 실행환경: dev, prod",
-		NextActions: []string{"--env로 지정하세요."},
+		Message:     "실행환경 선택 필요. 사용 가능한 실행환경: dev, prod",
+		NextActions: []string{"--env로 지정."},
 	})}
 	preflight := &fakePreflight{}
 	engine := core.NewEngine(reg, resolver, preflight, &fakeState{}, &fakeClock{now: time.Now()})

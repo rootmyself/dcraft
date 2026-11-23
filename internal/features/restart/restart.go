@@ -23,6 +23,7 @@ func (f *Feature) Descriptor() core.Descriptor {
 		Title:            msgTitle,
 		Summary:          msgSummary,
 		Usage:            msgUsage,
+		Section:          core.SectionOperate,
 		RecordsHistory:   true,
 		SupportsServices: true,
 	}
@@ -42,4 +43,10 @@ func (f *Feature) Run(ctx context.Context, in core.Invocation) (any, error) {
 
 func (f *Feature) Present(res core.Result, width int) string {
 	return lifecycle.Present(res, width)
+}
+
+// Document implements core.ViewPresenter. The TUI renders the structured
+// version; the CLI keeps Present above, unchanged.
+func (f *Feature) Document(res core.Result) core.Document {
+	return lifecycle.Document(res)
 }

@@ -82,7 +82,7 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation) (any, error) {
 // Plan shows the exact generated file, destination, project name, effects and
 // next command without writing anything.
 func (c *Controller) Plan(ctx context.Context, in core.Invocation) (core.Plan, error) {
-	prepared, err := c.prepare(ctx, in, false, true)
+	prepared, err := c.prepare(ctx, in, in.Option("wizard") == "apply", true)
 	if err != nil {
 		return core.Plan{}, err
 	}
@@ -99,7 +99,7 @@ func (c *Controller) RequiredApproval(ctx context.Context, in core.Invocation) (
 	}
 	projectDir := strings.TrimSpace(in.Target.ProjectDir)
 	if projectDir == "" {
-		return core.ApprovalNone, inputErr("대상 프로젝트 폴더를 확인하지 못했습니다.")
+		return core.ApprovalNone, inputErr("대상 프로젝트 폴더 확인 실패.")
 	}
 	dest, err := destinationPath(projectDir, strings.TrimSpace(in.Option("output")))
 	if err != nil {
@@ -187,8 +187,8 @@ func (c *Controller) prepare(ctx context.Context, in core.Invocation, wizard, pr
 			return Validation{}, core.Fail(core.Diagnostic{
 				Category:    core.CategoryInternal,
 				Severity:    core.SeverityError,
-				Message:     "Compose 검증기를 준비하지 못했습니다.",
-				NextActions: []string{"dcraft를 다시 빌드하거나 설치한 뒤 실행하세요."},
+				Message:     "Compose 검증기 준비 실패.",
+				NextActions: []string{"dcraft를 다시 빌드하거나 설치한 뒤 실행."},
 			})
 		}
 		result, err := c.validator.Validate(ctx, collect.dest.Dir, []byte(spec.Content))
@@ -242,7 +242,7 @@ func (c *Controller) prepare(ctx context.Context, in core.Invocation, wizard, pr
 	if validation.DefaultNetwork != "" {
 		resources = append(resources, Resource{
 			Kind: "network", Name: validation.DefaultNetwork,
-			Detail: "dcraft up 시 Compose가 생성합니다",
+			Detail: "dcraft up 시 Compose가 생성",
 		})
 	}
 	return &prepared{
@@ -275,10 +275,10 @@ func destinationChangedError(path string) *core.Error {
 // even with file_overwrite: the destination must be named.
 func explicitOverwriteError(dest Destination) *core.Error {
 	return inputErrDetail(
-		"기존 파일을 덮어쓰려면 저장 경로를 명시해야 합니다.",
-		fmt.Sprintf("기존 파일: %s\n--output %s와 --approve file_overwrite를 함께 지정하세요. 기존 파일은 변경하지 않았습니다.", dest.Path, dest.Path),
-		"--output <기존 파일>로 대상을 명시하세요.",
-		"자동화에서는 --approve file_overwrite도 함께 지정하세요.",
+		"기존 파일을 덮어쓰려면 저장 경로 명시 필요.",
+		fmt.Sprintf("기존 파일: %s\n--output %s와 --approve file_overwrite를 함께 지정. 기존 파일은 변경하지 않았음.", dest.Path, dest.Path),
+		"--output <기존 파일>로 대상을 명시.",
+		"자동화에서는 --approve file_overwrite도 함께 지정.",
 	)
 }
 
@@ -310,8 +310,8 @@ func (c *Controller) save(ctx context.Context, prepared *prepared) error {
 		return core.Fail(core.Diagnostic{
 			Category:    core.CategoryInternal,
 			Severity:    core.SeverityError,
-			Message:     "파일 저장기를 준비하지 못했습니다.",
-			NextActions: []string{"dcraft를 다시 빌드하거나 설치한 뒤 실행하세요."},
+			Message:     "파일 저장기 준비 실패.",
+			NextActions: []string{"dcraft를 다시 빌드하거나 설치한 뒤 실행."},
 		})
 	}
 	if err := ctx.Err(); err != nil {
@@ -333,7 +333,7 @@ func (c *Controller) save(ctx context.Context, prepared *prepared) error {
 			Severity:    core.SeverityError,
 			Message:     msgOutputInvalid,
 			Detail:      fmt.Sprintf("%s: %v", prepared.dest.Path, err),
-			NextActions: []string{"일반 파일 경로를 지정하세요.", msgComposeNoFile},
+			NextActions: []string{"일반 파일 경로 지정.", msgComposeNoFile},
 		})
 	default:
 		return core.FailCause(err, core.Diagnostic{
@@ -447,15 +447,15 @@ func (c *Controller) WizardSteps(ctx context.Context, in core.Invocation) (core.
 			},
 			{
 				Name: "port", Title: msgWizardPortTitle, Prompt: msgWizardPortPrompt,
-				AllowCustom: true, Optional: true, CustomHint: msgWizardPortHint,
+				AllowCustom: true, List: true, Optional: true, CustomHint: msgWizardPortHint,
 			},
 			{
 				Name: "volume", Title: msgWizardVolumeTitle, Prompt: msgWizardVolumePrompt,
-				AllowCustom: true, Optional: true, CustomHint: msgWizardVolumeHint,
+				AllowCustom: true, List: true, Optional: true, CustomHint: msgWizardVolumeHint,
 			},
 			{
 				Name: "env-var", Title: msgWizardEnvTitle, Prompt: msgWizardEnvPrompt,
-				AllowCustom: true, Optional: true, CustomHint: msgWizardEnvHint,
+				AllowCustom: true, List: true, Optional: true, CustomHint: msgWizardEnvHint,
 			},
 			{
 				Name: "command", Title: msgWizardCommandTitle, Prompt: msgWizardCommandPrompt,
@@ -485,7 +485,7 @@ func (c *Controller) WizardSteps(ctx context.Context, in core.Invocation) (core.
 func (c *Controller) WizardPreview(answers map[string]string) (string, error) {
 	target, approvals, ok := c.wizardState()
 	if !ok || target.ProjectDir == "" {
-		return "", inputErr("대화형 설정을 먼저 시작해야 합니다.")
+		return "", inputErr("대화형 설정을 먼저 시작 필요.")
 	}
 	in := core.Invocation{
 		Target:  target,
@@ -500,10 +500,10 @@ func (c *Controller) WizardPreview(answers map[string]string) (string, error) {
 	}
 	if prepared.overwrite && !core.HasApproval(approvals, core.ApprovalFileOverwrite) {
 		return "", inputErrDetail(
-			"선택한 저장 경로에 기존 파일이 있어 파일 덮어쓰기(file_overwrite) 승인이 필요합니다.",
-			fmt.Sprintf("저장 경로: %s\n기본 저장 경로로 돌아가거나, CLI에서 --output %s --approve file_overwrite를 명시하세요.", prepared.dest.Path, prepared.dest.Path),
-			"← 이전으로 돌아가 저장 경로를 바꾸세요.",
-			"CLI에서는 --approve file_overwrite를 명시해야 합니다.",
+			"선택한 저장 경로에 기존 파일이 있어 파일 덮어쓰기(file_overwrite) 승인이 필요.",
+			fmt.Sprintf("저장 경로: %s\n기본 저장 경로로 돌아가거나, CLI에서 --output %s --approve file_overwrite를 명시.", prepared.dest.Path, prepared.dest.Path),
+			"← 이전으로 돌아가 저장 경로를 바꾸.",
+			"CLI에서는 --approve file_overwrite 명시 필요.",
 		)
 	}
 	return previewText(prepared), nil

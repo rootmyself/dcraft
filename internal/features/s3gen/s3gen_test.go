@@ -309,10 +309,10 @@ func TestPlanExplainsEffectsPrerequisitesAuthenticationAndNextSteps(t *testing.T
 		t.Fatalf("plan = %+v", report)
 	}
 	for _, want := range []string{
-		"S3 호스트 스크립트", "S3에 접속하지 않습니다", "aws s3 sync",
+		"S3 호스트 스크립트", "S3에 접속하지 않음", "aws s3 sync",
 		"aws CLI", "기존 AWS CLI", "자격 증명", "삭제 동기화",
-		"file_overwrite", "dcraft hooks --add", "script_trust", "자동 등록하지 않습니다",
-		"실패", "수정", "남습니다",
+		"file_overwrite", "dcraft hooks --add", "script_trust", "자동 등록하지 않음",
+		"실패", "수정", "남음",
 	} {
 		if !strings.Contains(report.Text, want) {
 			t.Fatalf("plan missing %q:\n%s", want, report.Text)
@@ -336,7 +336,7 @@ func TestTarPlanShowsTheVerificationAndExtractionSteps(t *testing.T) {
 	if report.Failed() {
 		t.Fatalf("plan = %+v", report)
 	}
-	for _, want := range []string{"aws s3 cp", "gzip -t", "tar -tzf", "빈 임시 폴더", "심볼릭 링크", "삭제하지 않습니다", "정리"} {
+	for _, want := range []string{"aws s3 cp", "gzip -t", "tar -tzf", "빈 임시 폴더", "심볼릭 링크", "삭제하지 않음", "정리"} {
 		if !strings.Contains(report.Text, want) {
 			t.Fatalf("tar plan missing %q:\n%s", want, report.Text)
 		}
@@ -382,6 +382,34 @@ func TestWizardStepsCollectTheSameInputsAndPreviewSavesNothing(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(project, "scripts")); !os.IsNotExist(err) {
 		t.Fatal("wizard preview wrote a script")
+	}
+}
+
+// The TUI document declares the S3 source as a URL, the paths, and the next
+// commands; the CLI text stays the same.
+func TestS3genDocumentTagsURLPathsAndCommands(t *testing.T) {
+	feature := New()
+	res := core.Result{Outcome: core.OutcomeSuccess, Data: Payload{Generator: Report{
+		Script: "scripts/s3-sync.sh", Source: "s3://bucket/prefix", Destination: "src",
+		Mode: "sync", SHA256: "abc", NextCommands: []string{"dcraft hooks --add --stage pre"},
+	}}}
+	doc := feature.Document(res)
+	if len(doc.Blocks) != 1 || doc.Blocks[0].Kind != core.BlockValueLines {
+		t.Fatalf("document = %+v", doc)
+	}
+	kinds := map[core.ValueKind]int{}
+	var text []string
+	for _, line := range doc.Blocks[0].Lines {
+		text = append(text, line.Text())
+		for _, run := range line {
+			kinds[run.Kind]++
+		}
+	}
+	if kinds[core.ValueURL] != 1 || kinds[core.ValuePath] != 2 || kinds[core.ValueCommand] != 1 {
+		t.Fatalf("kinds = %v, want one url, two paths and one command", kinds)
+	}
+	if got, want := strings.Join(text, "\n"), feature.Present(res, 0); got != want {
+		t.Fatalf("document text = %q, want presenter text %q", got, want)
 	}
 }
 

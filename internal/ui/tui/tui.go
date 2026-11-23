@@ -6,12 +6,14 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/rootmyself/dcraft/internal/core"
-	"github.com/rootmyself/dcraft/internal/ui/view"
+	"github.com/rootmyself/dcraft/internal/stack"
+	"github.com/rootmyself/dcraft/internal/stack/present"
+	"github.com/rootmyself/dcraft/internal/ui/tui/visual"
 )
 
 // Options are the shared TUI dependencies.
@@ -19,6 +21,20 @@ type Options struct {
 	Engine   *core.Engine
 	Registry *core.Registry
 	Target   core.TargetRequest
+	// Theme overrides theme detection. It exists for tests and for a future
+	// caller that has already resolved the terminal profile; nil means the
+	// TUI resolves it once from the environment.
+	Theme *visual.Theme
+	// SpinnerInterval overrides the working animation cadence. Tests inject a
+	// short interval and drive the tick deterministically; production keeps the
+	// default.
+	SpinnerInterval time.Duration
+	// MarqueeInterval overrides the sidebar animation cadence.
+	MarqueeInterval time.Duration
+	// MarqueeTick schedules a tick; nil uses Bubble Tea's timer.
+	MarqueeTick func(time.Duration, func(time.Time) tea.Msg) tea.Cmd
+	// MouseNow supplies the clock used to detect double clicks.
+	MouseNow func() time.Time
 }
 
 // Run starts the interactive program. Normal quit (q or ctrl+c) does not touch
@@ -27,7 +43,7 @@ type Options struct {
 // canceled result.
 func Run(ctx context.Context, opts Options) error {
 	m := NewModel(ctx, opts)
-	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithContext(ctx))
+	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion(), tea.WithContext(ctx))
 	_, err := p.Run()
 	return err
 }
@@ -38,6 +54,7 @@ const (
 	phaseNoPrimary phase = iota
 	phaseLoadingEnvironments
 	phaseSelectingEnvironment
+	phaseEnvironmentActions
 	phaseLoadingServices
 	phaseSelectingServices
 	phaseLoading
@@ -63,19 +80,70 @@ type Model struct {
 	active   core.Feature
 	selected int
 
+	// filter narrows the menu by title or summary and filtering is true while
+	// "/" has the keyboard. navExpanded is the single-column menu's tab state:
+	// it changes the one-row summary, never the row count.
+	filter      string
+	filtering   bool
+	navExpanded bool
+
 	envs        []core.Environment
 	envSelected int
+	envSwitch   bool
+	envAction   int
+	envCreated  string
 
 	phase        phase
 	result       *core.Result
 	currentStage *core.Stage
-	events       chan core.Stage
-	pending      core.Feature
-	notice       string
-	runCtx       context.Context
-	runCancel    context.CancelFunc
-	width        int
-	height       int
+	// stages is every stage the engine reported this run, in report order,
+	// with a repeated name replacing its earlier snapshot. planStages is the
+	// sequence the phase is expected to pass through, so the timeline can mark
+	// the stages that are still ahead. Both are cleared when a new run starts.
+	stages     []core.Stage
+	planStages []core.Stage
+	events     chan core.Stage
+	pending    core.Feature
+	notice     string
+	runCtx     context.Context
+	runCancel  context.CancelFunc
+	width      int
+	height     int
+
+	// spinnerFrame and spinnerInterval drive the working animation. The frame
+	// is an index into the theme's spin glyphs; the interval is injected so a
+	// test can advance the animation without waiting on a wall clock.
+	spinnerFrame    int
+	spinnerInterval time.Duration
+	marquee         marqueeState
+	marqueeInterval time.Duration
+	marqueeTick     func(time.Duration, func(time.Time) tea.Msg) tea.Cmd
+	mouseNow        func() time.Time
+	mouseTarget     string
+	mouseAt         time.Time
+
+	// theme is resolved once in NewModel and injected into every renderer.
+	// facts holds the last observed header values; neither is a global and
+	// nothing re-reads the environment during a redraw.
+	theme visual.Theme
+	facts visual.Facts
+
+	// The body scrolls: body is the viewport over the scrollable rows, and
+	// detailOpen switches the result body to the full-value view. The detail's
+	// own position is kept separately so closing it returns to the table.
+	body         visual.Viewport
+	detailOpen   bool
+	detailScroll visual.Viewport
+	// resultDismissed hides a result sheet so the menu is reachable again. A
+	// long result owns the screen while it scrolls; esc puts it away without
+	// discarding the value (r re-reads, any feature reruns).
+	resultDismissed bool
+
+	// helpOpen is the "?" keymap panel; confirmScroll is the open panel's
+	// first visible row. Both are screen state, never persisted: a new flow
+	// starts at the top.
+	helpOpen      bool
+	confirmScroll int
 
 	// pendingApproval and planText hold the generic confirmation state. Any
 	// approval-gated feature that implements core.Planner reuses this screen;
@@ -104,6 +172,18 @@ type Model struct {
 	// renders its output and forwards keys for core.LiveAttach.
 	live   *liveState
 	liveCh chan string
+	// liveTop is the first visible output row and liveFollow keeps the window
+	// on the tail. The header above the output is fixed and never scrolls, so
+	// the service, instance, command and the "still running" state stay
+	// readable while the reader walks back through the log.
+	liveTop    int
+	liveFollow bool
+	// progress is the opt-in output of a long `up` run. It is cleared when the
+	// run completes: there is no post-run log panel.
+	progress       *progressState
+	progressCh     chan string
+	progressTop    int
+	progressFollow bool
 	// lastLive keeps the tail of the last live output so the management view
 	// still shows what the process printed after the screen closes.
 	lastLive []string
@@ -115,10 +195,16 @@ type Model struct {
 	wizardStep       int
 	wizardChoice     int
 	wizardInput      string
+	wizardItems      []string
+	wizardEditing    bool
 	wizardAnswers    map[string]string
 	wizardChecked    map[string]bool
 	wizardPreview    string
 	wizardPreviewErr error
+	// wizardNotice is guidance about the answer being typed (an empty
+	// required value). It is drawn inline under that field, not as a
+	// screen-level notice: the problem must stay next to the value to fix.
+	wizardNotice     string
 	wizardAwaiting   bool
 	wizardApplying   bool
 	wizardCanceled   bool
@@ -131,7 +217,27 @@ func NewModel(ctx context.Context, opts Options) *Model {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	m := &Model{ctx: ctx, engine: opts.Engine, registry: opts.Registry, target: opts.Target, envSelected: -1}
+	m := &Model{
+		ctx: ctx, engine: opts.Engine, registry: opts.Registry, target: opts.Target, envSelected: -1,
+		theme: resolveTheme(nil, opts.Theme),
+		facts: initialFacts(opts.Target),
+	}
+	m.spinnerInterval = opts.SpinnerInterval
+	m.marqueeInterval = opts.MarqueeInterval
+	m.marqueeTick = opts.MarqueeTick
+	m.mouseNow = opts.MouseNow
+	if m.mouseNow == nil {
+		m.mouseNow = time.Now
+	}
+	if m.marqueeTick == nil {
+		m.marqueeTick = tea.Tick
+	}
+	if m.marqueeInterval <= 0 {
+		m.marqueeInterval = 100 * time.Millisecond
+	}
+	if m.spinnerInterval <= 0 {
+		m.spinnerInterval = defaultSpinnerInterval
+	}
 	m.req = core.Request{Target: opts.Target}
 	if opts.Registry != nil {
 		m.features = opts.Registry.All()
@@ -172,6 +278,8 @@ type inputsMsg struct {
 
 type liveLineMsg struct{ line string }
 
+type progressLineMsg struct{ line string }
+
 type environmentListMsg struct {
 	envs []core.Environment
 	err  error
@@ -194,7 +302,25 @@ func (m *Model) Init() tea.Cmd {
 }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if tick, ok := msg.(marqueeTickMsg); ok {
+		m.advanceMarquee(tick)
+		return m, m.scheduleMarquee()
+	}
+	model, cmd := m.update(msg)
+	next := m.scheduleMarquee()
+	if cmd == nil {
+		return model, next
+	}
+	if next == nil {
+		return model, cmd
+	}
+	return model, tea.Batch(cmd, next)
+}
+
+func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.MouseMsg:
+		return m, m.updateMouse(msg)
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -202,18 +328,31 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case stageMsg:
 		st := msg.stage
 		m.currentStage = &st
+		m.observeStage(st)
 		if m.phase == phaseLoading || m.phase == phasePlanning {
 			return m, waitStageCmd(m.events)
 		}
 		return m, nil
+	case spinnerTickMsg:
+		return m, m.spinOneFrame()
 	case planMsg:
 		m.currentStage = nil
+		// The plan's own stages are what the confirmation screen continues
+		// from: the same timeline shape, with the run's remaining stages still
+		// marked as pending. A failed plan makes no promise about a run.
+		m.stages = append([]core.Stage{}, msg.report.Stages...)
+		m.planStages = nil
 		if msg.report.Failed() {
 			res := msg.report.Result()
 			m.result = &res
 			m.phase = phaseReady
 			return m, nil
 		}
+		if m.active != nil {
+			m.setPlan(runPending(core.PlannedStages(m.active), msg.report))
+		}
+		m.observeTarget(msg.report.Target)
+		m.observeTools(msg.report.Tools)
 		m.planText = msg.report.Text
 		m.planFingerprint = msg.report.Fingerprint
 		m.approvedHooks = append([]core.HookEntry{}, msg.report.Hooks...)
@@ -233,14 +372,37 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.pending = m.active
 		}
 		m.phase = phaseConfirm
+		m.confirmScroll = 0
 		return m, nil
 	case environmentListMsg:
 		if m.phase != phaseLoadingEnvironments {
 			return m, nil
 		}
-		// A broken catalog is not hidden here: running the primary feature
-		// through the engine produces the same resolve_target failure with
-		// Korean guidance and no Docker contact.
+		if m.envCreated != "" {
+			if msg.err == nil {
+				m.envs = msg.envs
+			} else {
+				m.notice = msgEnvReloadFailed + msg.err.Error()
+			}
+			m.target.Environment = m.envCreated
+			m.facts.Environment = m.envCreated
+			m.envCreated = ""
+			m.phase = phaseReady
+			return m, nil
+		}
+		if m.envSwitch {
+			if msg.err != nil || len(msg.envs) == 0 {
+				m.envSwitch = false
+				m.phase = phaseReady
+				m.notice = msgEnvSwitchFailed
+				return m, nil
+			}
+			m.envs = msg.envs
+			m.envSelected = -1
+			m.phase = phaseSelectingEnvironment
+			return m, nil
+		}
+		// On startup the primary feature reports catalog failures through the engine.
 		if msg.err != nil || len(msg.envs) == 0 {
 			return m, m.start(m.primary)
 		}
@@ -265,6 +427,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.resetServiceSelection()
 			return m, nil
 		}
+		m.observeTarget(msg.report.Target)
+		m.observeTools(msg.report.Tools)
 		m.serviceOptions = append([]core.ServiceStatus{}, msg.report.Services...)
 		m.serviceChecked = make([]bool, len(m.serviceOptions))
 		m.serviceCursor = 0
@@ -281,6 +445,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.phase = phaseReady
 			return m, nil
 		}
+		m.observeTarget(msg.report.Target)
+		m.observeTools(msg.report.Tools)
 		if len(msg.report.Fields) == 0 {
 			return m, m.begin(msg.feature)
 		}
@@ -293,6 +459,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.live.append(msg.line)
 		return m, waitLiveCmd(m.liveCh)
+	case progressLineMsg:
+		if m.progress == nil {
+			return m, nil
+		}
+		m.progress.append(msg.line)
+		return m, waitProgressCmd(m.progressCh)
 	case resultMsg:
 		if m.wizardCanceled {
 			// A canceled wizard step run may deliver its result after the
@@ -302,15 +474,32 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		res := msg.res
 		m.currentStage = nil
+		// A result ends the run, so the timeline stops animating. The reported
+		// stages come from the result itself; a failed or canceled run keeps
+		// the stages that never ran so their absence is visible next to the
+		// diagnostics.
+		m.stages = append([]core.Stage{}, res.Stages...)
+		if res.Outcome == core.OutcomeSuccess {
+			m.planStages = nil
+		}
+		m.observeTarget(res.Target)
+		m.observeTools(res.Tools)
 		if m.runCancel != nil {
 			m.runCancel()
 			m.runCancel = nil
 			m.runCtx = nil
 		}
+		// The running log belongs to the run. It is dropped before the result
+		// is drawn, so no stale pane competes with the result document.
+		m.closeProgress()
 		if m.wizardAwaiting {
 			m.wizardAwaiting = false
 			m.beginWizardSteps(res)
 			return m, nil
+		}
+		created := ""
+		if m.wizardApplying && res.Outcome == core.OutcomeSuccess && m.wizardFeature != nil && m.wizardFeature.Descriptor().EnvironmentAdmin {
+			created = strings.TrimSpace(m.wizardAnswers["name"])
 		}
 		if m.wizardApplying {
 			m.wizardApplying = false
@@ -323,6 +512,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.result = &res
 		m.phase = phaseReady
 		m.notice = ""
+		m.resultDismissed = false
+		m.resetScrollState()
 		if m.live != nil {
 			m.live.writer.flush()
 			m.drainLive()
@@ -334,55 +525,51 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.live = nil
 			m.liveCh = nil
 		}
+		if created != "" && m.engine != nil && m.engine.SupportsEnvironments() {
+			m.envCreated = created
+			m.phase = phaseLoadingEnvironments
+			return m, m.listEnvironmentsCmd()
+		}
 		return m, nil
 	case tea.KeyMsg:
+		// The help panel is the outermost layer: while it is open it owns
+		// every key, and closing it runs nothing.
+		if m.helpOpen {
+			return m, m.updateHelpKey(msg)
+		}
+		// The filter owns the keyboard while "/" is active: q and r are text,
+		// not commands, so a search can contain any letter.
+		if m.filtering {
+			return m, m.updateFilterKey(msg)
+		}
 		if m.form != nil {
 			return m.updateFormKey(msg)
 		}
 		if m.live != nil {
 			return m.updateLiveKey(msg)
 		}
+		if m.updateProgressKey(msg) {
+			return m, nil
+		}
+		// Body scrolling runs before the phase handlers: PgUp/PgDn, Home/End
+		// and g/G have no other meaning on a result screen. The detail view
+		// owns every key while it is open, so esc/d close it instead of
+		// clearing the screen.
+		if m.detailOpen {
+			return m, m.detailKey(msg)
+		}
+		if handled, cmd := m.scrollKey(msg); handled {
+			return m, cmd
+		}
 		if m.phase == phaseSelectingServices {
 			return m.updateServiceKey(msg)
 		}
 		if m.phase == phaseConfirm {
-			switch msg.String() {
-			case "q", "ctrl+c":
-				// A confirmation is not an operation; quitting is safe and
-				// runs nothing.
-				return m, tea.Quit
-			case "esc", "n":
-				if m.pendingApproval != core.ApprovalNone {
-					m.declineApproval()
-				} else {
-					m.pending = nil
-					m.planText = ""
-					m.phase = phaseReady
-					m.notice = ""
-				}
+			if msg.String() == "?" {
+				m.openHelp()
 				return m, nil
-			case "enter":
-				if m.pendingApproval != core.ApprovalNone {
-					feature := m.active
-					approvals := append([]core.ApprovalKind{}, m.pendingApprovals...)
-					m.pendingApproval = ""
-					m.pendingApprovals = nil
-					m.planText = ""
-					if feature == nil {
-						m.phase = phaseReady
-						return m, nil
-					}
-					return m, m.runApproved(feature, approvals)
-				}
-				if m.pending == nil {
-					m.phase = phaseReady
-					return m, nil
-				}
-				f := m.pending
-				m.pending = nil
-				return m, m.startRun(f, nil)
 			}
-			return m, nil
+			return m.updateConfirmKey(msg)
 		}
 		switch msg.String() {
 		case "q":
@@ -412,16 +599,75 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, tea.Quit
 		case "esc":
+			if m.phase == phaseEnvironmentActions || (m.phase == phaseSelectingEnvironment && m.envSwitch) {
+				m.envSwitch = false
+				m.phase = phaseReady
+				return m, nil
+			}
 			if m.isWizardPhase() {
+				if m.phase == phaseWizardStep && m.wizardEditing {
+					m.wizardEditing = false
+					m.wizardInput = ""
+					m.wizardNotice = ""
+					return m, nil
+				}
 				m.cancelWizard()
+				return m, nil
+			}
+			if m.navMenuVisible() && m.filter != "" {
+				// esc clears the filter: the whole registry comes back and the
+				// cursor stays on the same feature when it is still visible.
+				m.filter = ""
+				m.filtering = false
+				m.keepSelectionVisible()
+			}
+			// A result sheet that covers the menu is put away, not acted on:
+			// nothing was selected, so nothing must run. A short result that
+			// leaves the menu visible keeps its previous behaviour (esc is a
+			// no-op), so an accidental key does not blank the screen.
+			if m.phase == phaseReady && m.result != nil && !m.resultDismissed && m.resultScrolls() {
+				m.resultDismissed = true
+				m.body = visual.Viewport{}
 			}
 			return m, nil
+		}
+		if m.navMenuVisible() {
+			switch msg.String() {
+			case "/":
+				m.filtering = true
+				return m, nil
+			case "tab", "shift+tab":
+				// The single-column summary expands in place. It is one row
+				// either way, so the content keeps its height. Only the
+				// medium layout has that row; elsewhere tab has no meaning
+				// and must not pretend it did something.
+				if m.layoutMode() == visual.ModeMedium {
+					m.navExpanded = !m.navExpanded
+				}
+				return m, nil
+			}
 		}
 		if m.isWizardPhase() {
 			return m, m.updateWizard(msg)
 		}
+		if m.phase == phaseEnvironmentActions {
+			switch msg.String() {
+			case "?":
+				m.openHelp()
+			case "up", "k":
+				m.envAction = 1 - m.envAction
+			case "down", "j":
+				m.envAction = 1 - m.envAction
+			case "enter":
+				return m, m.chooseEnvironmentAction()
+			}
+			return m, nil
+		}
 		if m.phase == phaseSelectingEnvironment {
 			switch msg.String() {
+			case "?":
+				m.openHelp()
+				return m, nil
 			case "up", "k":
 				if len(m.envs) > 0 {
 					if m.envSelected <= 0 {
@@ -434,38 +680,103 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if len(m.envs) > 0 {
 					m.envSelected = (m.envSelected + 1) % len(m.envs)
 				}
+			case "pgup":
+				m.envSelected = max(0, m.envSelected-max(1, m.currentViewport().Visible()))
+			case "pgdown":
+				m.envSelected = min(len(m.envs)-1, max(0, m.envSelected)+max(1, m.currentViewport().Visible()))
+			case "home", "g":
+				m.envSelected = 0
+			case "end", "G":
+				m.envSelected = len(m.envs) - 1
 			case "enter":
-				if m.envSelected >= 0 && m.envSelected < len(m.envs) && m.primary != nil {
-					m.target.Environment = m.envs[m.envSelected].Name
-					return m, m.start(m.primary)
-				}
+				return m, m.chooseEnvironment()
 			}
 			return m, nil
 		}
 		switch msg.String() {
+		case "?":
+			// Help is available on every screen that advertises it. It only
+			// shows the current screen's keys and closes with esc; it never
+			// runs anything.
+			m.openHelp()
+			return m, nil
+		case "d":
+			if m.phase == phaseReady && m.hasDetail() {
+				m.openDetail()
+				return m, nil
+			}
+			return m, nil
 		case "r":
 			if m.active == nil || m.phase != phaseReady {
 				return m, nil
 			}
+			if m.resultDismissed && m.result != nil {
+				m.resultDismissed = false
+				return m, nil
+			}
 			return m, m.start(m.active)
 		case "up", "k":
-			if len(m.features) > 1 && m.phase == phaseReady {
-				m.selected = (m.selected - 1 + len(m.features)) % len(m.features)
+			if m.navMenuVisible() {
+				if m.selectionVisible() {
+					m.moveSelection(-1)
+				} else if m.resultScrolls() {
+					m.applyScroll(func(v *visual.Viewport) { v.Move(-1) })
+				}
 			}
 			return m, nil
 		case "down", "j":
-			if len(m.features) > 1 && m.phase == phaseReady {
-				m.selected = (m.selected + 1) % len(m.features)
+			if m.navMenuVisible() {
+				if m.selectionVisible() {
+					m.moveSelection(1)
+				} else if m.resultScrolls() {
+					m.applyScroll(func(v *visual.Viewport) { v.Move(1) })
+				}
 			}
 			return m, nil
 		case "enter":
-			if m.phase == phaseReady && len(m.features) > 0 {
-				return m, m.start(m.features[m.selected])
+			// While the result sheet covers the menu, or a filter has hidden
+			// the navigation, the highlighted feature is not visible; running
+			// it would act on an unseen selection.
+			if m.selectionVisible() {
+				if f := m.selectedFeature(); f != nil {
+					return m, m.start(f)
+				}
 			}
 			return m, nil
 		}
 	}
 	return m, nil
+}
+
+// chooseEnvironment is Enter on an environment row: it either runs the primary
+// feature against the chosen target or, when the screen was opened to switch,
+// only changes the target. Mouse and keyboard share this one path so a switch
+// can never start a run.
+func (m *Model) chooseEnvironment() tea.Cmd {
+	if m.envSelected < 0 || m.envSelected >= len(m.envs) || m.primary == nil {
+		return nil
+	}
+	m.target.Environment = m.envs[m.envSelected].Name
+	if m.envSwitch {
+		m.envSwitch = false
+		m.facts.Environment = m.target.Environment
+		m.result = nil
+		m.resultDismissed = false
+		m.resetScrollState()
+		m.phase = phaseReady
+		return nil
+	}
+	return m.start(m.primary)
+}
+
+// chooseEnvironmentAction is Enter on the environment administration screen.
+func (m *Model) chooseEnvironmentAction() tea.Cmd {
+	if m.envAction == 0 {
+		return m.startRunPath(m.active)
+	}
+	m.envSwitch = true
+	m.phase = phaseLoadingEnvironments
+	return m.listEnvironmentsCmd()
 }
 
 func (m *Model) listEnvironmentsCmd() tea.Cmd {
@@ -519,6 +830,12 @@ func (m *Model) start(f core.Feature) tea.Cmd {
 	}
 	m.ensureRequest(f)
 	m.pending = nil
+	if f.Descriptor().EnvironmentAdmin && m.engine != nil && m.engine.SupportsEnvironments() {
+		m.active = f
+		m.envAction = 0
+		m.phase = phaseEnvironmentActions
+		return nil
+	}
 	if m.wantsServiceSelection(f) {
 		return m.beginServiceSelection(f)
 	}
@@ -553,7 +870,12 @@ func (m *Model) startRunPath(f core.Feature) tea.Cmd {
 		return m.begin(f)
 	}
 	m.pending = f
+	// The screen is a bare confirmation with no plan behind it, so no stage
+	// sequence is known; a previous run's timeline must not leak into it.
+	m.stages = nil
+	m.planStages = nil
 	m.phase = phaseConfirm
+	m.confirmScroll = 0
 	m.notice = ""
 	return nil
 }
@@ -579,6 +901,9 @@ func (m *Model) beginServiceSelection(f core.Feature) tea.Cmd {
 	m.serviceCursor = 0
 	m.serviceChecked = nil
 	m.serviceWhole = true
+	// The table starts at its first row, never at the previous screen's scroll
+	// position: the select screen measures different rows than a result body.
+	m.body = visual.Viewport{}
 	m.req.Feature = f.Descriptor().Name
 	m.req.Target = m.target
 	// Never let a previous run's scope leak into this one before the user
@@ -600,20 +925,42 @@ func (m *Model) resetServiceSelection() {
 	m.serviceCursor = 0
 	m.serviceChecked = nil
 	m.serviceWhole = true
+	// The table window is reset with the rows it measured: a later screen with
+	// a different service count must not start mid-list.
+	m.body = visual.Viewport{}
 }
 
-// updateServiceKey drives the scope screen. The first row is the whole stack
-// and is selected until an individual service is checked; space on the whole
-// row clears every individual choice. Enter feeds Request.Services, esc
-// returns to the menu, and q/ctrl+c quit without running anything.
+// updateServiceKey drives the scope table. The first row is the whole stack and
+// is selected until an individual service is checked; space on the whole row
+// clears every individual choice. Enter feeds Request.Services, esc returns to
+// the menu, and q/ctrl+c quit without running anything. The cursor window follows
+// the selection, so every row stays reachable on a large stack.
 func (m *Model) updateServiceKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	total := len(m.serviceOptions) + 1
 	switch msg.String() {
 	case "up", "k":
 		m.serviceCursor = (m.serviceCursor - 1 + total) % total
+		m.followServiceCursor()
 		return m, nil
 	case "down", "j":
 		m.serviceCursor = (m.serviceCursor + 1) % total
+		m.followServiceCursor()
+		return m, nil
+	case "pgup":
+		m.serviceCursor = max(m.serviceCursor-m.pageRows(), 0)
+		m.followServiceCursor()
+		return m, nil
+	case "pgdown":
+		m.serviceCursor = min(m.serviceCursor+m.pageRows(), total-1)
+		m.followServiceCursor()
+		return m, nil
+	case "home", "g":
+		m.serviceCursor = 0
+		m.followServiceCursor()
+		return m, nil
+	case "end", "G":
+		m.serviceCursor = total - 1
+		m.followServiceCursor()
 		return m, nil
 	case " ":
 		if m.serviceCursor == 0 {
@@ -659,6 +1006,14 @@ func (m *Model) updateServiceKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// pageRows is how far PgUp/PgDn move on the scope table: one visible window.
+func (m *Model) pageRows() int {
+	if rows := m.serviceViewport().Visible(); rows > 0 {
+		return rows
+	}
+	return 1
+}
+
 func anyChecked(checked []bool) bool {
 	for _, ok := range checked {
 		if ok {
@@ -685,8 +1040,12 @@ func (m *Model) begin(f core.Feature) tea.Cmd {
 	m.setupLive(f)
 	if plansBeforeRun(f) {
 		m.phase = phasePlanning
-		return tea.Batch(m.planCmd(f, m.events), waitStageCmd(m.events))
+		m.setPlan(core.PlannedPlanStages(f))
+		m.stages = nil
+		return tea.Batch(m.planCmd(f, m.events), waitStageCmd(m.events), m.spinnerCmd())
 	}
+	m.setPlan(core.PlannedStages(f))
+	m.stages = nil
 	return m.launchRun(f, nil, nil)
 }
 
@@ -709,7 +1068,12 @@ func (m *Model) startRun(f core.Feature, options map[string]string) tea.Cmd {
 	// The confirmed plan is bound to its previewed inputs. It is copied into
 	// the request before resetRunState clears the screen state.
 	m.req.PlanFingerprint = m.planFingerprint
+	// The confirmed plan's observed stages and its remaining sequence are what
+	// the running screen continues from; both are copied before the reset.
+	planned, done := m.planStages, m.stages
 	m.resetRunState()
+	m.setPlan(planned)
+	m.stages = done
 	m.setupLive(f)
 	return m.launchRun(f, nil, options)
 }
@@ -717,7 +1081,10 @@ func (m *Model) startRun(f core.Feature, options map[string]string) tea.Cmd {
 func (m *Model) runApproved(f core.Feature, approvals []core.ApprovalKind) tea.Cmd {
 	m.ensureRequest(f)
 	m.req.PlanFingerprint = m.planFingerprint
+	planned, done := m.planStages, m.stages
 	m.resetRunState()
+	m.setPlan(planned)
+	m.stages = done
 	m.setupLive(f)
 	return m.launchRun(f, approvals, nil)
 }
@@ -758,7 +1125,11 @@ func (m *Model) ensureRequest(f core.Feature) {
 // Collected feature inputs in m.req are preserved unless the feature changes.
 func (m *Model) resetRunState() {
 	m.result = nil
+	m.resultDismissed = false
+	m.resetScrollState()
 	m.currentStage = nil
+	m.stages = nil
+	m.planStages = nil
 	m.pending = nil
 	m.pendingApproval = ""
 	m.pendingApprovals = nil
@@ -766,7 +1137,10 @@ func (m *Model) resetRunState() {
 	m.planText = ""
 	m.planFingerprint = ""
 	m.notice = ""
+	m.helpOpen = false
+	m.confirmScroll = 0
 	m.closeLive()
+	m.closeProgress()
 	m.form = nil
 	m.lastLive = nil
 	if m.runCancel != nil {
@@ -780,10 +1154,22 @@ func (m *Model) resetRunState() {
 func (m *Model) launchRun(f core.Feature, approvals []core.ApprovalKind, options map[string]string) tea.Cmd {
 	m.active = f
 	m.phase = phaseLoading
+	if len(m.planStages) == 0 {
+		m.setPlan(core.PlannedStages(f))
+	}
 	m.runCtx, m.runCancel = context.WithCancel(m.ctx)
+	if f != nil && f.Descriptor().StreamsProgress {
+		m.setupProgress()
+	}
 	cmds := []tea.Cmd{m.runCmd(f, approvals, options, m.events, m.runCtx), waitStageCmd(m.events)}
 	if m.live != nil {
 		cmds = append(cmds, waitLiveCmd(m.liveCh))
+	}
+	if m.progressCh != nil {
+		cmds = append(cmds, waitProgressCmd(m.progressCh))
+	}
+	if spin := m.spinnerCmd(); spin != nil {
+		cmds = append(cmds, spin)
 	}
 	return tea.Batch(cmds...)
 }
@@ -814,6 +1200,7 @@ func (m *Model) declineApproval() {
 	m.planText = ""
 	m.planFingerprint = ""
 	m.req.PlanFingerprint = ""
+	m.confirmScroll = 0
 	m.phase = phaseReady
 }
 
@@ -913,154 +1300,22 @@ func waitStageCmd(events chan core.Stage) tea.Cmd {
 	}
 }
 
-var (
-	titleStyle  = lipgloss.NewStyle().Bold(true)
-	hintStyle   = lipgloss.NewStyle().Faint(true)
-	noticeStyle = lipgloss.NewStyle().Bold(true)
-)
-
+// View composes the three fixed bands: the header, the phase body and the
+// keycap footer. Every line fits the terminal width exactly, so a resize
+// reflows immediately and never leaves the frame ragged.
 func (m *Model) View() string {
-	var b strings.Builder
-	title := msgApp
-	shown := m.active
-	if (m.phase == phaseLoadingServices || m.phase == phaseSelectingServices) && m.serviceFeature != nil {
-		shown = m.serviceFeature
+	body := m.renderBody()
+	if m.overlayOpen() {
+		// The panel covers the body; what shows through is the screen the
+		// user was on, dimmed. It still states the stack identity and the
+		// keys, so the panel never hides where the change would land.
+		body = m.backgroundModel().renderBody()
 	}
-	if m.phase == phaseConfirm && m.pending != nil {
-		shown = m.pending
-	}
-	if shown != nil {
-		title += " · " + shown.Descriptor().Title
-	}
-	b.WriteString(titleStyle.Render(title))
-	b.WriteString("\n\n")
-
-	switch m.phase {
-	case phaseNoPrimary:
-		b.WriteString(msgNoPrimary)
-		b.WriteString("\n")
-	case phasePlanning:
-		b.WriteString(msgPlanning)
-		b.WriteString("\n")
-		if m.currentStage != nil {
-			b.WriteString(view.StageList([]core.Stage{*m.currentStage}))
-			b.WriteString("\n")
-		}
-	case phaseConfirm:
-		if m.pendingApproval != core.ApprovalNone {
-			b.WriteString(titleStyle.Render(msgApprovalConfirmTitle))
-			b.WriteString("\n\n")
-			if m.active != nil {
-				d := m.active.Descriptor()
-				fmt.Fprintf(&b, "작업: %s (%s)\n", d.Title, d.Name)
-			}
-			fmt.Fprintf(&b, "%s: %s\n", msgConfirmScopeLabel, serviceScopeText(m.req.Services))
-			fmt.Fprintf(&b, "승인: %s (%s)\n", m.pendingApproval.KoreanLabel(), m.pendingApproval)
-			for _, kind := range m.pendingApprovals {
-				if kind == m.pendingApproval {
-					continue
-				}
-				fmt.Fprintf(&b, "승인: %s (%s)\n", kind.KoreanLabel(), kind)
-			}
-			b.WriteString("\n")
-			b.WriteString(m.planText)
-			b.WriteString("\n\n")
-			b.WriteString(hintStyle.Render(msgHintConfirm))
-			b.WriteString("\n")
-		} else {
-			b.WriteString(m.confirmView())
-			b.WriteString("\n")
-		}
-	case phaseLoadingEnvironments:
-		b.WriteString(msgEnvChecking)
-		b.WriteString("\n")
-	case phaseSelectingEnvironment:
-		b.WriteString(titleStyle.Render(msgEnvSelectTitle))
-		b.WriteString("\n\n")
-		b.WriteString(msgEnvSelectIntro)
-		b.WriteString("\n\n")
-		for i, env := range m.envs {
-			marker := "  "
-			if i == m.envSelected {
-				marker = "> "
-			}
-			fmt.Fprintf(&b, "%s%s — %s\n", marker, env.Name, environmentSummary(env))
-		}
-		b.WriteString("\n")
-		b.WriteString(hintStyle.Render(msgEnvIsolationNote))
-		b.WriteString("\n")
-	case phaseLoadingServices:
-		b.WriteString(msgServiceLoading)
-		b.WriteString("\n")
-	case phaseSelectingServices:
-		b.WriteString(m.serviceView())
-		b.WriteString("\n")
-	case phaseLoadingInputs:
-		b.WriteString(msgLoadingInputs)
-		b.WriteString("\n")
-	case phaseForm:
-		b.WriteString(m.formView())
-	case phaseWizardLoading, phaseWizardStep, phaseWizardPreview:
-		b.WriteString(m.wizardView())
-		b.WriteString("\n")
-	case phaseLoading:
-		if m.live != nil {
-			b.WriteString(m.liveView())
-			b.WriteString("\n")
-			break
-		}
-		b.WriteString(msgWorking)
-		b.WriteString("\n")
-		if m.currentStage != nil {
-			b.WriteString(view.StageList([]core.Stage{*m.currentStage}))
-			b.WriteString("\n")
-		}
-	default:
-		if len(m.lastLive) > 0 {
-			b.WriteString(titleStyle.Render(msgLastOutput))
-			b.WriteString("\n")
-			for _, line := range m.lastLive {
-				b.WriteString(line)
-				b.WriteString("\n")
-			}
-			b.WriteString("\n")
-		}
-		if m.result != nil {
-			if m.result.Outcome == core.OutcomeSuccess {
-				if p, ok := m.active.(core.Presenter); ok {
-					b.WriteString(p.Present(*m.result, m.contentWidth()))
-				} else {
-					b.WriteString(view.SuccessFallback(*m.result))
-				}
-				if warnings := view.Warnings(m.result.Diagnostics); len(warnings) > 0 {
-					b.WriteString("\n\n")
-					b.WriteString(view.Diagnostics(warnings))
-				}
-			} else {
-				b.WriteString(view.Failure(*m.result))
-			}
-			b.WriteString("\n")
-		}
-	}
-
-	body := b.String()
-	var footer strings.Builder
-	if len(m.features) > 1 && m.phase == phaseReady {
-		footer.WriteString("\n")
-		footer.WriteString(msgMenu)
-		footer.WriteString("\n")
-		footer.WriteString(m.menuView())
-	}
-
-	if m.notice != "" {
-		footer.WriteString("\n")
-		footer.WriteString(noticeStyle.Render(m.notice))
-		footer.WriteString("\n")
-	}
-
-	footer.WriteString("\n")
-	footer.WriteString(hintStyle.Render(m.hints()))
-	return m.fitView(body, footer.String())
+	lines := m.composeFrame(body)
+	// No trailing newline: the frame already occupies exactly the terminal
+	// height, and Bubble Tea drops the top line of a view taller than the
+	// window. One extra newline would scroll the header off screen.
+	return strings.Join(lines, "\n")
 }
 
 // menuWindow bounds how many feature rows the screen shows so a growing
@@ -1068,221 +1323,280 @@ func (m *Model) View() string {
 // follows the cursor and the omitted rows are stated explicitly.
 const menuWindow = 7
 
-func (m *Model) menuView() string {
-	var b strings.Builder
-	start, end := 0, len(m.features)
-	if end > menuWindow {
-		start = m.selected - menuWindow/2
-		if start < 0 {
-			start = 0
-		}
-		if start+menuWindow > end {
-			start = end - menuWindow
-		}
-		end = start + menuWindow
+// menuView is the single-column feature menu: the same sectioned list as the
+// sidebar, with the machine name kept because the layout has the width for it.
+// The cursor marker is the two-cell "> " form the existing key tests assert.
+// budget bounds the rows so a long registry cannot push the notice or the
+// result off the body; zero means no coding yet.
+func (m *Model) menuView(budget int) string {
+	lines, _ := m.menuLines(budget)
+	if len(lines) == 0 {
+		return ""
 	}
-	if start > 0 {
-		b.WriteString(hintStyle.Render(msgMenuMoreAbove))
-		b.WriteString("\n")
-	}
-	for i := start; i < end; i++ {
-		d := m.features[i].Descriptor()
-		marker := "  "
-		if i == m.selected {
-			marker = "> "
-		}
-		b.WriteString(marker + d.Title + " (" + d.Name + ")\n")
-	}
-	if end < len(m.features) {
-		b.WriteString(hintStyle.Render(msgMenuMoreBelow))
-		b.WriteString("\n")
-	}
-	return b.String()
+	return strings.Join(lines, "\n") + "\n"
 }
 
-// fitView keeps the rendered screen within the terminal height. The footer
-// (menu, notice, hints) is always kept; the body is shortened with an explicit
-// notice instead of letting the terminal silently clip the top.
-func (m *Model) fitView(body, footer string) string {
-	body = strings.TrimRight(body, "\n")
-	footer = strings.TrimRight(footer, "\n")
-	if m.height <= 0 {
-		return body + "\n" + footer + "\n"
+// menuLines is menuView plus the drawn row of every entry, from one window
+// calculation.
+func (m *Model) menuLines(budget int) ([]string, []visual.NavHit) {
+	if budget <= 0 {
+		budget = menuWindow
 	}
-	bodyLines := strings.Split(body, "\n")
-	footerLines := strings.Split(footer, "\n")
-	if len(bodyLines)+len(footerLines) <= m.height {
-		return body + "\n" + footer + "\n"
-	}
-	maxBody := m.height - len(footerLines)
-	if maxBody < 2 {
-		return footer + "\n"
-	}
-	keep := maxBody - 1
-	if keep > len(bodyLines) {
-		keep = len(bodyLines)
-	}
-	truncated := append([]string{}, bodyLines[:keep]...)
-	truncated = append(truncated, hintStyle.Render(msgViewTruncated))
-	return strings.Join(truncated, "\n") + "\n" + footer + "\n"
+	return visual.MenuLinesWithHits(m.theme, m.bodyWidth(), m.nav(), budget, !m.compact())
 }
 
-// confirmView explains the requested target and effect before a mutating
-// feature runs. It shows only caller input; the engine resolves and reports
-// the Compose project name after the operation starts.
-func (m *Model) confirmView() string {
-	var b strings.Builder
-	b.WriteString(msgConfirmTitle)
-	b.WriteString("\n")
-	if m.pending == nil {
-		return strings.TrimRight(b.String(), "\n")
-	}
-	d := m.pending.Descriptor()
-	fmt.Fprintf(&b, "%s: %s (%s)\n", msgConfirmActionLabel, d.Title, d.Name)
-	target := m.target.Path
-	if target == "" {
-		target = msgConfirmTargetNow
-	}
-	fmt.Fprintf(&b, "%s: %s\n", msgConfirmTargetLabel, target)
-	if m.target.Environment != "" {
-		fmt.Fprintf(&b, "%s: %s\n", msgConfirmEnvironment, m.target.Environment)
-	}
-	if len(m.target.Files) > 0 {
-		fmt.Fprintf(&b, "%s: %s\n", msgConfirmFileLabel, strings.Join(m.target.Files, ", "))
-	}
-	if len(m.target.Profiles) > 0 {
-		fmt.Fprintf(&b, "%s: %s\n", msgConfirmProfile, strings.Join(m.target.Profiles, ", "))
-	}
-	if m.target.ProjectName != "" {
-		fmt.Fprintf(&b, "%s: %s\n", msgConfirmProject, m.target.ProjectName)
-	} else {
-		fmt.Fprintf(&b, "%s: %s\n", msgConfirmProject, msgConfirmProjectAuto)
-	}
-	fmt.Fprintf(&b, "%s: %s\n", msgConfirmScopeLabel, serviceScopeText(m.req.Services))
-	fmt.Fprintf(&b, "%s: %s\n", msgConfirmEffectLabel, d.Summary)
-	if strings.TrimSpace(m.planText) != "" {
-		b.WriteString("\n")
-		b.WriteString(m.planText)
-		b.WriteString("\n")
-	}
-	b.WriteString(msgConfirmRisk)
-	return strings.TrimRight(b.String(), "\n")
+// compactByHeight reports a terminal too short for the decorated layout. The
+// compact mode is chosen by width or height, but only the height case needs the
+// navigation summary: a narrow terminal still has rows for the menu list.
+func (m *Model) compactByHeight() bool {
+	return m.height > 0 && m.height < visual.CompactMinRows
 }
 
-// serviceWindow bounds the visible rows so a large stack cannot push the list
-// off the terminal. The cursor-centered window keeps every row reachable.
-const serviceWindow = 10
+// navLine is the one-row navigation of the single-column layouts. The wide
+// layout has the persistent sidebar instead. A compact-by-height screen keeps
+// the row too: spec stories 11/12/14 require the current position to stay
+// visible, and a screen that hid the only navigation would let ↑/↓ move an
+// invisible cursor. Before the first WindowSizeMsg it renders nothing; a guess
+// would only be replaced one frame later.
+func (m *Model) navLine() string {
+	if m.width <= 0 || m.layoutMode() == visual.ModeWide {
+		return ""
+	}
+	if m.layoutMode() == visual.ModeCompact && !m.compactByHeight() {
+		// Compact by width: the menu list is drawn, and it names the position.
+		return ""
+	}
+	if !m.navMenuVisible() {
+		return ""
+	}
+	return visual.NavRow(m.theme, m.bodyWidth(), m.nav(), m.navExpanded)
+}
 
-func (m *Model) serviceView() string {
-	var b strings.Builder
-	b.WriteString(titleStyle.Render(msgServiceSelectTitle))
-	b.WriteString("\n\n")
+// serviceSelectCellWidth is the exact width of the selection column. It is
+// four cells because the cursor glyph and the checkbox together are four
+// (`▸[x]`), which keeps every row's name starting in the same cell.
+const serviceSelectCellWidth = 4
+
+// serviceScopeColumns is the approved column contract for the scope table: the
+// status table's columns with the selection column first, in the amended order
+// 서비스 · 상태 · 인스턴스 · health · 이미지 · 포트.
+func serviceScopeColumns() []core.Column {
+	return []core.Column{
+		{Header: msgServiceColumnSelect, Fixed: serviceSelectCellWidth},
+		{Header: msgServiceColumnService, Weight: 30, Min: 12, Max: 24},
+		{Header: msgServiceColumnState, Fixed: 11},
+		{Header: msgServiceColumnInstances, Fixed: 8, Align: core.AlignRight},
+		{Header: msgServiceColumnHealth, Fixed: 8, DropPriority: 3},
+		{Header: msgServiceColumnImage, Weight: 45, Min: 16, Max: 34, DropPriority: 2},
+		{Header: msgServiceColumnPort, Fixed: 13, DropPriority: 1},
+	}
+}
+
+// serviceTable is the scope table for the current catalog. compact folds a
+// health problem into the state cell, because the health column is not drawn
+// there; the icon and the Korean label both survive the fold.
+func (m *Model) serviceTable(compact bool) core.Table {
+	table := core.Table{Columns: serviceScopeColumns(), EmptyText: msgServiceNoServices}
+	for i, svc := range m.serviceOptions {
+		checked := "[ ]"
+		if i < len(m.serviceChecked) && m.serviceChecked[i] {
+			checked = "[x]"
+		}
+		// The cursor is the gutter glyph next to the checkbox: the approved
+		// non-color position marker, and it keeps the checkbox itself aligned.
+		marker := " "
+		if m.serviceCursor == i+1 {
+			marker = m.theme.Glyphs.Sel
+		}
+		state := present.StateLabelValue(svc.State)
+		stateBadge := present.StateBadgeValue(svc.State)
+		if compact {
+			if folded, ok := serviceFoldedHealth(svc.Health); ok {
+				state, stateBadge = folded, present.HealthBadgeValue(svc.Health)
+			}
+		}
+		table.Rows = append(table.Rows, core.Row{
+			Selectable: svc.Configured,
+			Cells: []core.Cell{
+				{Text: marker + checked},
+				{Text: svc.Name, Detail: svc.Name},
+				{Text: state, Badge: stateBadge},
+				{Text: fmt.Sprintf("%d", svc.Instances)},
+				{Text: present.HealthLabelValue(svc.Health), Badge: present.HealthBadgeValue(svc.Health)},
+				{Text: serviceImageLabel(svc), Detail: svc.Image},
+				{Text: servicePortLabel(svc), Detail: svc.Ports},
+			},
+		})
+	}
+	return table
+}
+
+// serviceScreen splits the scope screen on the same terms as the result table:
+// the heading, target, whole-stack row and table header never scroll, the
+// service rows do, and the guidance below stays put. The whole-stack row is
+// pinned above the table rather than being one of its rows: it has no state,
+// image or port, and keeping it visible means a narrowed scope can always be
+// widened again without scrolling back to the first row.
+func (m *Model) serviceScreen() screenLines {
+	return m.serviceScreenLayout().screen
+}
+
+// serviceScreenLayout is the scope screen plus the row of the whole-stack
+// selector inside Fixed. The renderer and the mouse targets read this one
+// layout, so the row a click resolves and the row the marker marks agree.
+type serviceScreenLayout struct {
+	screen   screenLines
+	wholeRow int
+}
+
+func (m *Model) serviceScreenLayout() serviceScreenLayout {
+	th := m.theme
+	width := m.bodyWidth()
+	compact := m.compact()
+
+	fixed := []string{th.Bold(visual.TokenAccent, msgServiceSelectTitle)}
 	dir := m.target.Path
 	if dir == "" {
 		dir = msgConfirmTargetNow
 	}
-	fmt.Fprintf(&b, "%s: %s\n", msgConfirmTargetLabel, dir)
+	fixed = append(fixed, msgConfirmTargetLabel+": "+dir)
 	if m.target.Environment != "" {
-		fmt.Fprintf(&b, "%s: %s\n", msgConfirmEnvironment, m.target.Environment)
+		fixed = append(fixed, msgConfirmEnvironment+": "+m.target.Environment)
 	}
-	b.WriteString("\n")
-	b.WriteString(msgServiceSelectIntro)
-	b.WriteString("\n\n")
+	if !compact {
+		fixed = append(fixed, "", m.hintText(msgServiceSelectIntro))
+	}
+	fixed = append(fixed, "")
+	wholeRow := len(fixed)
+	fixed = append(fixed, m.wholeStackRow())
 
-	rows := len(m.serviceOptions) + 1
-	start, end := 0, rows
-	if rows > serviceWindow {
-		start = m.serviceCursor - serviceWindow/2
-		if start < 0 {
-			start = 0
-		}
-		if start+serviceWindow > rows {
-			start = rows - serviceWindow
-		}
-		end = start + serviceWindow
+	table := m.serviceTable(compact)
+	tail := m.serviceTail(compact)
+	if width <= 0 {
+		// No size yet: render the cells complete instead of guessing widths.
+		// The next WindowSizeMsg reflows the same table.
+		rows := visual.RenderDocument(th, core.Document{
+			Blocks: []core.Block{{Kind: core.BlockTable, Table: &table}},
+		}, 0)
+		return serviceScreenLayout{screen: screenLines{Fixed: fixed, Band: rows, Tail: tail}, wholeRow: wholeRow}
 	}
-	if start > 0 {
-		b.WriteString(hintStyle.Render(msgMenuMoreAbove))
-		b.WriteString("\n")
+	layout := visual.LayoutTableOptions(th, table, width, visual.TableOptions{
+		Compact:        compact,
+		CompactColumns: 3,
+		// The whole-stack row is pinned above the table, so the cursor is a
+		// table row only when it points at a service.
+		CursorRow: m.serviceCursor,
+	})
+	if layout.Header != "" {
+		fixed = append(fixed, layout.Header)
 	}
-	for i := start; i < end; i++ {
-		marker := "  "
-		if i == m.serviceCursor {
-			marker = "> "
-		}
-		checked := " "
-		if i == 0 {
-			if m.serviceWhole {
-				checked = "x"
-			}
-			fmt.Fprintf(&b, "%s[%s] %s\n", marker, checked, msgServiceWhole)
-			continue
-		}
-		svc := m.serviceOptions[i-1]
-		if i-1 < len(m.serviceChecked) && m.serviceChecked[i-1] {
-			checked = "x"
-		}
-		fmt.Fprintf(&b, "%s[%s] %s · %s\n", marker, checked, svc.Name, serviceSummary(svc))
-	}
-	if end < rows {
-		b.WriteString(hintStyle.Render(msgMenuMoreBelow))
-		b.WriteString("\n")
-	}
-	b.WriteString("\n")
-	b.WriteString(hintStyle.Render(msgServiceSelectionNote))
-	return strings.TrimRight(b.String(), "\n")
+	return serviceScreenLayout{screen: screenLines{Fixed: fixed, Band: layout.Rows, Tail: tail}, wholeRow: wholeRow}
 }
 
-func serviceSummary(svc core.ServiceStatus) string {
-	parts := []string{serviceStateLabel(svc.State)}
-	if health := serviceHealthLabel(svc.Health); health != "" {
-		parts = append(parts, health)
+// serviceTail is the guidance below the table. Compact keeps only the
+// unconfigured marker, because it states a fact about a visible row; the note
+// about engine revalidation can wait for a decorated screen.
+func (m *Model) serviceTail(compact bool) []string {
+	var tail []string
+	if flag := m.unconfiguredFlag(); flag != "" {
+		tail = append(tail, flag)
 	}
-	if svc.Instances == 0 {
-		parts = append(parts, msgServiceNoInstances)
-	} else {
-		parts = append(parts, fmt.Sprintf(msgServiceInstances, svc.Instances))
+	if !compact {
+		tail = append(tail, "", m.hintText(msgServiceSelectionNote))
 	}
-	if !svc.Configured {
-		parts = append(parts, msgServiceNotConfigured)
-	}
-	return strings.Join(parts, " · ")
+	return tail
 }
 
-func serviceStateLabel(state string) string {
-	switch state {
-	case "running":
-		return msgServiceStateRunning
-	case "exited":
-		return msgServiceStateExited
-	case "paused":
-		return msgServiceStatePaused
-	case "restarting":
-		return msgServiceStateRestarting
-	case "created":
-		return msgServiceStateCreated
-	case "not_created":
-		return msgServiceStateNotCreated
-	case "":
-		return msgServiceStateUnknown
+// wholeStackRow is the always-visible whole-stack choice. It uses the hook
+// glyph rather than a checkbox: it is not a service row with state, and its
+// marker sits in the same cell as the table's cursor so the label lines up.
+func (m *Model) wholeStackRow() string {
+	marker := " "
+	if m.serviceCursor == 0 {
+		marker = m.theme.Glyphs.Sel
+	}
+	checked := "[ ]"
+	if m.serviceWhole {
+		checked = "[x]"
+	}
+	return marker + checked + " " + msgServiceWhole
+}
+
+// unconfiguredFlag names the services that are visible but cannot be selected,
+// so the muted row is not the only channel saying why.
+func (m *Model) unconfiguredFlag() string {
+	var names []string
+	for _, svc := range m.serviceOptions {
+		if !svc.Configured {
+			names = append(names, svc.Name)
+		}
+	}
+	if len(names) == 0 {
+		return ""
+	}
+	return m.hintText(msgServiceNotConfigured + ": " + strings.Join(names, ", "))
+}
+
+// serviceView is the flat rendering of the scope screen. The frame draws the
+// banded form so the header stays fixed; this exists for callers that want the
+// whole screen as text.
+func (m *Model) serviceView() string {
+	return strings.Join(m.serviceScreen().lines(), "\n")
+}
+
+// serviceScrolls reports whether the service rows have rows outside the window.
+func (m *Model) serviceScrolls() bool {
+	return m.serviceGeometry().scrolls
+}
+
+// serviceViewport is the scrolling window over the service rows, taken from the
+// same layout pass that draws them.
+func (m *Model) serviceViewport() visual.Viewport {
+	return m.serviceGeometry().viewport
+}
+
+// followServiceCursor scrolls the minimum distance that keeps the cursor row
+// visible, so a large stack can be walked without losing the selection. The
+// whole-stack row is pinned above the table, so choosing it returns the window
+// to the first service row instead of leaving the band at the bottom.
+func (m *Model) followServiceCursor() {
+	v := m.serviceViewport()
+	if m.serviceCursor <= 0 {
+		v.Home()
+		m.body.Top = v.Top
+		return
+	}
+	v.Follow(m.serviceCursor - 1)
+	m.body.Top = v.Top
+}
+
+// serviceFoldedHealth is the compact state-cell wording for a health problem.
+// A healthy or absent healthcheck is not a problem, so the container state
+// stays: `실행 중` says more than `정상` when the column is already gone. The
+// word itself comes from the shared mapping, never a second copy.
+func serviceFoldedHealth(health string) (string, bool) {
+	switch stack.Health(health) {
+	case stack.HealthUnhealthy, stack.HealthStarting:
+		return present.HealthLabelValue(health), true
 	default:
-		return state
+		return "", false
 	}
 }
 
-func serviceHealthLabel(health string) string {
-	switch health {
-	case "", "none":
-		return msgServiceHealthNone
-	case "healthy":
-		return msgServiceHealthy
-	case "starting":
-		return msgServiceHealthStarting
-	case "unhealthy":
-		return msgServiceUnhealthy
-	default:
-		return health
+// serviceImageLabel never leaves a cell empty: a catalog that cannot report the
+// image shows the approved dash, which is a fact ("unknown here"), not a blank.
+func serviceImageLabel(svc core.ServiceStatus) string {
+	if svc.Image == "" {
+		return msgServiceNoPort
 	}
+	return svc.Image
+}
+
+func servicePortLabel(svc core.ServiceStatus) string {
+	if svc.Ports == "" {
+		return msgServiceNoPort
+	}
+	return svc.Ports
 }
 
 // serviceScopeText is the exact scope shown on the plan/confirm screen. It
@@ -1294,55 +1608,10 @@ func serviceScopeText(services []string) string {
 	return strings.Join(services, ", ")
 }
 
+// contentWidth is the body width for presenter calls. It is kept for the
+// existing call sites; bodyWidth is the shell-aware equivalent.
 func (m *Model) contentWidth() int {
-	if m.width <= 0 {
-		return 0
-	}
-	const padding = 2
-	if m.width <= padding*2 {
-		return m.width
-	}
-	return m.width - padding*2
-}
-
-func (m *Model) hints() string {
-	if m.form != nil {
-		return msgHintForm
-	}
-	if m.live != nil {
-		if m.live.mode == core.LiveAttach {
-			return msgHintAttach
-		}
-		return msgHintLive
-	}
-	if m.isWizardPhase() {
-		return m.wizardHints()
-	}
-	if m.phase == phaseConfirm {
-		if m.pendingApproval != core.ApprovalNone {
-			return msgHintConfirm
-		}
-		return msgConfirmHints
-	}
-	if m.phase == phaseNoPrimary {
-		return msgHintQuit
-	}
-	if m.phase == phaseSelectingEnvironment {
-		return msgHintEnvSelect
-	}
-	if m.phase == phaseSelectingServices {
-		return msgHintServiceSelect
-	}
-	if m.phase == phaseLoading && m.active != nil && !m.active.Descriptor().ReadOnly {
-		return msgHintBusy
-	}
-	if m.phase != phaseReady {
-		return msgHintQuit
-	}
-	if len(m.features) > 1 {
-		return msgHintMenu
-	}
-	return msgHintSingle
+	return m.bodyWidth()
 }
 
 func environmentSummary(env core.Environment) string {
@@ -1350,10 +1619,10 @@ func environmentSummary(env core.Environment) string {
 	if len(env.Files) == 0 {
 		parts = append(parts, msgEnvDefaultFiles)
 	} else {
-		parts = append(parts, fmt.Sprintf("%s %d개", msgEnvComposeFiles, len(env.Files)))
+		parts = append(parts, fmt.Sprintf(msgEnvCount, msgEnvComposeFiles, len(env.Files)))
 	}
 	if len(env.EnvFiles) > 0 {
-		parts = append(parts, fmt.Sprintf("%s %d개", msgEnvEnvFiles, len(env.EnvFiles)))
+		parts = append(parts, fmt.Sprintf(msgEnvCount, msgEnvEnvFiles, len(env.EnvFiles)))
 	}
 	if len(env.Profiles) > 0 {
 		parts = append(parts, msgEnvProfiles+" "+strings.Join(env.Profiles, ", "))

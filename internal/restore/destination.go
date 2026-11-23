@@ -82,7 +82,7 @@ func MatchSource(m backup.Manifest, target backup.Source, explicit bool) ([]stri
 		if !explicit {
 			return fmt.Errorf("%w: %s %q, target %q", ErrTargetMismatch, field, have, want)
 		}
-		warnings = append(warnings, fmt.Sprintf("%s가 백업과 다릅니다: 백업 %q → 대상 %q (명시적 매핑)", field, have, want))
+		warnings = append(warnings, fmt.Sprintf("%s가 백업과 다름: 백업 %q → 대상 %q (명시적 매핑)", field, have, want))
 		return nil
 	}
 	if err := mismatch("project", src.Project, target.Project); err != nil {

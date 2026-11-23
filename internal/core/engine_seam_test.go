@@ -10,7 +10,8 @@ import (
 func TestEngineVerifierPanicBecomesInternalError(t *testing.T) {
 	feature := &verifyingFeature{
 		testFeature: &testFeature{desc: core.Descriptor{
-			Name: "update", Title: "갱신", Summary: "갱신합니다.", Usage: "dcraft update", RecordsHistory: true,
+			Name: "update", Title: "갱신", Summary: "갱신.", Usage: "dcraft update", RecordsHistory: true,
+			Section: core.SectionOperate,
 		}},
 		verify: func(context.Context, core.Invocation, any) error {
 			panic("verifier exploded")
@@ -42,7 +43,8 @@ func TestEngineVerifierPanicBecomesInternalError(t *testing.T) {
 func TestEngineVerificationFailureOmitsData(t *testing.T) {
 	feature := &verifyingFeature{
 		testFeature: &testFeature{desc: core.Descriptor{
-			Name: "update", Title: "갱신", Summary: "갱신합니다.", Usage: "dcraft update", RecordsHistory: true,
+			Name: "update", Title: "갱신", Summary: "갱신.", Usage: "dcraft update", RecordsHistory: true,
+			Section: core.SectionOperate,
 		}},
 		verify: func(context.Context, core.Invocation, any) error {
 			return core.Fail(core.Diagnostic{
@@ -67,7 +69,8 @@ func TestEngineCancellationAfterRunOmitsData(t *testing.T) {
 	defer cancel()
 	feature := &verifyingFeature{
 		testFeature: &testFeature{desc: core.Descriptor{
-			Name: "update", Title: "갱신", Summary: "갱신합니다.", Usage: "dcraft update", RecordsHistory: true,
+			Name: "update", Title: "갱신", Summary: "갱신.", Usage: "dcraft update", RecordsHistory: true,
+			Section: core.SectionOperate,
 		}},
 		verify: func(context.Context, core.Invocation, any) error {
 			cancel()
@@ -88,7 +91,8 @@ func TestEngineCancellationAfterRunOmitsData(t *testing.T) {
 
 func TestEngineHistoryRecordHasNoOpenStage(t *testing.T) {
 	feature := &testFeature{desc: core.Descriptor{
-		Name: "update", Title: "갱신", Summary: "갱신합니다.", Usage: "dcraft update", RecordsHistory: true,
+		Name: "update", Title: "갱신", Summary: "갱신.", Usage: "dcraft update", RecordsHistory: true,
+		Section: core.SectionOperate,
 	}}
 	h := newHarness(t, feature)
 	res := h.run(t, core.Request{Feature: "update"})

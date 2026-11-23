@@ -34,6 +34,7 @@ type Input struct {
 	Env        []string
 	Command    string
 	Restart    string
+	wizard     bool
 }
 
 func (i Input) modeLabel() string {
@@ -48,7 +49,7 @@ func inputErr(format string, args ...any) *core.Error {
 		Category:    core.CategoryInitInputInvalid,
 		Severity:    core.SeverityError,
 		Message:     fmt.Sprintf(format, args...),
-		NextActions: []string{"dcraft init --help로 필요한 입력을 확인하세요.", "값을 추측하지 않으며 누락된 입력이 있으면 아무 파일도 만들지 않습니다."},
+		NextActions: []string{"dcraft init --help로 필요한 입력 확인.", "값을 추측하지 않으며 누락된 입력이 있으면 아무 파일도 만들지 않음."},
 	})
 }
 
@@ -72,11 +73,12 @@ func collectInput(in core.Invocation, wizard bool) (Input, error) {
 		Context:    strings.TrimSpace(in.Option("context")),
 		Dockerfile: strings.TrimSpace(in.Option("dockerfile")),
 		Image:      strings.TrimSpace(in.Option("image")),
-		Ports:      optionValues(in, "port"),
-		Volumes:    optionValues(in, "volume"),
-		Env:        optionValues(in, "env-var"),
+		Ports:      optionValues(in, "port", wizard),
+		Volumes:    optionValues(in, "volume", wizard),
+		Env:        optionValues(in, "env-var", wizard),
 		Command:    strings.TrimSpace(in.Option("command")),
 		Restart:    strings.TrimSpace(in.Option("restart")),
+		wizard:     wizard,
 	}
 
 	switch raw.Mode {
@@ -140,10 +142,8 @@ func collectInput(in core.Invocation, wizard bool) (Input, error) {
 	return raw, nil
 }
 
-// optionValues reads a repeatable flag, or splits the comma-separated value the
-// TUI wizard collects in one text step. Values are never re-split silently
-// when the CLI used the repeatable flag.
-func optionValues(in core.Invocation, name string) []string {
+// optionValues preserves repeatable flags and decodes wizard answers by line.
+func optionValues(in core.Invocation, name string, wizard bool) []string {
 	if list := in.OptionList(name); len(list) > 0 {
 		out := make([]string, 0, len(list))
 		for _, value := range list {
@@ -152,6 +152,15 @@ func optionValues(in core.Invocation, name string) []string {
 			}
 		}
 		return out
+	}
+	if wizard {
+		var values []string
+		for _, value := range strings.Split(in.Option(name), "\n") {
+			if value = strings.TrimSpace(value); value != "" {
+				values = append(values, value)
+			}
+		}
+		return values
 	}
 	return splitComma(in.Option(name))
 }
@@ -179,7 +188,7 @@ func validateServiceName(name string) error {
 		return inputErr(msgServiceMissing)
 	}
 	if !serviceNameRe.MatchString(name) {
-		return inputErrDetail(msgServiceInvalid, fmt.Sprintf("서비스 이름: %q (영문·숫자·_ . -만 사용할 수 있습니다)", name))
+		return inputErrDetail(msgServiceInvalid, fmt.Sprintf("서비스 이름: %q (영문·숫자·_ . -만 사용 가능)", name))
 	}
 	return nil
 }
@@ -202,55 +211,55 @@ func validateImageRef(ref string) error {
 		return inputErr(msgImageMissing)
 	}
 	if strings.TrimSpace(ref) != ref || strings.ContainsAny(ref, " \t\r\n") {
-		return fail("공백을 포함할 수 없습니다")
+		return fail("공백 포함 불가")
 	}
 	if strings.Contains(ref, "://") || strings.Contains(ref, "$") {
-		return fail("주소나 변수 대신 레지스트리/저장소 참조를 입력하세요")
+		return fail("주소나 변수 대신 레지스트리/저장소 참조 입력")
 	}
 	nameTag := ref
 	if strings.Count(ref, "@") > 1 {
-		return fail("@는 한 번만 사용할 수 있습니다")
+		return fail("@는 한 번만 사용 가능")
 	}
 	if at := strings.Index(ref, "@"); at >= 0 {
 		nameTag = ref[:at]
 		digest := ref[at+1:]
 		if !validImageDigest(digest) {
-			return fail("digest 형식이 올바르지 않습니다")
+			return fail("digest 형식이 올바르지 않음")
 		}
 	}
 	if nameTag == "" {
-		return fail("저장소 이름이 없습니다")
+		return fail("저장소 이름이 없음")
 	}
 	if colon := strings.LastIndex(nameTag, ":"); colon > strings.LastIndex(nameTag, "/") {
 		tag := nameTag[colon+1:]
 		if !imageTagRe.MatchString(tag) {
-			return fail("tag 형식이 올바르지 않습니다")
+			return fail("tag 형식이 올바르지 않음")
 		}
 		nameTag = nameTag[:colon]
 	}
 	parts := strings.Split(nameTag, "/")
 	if len(parts) == 0 {
-		return fail("저장소 이름이 없습니다")
+		return fail("저장소 이름이 없음")
 	}
 	for _, part := range parts {
 		if part == "" {
-			return fail("빈 경로 요소가 있습니다")
+			return fail("빈 경로 요소가 있음")
 		}
 	}
 	if len(parts) > 1 && imageDomainPart(parts[0]) {
 		if !imageDomainRe.MatchString(parts[0]) {
-			return fail("레지스트리 주소 형식이 올바르지 않습니다")
+			return fail("레지스트리 주소 형식이 올바르지 않음")
 		}
 		if host, port, ok := strings.Cut(parts[0], ":"); ok {
 			if strings.Contains(host, ":") || !validPortNumber(port) {
-				return fail("레지스트리 포트가 올바르지 않습니다")
+				return fail("레지스트리 포트가 올바르지 않음")
 			}
 		}
 		parts = parts[1:]
 	}
 	for _, part := range parts {
 		if !imagePathComponentRe.MatchString(part) {
-			return fail("저장소 경로는 소문자/숫자와 _ . - 구분자만 사용할 수 있습니다")
+			return fail("저장소 경로는 소문자/숫자와 _ . - 구분자만 사용 가능")
 		}
 	}
 	return nil
@@ -309,27 +318,27 @@ func validatePort(raw string) error {
 		return inputErr(msgPortInvalid + ": 빈 값")
 	}
 	if strings.ContainsAny(s, " \t\r\n") {
-		return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (공백을 포함할 수 없습니다)", raw))
+		return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (공백 포함 불가)", raw))
 	}
 	hostIP := ""
 	rest := s
 	if strings.HasPrefix(s, "[") {
 		end := strings.Index(s, "]")
 		if end < 0 || end == 1 {
-			return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (IPv6 주소는 [주소] 형식으로 닫아야 합니다)", raw))
+			return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (IPv6 주소는 [주소] 형식으로 닫아야 )", raw))
 		}
 		hostIP = s[1:end]
 		if net.ParseIP(hostIP) == nil {
-			return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (호스트 IP가 올바르지 않습니다)", raw))
+			return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (호스트 IP가 올바르지 않음)", raw))
 		}
 		rest = s[end+1:]
 		if !strings.HasPrefix(rest, ":") {
-			return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (IPv6 주소 뒤에 :가 필요합니다)", raw))
+			return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (IPv6 주소 뒤에 :가 필요)", raw))
 		}
 		rest = rest[1:]
 		parts := strings.Split(rest, ":")
 		if len(parts) != 2 {
-			return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q ([IPv6]:호스트:컨테이너 형식이어야 합니다)", raw))
+			return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q ([IPv6]:호스트:컨테이너 형식이어야 )", raw))
 		}
 		return validatePortParts(parts[0], parts[1], true, raw)
 	}
@@ -342,11 +351,11 @@ func validatePort(raw string) error {
 		return validatePortParts(parts[0], parts[1], false, raw)
 	case 3:
 		if net.ParseIP(parts[0]) == nil {
-			return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (호스트 IP가 올바르지 않습니다)", raw))
+			return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (호스트 IP가 올바르지 않음)", raw))
 		}
 		return validatePortParts(parts[1], parts[2], true, raw)
 	default:
-		return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (호스트 IP를 쓰려면 127.0.0.1:8080:80 형식으로 지정하세요)", raw))
+		return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (호스트 IP를 쓰려면 127.0.0.1:8080:80 형식으로 지정)", raw))
 	}
 }
 
@@ -364,7 +373,7 @@ func validateContainerPart(container, raw string) error {
 
 func validatePortParts(host, container string, allowEmptyHost bool, raw string) error {
 	if host == "" && !allowEmptyHost {
-		return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (호스트 포트가 비어 있습니다)", raw))
+		return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (호스트 포트가 비어 있음)", raw))
 	}
 	containerPart, proto, err := splitPortProto(container, raw)
 	if err != nil {
@@ -382,10 +391,10 @@ func validatePortParts(host, container string, allowEmptyHost bool, raw string) 
 		return err
 	}
 	if hRange.isRange() != cRange.isRange() {
-		return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (호스트와 컨테이너 포트는 둘 다 범위이거나 둘 다 단일 값이어야 합니다)", raw))
+		return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (호스트와 컨테이너 포트는 둘 다 범위이거나 둘 다 단일 값이어야 )", raw))
 	}
 	if hRange.isRange() && (hRange.end-hRange.start) != (cRange.end-cRange.start) {
-		return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (호스트와 컨테이너 포트 범위 길이가 같아야 합니다)", raw))
+		return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (호스트와 컨테이너 포트 범위 길이가 같아야 )", raw))
 	}
 	_ = proto
 	return nil
@@ -394,13 +403,13 @@ func validatePortParts(host, container string, allowEmptyHost bool, raw string) 
 func splitPortProto(container, raw string) (string, string, error) {
 	parts := strings.Split(container, "/")
 	if len(parts) > 2 {
-		return "", "", inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (프로토콜은 한 번만 지정할 수 있습니다)", raw))
+		return "", "", inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (프로토콜은 한 번만 지정 가능)", raw))
 	}
 	proto := "tcp"
 	if len(parts) == 2 {
 		proto = parts[1]
 		if proto != "tcp" && proto != "udp" {
-			return "", "", inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (프로토콜은 tcp 또는 udp만 사용할 수 있습니다)", raw))
+			return "", "", inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (프로토콜은 tcp 또는 udp만 사용 가능)", raw))
 		}
 	}
 	return parts[0], proto, nil
@@ -409,17 +418,17 @@ func splitPortProto(container, raw string) (string, string, error) {
 func parsePortRange(raw, full string) (portRange, error) {
 	m := portRangeRe.FindStringSubmatch(raw)
 	if m == nil {
-		return portRange{}, inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (숫자 또는 시작-끝 범위가 필요합니다)", full))
+		return portRange{}, inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (숫자 또는 시작-끝 범위가 필요)", full))
 	}
 	start, err := strconv.Atoi(m[1])
 	if err != nil || start < 1 || start > 65535 {
-		return portRange{}, inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (포트는 1-65535 범위여야 합니다)", full))
+		return portRange{}, inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (포트는 1-65535 범위여야 )", full))
 	}
 	end := start
 	if m[2] != "" {
 		end, err = strconv.Atoi(m[2])
 		if err != nil || end < 1 || end > 65535 || end < start {
-			return portRange{}, inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (끝 포트가 올바르지 않습니다)", full))
+			return portRange{}, inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (끝 포트가 올바르지 않음)", full))
 		}
 	}
 	return portRange{start: start, end: end}, nil
@@ -455,11 +464,11 @@ func parseVolume(raw string) (volumeSpec, error) {
 		return fail("빈 값")
 	}
 	if strings.Contains(s, "$") {
-		return fail("변수 대신 실제 경로나 볼륨 이름을 입력하세요")
+		return fail("변수 대신 실제 경로나 볼륨 이름 입력")
 	}
 	parts := strings.Split(s, ":")
 	if len(parts) > 3 {
-		return fail("SOURCE:TARGET[:MODE] 형식이어야 합니다")
+		return fail("SOURCE:TARGET[:MODE] 형식이어야 함")
 	}
 	spec := volumeSpec{Raw: s}
 	switch len(parts) {
@@ -471,18 +480,18 @@ func parseVolume(raw string) (volumeSpec, error) {
 		spec.Source, spec.Target, spec.Mode = parts[0], parts[1], parts[2]
 	}
 	if len(parts) > 1 && spec.Source == "" {
-		return fail("원본이 비어 있습니다")
+		return fail("원본이 비어 있음")
 	}
 	if spec.Target == "" || !strings.HasPrefix(spec.Target, "/") {
-		return fail("대상 경로는 /로 시작하는 절대 경로여야 합니다")
+		return fail("대상 경로는 /로 시작하는 절대 경로여야 함")
 	}
 	if hasDotDot(spec.Target) {
-		return fail("대상 경로에 ..를 사용할 수 없습니다")
+		return fail("대상 경로에 .. 사용 불가")
 	}
 	if spec.Mode != "" {
 		for _, mode := range strings.Split(spec.Mode, ",") {
 			if !volumeModes[mode] {
-				return fail(fmt.Sprintf("지원하지 않는 모드입니다: %s", mode))
+				return fail(fmt.Sprintf("지원하지 않는 모드: %s", mode))
 			}
 		}
 	}
@@ -499,7 +508,7 @@ func parseVolume(raw string) (volumeSpec, error) {
 		spec.Home = true
 	default:
 		if !namedVolumeRe.MatchString(spec.Source) {
-			return fail("볼륨 이름은 영문·숫자로 시작하고 _ . -만 사용할 수 있습니다")
+			return fail("볼륨 이름은 영문·숫자로 시작하고 _ . -만 사용 가능")
 		}
 		spec.Named = true
 	}
@@ -530,15 +539,15 @@ func parseEnvironment(entries []string) (map[string]string, error) {
 		if eq <= 0 {
 			// Never echo the raw entry: a malformed line can contain a value
 			// the user intended as a secret.
-			return nil, inputErrDetail(msgEnvInvalid, "환경변수 항목이 KEY=VALUE 형식이 아닙니다. 호스트 값을 자동으로 가져오지 않으며 입력값은 출력하지 않았습니다.")
+			return nil, inputErrDetail(msgEnvInvalid, "환경변수 항목이 KEY=VALUE 형식이 아님. 호스트 값을 자동으로 가져오지 않으며 입력값은 출력하지 않았음.")
 		}
 		key := entry[:eq]
 		value := entry[eq+1:]
 		if !envKeyRe.MatchString(key) {
-			return nil, inputErrDetail(msgEnvInvalid, fmt.Sprintf("환경변수 이름: %q (영문·숫자·_만 사용할 수 있고 숫자로 시작할 수 없습니다)", key))
+			return nil, inputErrDetail(msgEnvInvalid, fmt.Sprintf("환경변수 이름: %q (영문·숫자·_만 사용할 수 있고 숫자로 시작 불가)", key))
 		}
 		if _, exists := out[key]; exists {
-			return nil, inputErrDetail(msgEnvInvalid, fmt.Sprintf("환경변수 이름이 중복되었습니다: %s", key))
+			return nil, inputErrDetail(msgEnvInvalid, fmt.Sprintf("환경변수 이름이 중복되었음: %s", key))
 		}
 		out[key] = value
 	}
@@ -556,7 +565,7 @@ func validateRestart(raw string) error {
 	if onFailureRe.MatchString(value) {
 		return nil
 	}
-	return inputErrDetail(msgRestartInvalid, fmt.Sprintf("restart: %q (no, always, unless-stopped, on-failure, on-failure:횟수만 사용할 수 있습니다)", raw))
+	return inputErrDetail(msgRestartInvalid, fmt.Sprintf("restart: %q (no, always, unless-stopped, on-failure, on-failure:횟수만 사용 가능)", raw))
 }
 
 // Destination is the resolved save target. Existing is true for any non-directory
@@ -576,16 +585,16 @@ func destinationPath(projectDir, raw string) (Destination, error) {
 		value = "compose.yaml"
 	}
 	if value == "-" {
-		return Destination{}, inputErrDetail(msgOutputInvalid, "표준 출력으로 저장할 수 없습니다. 파일 경로를 지정하세요.")
+		return Destination{}, inputErrDetail(msgOutputInvalid, "표준 출력으로 저장 불가. 파일 경로 지정.")
 	}
 	if strings.HasPrefix(value, "~") {
-		return Destination{}, inputErrDetail(msgOutputInvalid, "~ 경로는 지원하지 않습니다. 상대 경로나 절대 경로를 지정하세요.")
+		return Destination{}, inputErrDetail(msgOutputInvalid, "~ 경로는 지원하지 않음. 상대 경로나 절대 경로 지정.")
 	}
 	if strings.Contains(value, "$") {
-		return Destination{}, inputErrDetail(msgOutputInvalid, "변수 대신 실제 경로를 입력하세요.")
+		return Destination{}, inputErrDetail(msgOutputInvalid, "변수 대신 실제 경로 입력.")
 	}
 	if strings.ContainsRune(value, 0) {
-		return Destination{}, inputErrDetail(msgOutputInvalid, "경로에 NUL 문자를 사용할 수 없습니다.")
+		return Destination{}, inputErrDetail(msgOutputInvalid, "경로에 NUL 문자 사용 불가.")
 	}
 	p := value
 	if !filepath.IsAbs(p) {
@@ -600,7 +609,7 @@ func destinationPath(projectDir, raw string) (Destination, error) {
 		return Destination{}, inputErrDetail(msgOutputParent, fmt.Sprintf("저장 폴더: %s", dest.Dir))
 	}
 	if !info.IsDir() {
-		return Destination{}, inputErrDetail(msgOutputParent, fmt.Sprintf("저장 폴더가 아닙니다: %s", dest.Dir))
+		return Destination{}, inputErrDetail(msgOutputParent, fmt.Sprintf("저장 폴더가 아님: %s", dest.Dir))
 	}
 	if linkInfo, err := os.Lstat(p); err == nil {
 		dest.Exists = true

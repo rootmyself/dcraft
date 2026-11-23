@@ -263,7 +263,7 @@ func TestLogsIndexWithoutASingleServiceFailsWithExitTwo(t *testing.T) {
 	if res.code != 2 {
 		t.Fatalf("exit = %d, want 2 (stderr=%q stdout=%q)", res.code, res.stderr, res.stdout)
 	}
-	for _, want := range []string{"서비스를 하나만", "-s"} {
+	for _, want := range []string{"서비스 하나만", "-s"} {
 		if !strings.Contains(res.stderr, want) {
 			t.Fatalf("stderr missing %q:\n%s", want, res.stderr)
 		}
@@ -440,7 +440,7 @@ func TestExecStoppedServiceFailsWithExitOne(t *testing.T) {
 	if res.code != 1 {
 		t.Fatalf("exit = %d, want 1 (stderr=%q)", res.code, res.stderr)
 	}
-	if !strings.Contains(res.stderr, "실행 중이 아닙니다") {
+	if !strings.Contains(res.stderr, "실행 중이 아님") {
 		t.Fatalf("stderr = %q", res.stderr)
 	}
 }

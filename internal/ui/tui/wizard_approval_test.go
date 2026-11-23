@@ -29,7 +29,8 @@ func TestApprovalWizardUsesTheGenericPlanAndDataRestoreApproval(t *testing.T) {
 	stub := &wizardStub{
 		desc: core.Descriptor{
 			Name: "restore", Title: "데이터 복원", Summary: "요약", Usage: "dcraft restore",
-			Wizard: true, Approval: core.ApprovalDataRestore,
+			Section: core.SectionData,
+			Wizard:  true, Approval: core.ApprovalDataRestore,
 		},
 		steps: core.WizardSpec{
 			Title: "데이터 복원 설정",

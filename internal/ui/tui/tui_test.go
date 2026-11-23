@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -47,7 +48,7 @@ func (f *stubFeature) Run(ctx context.Context, in core.Invocation) (any, error) 
 	if f.outcome == core.OutcomeFailure {
 		return nil, core.Fail(core.Diagnostic{
 			Category: core.CategoryEngineUnreachable, Severity: core.SeverityError,
-			Message: "Docker Engine에 연결할 수 없습니다.",
+			Message: "Docker Engine에 연결 불가.",
 		})
 	}
 	return "payload", nil
@@ -58,7 +59,8 @@ func (f *stubFeature) Present(res core.Result, width int) string { return f.body
 func descriptor(name string, primary bool) core.Descriptor {
 	return core.Descriptor{
 		Name: name, Title: "제목 " + name, Summary: "요약 " + name,
-		Usage: "dcraft " + name, ReadOnly: true, Primary: primary,
+		Section: core.SectionInspect,
+		Usage:   "dcraft " + name, ReadOnly: true, Primary: primary,
 	}
 }
 
@@ -130,7 +132,7 @@ func TestPrimaryFeatureRendersKoreanStatusScreen(t *testing.T) {
 	m := newTestModel(t, status)
 	initModel(t, m)
 	view := m.View()
-	for _, want := range []string{"dcraft", "제목 status", "서비스 상태 본문", "r 새로고침", "q 종료"} {
+	for _, want := range []string{"dcraft", "제목 status", "서비스 상태 본문", "[r] 새로고침", "[q] 종료"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("view missing %q:\n%s", want, view)
 		}
@@ -164,7 +166,7 @@ func TestMenuAndExecutionAreDerivedFromRegistry(t *testing.T) {
 	m := newTestModel(t, status, logs)
 	initModel(t, m)
 	view := m.View()
-	for _, want := range []string{"작업", "제목 status", "제목 logs", "enter 실행"} {
+	for _, want := range []string{"작업", "제목 status", "제목 logs", "[enter] 실행"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("menu missing %q:\n%s", want, view)
 		}
@@ -202,10 +204,10 @@ func TestNoPrimaryScreenExplainsAndOnlyQuits(t *testing.T) {
 		t.Fatal("model without a primary feature started work")
 	}
 	view := m.View()
-	if !strings.Contains(view, "기본 화면이 없습니다") {
+	if !strings.Contains(view, "등록된 기본 화면 없음") {
 		t.Fatalf("view = %s", view)
 	}
-	if !strings.Contains(view, "q 종료") {
+	if !strings.Contains(view, "[q] 종료") {
 		t.Fatalf("view missing quit hint: %s", view)
 	}
 }
@@ -230,7 +232,7 @@ func TestFailureRendersDiagnosticsAndStages(t *testing.T) {
 	m := newTestModel(t, status)
 	initModel(t, m)
 	view := m.View()
-	for _, want := range []string{"작업 실패", "Docker Engine에 연결할 수 없습니다", "대상 확인", "환경 확인"} {
+	for _, want := range []string{"작업 실패", "Docker Engine에 연결 불가", "대상 확인", "환경 확인"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("view missing %q:\n%s", want, view)
 		}
@@ -255,7 +257,7 @@ func TestSuccessWarningsAreVisibleInTheTUI(t *testing.T) {
 	initModel(t, m)
 	m.result.Diagnostics = []core.Diagnostic{{
 		Category: core.CategoryMultipleConfigFiles, Severity: core.SeverityWarning,
-		Message: "대상 폴더에 여러 개의 Compose 파일이 있습니다.",
+		Message: "대상 폴더에 여러 개의 Compose 파일이 있음.",
 	}}
 	if view := m.View(); !strings.Contains(view, "여러 개의 Compose 파일") {
 		t.Fatalf("warning not rendered:\n%s", view)
@@ -325,13 +327,129 @@ func envResolver() *stubEnvResolver {
 	}}
 }
 
+func TestEnvironmentAdministrationSwitchDoesNotRunFeature(t *testing.T) {
+	status := &stubFeature{desc: descriptor("status", true), body: "old result"}
+	adminDesc := descriptor("aliases", false)
+	adminDesc.EnvironmentAdmin = true
+	admin := &stubFeature{desc: adminDesc}
+	resolver := envResolver()
+	m := newEnvTestModel(t, resolver, core.TargetRequest{Environment: "dev"}, status, admin)
+	initModel(t, m)
+	m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if view := m.View(); !strings.Contains(view, "새 별칭") || !strings.Contains(view, "전환") {
+		t.Fatalf("missing administration actions:\n%s", view)
+	}
+	resolver.envs = append(resolver.envs, core.Environment{Name: "stage"})
+	m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	feed(t, m, execute(t, cmd))
+	if view := m.View(); !strings.Contains(view, "stage") || !strings.Contains(view, "현재") {
+		t.Fatalf("switch list missing updated aliases or current target:\n%s", view)
+	}
+	for i := 0; i < 3; i++ {
+		m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if view := m.View(); !strings.Contains(view, "stage") || strings.Contains(view, "old result") {
+		t.Fatalf("switch did not update header and clear result:\n%s", view)
+	}
+	if status.runs != 1 || admin.runs != 0 {
+		t.Fatalf("switch ran a feature: status=%d admin=%d", status.runs, admin.runs)
+	}
+}
+
+func TestEnvironmentSwitchKeepsLongListSelectionVisible(t *testing.T) {
+	status := &stubFeature{desc: descriptor("status", true), body: "old result"}
+	adminDesc := descriptor("aliases", false)
+	adminDesc.EnvironmentAdmin = true
+	admin := &stubFeature{desc: adminDesc}
+	resolver := envResolver()
+	m := newEnvTestModel(t, resolver, core.TargetRequest{Environment: "dev"}, status, admin)
+	initModel(t, m)
+	resize(t, m, 80, 24)
+	m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	for i := 0; i < 30; i++ {
+		resolver.envs = append(resolver.envs, core.Environment{Name: fmt.Sprintf("env%02d", i)})
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	feed(t, m, execute(t, cmd))
+	for i := 0; i < 30; i++ {
+		m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	}
+	if view := m.View(); !strings.Contains(view, "> env27") {
+		t.Fatalf("selected environment is not visible:\n%s", view)
+	}
+	resize(t, m, 40, 18)
+	if view := m.View(); !strings.Contains(view, "> env27") {
+		t.Fatalf("selected environment disappeared after resize:\n%s", view)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyHome})
+	if view := m.View(); !strings.Contains(view, "> dev") {
+		t.Fatalf("home did not select a visible first environment:\n%s", view)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyEnd})
+	if view := m.View(); !strings.Contains(view, "> env29") {
+		t.Fatalf("end did not select a visible last environment:\n%s", view)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if view := m.View(); !strings.Contains(view, "env27") || strings.Contains(view, "old result") {
+		t.Fatalf("switch did not select visible target:\n%s", view)
+	}
+	if status.runs != 1 || admin.runs != 0 {
+		t.Fatalf("switch ran a feature: status=%d admin=%d", status.runs, admin.runs)
+	}
+}
+
+func TestEnvironmentIssuanceSelectsNewAlias(t *testing.T) {
+	status := &stubFeature{desc: descriptor("status", true), body: "body"}
+	adminDesc := descriptor("aliases", false)
+	adminDesc.EnvironmentAdmin = true
+	adminDesc.Wizard = true
+	admin := &wizardStub{desc: adminDesc, steps: core.WizardSpec{
+		Title: "별칭 발급",
+		Steps: []core.WizardStep{{Name: "name", Title: "이름", AllowCustom: true}},
+	}}
+	resolver := envResolver()
+	reg := core.NewRegistry()
+	for _, f := range []core.Feature{status, admin} {
+		if err := reg.Register(f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	engine := core.NewEngine(reg, resolver, stubPreflight{}, stubState{}, stubClock{})
+	engine.CWD = func() (string, error) { return "/cwd", nil }
+	engine.NewOperationID = func() string { return "op_env_create" }
+	m := NewModel(context.Background(), Options{Engine: engine, Registry: reg, Target: core.TargetRequest{Environment: "dev"}})
+	initModel(t, m)
+	feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeyEnter}, tea.KeyMsg{Type: tea.KeyEnter}})
+	feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("new")}, tea.KeyMsg{Type: tea.KeyEnter}})
+	resolver.envs = append(resolver.envs, core.Environment{Name: "new"})
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	for _, msg := range execute(t, cmd) {
+		_, next := m.Update(msg)
+		feed(t, m, execute(t, next))
+	}
+	if !admin.applied || resolver.envCalls != 1 || !strings.Contains(m.View(), "new") {
+		t.Fatalf("issuance did not reload and select alias, calls=%d applied=%v:\n%s", resolver.envCalls, admin.applied, m.View())
+	}
+	feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeyUp}, tea.KeyMsg{Type: tea.KeyEnter}})
+	if resolver.lastTarget.Environment != "new" {
+		t.Fatalf("next feature target = %q, want new", resolver.lastTarget.Environment)
+	}
+}
+
 func TestEnvironmentSelectionIsRequiredWhenAliasesExist(t *testing.T) {
 	status := &stubFeature{desc: descriptor("status", true), body: "body"}
 	resolver := envResolver()
 	m := newEnvTestModel(t, resolver, core.TargetRequest{}, status)
 	initModel(t, m)
 	view := m.View()
-	for _, want := range []string{"실행환경 선택", "dev", "prod", "직접 선택", "q 종료"} {
+	for _, want := range []string{"실행환경 선택", "dev", "prod", "작업할 실행환경 선택", "[q] 종료"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("selection view missing %q:\n%s", want, view)
 		}
@@ -461,7 +579,7 @@ func TestMutatingFeatureConfirmsTargetAndEffectBeforeRunning(t *testing.T) {
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = nm.(*Model)
 	view := m.View()
-	for _, want := range []string{"다음 작업", "제목 up", "대상", "범위", "스택 전체", "효과", "요약 up", "변경", "enter 실행", "esc 취소"} {
+	for _, want := range []string{msgConfirmTitle, "제목 up", "대상", "범위", "스택 전체", "효과", "요약 up", "변경", "[enter] 실행", "[esc] 취소"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("confirmation missing %q:\n%s", want, view)
 		}
@@ -524,7 +642,7 @@ func TestEscapeCancelsConfirmationWithoutRunning(t *testing.T) {
 	if up.runs != 0 {
 		t.Fatalf("escaped confirmation ran the feature: %d", up.runs)
 	}
-	if strings.Contains(m.View(), "다음 작업") {
+	if strings.Contains(m.View(), msgConfirmTitle) {
 		t.Fatalf("confirmation still visible:\n%s", m.View())
 	}
 	if !strings.Contains(m.View(), "body") {
@@ -623,7 +741,7 @@ func TestRefreshOfAMutatingFeatureAlsoConfirms(t *testing.T) {
 	if up.runs != 1 {
 		t.Fatalf("r reran a mutating feature without confirmation: %d", up.runs)
 	}
-	if !strings.Contains(m.View(), "다음 작업") {
+	if !strings.Contains(m.View(), msgConfirmTitle) {
 		t.Fatalf("refresh did not ask for confirmation:\n%s", m.View())
 	}
 }
@@ -644,7 +762,7 @@ func TestCtrlCDuringMutatingOperationRequestsSafeCancellation(t *testing.T) {
 	if m.runCtx == nil || m.runCtx.Err() != context.Canceled {
 		t.Fatalf("run context was not canceled: %v", m.runCtx)
 	}
-	if !strings.Contains(m.View(), "중단을 요청했습니다") {
+	if !strings.Contains(m.View(), "중단 요청됨") {
 		t.Fatalf("no cancellation notice:\n%s", m.View())
 	}
 	// The engine reports the canceled result; the screen must show it.
@@ -654,7 +772,7 @@ func TestCtrlCDuringMutatingOperationRequestsSafeCancellation(t *testing.T) {
 		Outcome:       core.OutcomeCanceled,
 		Diagnostics: []core.Diagnostic{{
 			Category: core.CategoryCanceled, Severity: core.SeverityWarning,
-			Message: "작업이 중단되었습니다. 이미 완료된 단계의 효과는 남아 있을 수 있습니다.",
+			Message: "작업이 중단되었음. 이미 완료된 단계의 효과는 남아 있을 수 있음.",
 		}},
 	}})
 	m = nm.(*Model)

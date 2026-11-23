@@ -48,8 +48,8 @@ func (v ComposeValidator) Validate(ctx context.Context, destinationDir string, c
 		return Validation{}, core.Fail(core.Diagnostic{
 			Category:    core.CategoryInternal,
 			Severity:    core.SeverityError,
-			Message:     "Compose 검증기를 준비하지 못했습니다.",
-			NextActions: []string{"dcraft를 다시 빌드하거나 설치한 뒤 실행하세요."},
+			Message:     "Compose 검증기 준비 실패.",
+			NextActions: []string{"dcraft를 다시 빌드하거나 설치한 뒤 실행."},
 		})
 	}
 	if err := ctx.Err(); err != nil {
@@ -84,7 +84,7 @@ func (v ComposeValidator) Validate(ctx context.Context, destinationDir string, c
 				Severity:    core.SeverityError,
 				Message:     msgComposeMissing,
 				Detail:      truncateText(text, 800),
-				NextActions: []string{msgComposeMissingAct, "생성한 파일은 저장하지 않았습니다."},
+				NextActions: []string{msgComposeMissingAct, "생성한 파일은 저장하지 않았음."},
 			})
 		}
 		return Validation{}, core.Fail(core.Diagnostic{

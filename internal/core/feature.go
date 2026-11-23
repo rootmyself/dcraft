@@ -32,6 +32,9 @@ type Descriptor struct {
 	Title   string
 	Summary string
 	Usage   string
+	// Section is the TUI navigation group. It is required: a feature without
+	// a declared section cannot be placed in the menu.
+	Section Section
 	// ReadOnly marks operations that do not change the stack. Read-only
 	// features cannot require an approval.
 	ReadOnly bool
@@ -66,10 +69,21 @@ type Descriptor struct {
 	// the generic confirmation screen. The feature must implement Wizard and
 	// handle Options["wizard"]="steps"/"apply" in Run.
 	Wizard bool
+	// EnvironmentAdmin offers alias issuance and target switching in the TUI.
+	EnvironmentAdmin bool
+	// StreamsProgress marks a feature that can report its own tool output
+	// (currently `up`) through Invocation.IO.Progress while it runs. The CLI
+	// never supplies that writer, so its captured output is unchanged.
+	StreamsProgress bool
 	// Hooks declares the registered host-script attachment point. The zero
 	// value runs no scripts. HookUpUpdate is only valid on `up` and `update`;
 	// read-only features may never declare it.
 	Hooks HookScope
+	// Destructive marks operations that irreversibly destroy or replace user
+	// data or a running stack. It is independent of Approval: an operation
+	// may need no approval but still be destructive (down), and an approval
+	// may be needed without being destructive (file_overwrite, install).
+	Destructive bool
 }
 
 // FlagKind is the supported shape of a feature flag. Supporting a new kind is
@@ -151,6 +165,18 @@ func validateDescriptor(d Descriptor) error {
 	}
 	if d.ReadOnly && d.Hooks != HookNone {
 		return fmt.Errorf("feature %q: read-only features cannot run host hooks", d.Name)
+	}
+	// Destruction is a claim about the effect, and a read-only feature has no
+	// effect. The pair contradicts itself, so the descriptor is rejected
+	// instead of rendering a misleading risk badge.
+	if d.ReadOnly && d.Destructive {
+		return fmt.Errorf("feature %q: read-only features cannot be destructive", d.Name)
+	}
+	// The TUI places every feature by its declared section. An unknown or
+	// empty value cannot be grouped, so it is a registration error rather than
+	// a screen the user has to interpret.
+	if !validSection(d.Section) {
+		return fmt.Errorf("feature %q: unknown section %q", d.Name, d.Section)
 	}
 	for _, r := range d.Requires {
 		switch r {

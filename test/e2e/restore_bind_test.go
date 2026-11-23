@@ -157,7 +157,7 @@ func TestRestoreBindCLIPathMismatchRequiresTheExplicitFlag(t *testing.T) {
 	if !report.PathMapping {
 		t.Fatalf("path mapping not reported: %+v", report)
 	}
-	if !containsDiagnosticWarning(report.Warnings, "경로가 백업과 다릅니다") {
+	if !containsDiagnosticWarning(report.Warnings, "경로가 백업과 다름") {
 		t.Fatalf("mapping warning missing: %v", report.Warnings)
 	}
 	if raw, err := os.ReadFile(filepath.Join(targetDir, "file.txt")); err != nil || string(raw) != "hello" {
@@ -229,8 +229,8 @@ func TestRestoreBindTUIWizardSelectsABindArtifactAndTarget(t *testing.T) {
 	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
 		// The menu order is the registration order; compute the distance from
 		// status so another ticket's feature does not break this journey.
-		{wait: "> 스택 상태 (status)", send: strings.Repeat("\x1b[B", menuDownPresses(t, "restore"))},
-		{wait: "> 데이터 복원 (restore)", send: "\r"},
+		{wait: "[↑↓] 이동", send: strings.Repeat("\x1b[B", menuDownPresses(t, "restore"))},
+		{wait: "▸ 데이터 복원", send: "\r"},
 		{wait: "복원할 백업 선택", send: "\r"},
 		{wait: "복원 대상 선택", send: "down"},
 		{wait: "복원 대상 선택", send: "down"},
@@ -245,7 +245,7 @@ func TestRestoreBindTUIWizardSelectsABindArtifactAndTarget(t *testing.T) {
 		t.Fatalf("bind restore TUI exit = %d\n%s", code, output)
 	}
 	for _, want := range []string{"데이터 복원 설정", "볼륨과 연결 폴더 백업", "폴더", "복원 계획", "data_restore", "복원 완료"} {
-		if !strings.Contains(output, want) {
+		if !screenContains(output, want) {
 			t.Fatalf("TUI output missing %q:\n%s", want, output)
 		}
 	}

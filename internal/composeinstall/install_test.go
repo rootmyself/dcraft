@@ -135,8 +135,8 @@ func TestPlanShowsSourceVersionDestinationPermissionAndEffect(t *testing.T) {
 	}
 	for _, want := range []string{
 		"출처", "https://github.com/docker/compose/releases/download/v5.8.0/docker-compose-darwin-aarch64",
-		"버전: v5.8.0", "대상 경로: " + dest, "관리자 권한(sudo)은 필요하지 않습니다",
-		"변경 내용", "Docker CLI·Engine·Desktop과 WSL 통합은 변경하지 않습니다",
+		"버전: v5.8.0", "대상 경로: " + dest, "관리자 권한(sudo)은 필요하지 않음",
+		"변경 내용", "Docker CLI·Engine·Desktop과 WSL 통합은 변경하지 않음",
 		"SHA-256",
 	} {
 		if !strings.Contains(plan.Text, want) {
@@ -388,6 +388,35 @@ func TestRecheckFailureReportsInstalledFileButFails(t *testing.T) {
 	}
 	if len(inst.written[dest]) == 0 {
 		t.Fatal("recheck failure did not install the verified file")
+	}
+}
+
+// The TUI document declares the install target as a path and the source as a
+// URL; the CLI text is unchanged.
+func TestComposeInstallDocumentTagsURLAndPath(t *testing.T) {
+	feature := &Feature{}
+	res := core.Result{Outcome: core.OutcomeSuccess, Data: Payload{Install: Info{
+		Changed: true, Version: "v2.39.1",
+		Source:      "https://github.com/docker/compose/releases/download/v2.39.1/docker-compose",
+		Destination: "/home/me/.docker/cli-plugins/docker-compose",
+	}}}
+	doc := feature.Document(res)
+	if len(doc.Blocks) != 1 || doc.Blocks[0].Kind != core.BlockValueLines {
+		t.Fatalf("document = %+v", doc)
+	}
+	kinds := map[core.ValueKind]int{}
+	var text []string
+	for _, line := range doc.Blocks[0].Lines {
+		text = append(text, line.Text())
+		for _, run := range line {
+			kinds[run.Kind]++
+		}
+	}
+	if kinds[core.ValueURL] != 1 || kinds[core.ValuePath] != 1 {
+		t.Fatalf("kinds = %v, want one url and one path", kinds)
+	}
+	if got, want := strings.Join(text, "\n"), feature.Present(res, 0); got != want {
+		t.Fatalf("document text = %q, want presenter text %q", got, want)
 	}
 }
 

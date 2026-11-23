@@ -14,6 +14,7 @@ func TestWizardStepsSkipApprovalOnlyForWizardFeatures(t *testing.T) {
 		feature := &testFeature{
 			desc: core.Descriptor{
 				Name: "restore", Title: "데이터 복원", Summary: "복원", Usage: "dcraft restore",
+				Section:  core.SectionData,
 				Approval: core.ApprovalDataRestore, Wizard: wizard,
 			},
 			run: func(ctx context.Context, in core.Invocation) (any, error) {

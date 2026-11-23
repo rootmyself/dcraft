@@ -207,6 +207,7 @@ for a in "$@"; do
 done
 case "$sub" in
   up)
+    if [ -n "${DOCKER_FAKE_UP_LINES:-}" ]; then printf '%s\n' "$DOCKER_FAKE_UP_LINES"; fi
     if [ -n "$DOCKER_FAKE_SLEEP_UP" ]; then exec sleep "$DOCKER_FAKE_SLEEP_UP"; fi
     if [ -n "${DOCKER_FAKE_ECHO_ENV:-}" ]; then echo "container env: $(printenv "$DOCKER_FAKE_ECHO_ENV")"; fi
     if [ -n "${DOCKER_FAKE_FAIL_UP:-}" ]; then echo "container failed" >&2; exit 1; fi
@@ -473,7 +474,7 @@ func TestStatusHumanOutputAndNoServiceChanges(t *testing.T) {
 	if res.code != 0 {
 		t.Fatalf("exit = %d, stderr=%q", res.code, res.stderr)
 	}
-	for _, want := range []string{"fake-project", "web", "api", "8080", "앱 확인 안 됨", "healthy", "dcraft status", "dcraft secrets", "자동 제거되지 않습니다"} {
+	for _, want := range []string{"fake-project", "web", "api", "8080", "앱 확인 안 됨", "healthy", "dcraft status", "dcraft secrets", "자동 제거되지 않음"} {
 		if !strings.Contains(res.stdout, want) {
 			t.Fatalf("stdout missing %q:\n%s", want, res.stdout)
 		}
@@ -598,7 +599,7 @@ func TestJSONWithoutCommandFails(t *testing.T) {
 	if res.code != 2 {
 		t.Fatalf("exit = %d, want 2", res.code)
 	}
-	if !strings.Contains(res.stderr, "명령을 지정") {
+	if !strings.Contains(res.stderr, "명령 지정") {
 		t.Fatalf("stderr = %q", res.stderr)
 	}
 }
@@ -709,7 +710,7 @@ func runPTY(t *testing.T, dir string, env []string, waitText string) (string, in
 	}()
 
 	deadline := time.Now().Add(15 * time.Second)
-	for !strings.Contains(out.String(), waitText) {
+	for !screenContains(out.String(), waitText) {
 		if time.Now().After(deadline) {
 			t.Fatalf("TUI did not render %q within timeout; output:\n%s", waitText, out.String())
 		}
@@ -747,8 +748,8 @@ func TestTUIEnterAndQuitDoesNotChangeServices(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("TUI exit = %d\n%s", code, output)
 	}
-	for _, want := range []string{"dcraft", "스택 상태", "새로고침", "종료"} {
-		if !strings.Contains(output, want) {
+	for _, want := range []string{"dcraft", "스택 상태", "[r] 새로고침", "[q] 종료"} {
+		if !screenContains(output, want) {
 			t.Fatalf("TUI output missing %q:\n%s", want, output)
 		}
 	}
@@ -758,12 +759,12 @@ func TestTUIEnterAndQuitDoesNotChangeServices(t *testing.T) {
 func TestTUIShowsDiagnosticsAndQuitsInEmptyFolder(t *testing.T) {
 	fake := newFakeDocker(t)
 	empty := t.TempDir()
-	output, code := runPTY(t, empty, fake.env(t, t.TempDir()), "Compose 설정을 찾지 못했습니다")
+	output, code := runPTY(t, empty, fake.env(t, t.TempDir()), "Compose 설정 찾지 못함")
 	if code != 0 {
 		t.Fatalf("TUI exit = %d\n%s", code, output)
 	}
-	for _, want := range []string{"작업 실패", "다음 행동", "q 종료"} {
-		if !strings.Contains(output, want) {
+	for _, want := range []string{"작업 실패", "다음 행동", "[q] 종료"} {
+		if !screenContains(output, want) {
 			t.Fatalf("failure screen missing %q:\n%s", want, output)
 		}
 	}
@@ -780,7 +781,7 @@ func TestTUIHasNoStaleUnavailableActionClaim(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("TUI exit = %d\n%s", code, output)
 	}
-	for _, stale := range []string{"아직 제공되지 않습니다", "아직 구현되지 않았습니다"} {
+	for _, stale := range []string{"아직 제공되지 않음", "아직 구현되지 않았음"} {
 		if strings.Contains(output, stale) {
 			t.Fatalf("TUI still claims a registered feature is unavailable (%q):\n%s", stale, output)
 		}

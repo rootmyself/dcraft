@@ -76,7 +76,8 @@ func (f *stubFeature) Present(res core.Result, width int) string {
 func descriptor(name string) core.Descriptor {
 	return core.Descriptor{
 		Name: name, Title: "제목 " + name, Summary: "요약 " + name,
-		Usage: "dcraft " + name, ReadOnly: true,
+		Section: core.SectionInspect,
+		Usage:   "dcraft " + name, ReadOnly: true,
 	}
 }
 
@@ -259,6 +260,7 @@ func TestFeatureFlagsArgsAndServicesReachFeature(t *testing.T) {
 	var got core.Invocation
 	logs := &stubFeature{desc: core.Descriptor{
 		Name: "logs", Title: "로그", Summary: "로그를 봅니다.", Usage: "dcraft logs",
+		Section:  core.SectionInspect,
 		ReadOnly: true, AcceptsArgs: true, SupportsServices: true,
 		Flags: []core.Flag{
 			{Name: "follow", Shorthand: "l", Kind: core.FlagBool, Usage: "계속 출력"},
@@ -286,7 +288,8 @@ func TestFeatureFlagsArgsAndServicesReachFeature(t *testing.T) {
 func TestRepeatableStringFlagReachesFeatureAsList(t *testing.T) {
 	var got core.Invocation
 	backup := &stubFeature{desc: core.Descriptor{
-		Name: "backup", Title: "백업", Summary: "데이터를 백업합니다.", Usage: "dcraft backup",
+		Name: "backup", Title: "백업", Summary: "데이터 백업.", Usage: "dcraft backup",
+		Section: core.SectionData,
 		Flags: []core.Flag{
 			{Name: "output", Shorthand: "o", Kind: core.FlagString, Usage: "출력 폴더"},
 			{Name: "volume", Kind: core.FlagList, Usage: "볼륨 키"},
@@ -309,7 +312,8 @@ func TestRepeatableStringFlagReachesFeatureAsList(t *testing.T) {
 
 func TestApprovalIsEnforcedByEngineAndExitCode(t *testing.T) {
 	install := &stubFeature{desc: core.Descriptor{
-		Name: "install", Title: "설치", Summary: "설치합니다.", Usage: "dcraft install",
+		Name: "install", Title: "설치", Summary: "설치.", Usage: "dcraft install",
+		Section:  core.SectionConfig,
 		Approval: core.ApprovalInstall,
 	}}
 	h := newHarness(t, install)
@@ -340,7 +344,8 @@ func TestApprovalIsEnforcedByEngineAndExitCode(t *testing.T) {
 
 func TestUnknownApprovalIsUsageError(t *testing.T) {
 	install := &stubFeature{desc: core.Descriptor{
-		Name: "install", Title: "설치", Summary: "설치합니다.", Usage: "dcraft install",
+		Name: "install", Title: "설치", Summary: "설치.", Usage: "dcraft install",
+		Section:  core.SectionConfig,
 		Approval: core.ApprovalInstall,
 	}}
 	h := newHarness(t, install)
@@ -360,8 +365,8 @@ func TestFailureJSONHasNoStderrAndFailureExit(t *testing.T) {
 	status := &stubFeature{desc: descriptor("status"), run: func(ctx context.Context, in core.Invocation) (any, error) {
 		return nil, core.Fail(core.Diagnostic{
 			Category: core.CategoryNoConfiguration, Severity: core.SeverityError,
-			Message:     "대상 폴더에서 Compose 설정을 찾지 못했습니다.",
-			NextActions: []string{"compose.yaml을 추가하세요."},
+			Message:     "대상 폴더에서 Compose 설정 찾기 실패.",
+			NextActions: []string{"compose.yaml을 추가."},
 		})
 	}}
 	h := newHarness(t, status)
@@ -397,7 +402,8 @@ func (f *panicVerifyFeature) Verify(context.Context, core.Invocation, any) error
 func TestVerifierPanicExitsOneWithAResult(t *testing.T) {
 	feature := &panicVerifyFeature{stubFeature: &stubFeature{
 		desc: core.Descriptor{
-			Name: "update", Title: "갱신", Summary: "갱신합니다.", Usage: "dcraft update",
+			Name: "update", Title: "갱신", Summary: "갱신.", Usage: "dcraft update",
+			Section: core.SectionOperate,
 		},
 	}}
 	h := newHarness(t, feature)
@@ -433,8 +439,8 @@ func TestHumanFailureGoesToStderrWithKoreanGuidance(t *testing.T) {
 	status := &stubFeature{desc: descriptor("status"), run: func(ctx context.Context, in core.Invocation) (any, error) {
 		return nil, core.Fail(core.Diagnostic{
 			Category: core.CategoryEngineUnreachable, Severity: core.SeverityError,
-			Message: "Docker Engine에 연결할 수 없습니다.", Detail: "failed to connect",
-			NextActions: []string{"Docker Desktop을 시작하세요."},
+			Message: "Docker Engine에 연결 불가.", Detail: "failed to connect",
+			NextActions: []string{"Docker Desktop을 시작."},
 		})
 	}}
 	h := newHarness(t, status)
@@ -509,7 +515,7 @@ func TestJSONWithoutCommandIsUsageError(t *testing.T) {
 	if err := h.run("--json"); exitCode(err) != 2 {
 		t.Fatalf("exit = %d, want 2", exitCode(err))
 	}
-	if !strings.Contains(h.stderr.String(), "명령을 지정") {
+	if !strings.Contains(h.stderr.String(), "명령 지정") {
 		t.Fatalf("stderr = %q", h.stderr.String())
 	}
 	if h.homeRan {
@@ -522,7 +528,7 @@ func TestWarningsDoNotContaminateStdout(t *testing.T) {
 	h := newHarness(t, status)
 	h.resolver.warns = []core.Diagnostic{{
 		Category: core.CategoryMultipleConfigFiles, Severity: core.SeverityWarning,
-		Message: "여러 Compose 파일이 있습니다.",
+		Message: "여러 Compose 파일이 있음.",
 	}}
 	if err := h.run("status"); err != nil {
 		t.Fatalf("status: %v", err)
@@ -532,5 +538,24 @@ func TestWarningsDoNotContaminateStdout(t *testing.T) {
 	}
 	if !strings.Contains(h.stderr.String(), "여러 Compose 파일") {
 		t.Fatalf("warning missing from stderr: %q", h.stderr.String())
+	}
+}
+
+// The shared visual layer belongs to the TUI. CLI human output and --json must
+// stay free of escape sequences: the resolved theme is injected into the TUI
+// model only, and the CLI never constructs it.
+func TestCLIOutputNeverContainsANSI(t *testing.T) {
+	status := &stubFeature{desc: descriptor("status")}
+	for _, args := range [][]string{{"status"}, {"status", "--json"}, {"--help"}} {
+		h := newHarness(t, status)
+		if err := h.run(args...); err != nil {
+			t.Fatalf("%v: %v", args, err)
+		}
+		if strings.Contains(h.stdout.String(), "\x1b") {
+			t.Fatalf("%v: stdout has ANSI: %q", args, h.stdout.String())
+		}
+		if strings.Contains(h.stderr.String(), "\x1b") {
+			t.Fatalf("%v: stderr has ANSI: %q", args, h.stderr.String())
+		}
 	}
 }

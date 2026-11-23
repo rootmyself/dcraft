@@ -379,7 +379,7 @@ func verifyNativeArtifact(t *testing.T, bin string) {
 	}
 
 	res = runProcess(t, bin, empty, env, strings.NewReader(""), "status", "--path", empty)
-	if res.code != 1 || !strings.Contains(res.stderr, "Compose 설정을 찾지 못했습니다") || !strings.Contains(res.stderr, "다음 행동") {
+	if res.code != 1 || !strings.Contains(res.stderr, "Compose 설정 찾지 못함") || !strings.Contains(res.stderr, "다음 행동") {
 		t.Fatalf("human status failure: exit=%d stderr=%q", res.code, res.stderr)
 	}
 
@@ -436,7 +436,7 @@ func verifyNativeTUI(t *testing.T, bin string, env []string, dir string) {
 		_, _ = io.Copy(out, f)
 		close(readDone)
 	}()
-	waitText := "Compose 설정을 찾지 못했습니다"
+	waitText := "Compose 설정 찾지 못함"
 	deadline := time.Now().Add(15 * time.Second)
 	for !strings.Contains(out.String(), waitText) {
 		if time.Now().After(deadline) {

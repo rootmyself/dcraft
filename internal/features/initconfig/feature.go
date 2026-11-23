@@ -23,6 +23,7 @@ func (f *Feature) Descriptor() core.Descriptor {
 		Title:   initimpl.Title(),
 		Summary: initimpl.Summary(),
 		Usage:   initimpl.Usage(),
+		Section: core.SectionConfig,
 		// Generation and `docker compose config` validation do not need a
 		// reachable engine; the narrow requirement keeps init usable while the
 		// engine is stopped. A missing Compose is reported by the validation
@@ -33,47 +34,47 @@ func (f *Feature) Descriptor() core.Descriptor {
 		Flags: []core.Flag{
 			{
 				Name: "from", Kind: core.FlagString, Required: true,
-				Usage: "구성 방식: dockerfile 또는 image (필수). Dockerfile 방식은 빌드 컨텍스트와 Dockerfile을, 이미지 방식은 이미지 참조를 사용합니다.",
+				Usage: "구성 방식: dockerfile 또는 image (필수). Dockerfile 방식은 빌드 컨텍스트와 Dockerfile을, 이미지 방식은 이미지 참조 사용.",
 			},
 			{
 				Name: "service-name", Kind: core.FlagString, Required: true,
-				Usage: "생성할 Compose 서비스 이름 (필수, 예: app). 대화형 화면에서는 app을 제안하지만 미리보기에서 확인해야 합니다.",
+				Usage: "생성할 Compose 서비스 이름 (필수, 예: app). 대화형 화면에서는 app을 제안하지만 미리보기에서 확인 필요.",
 			},
 			{
 				Name: "context", Kind: core.FlagString,
-				Usage: "Dockerfile 방식의 빌드 컨텍스트 폴더 (기본: 현재 프로젝트 폴더). 상대 경로는 프로젝트 폴더 기준입니다.",
+				Usage: "Dockerfile 방식의 빌드 컨텍스트 폴더 (기본: 현재 프로젝트 폴더). 상대 경로는 프로젝트 폴더 기준.",
 			},
 			{
 				Name: "dockerfile", Kind: core.FlagString,
-				Usage: "Dockerfile 방식의 Dockerfile 경로 (기본: Dockerfile). 빌드 컨텍스트 기준이며 실제 파일이 있어야 합니다.",
+				Usage: "Dockerfile 방식의 Dockerfile 경로 (기본: Dockerfile). 빌드 컨텍스트 기준이며 실제 파일이 있어야 함.",
 			},
 			{
 				Name: "image", Kind: core.FlagString,
-				Usage: "이미지 방식의 이미지 참조 (예: nginx:1.27-alpine). 태그나 digest를 포함할 수 있으며 이미지를 pull하지 않습니다.",
+				Usage: "이미지 방식의 이미지 참조 (예: nginx:1.27-alpine). 태그나 digest를 포함할 수 있으며 이미지를 pull하지 않음.",
 			},
 			{
 				Name: "output", Shorthand: "o", Kind: core.FlagString,
-				Usage: "저장할 Compose 파일 경로 (기본: compose.yaml). 상대 경로는 프로젝트 폴더 기준입니다. 기존 파일 덮어쓰기는 --approve file_overwrite가 필요합니다.",
+				Usage: "저장할 Compose 파일 경로 (기본: compose.yaml). 상대 경로는 프로젝트 폴더 기준. 기존 파일 덮어쓰기는 --approve file_overwrite가 필요.",
 			},
 			{
 				Name: "port", Kind: core.FlagList,
-				Usage: "공개할 포트 (반복 지정 가능, 예: --port 8080:80). 이미지나 Dockerfile에서 포트를 추측하지 않으며 직접 지정한 값만 기록합니다.",
+				Usage: "공개할 포트 (반복 지정 가능, 예: --port 8080:80). 이미지나 Dockerfile에서 포트를 추측하지 않으며 직접 지정한 값만 기록.",
 			},
 			{
 				Name: "volume", Kind: core.FlagList,
-				Usage: "볼륨/바인드 마운트 (반복 지정 가능, 예: --volume ./data:/data). 이름 있는 볼륨은 최상위 volumes에 선언합니다.",
+				Usage: "볼륨/바인드 마운트 (반복 지정 가능, 예: --volume ./data:/data). 이름 있는 볼륨은 최상위 volumes에 선언.",
 			},
 			{
 				Name: "env-var", Kind: core.FlagList,
-				Usage: "환경변수 KEY=VALUE (반복 지정 가능). 값은 compose.yaml에 평문으로 저장되므로 비밀값은 dcraft secrets 참조를 사용하세요.",
+				Usage: "환경변수 KEY=VALUE (반복 지정 가능). 값은 compose.yaml에 평문으로 저장되므로 비밀값은 dcraft secrets 참조 사용.",
 			},
 			{
 				Name: "command", Kind: core.FlagString,
-				Usage: "이미지 기본 CMD를 덮어쓸 명령 (선택). 지정하지 않으면 이미지/Dockerfile 기본값을 사용합니다.",
+				Usage: "이미지 기본 CMD를 덮어쓸 명령 (선택). 지정하지 않으면 이미지/Dockerfile 기본값 사용.",
 			},
 			{
 				Name: "restart", Kind: core.FlagString,
-				Usage: "재시작 정책: no, always, unless-stopped, on-failure, on-failure:횟수 (선택). 지정하지 않으면 Compose 기본값을 사용합니다.",
+				Usage: "재시작 정책: no, always, unless-stopped, on-failure, on-failure:횟수 (선택). 지정하지 않으면 Compose 기본값 사용.",
 			},
 		},
 	}
@@ -86,8 +87,8 @@ func (f *Feature) Run(ctx context.Context, in core.Invocation) (any, error) {
 		return nil, core.Fail(core.Diagnostic{
 			Category:    core.CategoryInternal,
 			Severity:    core.SeverityError,
-			Message:     "최초 구성기를 준비하지 못했습니다.",
-			NextActions: []string{"dcraft를 다시 빌드하거나 설치한 뒤 실행하세요."},
+			Message:     "최초 구성기 준비 실패.",
+			NextActions: []string{"dcraft를 다시 빌드하거나 설치한 뒤 실행."},
 		})
 	}
 	if in.Option("wizard") == "steps" {
@@ -103,8 +104,8 @@ func (f *Feature) Plan(ctx context.Context, in core.Invocation) (core.Plan, erro
 		return core.Plan{}, core.Fail(core.Diagnostic{
 			Category:    core.CategoryInternal,
 			Severity:    core.SeverityError,
-			Message:     "최초 구성기를 준비하지 못했습니다.",
-			NextActions: []string{"dcraft를 다시 빌드하거나 설치한 뒤 실행하세요."},
+			Message:     "최초 구성기 준비 실패.",
+			NextActions: []string{"dcraft를 다시 빌드하거나 설치한 뒤 실행."},
 		})
 	}
 	return f.control.Plan(ctx, in)
@@ -126,8 +127,8 @@ func (f *Feature) WizardPreview(answers map[string]string) (string, error) {
 		return "", core.Fail(core.Diagnostic{
 			Category:    core.CategoryInternal,
 			Severity:    core.SeverityError,
-			Message:     "최초 구성기를 준비하지 못했습니다.",
-			NextActions: []string{"dcraft를 다시 빌드하거나 설치한 뒤 실행하세요."},
+			Message:     "최초 구성기 준비 실패.",
+			NextActions: []string{"dcraft를 다시 빌드하거나 설치한 뒤 실행."},
 		})
 	}
 	return f.control.WizardPreview(answers)
@@ -135,6 +136,12 @@ func (f *Feature) WizardPreview(answers map[string]string) (string, error) {
 
 func (f *Feature) Present(res core.Result, width int) string {
 	return initimpl.Present(res, width)
+}
+
+// Document implements core.ViewPresenter: the saved path and the next command
+// carry declared value kinds in the TUI while the CLI text is unchanged.
+func (f *Feature) Document(res core.Result) core.Document {
+	return initimpl.Document(res)
 }
 
 // CanceledDiagnostic describes the atomic save window honestly.

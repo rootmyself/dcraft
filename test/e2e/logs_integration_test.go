@@ -165,7 +165,7 @@ func TestIntegrationLogsExecScaledService(t *testing.T) {
 	}
 	parsedMissing := parseLive(t, missing.stdout)
 	assertStageStatus(t, parsedMissing.Stages, "attach", core.StageFailed)
-	if !strings.Contains(parsedMissing.Diagnostics[0].Message, "명령이 없습니다") {
+	if !strings.Contains(parsedMissing.Diagnostics[0].Message, "명령이 없음") {
 		t.Fatalf("missing command message = %q", parsedMissing.Diagnostics[0].Message)
 	}
 
@@ -184,7 +184,7 @@ func TestIntegrationLogsExecScaledService(t *testing.T) {
 		t.Fatalf("stopped exec exit=%d, want 1", stopped.code)
 	}
 	parsedStopped := parseLive(t, stopped.stdout)
-	if !strings.Contains(parsedStopped.Diagnostics[0].Message, "실행 중이 아닙니다") {
+	if !strings.Contains(parsedStopped.Diagnostics[0].Message, "실행 중이 아님") {
 		t.Fatalf("stopped message = %q", parsedStopped.Diagnostics[0].Message)
 	}
 
@@ -233,11 +233,11 @@ func TestIntegrationLogsExecScaledService(t *testing.T) {
 	// instances running.
 	ptyEnv := append([]string{}, dcraftEnv...)
 	s := startPTY(t, dir, ptyEnv, "--path", dir, "-p", name)
-	s.waitFor("스택 상태 (status)", 30*time.Second)
+	s.waitFor("[↑↓] 이동", 30*time.Second)
 	s.pressMenuDown(menuDownPresses(t, "logs"))
 	s.waitFor("서비스 선택", 30*time.Second)
 	s.press("\r")
-	s.waitFor("로그 보기 (logs)", 30*time.Second)
+	s.waitFor("로그 보기", 30*time.Second)
 	s.waitFor("line-", 30*time.Second)
 	s.press("q")
 	s.waitFor("마지막 실시간 출력", 30*time.Second)

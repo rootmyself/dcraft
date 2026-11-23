@@ -65,7 +65,7 @@ func Build(in Input) (Generated, error) {
 		return Generated{}, err
 	}
 	if in.Layout.ProjectDir == "" || in.Layout.Destination == "" || in.Layout.ScriptPath == "" {
-		return Generated{}, inputError("layout", "프로젝트·받을 폴더·스크립트 경로가 모두 필요합니다.", "")
+		return Generated{}, inputError("layout", "프로젝트·받을 폴더·스크립트 경로가 모두 필요.", "")
 	}
 
 	content := render(renderInput{layout: in.Layout, source: source, mode: in.Mode, profile: profile})
@@ -74,7 +74,7 @@ func Build(in Input) (Generated, error) {
 	if info, statErr := os.Lstat(in.Layout.ScriptPath); statErr == nil {
 		existed = true
 		if info.IsDir() || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
-			return Generated{}, inputError("output", "스크립트 경로가 일반 파일이 아닙니다. 안전을 위해 덮어쓰지 않습니다.", in.Layout.ScriptPath)
+			return Generated{}, inputError("output", "스크립트 경로가 일반 파일이 아님. 안전을 위해 덮어쓰지 않음.", in.Layout.ScriptPath)
 		}
 	} else if !os.IsNotExist(statErr) {
 		return Generated{}, statErr
@@ -93,16 +93,16 @@ func Build(in Input) (Generated, error) {
 func normalizeSource(raw string, mode Mode) (string, error) {
 	source := strings.TrimSpace(raw)
 	if source == "" {
-		return "", inputError("source", "S3 원본 주소를 입력하세요.", "")
+		return "", inputError("source", "S3 원본 주소 입력.", "")
 	}
 	if mode != ModeSync && mode != ModeTar {
-		return "", inputError("mode", "방식은 sync 또는 tar여야 합니다.", "")
+		return "", inputError("mode", "방식은 sync 또는 tar여야 함.", "")
 	}
 	if hasControl(source) || strings.IndexFunc(source, unicode.IsSpace) >= 0 {
-		return "", inputError("source", "S3 원본에 공백·제어 문자를 사용할 수 없습니다.", "")
+		return "", inputError("source", "S3 원본에 공백·제어 문자 사용 불가.", "")
 	}
 	if !strings.HasPrefix(source, "s3://") {
-		return "", inputError("source", "S3 원본은 s3://bucket/prefix 형식이어야 합니다.", "")
+		return "", inputError("source", "S3 원본은 s3://bucket/prefix 형식이어야 함.", "")
 	}
 	rest := strings.TrimPrefix(source, "s3://")
 	authority := rest
@@ -112,22 +112,22 @@ func normalizeSource(raw string, mode Mode) (string, error) {
 		key = rest[cut+1:]
 	}
 	if authority == "" {
-		return "", inputError("source", "S3 원본에 버킷 이름이 없습니다.", "")
+		return "", inputError("source", "S3 원본에 버킷 이름이 없음.", "")
 	}
 	if strings.Contains(authority, "@") {
-		return "", inputError("source", "S3 주소에는 인증 정보를 넣을 수 없습니다. 기존 AWS CLI 자격 증명을 사용하세요.", "")
+		return "", inputError("source", "S3 주소에는 인증 정보를 넣을 수 없음. 기존 AWS CLI 자격 증명 사용.", "")
 	}
 	if !bucketRe.MatchString(authority) || len(authority) < 3 || len(authority) > 63 || strings.Contains(authority, "..") {
-		return "", inputError("source", "S3 버킷 이름 형식이 올바르지 않습니다.", "")
+		return "", inputError("source", "S3 버킷 이름 형식이 올바르지 않음.", "")
 	}
 	if strings.ContainsAny(source, "?#") {
-		return "", inputError("source", "쿼리 문자열·미리 서명된 URL은 지원하지 않습니다. 기존 AWS CLI 자격 증명을 사용하세요.", "")
+		return "", inputError("source", "쿼리 문자열·미리 서명된 URL은 지원하지 않음. 기존 AWS CLI 자격 증명 사용.", "")
 	}
 	if strings.ContainsAny(key, "\\*") {
-		return "", inputError("source", "S3 경로에 \\ 또는 * 문자를 사용할 수 없습니다.", "")
+		return "", inputError("source", "S3 경로에 \\ 또는 * 문자 사용 불가.", "")
 	}
 	if strings.HasPrefix(key, "/") {
-		return "", inputError("source", "S3 경로에 빈 구성 요소를 사용할 수 없습니다. 버킷 뒤에는 하나의 /만 사용하세요.", "")
+		return "", inputError("source", "S3 경로에 빈 구성 요소 사용 불가. 버킷 뒤에는 하나의 /만 사용.", "")
 	}
 	if key != "" {
 		trimmed := key
@@ -135,12 +135,12 @@ func normalizeSource(raw string, mode Mode) (string, error) {
 			trimmed = strings.TrimSuffix(trimmed, "/")
 		}
 		if trimmed == "" && mode == ModeTar {
-			return "", inputError("source", "tar 방식에는 단일 .tar.gz 객체 경로가 필요합니다.", "")
+			return "", inputError("source", "tar 방식에는 단일 .tar.gz 객체 경로가 필요.", "")
 		}
 		if trimmed != "" {
 			for _, part := range strings.Split(trimmed, "/") {
 				if part == "" || part == "." || part == ".." {
-					return "", inputError("source", "S3 경로의 구성 요소가 올바르지 않습니다. 빈 경로·.·..는 사용할 수 없습니다.", "")
+					return "", inputError("source", "S3 경로의 구성 요소가 올바르지 않음. 빈 경로·.·..는 사용 불가.", "")
 				}
 			}
 		}
@@ -148,14 +148,14 @@ func normalizeSource(raw string, mode Mode) (string, error) {
 	}
 	if mode == ModeSync {
 		if strings.HasSuffix(key, ".tar.gz") {
-			return "", inputError("source", "sync 방식에는 .tar.gz 객체를 지정할 수 없습니다. tar 방식을 사용하세요.", "")
+			return "", inputError("source", "sync 방식에는 .tar.gz 객체 지정 불가. tar 방식 사용.", "")
 		}
 	} else {
 		if !strings.HasSuffix(key, ".tar.gz") {
-			return "", inputError("source", "tar 방식에는 .tar.gz 객체 경로가 필요합니다.", "")
+			return "", inputError("source", "tar 방식에는 .tar.gz 객체 경로가 필요.", "")
 		}
 		if base := key[strings.LastIndex(key, "/")+1:]; base == ".tar.gz" {
-			return "", inputError("source", "tar 방식에는 파일 이름이 있는 .tar.gz 객체가 필요합니다.", "")
+			return "", inputError("source", "tar 방식에는 파일 이름이 있는 .tar.gz 객체가 필요.", "")
 		}
 	}
 	normalized := "s3://" + authority
@@ -171,7 +171,7 @@ func normalizeProfile(raw string) (string, error) {
 		return "", nil
 	}
 	if hasControl(profile) || strings.IndexFunc(profile, unicode.IsSpace) >= 0 || !profileRe.MatchString(profile) {
-		return "", inputError("aws-profile", "AWS 프로필 이름은 영문·숫자와 . _ @ + - 만 사용할 수 있습니다.", "")
+		return "", inputError("aws-profile", "AWS 프로필 이름은 영문·숫자와 . _ @ + - 만 사용 가능.", "")
 	}
 	return profile, nil
 }

@@ -241,8 +241,8 @@ func TestInitHumanOutputShowsTheExactFileAndTheNextCommand(t *testing.T) {
 		"127.0.0.1:18081:80",
 		"fake-project",
 		"dcraft up",
-		"저장은 실행이 아닙니다",
-		"Compose 파일을 저장했습니다.",
+		"저장은 실행이 아님",
+		"Compose 파일 저장.",
 	} {
 		if !strings.Contains(combined, want) {
 			t.Fatalf("human output missing %q:\n%s", want, combined)

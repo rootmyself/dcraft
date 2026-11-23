@@ -90,7 +90,8 @@ func hookPlan(entries ...core.HookEntry) core.HookPlan {
 
 func hookDescriptor(name string) core.Descriptor {
 	return core.Descriptor{
-		Name: name, Title: "배포", Summary: "배포합니다.", Usage: "dcraft " + name,
+		Name: name, Title: "배포", Summary: "배포.", Usage: "dcraft " + name,
+		Section:        core.SectionInspect,
 		RecordsHistory: true, Hooks: core.HookUpUpdate,
 	}
 }
@@ -159,7 +160,7 @@ func TestEnginePreHookFailureBlocksTheFeature(t *testing.T) {
 		executeErr: map[string]error{
 			"scripts/pre.sh": core.Fail(core.Diagnostic{
 				Category: core.CategoryHookFailed, Severity: core.SeverityError,
-				Message: "사전 훅이 실패했습니다.",
+				Message: "사전 훅이 실패.",
 			}),
 		},
 	}
@@ -220,7 +221,8 @@ func TestEngineRequiresIndependentScriptTrustApproval(t *testing.T) {
 func TestEngineScriptTrustIsNotTheFeatureApproval(t *testing.T) {
 	feature := &testFeature{
 		desc: core.Descriptor{
-			Name: "up", Title: "시작", Summary: "시작합니다.", Usage: "dcraft up",
+			Name: "up", Title: "시작", Summary: "시작.", Usage: "dcraft up",
+			Section:  core.SectionOperate,
 			Approval: core.ApprovalInstall, Hooks: core.HookUpUpdate, RecordsHistory: true,
 		},
 	}
@@ -262,7 +264,7 @@ func TestEnginePostHookFailureIsSeparateFromCompletedWork(t *testing.T) {
 		executeErr: map[string]error{
 			"scripts/post.sh": core.Fail(core.Diagnostic{
 				Category: core.CategoryHookPostFailed, Severity: core.SeverityError,
-				Message: "후처리 훅이 실패했습니다.",
+				Message: "후처리 훅이 실패.",
 			}),
 		},
 	}
@@ -465,7 +467,7 @@ func TestEngineContentChangedDiagnosticSurvivesExecution(t *testing.T) {
 		executeErr: map[string]error{
 			"scripts/pre.sh": core.Fail(core.Diagnostic{
 				Category: core.CategoryHookContentChanged, Severity: core.SeverityError,
-				Message: "승인 후 스크립트 내용이 바뀌었습니다.",
+				Message: "승인 후 스크립트 내용이 바뀌었음.",
 			}),
 		},
 	}

@@ -24,6 +24,8 @@ func (f *Feature) Descriptor() core.Descriptor {
 		Title:          restoreimpl.MsgTitle,
 		Summary:        restoreimpl.MsgSummary,
 		Usage:          restoreimpl.MsgUsage,
+		Section:        core.SectionData,
+		Destructive:    true,
 		Approval:       core.ApprovalDataRestore,
 		RecordsHistory: true,
 		Wizard:         true,
@@ -37,22 +39,22 @@ func (f *Feature) Descriptor() core.Descriptor {
 			{
 				Name:  "volume",
 				Kind:  core.FlagString,
-				Usage: "복원 대상 볼륨 키. 생략하면 백업에 기록된 볼륨을 사용합니다. 백업의 프로젝트·실행환경과 다른 대상은 항상 거부합니다. 연결 폴더 백업에는 사용할 수 없습니다.",
+				Usage: "복원 대상 볼륨 키. 생략하면 백업에 기록된 볼륨 사용. 백업의 프로젝트·실행환경과 다른 대상은 항상 거부. 연결 폴더 백업에는 사용 불가.",
 			},
 			{
 				Name:  "bind",
 				Kind:  core.FlagString,
-				Usage: "복원 대상 연결 폴더. 현재 스택의 Compose 파일이 선언한 폴더(경로 또는 마운트 대상)만 지정할 수 있습니다. 생략하면 백업에 기록된 경로와 같은 선언 폴더를 사용합니다.",
+				Usage: "복원 대상 연결 폴더. 현재 스택의 Compose 파일이 선언한 폴더(경로 또는 마운트 대상)만 지정 가능. 생략하면 백업에 기록된 경로와 같은 선언 폴더 사용.",
 			},
 			{
 				Name:  "safety-output",
 				Kind:  core.FlagString,
-				Usage: "현재 데이터의 안전 백업을 만들 별도 호스트 폴더. 기본은 백업 폴더 옆의 dcraft-safety입니다.",
+				Usage: "현재 데이터의 안전 백업을 만들 별도 호스트 폴더. 기본은 백업 폴더 옆의 dcraft-safety.",
 			},
 			{
 				Name:  "allow-path-mismatch",
 				Kind:  core.FlagBool,
-				Usage: "연결 폴더 백업에 기록된 경로와 현재 스택의 선언 폴더가 달라도 --bind로 지정한 폴더에 명시적으로 매핑합니다. 경고를 표시하며 기본은 거부입니다.",
+				Usage: "연결 폴더 백업에 기록된 경로와 현재 스택의 선언 폴더가 달라도 --bind로 지정한 폴더에 명시적으로 매핑. 경고를 표시하며 기본은 거부.",
 			},
 		},
 	}

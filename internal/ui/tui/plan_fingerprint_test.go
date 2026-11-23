@@ -42,7 +42,8 @@ func (f *tuiPlanFeature) Run(context.Context, core.Invocation) (any, error) {
 
 func TestTUIBindsTheRunToTheApprovedPlanFingerprint(t *testing.T) {
 	feature := &tuiPlanFeature{desc: core.Descriptor{
-		Name: "install-compose", Title: "설치", Summary: "설치합니다.", Usage: "dcraft install-compose",
+		Name: "install-compose", Title: "설치", Summary: "설치.", Usage: "dcraft install-compose",
+		Section: core.SectionConfig,
 		Primary: true, Approval: core.ApprovalInstall,
 	}}
 	reg := core.NewRegistry()

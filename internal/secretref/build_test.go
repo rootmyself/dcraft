@@ -293,7 +293,7 @@ func TestPrepareBuildWarnsWithoutEditingDockerfile(t *testing.T) {
 		t.Fatalf("PrepareBuild: %v", err)
 	}
 	notices := strings.Join(session.Notices, "\n")
-	for _, want := range []string{"Dockerfile", dockerfile, "web_token", "--mount=type=secret,id=web_token", "자동으로 수정하지 않습니다"} {
+	for _, want := range []string{"Dockerfile", dockerfile, "web_token", "--mount=type=secret,id=web_token", "자동으로 수정하지 않음"} {
 		if !strings.Contains(notices, want) {
 			t.Fatalf("notices missing %q:\n%s", want, notices)
 		}
@@ -384,7 +384,7 @@ func TestPrepareBuildRecognizesInlineDockerfileMount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PrepareBuild: %v", err)
 	}
-	if strings.Contains(strings.Join(session.Notices, "\n"), "참조가 없습니다") {
+	if strings.Contains(strings.Join(session.Notices, "\n"), "참조가 없음") {
 		t.Fatalf("inline mount was not recognized: %v", session.Notices)
 	}
 	if err := session.Finish(); err != nil {

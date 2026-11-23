@@ -54,6 +54,20 @@ func Warnings(diags []core.Diagnostic) []core.Diagnostic {
 // completed and failed stages. It never claims partial work succeeded.
 func Failure(res core.Result) string {
 	var b strings.Builder
+	b.WriteString(FailureText(res))
+	if stages := StageList(res.Stages); stages != "" {
+		b.WriteString("\n\n단계:\n")
+		b.WriteString(stages)
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+// FailureText is Failure without the stage list. The CLI appends StageList; the
+// TUI appends its own stage timeline, so both render the identical Korean
+// outcome, target, operation ID and diagnostics while the stage rows use each
+// interface's own glyphs and can show the stages that never ran.
+func FailureText(res core.Result) string {
+	var b strings.Builder
 	title := "작업 실패"
 	switch res.Outcome {
 	case core.OutcomeCanceled:
@@ -75,10 +89,6 @@ func Failure(res core.Result) string {
 		b.WriteString(Diagnostics(res.Diagnostics))
 		b.WriteString("\n")
 	}
-	if stages := StageList(res.Stages); stages != "" {
-		b.WriteString("\n단계:\n")
-		b.WriteString(stages)
-	}
 	return strings.TrimRight(b.String(), "\n")
 }
 
@@ -89,7 +99,7 @@ func SuccessFallback(res core.Result) string {
 		action = "작업"
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "작업을 완료했습니다: %s\n", action)
+	fmt.Fprintf(&b, "작업 완료: %s\n", action)
 	if res.Target.ProjectDir != "" {
 		fmt.Fprintf(&b, "대상: %s\n", res.Target.ProjectDir)
 	}
@@ -108,6 +118,11 @@ func StageList(stages []core.Stage) string {
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
+
+// StageStatusLabel is the Korean status word for one stage. It is exported so
+// the TUI can render a stage with its own glyph set without duplicating the
+// wording; view.StageList keeps using it.
+func StageStatusLabel(status core.StageStatus) string { return stageStatusLabel(status) }
 
 func stageSymbol(status core.StageStatus) string {
 	switch status {

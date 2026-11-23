@@ -227,10 +227,10 @@ var (
 func Validate(r Reference) error {
 	service := strings.TrimSpace(r.Service)
 	if service == "" {
-		return &ValidationError{Field: "service", Reason: "서비스 이름이 비어 있습니다."}
+		return &ValidationError{Field: "service", Reason: "서비스 이름이 비어 있음."}
 	}
 	if !serviceNameRe.MatchString(service) || strings.ContainsAny(service, " \t") {
-		return &ValidationError{Field: "service", Reason: "서비스 이름에 사용할 수 없는 문자가 있습니다: " + service}
+		return &ValidationError{Field: "service", Reason: "서비스 이름에 사용할 수 없는 문자가 있음: " + service}
 	}
 
 	switch r.Phase {
@@ -241,17 +241,17 @@ func Validate(r Reference) error {
 		if r.Delivery != DeliveryFile {
 			return &ValidationError{
 				Field:  "delivery",
-				Reason: "빌드 시점 비밀값은 BuildKit secret mount(file)로만 전달합니다. delivery를 file로 지정하거나 생략하세요.",
+				Reason: "빌드 시점 비밀값은 BuildKit secret mount(file)로만 전달. delivery를 file로 지정하거나 생략.",
 			}
 		}
 	default:
-		return &ValidationError{Field: "phase", Reason: "지원하지 않는 단계입니다: " + string(r.Phase)}
+		return &ValidationError{Field: "phase", Reason: "지원하지 않는 단계: " + string(r.Phase)}
 	}
 
 	switch r.Delivery {
 	case DeliveryEnvironment, DeliveryFile:
 	default:
-		return &ValidationError{Field: "delivery", Reason: "delivery 값이 지원되지 않습니다: " + string(r.Delivery)}
+		return &ValidationError{Field: "delivery", Reason: "delivery 값이 지원되지 않음: " + string(r.Delivery)}
 	}
 
 	switch r.Source {
@@ -261,10 +261,10 @@ func Validate(r Reference) error {
 		}
 		ref := strings.TrimSpace(r.Ref)
 		if ref == "" {
-			return &ValidationError{Field: "ref", Reason: "환경변수 이름이 비어 있습니다."}
+			return &ValidationError{Field: "ref", Reason: "환경변수 이름이 비어 있음."}
 		}
 		if !envNameRe.MatchString(ref) {
-			return &ValidationError{Field: "ref", Reason: "환경변수 이름이 올바르지 않습니다: " + ref}
+			return &ValidationError{Field: "ref", Reason: "환경변수 이름이 올바르지 않음: " + ref}
 		}
 	case SourceFile:
 		if err := rejectAWSOnlyFields(r); err != nil {
@@ -272,34 +272,34 @@ func Validate(r Reference) error {
 		}
 		ref := strings.TrimSpace(r.Ref)
 		if ref == "" {
-			return &ValidationError{Field: "ref", Reason: "파일 경로가 비어 있습니다."}
+			return &ValidationError{Field: "ref", Reason: "파일 경로가 비어 있음."}
 		}
 		if controlRe.MatchString(ref) {
-			return &ValidationError{Field: "ref", Reason: "파일 경로에 제어 문자를 사용할 수 없습니다."}
+			return &ValidationError{Field: "ref", Reason: "파일 경로에 제어 문자 사용 불가."}
 		}
 		if strings.HasSuffix(ref, string(filepath.Separator)) {
-			return &ValidationError{Field: "ref", Reason: "파일 경로가 폴더로 끝납니다: " + ref}
+			return &ValidationError{Field: "ref", Reason: "파일 경로가 폴더로 끝남: " + ref}
 		}
 	case SourceAWS:
 		if err := validateAWSReference(r); err != nil {
 			return err
 		}
 	default:
-		return &ValidationError{Field: "source", Reason: "지원하지 않는 원본 종류입니다: " + string(r.Source)}
+		return &ValidationError{Field: "source", Reason: "지원하지 않는 원본 종류: " + string(r.Source)}
 	}
 
 	target := r.EffectiveTarget()
 	if target == "" {
-		return &ValidationError{Field: "target", Reason: "전달 대상 이름을 정할 수 없습니다. target을 지정하세요."}
+		return &ValidationError{Field: "target", Reason: "전달 대상 이름 정 불가. target을 지정."}
 	}
 	if controlRe.MatchString(target) || strings.ContainsAny(target, " \t/\\") || target == "." || target == ".." {
-		return &ValidationError{Field: "target", Reason: "target 이름이 올바르지 않습니다: " + target}
+		return &ValidationError{Field: "target", Reason: "target 이름이 올바르지 않음: " + target}
 	}
 	if r.Delivery == DeliveryEnvironment && !envNameRe.MatchString(target) {
-		return &ValidationError{Field: "target", Reason: "target 환경변수 이름이 올바르지 않습니다: " + target}
+		return &ValidationError{Field: "target", Reason: "target 환경변수 이름이 올바르지 않음: " + target}
 	}
 	if r.Delivery == DeliveryFile && !secretNameRe.MatchString(target) {
-		return &ValidationError{Field: "target", Reason: "target 파일 비밀값 이름이 올바르지 않습니다: " + target}
+		return &ValidationError{Field: "target", Reason: "target 파일 비밀값 이름이 올바르지 않음: " + target}
 	}
 	return nil
 }
@@ -315,7 +315,7 @@ func validateAWSReference(r Reference) error {
 	// target keeps the container variable/file name intentional instead of
 	// deriving it from an ARN suffix.
 	if strings.TrimSpace(r.Target) == "" {
-		return &ValidationError{Field: "target", Reason: "AWS 원본은 전달 대상 이름을 target으로 지정해야 합니다."}
+		return &ValidationError{Field: "target", Reason: "AWS 원본은 전달 대상 이름을 target으로 지정 필요."}
 	}
 	return nil
 }
@@ -325,39 +325,39 @@ func validateAWSReference(r Reference) error {
 func validateAWSSelector(r Reference) error {
 	ref := strings.TrimSpace(r.Ref)
 	if ref == "" {
-		return &ValidationError{Field: "ref", Reason: "ref(AWS 비밀값 이름 또는 ARN)가 비어 있습니다."}
+		return &ValidationError{Field: "ref", Reason: "ref(AWS 비밀값 이름 또는 ARN)가 비어 있음."}
 	}
 	if len(ref) > 2048 || controlRe.MatchString(ref) {
-		return &ValidationError{Field: "ref", Reason: "ref(AWS 비밀값 이름 또는 ARN)에 사용할 수 없는 문자가 있습니다."}
+		return &ValidationError{Field: "ref", Reason: "ref(AWS 비밀값 이름 또는 ARN)에 사용할 수 없는 문자가 있음."}
 	}
 	if strings.HasPrefix(ref, "-") {
-		return &ValidationError{Field: "ref", Reason: "ref는 '-'로 시작할 수 없습니다."}
+		return &ValidationError{Field: "ref", Reason: "ref는 '-'로 시작 불가."}
 	}
 	switch {
 	case awsSecretNameRe.MatchString(ref):
 	case awsARNRe.MatchString(ref):
 	default:
 		if strings.Contains(ref, ":") {
-			return &ValidationError{Field: "ref", Reason: "ref 값이 AWS Secrets Manager ARN 형식이 아닙니다: " + ref}
+			return &ValidationError{Field: "ref", Reason: "ref 값이 AWS Secrets Manager ARN 형식이 아님: " + ref}
 		}
-		return &ValidationError{Field: "ref", Reason: "ref 값에 사용할 수 없는 문자가 있습니다: " + ref}
+		return &ValidationError{Field: "ref", Reason: "ref 값에 사용할 수 없는 문자가 있음: " + ref}
 	}
 
 	if field := strings.TrimSpace(r.Field); field != "" {
 		if len(field) > 512 || controlRe.MatchString(field) {
-			return &ValidationError{Field: "field", Reason: "field 경로에 사용할 수 없는 문자가 있습니다."}
+			return &ValidationError{Field: "field", Reason: "field 경로에 사용할 수 없는 문자가 있음."}
 		}
 		for _, segment := range strings.Split(field, ".") {
 			if !awsFieldSegmentRe.MatchString(segment) {
-				return &ValidationError{Field: "field", Reason: "field 경로가 올바르지 않습니다: " + field}
+				return &ValidationError{Field: "field", Reason: "field 경로가 올바르지 않음: " + field}
 			}
 		}
 	}
 	if region := strings.TrimSpace(r.Region); region != "" && !awsRegionRe.MatchString(region) {
-		return &ValidationError{Field: "region", Reason: "region(리전) 값이 올바르지 않습니다: " + region}
+		return &ValidationError{Field: "region", Reason: "region(리전) 값이 올바르지 않음: " + region}
 	}
 	if profile := strings.TrimSpace(r.Profile); profile != "" && !awsProfileRe.MatchString(profile) {
-		return &ValidationError{Field: "profile", Reason: "profile 이름이 올바르지 않습니다: " + profile}
+		return &ValidationError{Field: "profile", Reason: "profile 이름이 올바르지 않음: " + profile}
 	}
 	return nil
 }
@@ -367,13 +367,13 @@ func validateAWSSelector(r Reference) error {
 // connection look different from what is delivered.
 func rejectAWSOnlyFields(r Reference) error {
 	if strings.TrimSpace(r.Field) != "" {
-		return &ValidationError{Field: "field", Reason: "field 항목은 source: aws일 때만 사용할 수 있습니다."}
+		return &ValidationError{Field: "field", Reason: "field 항목은 source: aws일 때만 사용 가능."}
 	}
 	if strings.TrimSpace(r.Region) != "" {
-		return &ValidationError{Field: "region", Reason: "region(리전) 항목은 source: aws일 때만 사용할 수 있습니다."}
+		return &ValidationError{Field: "region", Reason: "region(리전) 항목은 source: aws일 때만 사용 가능."}
 	}
 	if strings.TrimSpace(r.Profile) != "" {
-		return &ValidationError{Field: "profile", Reason: "profile 항목은 source: aws일 때만 사용할 수 있습니다."}
+		return &ValidationError{Field: "profile", Reason: "profile 항목은 source: aws일 때만 사용 가능."}
 	}
 	return nil
 }

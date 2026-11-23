@@ -50,7 +50,7 @@ type Runtime struct {
 // application was not wired with the secret runtime. It is a programming
 // error, never a silent no-op.
 func Unavailable() *core.Error {
-	return applyError("비밀값 전달 연결이 준비되지 않았습니다.", "secret runtime is not configured")
+	return applyError("비밀값 전달 연결이 준비되지 않았음.", "secret runtime is not configured")
 }
 
 // NewRuntime builds the runtime. getenv should return the process environment
@@ -139,14 +139,14 @@ func (r *Runtime) prepare(ctx context.Context, target core.Target, refs []Refere
 		return Session{}, err
 	}
 	if r == nil || r.dirs == nil {
-		return Session{}, applyError("비밀값 전달을 준비할 수 없습니다.", "state directories are not configured")
+		return Session{}, applyError("비밀값 전달 준비 불가.", "state directories are not configured")
 	}
 	if strings.TrimSpace(target.ProjectDir) == "" {
-		return Session{}, applyError("비밀값 전달 대상 폴더를 확인할 수 없습니다.", "target has no project folder")
+		return Session{}, applyError("비밀값 전달 대상 폴더 확인 불가.", "target has no project folder")
 	}
 	stackDir, err := r.dirs.StackDir(target)
 	if err != nil {
-		return Session{}, applyError("비밀값 전달 상태 폴더를 확인할 수 없습니다.", err.Error())
+		return Session{}, applyError("비밀값 전달 상태 폴더 확인 불가.", err.Error())
 	}
 	session := Session{
 		runtime:      r,
@@ -168,7 +168,7 @@ func (r *Runtime) prepare(ctx context.Context, target core.Target, refs []Refere
 		// success. Build-phase references are never runtime delivery.
 		if !explicit && mode == ModeCreate {
 			if err := os.Remove(session.overridePath); err != nil && !errors.Is(err, fs.ErrNotExist) {
-				return Session{}, applyError("dcraft 관리 Compose override를 정리하지 못했습니다.", err.Error())
+				return Session{}, applyError("dcraft 관리 Compose override 정리 실패.", err.Error())
 			}
 		}
 		return session, nil
@@ -209,7 +209,7 @@ func (r *Runtime) prepare(ctx context.Context, target core.Target, refs []Refere
 			}
 			items = append(items, resolvedItem{ref: ref, value: value})
 		default:
-			return Session{}, applyError("지원하지 않는 비밀값 원본입니다.", string(ref.Source))
+			return Session{}, applyError("지원하지 않는 비밀값 원본.", string(ref.Source))
 		}
 	}
 	for _, item := range items {
@@ -219,7 +219,7 @@ func (r *Runtime) prepare(ctx context.Context, target core.Target, refs []Refere
 	if mode == ModeFiles {
 		if len(items) > 0 {
 			if err := os.MkdirAll(session.secretsDir, 0o700); err != nil {
-				return Session{}, applyError("비밀값 전달 폴더를 만들지 못했습니다.", err.Error())
+				return Session{}, applyError("비밀값 전달 폴더 만들지 못함.", err.Error())
 			}
 		}
 		for _, item := range items {
@@ -241,7 +241,7 @@ func (r *Runtime) prepare(ctx context.Context, target core.Target, refs []Refere
 		return Session{}, err
 	}
 	if err := os.MkdirAll(session.secretsDir, 0o700); err != nil {
-		return Session{}, applyError("비밀값 전달 폴더를 만들지 못했습니다.", err.Error())
+		return Session{}, applyError("비밀값 전달 폴더 만들지 못함.", err.Error())
 	}
 	for _, item := range items {
 		if err := ctx.Err(); err != nil {
@@ -501,7 +501,7 @@ func (s *Session) ensureMaterialized(ref Reference, value []byte) error {
 	if info, err := os.Lstat(path); err == nil {
 		if !info.Mode().IsRegular() {
 			if err := os.Remove(path); err != nil {
-				return applyError("이전 비밀값 전달 파일을 정리하지 못했습니다.", err.Error())
+				return applyError("이전 비밀값 전달 파일 정리 실패.", err.Error())
 			}
 			s.created = append(s.created, path)
 		} else {
@@ -512,22 +512,22 @@ func (s *Session) ensureMaterialized(ref Reference, value []byte) error {
 	}
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
-		return applyError("비밀값 전달 파일을 만들지 못했습니다.", err.Error())
+		return applyError("비밀값 전달 파일 만들지 못함.", err.Error())
 	}
 	if err := f.Chmod(0o600); err != nil {
 		_ = f.Close()
-		return applyError("비밀값 전달 파일 권한을 설정하지 못했습니다.", err.Error())
+		return applyError("비밀값 전달 파일 권한 설정 실패.", err.Error())
 	}
 	if _, err := f.Write(value); err != nil {
 		_ = f.Close()
-		return applyError("비밀값 전달 파일을 쓰지 못했습니다.", err.Error())
+		return applyError("비밀값 전달 파일 쓰지 못함.", err.Error())
 	}
 	if err := f.Sync(); err != nil {
 		_ = f.Close()
-		return applyError("비밀값 전달 파일을 저장하지 못했습니다.", err.Error())
+		return applyError("비밀값 전달 파일 저장 실패.", err.Error())
 	}
 	if err := f.Close(); err != nil {
-		return applyError("비밀값 전달 파일을 닫지 못했습니다.", err.Error())
+		return applyError("비밀값 전달 파일 닫지 못함.", err.Error())
 	}
 	return nil
 }
@@ -569,7 +569,7 @@ func (r *Runtime) writeOverride(target core.Target, session *Session, items []re
 	}
 	data, err := yaml.Marshal(doc)
 	if err != nil {
-		return applyError("dcraft 관리 Compose override를 만들지 못했습니다.", err.Error())
+		return applyError("dcraft 관리 Compose override 만들지 못함.", err.Error())
 	}
 	header := "# dcraft-managed runtime secret override. Do not edit; dcraft regenerates it.\n"
 	if _, err := os.Stat(session.overridePath); err == nil {
@@ -577,23 +577,23 @@ func (r *Runtime) writeOverride(target core.Target, session *Session, items []re
 	}
 	tmp, err := os.CreateTemp(filepath.Dir(session.overridePath), ".compose-secrets-*.tmp")
 	if err != nil {
-		return applyError("dcraft 관리 Compose override를 쓰지 못했습니다.", err.Error())
+		return applyError("dcraft 관리 Compose override 쓰지 못함.", err.Error())
 	}
 	tmpName := tmp.Name()
 	defer func() { _ = os.Remove(tmpName) }()
 	if err := tmp.Chmod(0o600); err != nil {
 		_ = tmp.Close()
-		return applyError("dcraft 관리 Compose override 권한을 설정하지 못했습니다.", err.Error())
+		return applyError("dcraft 관리 Compose override 권한 설정 실패.", err.Error())
 	}
 	if _, err := tmp.Write(append([]byte(header), data...)); err != nil {
 		_ = tmp.Close()
-		return applyError("dcraft 관리 Compose override를 쓰지 못했습니다.", err.Error())
+		return applyError("dcraft 관리 Compose override 쓰지 못함.", err.Error())
 	}
 	if err := tmp.Close(); err != nil {
-		return applyError("dcraft 관리 Compose override를 쓰지 못했습니다.", err.Error())
+		return applyError("dcraft 관리 Compose override 쓰지 못함.", err.Error())
 	}
 	if err := os.Rename(tmpName, session.overridePath); err != nil {
-		return applyError("dcraft 관리 Compose override를 적용하지 못했습니다.", err.Error())
+		return applyError("dcraft 관리 Compose override 적용 실패.", err.Error())
 	}
 	session.wroteOverride = true
 	session.Files = []string{session.overridePath}
@@ -603,11 +603,11 @@ func (r *Runtime) writeOverride(target core.Target, session *Session, items []re
 func (r *Runtime) checkStateOutsideProject(projectDir, stackDir string) error {
 	project, err := filepath.Abs(projectDir)
 	if err != nil {
-		return applyError("프로젝트 폴더를 확인할 수 없습니다.", err.Error())
+		return applyError("프로젝트 폴더 확인 불가.", err.Error())
 	}
 	state, err := filepath.Abs(stackDir)
 	if err != nil {
-		return applyError("상태 폴더를 확인할 수 없습니다.", err.Error())
+		return applyError("상태 폴더 확인 불가.", err.Error())
 	}
 	rel, err := filepath.Rel(project, state)
 	if err != nil {
@@ -624,11 +624,11 @@ func (r *Runtime) checkStateOutsideProject(projectDir, stackDir string) error {
 // exist.
 func (r *Runtime) OverridePath(target core.Target) (string, error) {
 	if r == nil || r.dirs == nil {
-		return "", applyError("비밀값 전달을 준비할 수 없습니다.", "state directories are not configured")
+		return "", applyError("비밀값 전달 준비 불가.", "state directories are not configured")
 	}
 	stackDir, err := r.dirs.StackDir(target)
 	if err != nil {
-		return "", applyError("비밀값 전달 상태 폴더를 확인할 수 없습니다.", err.Error())
+		return "", applyError("비밀값 전달 상태 폴더 확인 불가.", err.Error())
 	}
 	return filepath.Join(stackDir, "compose.secrets.yaml"), nil
 }
@@ -637,11 +637,11 @@ func (r *Runtime) OverridePath(target core.Target) (string, error) {
 // delivery reference.
 func (r *Runtime) MaterializedPath(target core.Target, ref Reference) (string, error) {
 	if r == nil || r.dirs == nil {
-		return "", applyError("비밀값 전달을 준비할 수 없습니다.", "state directories are not configured")
+		return "", applyError("비밀값 전달 준비 불가.", "state directories are not configured")
 	}
 	stackDir, err := r.dirs.StackDir(target)
 	if err != nil {
-		return "", applyError("비밀값 전달 상태 폴더를 확인할 수 없습니다.", err.Error())
+		return "", applyError("비밀값 전달 상태 폴더 확인 불가.", err.Error())
 	}
 	return filepath.Join(stackDir, "secrets", materializedName(ref)), nil
 }
@@ -658,7 +658,7 @@ func (r *Runtime) RemoveMaterialized(target core.Target, ref Reference) error {
 		return err
 	}
 	if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return applyError("비밀값 전달 파일을 정리하지 못했습니다.", err.Error())
+		return applyError("비밀값 전달 파일 정리 실패.", err.Error())
 	}
 	return nil
 }
@@ -673,16 +673,16 @@ func (r *Runtime) CleanupStack(target core.Target) error {
 	}
 	stackDir, err := r.dirs.StackDir(target)
 	if err != nil {
-		return applyError("비밀값 전달 상태 폴더를 확인할 수 없습니다.", err.Error())
+		return applyError("비밀값 전달 상태 폴더 확인 불가.", err.Error())
 	}
 	for _, name := range []string{"compose.secrets.yaml", buildOverrideName} {
 		if err := os.Remove(filepath.Join(stackDir, name)); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return applyError("dcraft 관리 Compose override를 정리하지 못했습니다.", err.Error())
+			return applyError("dcraft 관리 Compose override 정리 실패.", err.Error())
 		}
 	}
 	for _, dir := range []string{"secrets", buildSecretsDir} {
 		if err := os.RemoveAll(filepath.Join(stackDir, dir)); err != nil {
-			return applyError("비밀값 전달 파일을 정리하지 못했습니다.", err.Error())
+			return applyError("비밀값 전달 파일 정리 실패.", err.Error())
 		}
 	}
 	return nil
@@ -699,7 +699,7 @@ func (r *Runtime) RegenerateOverride(target core.Target) error {
 	}
 	stackDir, err := r.dirs.StackDir(target)
 	if err != nil {
-		return applyError("비밀값 전달 상태 폴더를 확인할 수 없습니다.", err.Error())
+		return applyError("비밀값 전달 상태 폴더 확인 불가.", err.Error())
 	}
 	cat, err := Load(target.ProjectDir)
 	if err != nil {
@@ -710,11 +710,11 @@ func (r *Runtime) RegenerateOverride(target core.Target) error {
 	runtimeRefs := cat.ForPhase(PhaseRuntime)
 	if len(runtimeRefs) == 0 {
 		if err := os.Remove(runtimePath); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return applyError("dcraft 관리 Compose override를 정리하지 못했습니다.", err.Error())
+			return applyError("dcraft 관리 Compose override 정리 실패.", err.Error())
 		}
 	} else {
 		if err := os.MkdirAll(stackDir, 0o700); err != nil {
-			return applyError("비밀값 전달 상태 폴더를 만들지 못했습니다.", err.Error())
+			return applyError("비밀값 전달 상태 폴더 만들지 못함.", err.Error())
 		}
 		doc := overrideDoc{Services: map[string]overrideService{}}
 		fileSecrets := map[string]overrideSecret{}
@@ -742,7 +742,7 @@ func (r *Runtime) RegenerateOverride(target core.Target) error {
 		}
 		data, err := yaml.Marshal(doc)
 		if err != nil {
-			return applyError("dcraft 관리 Compose override를 만들지 못했습니다.", err.Error())
+			return applyError("dcraft 관리 Compose override 만들지 못함.", err.Error())
 		}
 		header := "# dcraft-managed runtime secret override. Do not edit; dcraft regenerates it.\n"
 		if err := writePrivateFile(runtimePath, append([]byte(header), data...)); err != nil {

@@ -1,9 +1,12 @@
 package lifecycle_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -348,7 +351,7 @@ func TestBusyStackFailsWithoutWaitingAndNamesTheHolder(t *testing.T) {
 	if !strings.Contains(ce.Diagnostics[0].Detail, "down") && !strings.Contains(ce.Diagnostics[0].Message, "down") {
 		t.Fatalf("busy diagnostic does not name the holder: %+v", ce.Diagnostics[0])
 	}
-	if strings.Contains(strings.Join(ce.Diagnostics[0].NextActions, " "), "기다리") &&
+	if strings.Contains(strings.Join(ce.Diagnostics[0].NextActions, " "), "기다리기") &&
 		!strings.Contains(strings.Join(ce.Diagnostics[0].NextActions, " "), "끝난 뒤") {
 		t.Fatalf("next actions suggest unbounded waiting: %v", ce.Diagnostics[0].NextActions)
 	}
@@ -463,7 +466,7 @@ func TestActionFailureWithoutObservableStateStillReportsTheStage(t *testing.T) {
 	if !errors.As(err, &ce) || ce.Diagnostics[0].Category != core.CategoryLifecycleFailed {
 		t.Fatalf("err = %v", err)
 	}
-	if !strings.Contains(ce.Diagnostics[0].Message, "확인하지 못했습니다") {
+	if !strings.Contains(ce.Diagnostics[0].Message, "확인 실패") {
 		t.Fatalf("missing observation caveat: %+v", ce.Diagnostics[0])
 	}
 	rep := in.Reporter.(*reporter)
@@ -502,7 +505,7 @@ func TestObservationFailureDoesNotTurnACompletedChangeIntoFailure(t *testing.T) 
 	if payload.Lifecycle.State != nil {
 		t.Fatalf("state = %+v, want unknown", payload.Lifecycle.State)
 	}
-	if len(payload.Lifecycle.Notices) != 1 || !strings.Contains(payload.Lifecycle.Notices[0], "확인하지 못했습니다") {
+	if len(payload.Lifecycle.Notices) != 1 || !strings.Contains(payload.Lifecycle.Notices[0], "확인 실패") {
 		t.Fatalf("notices = %v", payload.Lifecycle.Notices)
 	}
 	if rep := in.Reporter.(*reporter); rep.status("observe") != core.StageFailed {
@@ -550,7 +553,7 @@ func TestConfigFailureStopsBeforeAllocation(t *testing.T) {
 	h := newHarness(t)
 	h.identity.configErr = core.Fail(core.Diagnostic{
 		Category: core.CategoryInvalidConfiguration, Severity: core.SeverityError,
-		Message: "Compose 설정을 읽을 수 없습니다.",
+		Message: "Compose 설정을 읽을 수 없음.",
 	})
 	_, err := h.run(t, lifecycle.ActionUp, invocation())
 	if category(err) != core.CategoryInvalidConfiguration {
@@ -592,6 +595,98 @@ func TestPayloadIsMachineReadable(t *testing.T) {
 	}
 	if decoded.Lifecycle.Action != "up" || decoded.Lifecycle.Services == nil || decoded.Lifecycle.Notices == nil {
 		t.Fatalf("payload = %+v\n%s", decoded.Lifecycle, data)
+	}
+}
+
+// streamingLifecycle adds the optional progress capability to the fake. Only
+// UpProgress writes; the other actions keep the captured path the same way a
+// real adapter does.
+type streamingLifecycle struct {
+	*fakeLifecycle
+	mu         sync.Mutex
+	upStreamed int
+}
+
+func (f *streamingLifecycle) UpProgress(ctx context.Context, t core.Target, services []string, progress io.Writer) (stack.OpResult, error) {
+	f.mu.Lock()
+	f.upStreamed++
+	f.mu.Unlock()
+	if progress != nil {
+		_, _ = fmt.Fprintln(progress, "fake compose: pulling web")
+	}
+	return f.record(ctx, "up", t, services)
+}
+
+func (f *streamingLifecycle) streamed() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.upStreamed
+}
+
+func TestProgressWriterStreamsUpOnly(t *testing.T) {
+	h := newHarness(t)
+	stream := &streamingLifecycle{fakeLifecycle: h.life}
+	h.controller = lifecycle.New(stream, h.identity, h.backend, h.store, core.SystemClock{})
+
+	var progress bytes.Buffer
+	in := invocation()
+	in.IO.Progress = &progress
+	if _, err := h.run(t, lifecycle.ActionUp, in); err != nil {
+		t.Fatalf("up: %v", err)
+	}
+	if got := stream.streamed(); got != 1 {
+		t.Fatalf("UpProgress calls = %d, want 1", got)
+	}
+	if !strings.Contains(progress.String(), "fake compose: pulling web") {
+		t.Fatalf("progress = %q", progress.String())
+	}
+	if calls := h.life.callNames(); strings.Join(calls, ",") != "up" {
+		t.Fatalf("lifecycle calls = %v", calls)
+	}
+
+	// The same writer on another action must not be used: only up streams.
+	progress.Reset()
+	in = invocation("web")
+	in.IO.Progress = &progress
+	if _, err := h.run(t, lifecycle.ActionStop, in); err != nil {
+		t.Fatalf("stop: %v", err)
+	}
+	if got := stream.streamed(); got != 1 {
+		t.Fatalf("UpProgress called for stop: %d", got)
+	}
+	if progress.Len() != 0 {
+		t.Fatalf("stop wrote progress %q", progress.String())
+	}
+}
+
+func TestProgressWriterFallsBackToCaptureWithoutTheCapability(t *testing.T) {
+	h := newHarness(t)
+	var progress bytes.Buffer
+	in := invocation()
+	in.IO.Progress = &progress
+	if _, err := h.run(t, lifecycle.ActionUp, in); err != nil {
+		t.Fatalf("up: %v", err)
+	}
+	if progress.Len() != 0 {
+		t.Fatalf("capture-only backend wrote progress %q", progress.String())
+	}
+	if calls := h.life.callNames(); strings.Join(calls, ",") != "up" {
+		t.Fatalf("lifecycle calls = %v", calls)
+	}
+}
+
+func TestNilProgressWriterKeepsTheCapturePath(t *testing.T) {
+	h := newHarness(t)
+	stream := &streamingLifecycle{fakeLifecycle: h.life}
+	h.controller = lifecycle.New(stream, h.identity, h.backend, h.store, core.SystemClock{})
+	if _, err := h.run(t, lifecycle.ActionUp, invocation()); err != nil {
+		t.Fatalf("up: %v", err)
+	}
+	if got := stream.streamed(); got != 0 {
+		t.Fatalf("nil writer streamed %d times", got)
+	}
+	if calls := h.life.callNames(); strings.Join(calls, ",") != "up" {
+		t.Fatalf("lifecycle calls = %v", calls)
 	}
 }
 

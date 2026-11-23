@@ -61,16 +61,16 @@ var (
 func ClassifyRef(raw string) (Kind, string, error) {
 	ref := strings.TrimSpace(raw)
 	if ref == "" {
-		return "", "", inputError("ref", "ref(브랜치·태그·전체 SHA)를 입력하세요.", "")
+		return "", "", inputError("ref", "ref(브랜치·태그·전체 SHA)를 입력.", "")
 	}
 	if hasControl(ref) {
-		return "", "", inputError("ref", "ref에 허용되지 않는 제어 문자가 있습니다.", "")
+		return "", "", inputError("ref", "ref에 허용되지 않는 제어 문자가 있음.", "")
 	}
 	if strings.HasPrefix(ref, "-") {
-		return "", "", inputError("ref", "ref는 -로 시작할 수 없습니다.", ref)
+		return "", "", inputError("ref", "ref는 -로 시작 불가.", ref)
 	}
 	if strings.EqualFold(ref, "HEAD") {
-		return "", "", inputError("ref", "HEAD 대신 branch, tag 또는 전체 SHA를 지정하세요.", ref)
+		return "", "", inputError("ref", "HEAD 대신 branch, tag 또는 전체 SHA를 지정.", ref)
 	}
 	switch {
 	case fullSHARe.MatchString(ref):
@@ -88,9 +88,9 @@ func ClassifyRef(raw string) (Kind, string, error) {
 		}
 		return KindTag, short, nil
 	case strings.HasPrefix(ref, "refs/"):
-		return "", "", inputError("ref", "지원하지 않는 전체 ref 형식입니다. refs/heads/... 또는 refs/tags/...를 사용하세요.", ref)
+		return "", "", inputError("ref", "지원하지 않는 전체 ref 형식. refs/heads/... 또는 refs/tags/...를 사용.", ref)
 	case shortSHARe.MatchString(ref):
-		return "", "", inputError("ref", "짧은 SHA는 지원하지 않습니다. 40자(또는 64자) 전체 SHA를 입력하세요.", ref)
+		return "", "", inputError("ref", "짧은 SHA는 지원하지 않음. 40자(또는 64자) 전체 SHA를 입력.", ref)
 	default:
 		if err := validateShortRef("auto", ref); err != nil {
 			return "", "", err
@@ -101,23 +101,23 @@ func ClassifyRef(raw string) (Kind, string, error) {
 
 func validateShortRef(kind, ref string) error {
 	if ref == "" {
-		return inputError("ref", "ref 이름이 비어 있습니다.", "")
+		return inputError("ref", "ref 이름이 비어 있음.", "")
 	}
 	if strings.HasPrefix(ref, "/") || strings.HasSuffix(ref, "/") || strings.Contains(ref, "//") {
-		return inputError("ref", "ref 이름의 / 위치가 올바르지 않습니다.", ref)
+		return inputError("ref", "ref 이름의 / 위치가 올바르지 않음.", ref)
 	}
 	if strings.HasSuffix(ref, ".") {
-		return inputError("ref", "ref 이름은 .로 끝날 수 없습니다.", ref)
+		return inputError("ref", "ref 이름은 .로 끝날 수 없음.", ref)
 	}
 	if strings.Contains(ref, "..") {
-		return inputError("ref", "ref 이름에 ..를 사용할 수 없습니다.", ref)
+		return inputError("ref", "ref 이름에 .. 사용 불가.", ref)
 	}
 	if strings.ContainsAny(ref, " ~^:?*[\\\t") || strings.Contains(ref, "@{") {
-		return inputError("ref", "ref 이름에 Git이 허용하지 않는 문자가 있습니다.", ref)
+		return inputError("ref", "ref 이름에 Git이 허용하지 않는 문자가 있음.", ref)
 	}
 	for _, part := range strings.Split(ref, "/") {
 		if part == "" || part == "." || part == ".." || strings.HasPrefix(part, ".") || strings.HasSuffix(part, ".lock") {
-			return inputError("ref", "ref 이름의 경로 구성 요소가 올바르지 않습니다.", ref)
+			return inputError("ref", "ref 이름의 경로 구성 요소가 올바르지 않음.", ref)
 		}
 	}
 	if kind != "auto" {
@@ -141,17 +141,17 @@ func hasControl(value string) bool {
 func Build(in Input) (Generated, error) {
 	repo := strings.TrimSpace(in.Repository)
 	if repo == "" {
-		return Generated{}, inputError("repo", "저장소 URL 또는 경로를 입력하세요.", "")
+		return Generated{}, inputError("repo", "저장소 URL 또는 경로 입력.", "")
 	}
 	if hasControl(repo) {
-		return Generated{}, inputError("repo", "저장소 값에 허용되지 않는 제어 문자가 있습니다.", "")
+		return Generated{}, inputError("repo", "저장소 값에 허용되지 않는 제어 문자가 있음.", "")
 	}
 	if strings.HasPrefix(repo, "-") {
-		return Generated{}, inputError("repo", "저장소 값은 -로 시작할 수 없습니다.", repo)
+		return Generated{}, inputError("repo", "저장소 값은 -로 시작 불가.", repo)
 	}
 	if credentialsInRepo(repo) {
 		return Generated{}, inputError("repo",
-			"저장소 URL에 인증 정보가 들어 있습니다. 기존 credential helper 또는 SSH agent를 사용하고 URL에서는 인증 정보를 빼세요.", repo)
+			"저장소 URL에 인증 정보가 들어 있음. 기존 credential helper 또는 SSH agent를 사용하고 URL에서는 인증 정보를 빼.", repo)
 	}
 	kind, short, err := ClassifyRef(in.Ref)
 	if err != nil {
@@ -159,10 +159,10 @@ func Build(in Input) (Generated, error) {
 	}
 	stage := strings.TrimSpace(in.Stage)
 	if stage != "pre" && stage != "post" {
-		return Generated{}, inputError("stage", "실행 시점은 pre 또는 post여야 합니다.", stage)
+		return Generated{}, inputError("stage", "실행 시점은 pre 또는 post여야 함.", stage)
 	}
 	if in.Layout.ProjectDir == "" || in.Layout.Destination == "" || in.Layout.ScriptPath == "" {
-		return Generated{}, inputError("layout", "프로젝트·받을 폴더·스크립트 경로가 모두 필요합니다.", "")
+		return Generated{}, inputError("layout", "프로젝트·받을 폴더·스크립트 경로가 모두 필요.", "")
 	}
 
 	content := render(renderInput{
@@ -177,7 +177,7 @@ func Build(in Input) (Generated, error) {
 	if info, statErr := os.Lstat(in.Layout.ScriptPath); statErr == nil {
 		existed = true
 		if info.IsDir() || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
-			return Generated{}, inputError("output", "스크립트 경로가 일반 파일이 아닙니다. 안전을 위해 덮어쓰지 않습니다.", in.Layout.ScriptPath)
+			return Generated{}, inputError("output", "스크립트 경로가 일반 파일이 아님. 안전을 위해 덮어쓰지 않음.", in.Layout.ScriptPath)
 		}
 	} else if !os.IsNotExist(statErr) {
 		return Generated{}, statErr

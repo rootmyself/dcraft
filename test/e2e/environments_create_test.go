@@ -175,29 +175,29 @@ func TestEnvironmentTUIWizardPreviewDeclineThenAccept(t *testing.T) {
 	}
 	hashes := map[string]string{compose: sha256File(t, compose)}
 	env := fake.env(t, t.TempDir())
-	down := strings.Repeat("\x1b[B", menuDownPresses(t, "environments"))
+	down := menuDown(t, "environments")
 
 	// Decline at the preview: esc must leave the folder untouched.
 	output, code := runPTYSteps(t, project, env, []ptyStep{
-		{waitText: "스택 상태 (status)"},
-		{waitText: "↑/↓ 선택"},
+		{waitText: "[↑↓] 이동"},
 		{send: down},
-		{waitText: "실행환경 별칭 (environments)", send: "\r"},
+		{waitText: "▸ 실행환경 별칭", send: "\r"},
+		{waitText: "새 별칭", send: "\r"},
 		{waitText: "별칭 이름", send: "dev\r"},
 		{waitText: "Compose 파일", send: "\r"},
-		{waitText: "환경 파일", send: ".env.dev\r"},
-		{waitText: "Compose 프로필", send: "dev\r"},
-		{waitText: "다음 실행환경 별칭을 저장할까요?"},
+		{waitText: "환경 파일", send: ".env.dev\r\r"},
+		{waitText: "Compose 프로필", send: "dev\r\r"},
+		{waitText: "실행환경 별칭 저장 확인"},
 		{waitText: "environments:"},
 		{send: "\x1b"},
-		{waitText: "저장된 내용은 없습니다"},
+		{waitText: "저장된 내용 없음"},
 		{send: "q"},
 	})
 	if code != 0 {
 		t.Fatalf("decline TUI exit = %d\n%s", code, output)
 	}
-	for _, want := range []string{"다음 실행환경 별칭을 저장할까요?", "compose.yaml", ".env.dev", "저장된 내용은 없습니다"} {
-		if !strings.Contains(output, want) {
+	for _, want := range []string{"실행환경 별칭 저장 확인", "compose.yaml", ".env.dev", "저장된 내용 없음"} {
+		if !screenContains(output, want) {
 			t.Fatalf("decline TUI output missing %q:\n%s", want, output)
 		}
 	}
@@ -211,16 +211,17 @@ func TestEnvironmentTUIWizardPreviewDeclineThenAccept(t *testing.T) {
 
 	// Accept the same flow: enter saves, then the presenter confirms.
 	output, code = runPTYSteps(t, project, env, []ptyStep{
-		{waitText: "스택 상태 (status)"},
-		{waitText: "↑/↓ 선택"},
+		{waitText: "[↑↓] 이동"},
 		{send: down},
-		{waitText: "실행환경 별칭 (environments)", send: "\r"},
+		{waitText: "▸ 실행환경 별칭", send: "\r"},
+		{waitText: "새 별칭", send: "\r"},
 		{waitText: "별칭 이름", send: "dev\r"},
 		{waitText: "Compose 파일", send: "\r"},
-		{waitText: "환경 파일", send: ".env.dev\r"},
-		{waitText: "Compose 프로필", send: "dev\r"},
-		{waitText: "다음 실행환경 별칭을 저장할까요?", send: "\r"},
-		{waitText: "별칭을 저장했습니다"},
+		{waitText: "환경 파일", send: ".env.dev\r\r"},
+		{waitText: "Compose 프로필", send: "dev\r\r"},
+		{waitText: "실행환경 별칭 저장 확인", send: "\r"},
+		{waitText: "별칭 저장"},
+		{waitText: "· dev"},
 		{send: "q"},
 	})
 	if code != 0 {

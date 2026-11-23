@@ -52,6 +52,7 @@ cmd/dcraft                 process entry, signal context, TTY check, exit codes
         +-- internal/features/all    feature registration files (one per feature)
         +-- internal/selector        service/instance selection (ticket #5)
         +-- internal/stack           Backend/read types + Lifecycle/Identity seams
+        +-- internal/stack/present   the one state/health label + badge mapping
         +-- internal/compose         Preflight + Inspect + Lifecycle adapter (Docker CLI)
         +-- internal/composeinstall  approved Compose plugin installation
         +-- internal/artifacts       HTTP download + atomic file-install boundary
@@ -80,6 +81,13 @@ Dependency rules:
 - `internal/identity` implements the read-only `core.IdentityReader` from the
   same `stack.Identity` and `state.Store` boundaries. It never writes, locks or
   creates state.
+- `internal/stack/present` is the one mapping from a stack state, health or
+  update readiness to its Korean label and badge kind. The status document, the
+  lifecycle document, the update document and the TUI service scope all consume
+  it, so the same input renders the same words everywhere. It lives beside
+  `internal/stack` rather than in `core` because `stack` imports `core`: putting
+  it in `core` would invert that dependency, and putting it in a feature would
+  recreate the fork it exists to prevent.
 
 ---
 
@@ -530,6 +538,7 @@ type core.Feature interface {
 |---|---|
 | `Name` | English command/machine name, `^[a-z][a-z0-9-]*$`, globally unique |
 | `Title`, `Summary`, `Usage` | Korean user-facing text |
+| `Section` | TUI navigation group: `inspect`, `operate`, `data`, `config`; required, the TUI derives the menu from it |
 | `ReadOnly` | no stack change; cannot require approval |
 | `Approval` | required `core.ApprovalKind` |
 | `RecordsHistory` | stack-changing feature whose success is written to history |
@@ -541,15 +550,25 @@ type core.Feature interface {
 | `Wizard` | TUI entry uses the generic guided flow (`core.Wizard`) instead of the generic confirmation screen; the CLI path is unchanged |
 | `Flags []core.Flag` | feature-owned flags parsed by the shared CLI |
 | `Hooks` | registered host-script scope; `HookUpUpdate` only on `up`/`update`, rejected on read-only features |
+| `Destructive` | irreversibly destroys or replaces user data or a running stack; independent of `Approval`, rejected on read-only features |
 
 Registry validation rejects duplicate names, invalid names, missing Korean text,
-read-only+approval combinations, read-only+history combinations,
-read-only+hooks combinations, a mutating primary feature without an independent
-approval (the TUI would otherwise run it as soon as it opens), a second
-primary, unknown preflight requirements, reserved flag names (`path`, `file`,
-`env-file`, `profile`, `project-name`, `env`, `json`, `approve`, `help`,
+a missing or unknown section, read-only+approval combinations,
+read-only+history combinations, read-only+hooks combinations,
+read-only+destructive combinations, a mutating primary feature without an
+independent approval (the TUI would otherwise run it as soon as it opens), a
+second primary, unknown preflight requirements, reserved flag names (`path`,
+`file`, `env-file`, `profile`, `project-name`, `env`, `json`, `approve`, `help`,
 `service`), reserved shorthands (`f`, `p`, `s`, `h`, `v`), duplicate flags and
 invalid bool defaults.
+
+`Registry.All()` keeps registration order; `Registry.BySection()` groups the
+same features by `SectionOrder` (`inspect`, `operate`, `data`, `config`) while
+preserving registration order inside each section. The TUI navigation is its
+consumer: `internal/ui/tui/nav.go` narrows the grouping by the active filter and
+maps it onto renderer items, and `Registry.All()` stays the source of the
+registration index the cursor holds. No other code re-implements the section
+grouping.
 
 ### Adding a feature (the only steps)
 
@@ -710,21 +729,24 @@ is in the payload and in every Compose call.
 ### TUI
 
 - The menu lists every registered feature in Korean. Selecting a mutating
-  feature first shows a confirmation screen with the requested target
+  feature first shows the shared confirmation panel with the requested target
   (path/files/profiles/project name), the exact scope and the effect. `enter`
   runs the same engine path, `esc` cancels, `q` quits without running.
   The TUI is not whole-stack-only: any feature whose descriptor declares
-  `SupportsServices` (up/stop/restart/update/logs at minimum) first shows a
-  read-only service list from the current stack (state, health and instance
-  count). The first row `전체 (스택 전체)` is selected by default; `space`
-  toggles individual services, `enter` confirms, and `esc`/`q` runs nothing.
-  The choice feeds `Request.Services` into the same plan/confirm/run path as
-  `-s/--service`, and the plan/confirm screen states the exact scope
-  (`스택 전체` or the service names), so an explicit selection never silently
-  widens back to the whole stack. A list that cannot be read is shown as a
-  failure and blocks the operation. Features that collect their own service
-  input keep it: the exec form and wizard steps are unchanged. Instance-level
-  selection remains specific to logs/exec.
+  `SupportsServices` (up/stop/restart/update/logs at minimum) first shows the
+  current stack as a read-only table with `선택 · 서비스 · 상태 · 인스턴스 ·
+  health · 이미지 · 포트`, so the choice is informed by state and ports. The
+  whole-stack row `전체 (스택 전체)` is pinned above the table and selected by
+  default; `space` toggles individual services, `enter` confirms, and `esc`/`q`
+  runs nothing. A service that is not in the active configuration is shown,
+  marked `현재 설정에 없음` and cannot be selected. The choice feeds
+  `Request.Services` into the same plan/confirm/run path as `-s/--service`, and
+  the confirmation panel states the exact scope (`스택 전체` or the service
+  names), so an explicit selection never silently widens back to the whole
+  stack. A list that cannot be read is shown as a failure and blocks the
+  operation. Features that collect their own service input keep it: the exec
+  form and wizard steps are unchanged. Instance-level selection remains
+  specific to logs/exec.
 - During an in-flight mutating operation, `q` explains that the operation is
   running and that quitting can leave partial effects (it does not orphan the
   Compose process). `ctrl+c` requests safe cancellation: the per-run context is
@@ -799,62 +821,221 @@ make a separate plan call; the result carries the same public metadata.
 ### TUI (`internal/ui/tui`)
 
 `tui.NewModel(ctx, Options)` is pure construction; `tui.Run` starts Bubble Tea.
-It derives everything from the registry:
+The interactive screen is a *shell* around *screens*, and the two are separate
+packages: `internal/ui/tui` owns the model, the screens and the key handling;
+`internal/ui/tui/visual` owns the theme, the frame geometry, the document
+renderer, the modal, the viewport and the keycap rows. Nothing in `visual` knows
+a feature name, a model field or the environment.
 
-- the primary feature runs immediately;
-- the body is the feature presenter on success or `view.Failure` on
-  failure/canceled, including warnings and stage list;
-- the stage sink shows the current stage while loading;
-- if more than one feature is registered, a Korean menu lists all features;
-  `↑/↓` select, `enter` runs the selected feature through the same engine;
-- if the folder registers environment aliases and no `--env` was given, the TUI
-  first lists them through `core.Engine.Environments` and requires an explicit
-  `↑/↓` + `enter` selection. Nothing is preselected; `q` quits without running
-  a feature. An explicit `--env` skips the screen. A broken alias file is not
-  hidden: running the feature surfaces the same `resolve_target` failure.
-- selecting a mutating feature that has no independent approval shows the small
-  confirmation screen (requested target and environment, exact service scope,
-  effect); `esc` returns to the menu;
-- for a `SupportsServices` feature the TUI first loads the current service list
-  through `core.Engine.Services` (the registered read-only `core.ServiceCatalog`,
-  implemented by `status` on its existing inspect path) and collects an explicit
-  scope. TUI selection is a convenience over the same engine rules: the selected
-  names travel in `Request.Services` and the feature validates them again. No
-  Docker call is made by the TUI package itself;
-- a feature that implements `core.Planner` starts the read-only plan screen
-  instead of the generic confirmation. For an approval-gated feature the plan is
-  the approval confirmation (flow below); for an ordinary `update` the same plan
-  is the target/planned-work preview and one `enter` runs it without an extra
-  approval kind;
-- a feature with `Descriptor.Wizard` starts the generic guided flow (`steps`
-  run, keyboard answers, effect preview, `apply` run). `backup` uses it to select
-  a mixed volume/bind selection and an output directory and to show
-  affected/running services before anything is stopped. The source step is the
-  published generic `Multi` step; the TUI adds no safety rule; the feature
-  rechecks selection, paths and consumers on the apply run. `environments`
-  uses the same flow to create an alias: it asks for a name, Compose files
-  (defaulted from discovery), env files and profiles, renders the exact
-  `.dcraft.yaml` section, and writes only after `enter` on the preview. The
-  preview states that aliases group Compose inputs only and do not isolate
-  external volumes, binds, networks or fixed host ports;
-- `r` re-runs read-only features directly, re-plans every Planner and asks for
-  confirmation again for other mutating features. The selected environment is
-  reused; `q` and `ctrl+c` quit outside an operation;
-- a live feature opens a live screen instead of the loading text. Logs stop
-  following with `q`/`esc`/`ctrl+c`; an attached command forwards keys and
-  detaches with `ctrl+]`. Both return to the management view, keep the last
-  output lines visible, and never stop a service;
-- a feature implementing `core.InputProvider` first opens the generic form
-  (`phaseForm`) fed by `Engine.Inputs`; `esc` runs nothing and the exact
-  service/instance/command values are shown before the feature runs;
-- normal quit is not an operation and does not touch services. During an
-  in-flight mutating operation `q` explains the risk; `ctrl+c` requests safe
-  cancellation and keeps the screen for the canceled result (see §5).
+#### Frame
+
+```
+row 1            header   (one row, surface plate)
+row 2 .. H-1     body     (sidebar + content, or content only)
+row H            footer   (one row of keycaps)
+```
+
+- The header states `dcraft · project · environment` on the left and the last
+  observed `Docker`/`Compose`/`로컬` facts on the right. It never polls: only a
+  plan, a service read or a run updates it. When cells are scarce the right side
+  is dropped first (the `로컬` suffix, then Compose, then all tool facts), and
+  only then does the left shrink to `dcraft · project` and finally `dcraft`:
+  stack identity outranks tool versions.
+- The footer is one row, never wrapped. It is the approved row of the current
+  phase (`menu`/`confirm`/`form`/`live`/`busy`) and shrinks by priority, never by
+  dropping everything: items at priority 0 (`enter`, `esc`, `q`) are never
+  removed. Screens whose keys are a strict superset of the phase row supply
+  their own row through `visual.Row` — the service scope table, the wizard
+  steps, the detail view, and the help panel — so the footer never advertises a
+  key that does nothing and never hides one that works.
+- `visual.Compose` returns exactly `height` rows of exactly `width` cells. A body
+  line wider than the frame is cut with the theme's explicit marker, never
+  silently clipped. `Frame.Overflow` is the only explicit overflow slot the
+  shell uses: the one pinned statement in the product is the confirmation risk,
+  and it lives inside the panel where it cannot be scrolled away or drawn twice.
+- Breakpoints use width and height only, never content length, so a resize
+  reflows and never renegotiates the mode: `≥100` columns is the two-pane layout,
+  `60–99` a single column, and `<60` columns or `<18` rows is compact (borders,
+  rules, descriptions and secondary columns dropped; badges and core values
+  kept). A resize keeps the selection, the scroll position and the current stage.
+
+#### Layout and navigation
+
+- Wide (`≥100`): a persistent left sidebar of `clamp(width×22/100, 26, 30)`
+  cells plus a one-cell gap, so the body gets `width − sidebar − 1`. The sidebar
+  lists the four sections the descriptors declare (`조회`/`운영`/`데이터`/`설정`)
+  in that fixed order, registration order inside each section, with the focused
+  entry's summary in a pinned band. A sidebar too short for both keeps its
+  entries and drops the band. Its title bar carries `esc 닫기` on the right; the
+  hint is dropped before the title when the pane is too narrow for both.
+- Medium (`60–99`) and compact-by-height (`<18` rows): a one-row navigation
+  summary under the header (`메뉴 · ▸ <title> · N개 기능` … `tab 펼치기`).
+  `tab`/`shift+tab` expands it in place into per-section counts; the row count
+  never changes, so opening the menu never costs the body a line. The summary
+  stays at every height because the current position must remain visible: without
+  it, `↑`/`↓` would move a cursor nothing on screen shows.
+- Compact (`<60` columns, or `<18` rows for decoration): a title row, the content
+  and the menu list; no borders, no descriptions. Compact is decided by width or
+  height, so a tall table on a short terminal folds to its leading columns even
+  though the terminal is wide.
+- The menu is derived entirely from the registry: section, Korean title, summary
+  and the `Destructive` flag come from `core.Descriptor`. A destructive entry
+  carries the danger glyph and the word `위험`, which is a text channel, not only
+  a color. `↑`/`↓`/`j`/`k` select with wrap-around, `enter` runs, `/` filters by
+  title or summary (with `esc` clearing it), `r` refreshes. The cursor is an index
+  into registration order and is never left on a hidden row, so it survives a
+  round trip to a result screen and a filter that hides it.
+- The TUI holds no feature-name list and branches on no feature name; a test
+  fails the build if a name literal appears in the package.
+
+#### Document model
+
+`core.Document` is the neutral body a feature can publish: heading, paragraph,
+key-value list, table, badges, callout, divider — seven blocks, no color, no
+width, no terminal knowledge. `core.ViewPresenter` is the optional capability
+(`Document(core.Result) core.Document`); the existing `core.Presenter` interface
+and its signature are unchanged.
+
+The resolution order is fixed and applied in one place
+(`resolveResult`): `ViewPresenter`, then `Presenter`, then
+`view.SuccessFallback`. A string presenter becomes a single paragraph block, so
+both paths render through one document surface. The CLI keeps its own
+`Presenter`-only order and always passes width `0`, so a feature gaining a
+document cannot change CLI output by accident — `internal/ui/cli` does not
+import the TUI or the visual layer at all.
+
+`internal/features/status` is the first structured feature; `up`, `stop`,
+`restart`, `down` and `update` still publish strings and render through the
+paragraph path. Adding a block kind is additive.
+
+The table renderer is where the column contract lives: fixed columns keep their
+exact width, flexible columns share the rest by weight and clamp to min/max, and
+the remainder is redistributed one cell at a time so a row fills the width
+exactly. When the minimums no longer fit, columns are dropped in the approved
+order — port, then image, then health — while `서비스 · 상태 · 인스턴스` are
+never dropped by width. Compact shows only the leading columns the screen names
+(two for the status table, three for the scope table). A cell that does not fit
+is cut with `…` (ASCII `~`) and its full value is recorded for the detail view;
+a state badge that cannot fit falls back to a shorter Korean label before it is
+cut, so `○ 컨테이너 없음` becomes `○ 미생성` rather than `○ 컨…`.
+
+#### Theme
+
+The theme is six semantic tokens (`accent`, `success`, `warning`, `danger`,
+`muted`, `surface`), a light and a dark palette, a color on/off decision and the
+UTF-8/ASCII glyph set. Background and foreground are the terminal's own colors;
+`surface` is the only token painted as a background plate.
+
+`visual.Resolve` is a pure function of explicit inputs: `DCRAFT_THEME`
+(`auto|light|dark`), `NO_COLOR`, `TERM`, the terminal color profile, the
+detected background brightness and the locale. `visual.Detect` gathers those
+inputs through an injected `getenv`, so no renderer reads the environment.
+`internal/ui/tui.resolveTheme` calls it once in `NewModel` and injects the
+result; a redraw cannot change color mid-session. Color is off for `NO_COLOR`,
+`TERM=dumb`, 16-color and non-TTY output, and `Theme.Paint`/`Bold` then return
+the string unchanged — so no escape sequence can reach a colorless path. A
+non-UTF-8 locale swaps only the decorative glyphs for one-cell ASCII forms; the
+Korean labels stay.
+
+Every state is an icon plus a Korean label plus a color, in that order of
+reliability: color is the third channel, never the only one.
+
+#### Body and screens
+
+- The result body is split into fixed rows (summary, table header), a scrollable
+  band and a tail (guidance). The header stays put while the rows scroll. When
+  even the fixed rows do not fit, the whole result becomes one band so no row is
+  unreachable. One layout function (`fitBand`) computes that split, and the drawn
+  rows, the title counter, the overflow hint, `bodyScrolls()` and the scroll key
+  handler all read its result: there is no second accounting pass that could
+  count a row the frame did not draw.
+- The scroll viewport is shared by the keys and the counter, so what is drawn and
+  what `PgUp` moves cannot disagree. Keys: `PgUp`/`PgDn`, `g`/`G`, `home`/`end`.
+  The table counter is the range form `first-last/total` and is computed from the
+  rows actually drawn. The old truncation notice is gone: content scrolls
+  instead of being cut.
+- A scrolling content list also carries the approved one-cell scrollbar gutter in
+  its last content cell: a blank track with a solid thumb (`█`, ASCII `#`) in the
+  accent token. It applies to the status table and the log viewport; the content
+  is laid out one cell narrower when it appears, so the thumb never covers a
+  value.
+- A truncated value opens in the detail view with `d` (advertised only when
+  something was cut) and is shown in full with a hanging indent; `esc`/`d`
+  closes it, `q` quits.
+- Confirmation and approval are one panel, not two screens: a centered surface
+  plate over the dimmed body, with exactly one keycap row (the frame footer).
+  The nine fields are in fixed order — `작업 · 대상 · 실행환경 · Compose 파일 ·
+  프로필 · 프로젝트 이름 · 범위 · 효과 · 위험` — and no field is deleted at any
+  width. The panel scrolls instead: a scrolling band, a `12/24 · PgUp/PgDn`
+  position row when it overflows, and a danger rule plus the pinned risk
+  statement below it. The pinned band is clamped to
+  `clamp(innerHeight/8, 1, 3)` rows and marks a cut with `…`; the remainder stays
+  reachable under `위험 · 이어서`. The panel height follows its content and is
+  vertically centered in the body. The dimming lowers the body's foreground to
+  `muted` and keeps the header and footer at full contrast, so the stack identity
+  and the available keys are always readable.
+- Progress is a spinner plus a stage timeline: completed (`✓`), current (a
+  spinner frame) and pending (`·`), each with the Korean stage title and the
+  shared status word (`완료`/`실패`/`중단`/`진행 중`/`예정`). The plan's own stages
+  are the backbone, so the timeline follows the engine's order and marks the
+  stages still ahead. A failed stage stays visible with its diagnostics. Compact
+  keeps the current stage and its immediate neighbours and states the omitted
+  rows explicitly.
+- The service scope screen is a table, not a checklist: `선택 · 서비스 · 상태 ·
+  인스턴스 · health · 이미지 · 포트`, with the whole-stack row pinned above it.
+  `space` toggles, `enter` confirms, `esc` runs nothing. Unconfigured services are
+  shown, marked `현재 설정에 없음` and cannot be selected. The cursor follows the
+  selection, so every row of a large stack is reachable.
+- The service selection is echoed unchanged on the confirmation panel; a subset
+  never silently widens to `스택 전체`.
+- Live logs and attached commands have a fixed header (service, instance,
+  command, and the promise that the service keeps running) and one scrolling
+  output band with a position row directly above the footer. `q`/`esc`/`ctrl+c`
+  close a log stream; an attached command forwards keys and detaches with
+  `ctrl+]`. Closing a live screen cancels the run context and never stops a
+  service. The last output stays visible as a titled panel on the management
+  screen, and the lines it had to omit are stated.
+- The wizard is the generic guided flow: `단계 1/4` (counted over the visible
+  steps, so a conditional step changes the denominator), the step title, the
+  prompt, choice cards or `[ ]`/`[x]` checkboxes, and a visible end caret for a
+  typed answer. A missing required value is refused inline, under the field. The
+  preview panel lists every collected answer as the apply will send it; a long
+  preview scrolls. An approval-gated apply routes through the same generic
+  confirmation panel — there is exactly one approval surface.
+- `?` opens a help panel that lists the keycaps of the screen it was opened from
+  (it reads the same row the footer draws); `esc` closes it and runs nothing. A
+  screen whose `?` is text (a filter field, a wizard answer) does not advertise
+  it.
+- Screens with two competing scroll lists do not fight for the keys: a long
+  result hides the menu until `esc` puts the sheet away, and the result value is
+  not discarded.
+
+#### Keys
+
+Every pre-redesign key keeps its meaning: `↑`/`↓`/`j`/`k`, `enter`, `esc`, `r`,
+`q`, `ctrl+c`, `ctrl+]`, `space`, `tab`/`shift+tab`. Added: `/` filter, `PgUp`/
+`PgDn`, `g`/`G`, `home`/`end`, `d` detail, `?` help. Mouse input is out of
+scope.
+
+#### Approval: one key, on purpose
+
+The approved decision sheet's confirm footer says `[space] 승인`. The shipped
+screen approves with `enter` only, and `space` deliberately does nothing. The
+reason is the constraint that approval and safety rules must not change: `enter`
+was the accept key before the redesign, the footer advertises exactly the keys
+that act, and a second accept key would widen the surface that can run an
+approval-gated operation. Declining is `esc`/`n`, and it produces the existing
+canceled result that states nothing ran. `q`/`ctrl+c` on the confirmation quit
+without running anything, because a confirmation is not an operation.
+
+This is a recorded decision, not an oversight. `TestInvariantApprovalStaysOneKey`
+and `TestSpaceDoesNotApprove` pin it, and the footer assertion fails if a
+`[space] 승인` chip reappears.
 
 Approval flow (generic, engine-enforced):
 
 1. Selecting a feature that implements `core.Planner` starts `Engine.Plan`, not
-   `Engine.Run`. If the descriptor also requires an approval, the plan screen
+   `Engine.Run`. If the descriptor also requires an approval, the plan panel
    shows that approval kind.
 2. The read-only plan is rendered with the approval kind; `enter` approves and
    passes only that kind in the request; `esc`/`n` declines and runs nothing,
@@ -863,8 +1044,36 @@ Approval flow (generic, engine-enforced):
    it only collects and passes the approval. A feature that requires an approval
    but has no planner is not silently approved; the engine returns the normal
    approval failure.
-4. The confirm screen is not feature-specific, so `script_trust`,
-   `previous_version` and `data_restore` will reuse it without a TUI branch.
+4. The confirmation panel is not feature-specific, so `script_trust`,
+   `previous_version` and `data_restore` reuse it without a TUI branch.
+5. During an in-flight mutating operation `q` explains the partial-effect risk
+   instead of quitting; `ctrl+c` requests safe cancellation and keeps the screen
+   for the canceled result.
+
+#### Verification
+
+`internal/ui/tui/testdata/golden` commits the layout contract: eight main
+screens (menu+status, service selection, confirmation panel, progress, wizard,
+failure, empty stack, logs) at 40/80/120/200 columns × 18/30/50 rows, once with
+the painted theme and once with the colorless one. The committed text has
+escape sequences stripped, so a diff is a layout change rather than an ANSI byte
+change; `TestGoldenStructureDoesNotDependOnPaint` asserts that stripping the
+painted frame yields the colorless frame byte for byte, which is the NO_COLOR
+proof. The matrix is one table-driven list, so adding a screen is one entry.
+
+Regenerate with:
+
+```
+scripts/tui-golden.sh            # rewrite
+scripts/tui-golden.sh -check    # fail if stale (used by CI)
+go test ./internal/ui/tui -run TestGolden -update   # the underlying command
+```
+
+`test/e2e` covers what only a real terminal can: SIGWINCH resize and reflow
+across the 100-column breakpoint, returning to a screen with the cursor and
+result intact, raw-mode restoration after several resizes, `NO_COLOR` producing
+no SGR sequence, and rendering per color profile. Real-Docker scenarios stay
+opt-in (`DCRAFT_INTEGRATION=1`) and are not part of CI.
 
 No feature action is selectable unless it is registered. The current build
 registers `status` (primary), `install-compose`, `up`, `stop`, `down`,
@@ -2359,6 +2568,25 @@ Tested seams:
   remote non-zero mapping with `exit_code`, missing command and stopped service;
 - execx streaming: piped and pty modes, input forwarding, output capture and
   context cancellation, and terminal restoration after success and failure;
+- TUI visual system: golden snapshot matrix of eight main screens (menu+status,
+  service selection, confirmation panel, progress, wizard, failure, empty stack,
+  logs) at 40/80/120/200 columns × 18/30/50 rows, committed once with the painted
+  theme and once colorless, with the colorless set asserted to be the stripped
+  painted set byte for byte; 40-column frame integrity on every screen; Korean
+  display-cell width (a syllable is two cells, never split by truncation); long
+  path truncation with an explicit marker and the full value in the detail view;
+  a 25-service stack scrolled end to end with a header that never moves; the
+  theme decision as a pure function of `DCRAFT_THEME`, `NO_COLOR`, `TERM`,
+  profile, background and locale; the modal gutter never widening a row on a
+  straddling wide glyph. CLI invariants are pinned structurally: `internal/ui/cli`
+  and `internal/ui/view` have no dependency on the TUI or its visual layer,
+  `--json` keeps schema `1` and its exact key set, exit codes stay 0/1/2/130,
+  and the shared Korean failure text is identical in both interfaces.
+- pty process tests for the TUI layout: SIGWINCH resize reflowing across the
+  100-column breakpoint with no row wider than the terminal, returning to a
+  screen with the cursor and the last result intact, raw-mode restoration after
+  a resize loop, `NO_COLOR` producing no SGR sequence, and rendering under the
+  truecolor, 256-color, 16-color and `dumb` profiles.
 - TUI live screens: logs streaming, quit to the management view, attach key
   forwarding and `ctrl+]` detach, generic input form, no run before confirm;
 - real Docker logs/exec: a scaled `web=2` stack with distinct instances, logs

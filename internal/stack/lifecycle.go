@@ -2,6 +2,7 @@ package stack
 
 import (
 	"context"
+	"io"
 
 	"github.com/rootmyself/dcraft/internal/core"
 )
@@ -18,6 +19,15 @@ type Lifecycle interface {
 	Stop(ctx context.Context, target core.Target, services []string) (OpResult, error)
 	Down(ctx context.Context, target core.Target) (OpResult, error)
 	Restart(ctx context.Context, target core.Target, services []string) (OpResult, error)
+}
+
+// ProgressLifecycle is the optional capability of a Lifecycle implementation
+// to report its own process output while `up` runs. The writer receives the
+// command's stdout and stderr as plain, colorless text; it is never the
+// container log stream. An implementation without this capability keeps the
+// capture-only path, and a nil writer never streams.
+type ProgressLifecycle interface {
+	UpProgress(ctx context.Context, target core.Target, services []string, progress io.Writer) (OpResult, error)
 }
 
 // OpResult is the observable tool output of one lifecycle invocation. Output

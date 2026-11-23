@@ -270,8 +270,15 @@ func TestGeneratedScriptFailsWithGuidanceWhenGitIsMissing(t *testing.T) {
 	if err == nil {
 		t.Fatalf("script succeeded without git:\n%s", out)
 	}
-	if !strings.Contains(string(out), "git CLI를 찾지 못했습니다") {
+	if !strings.Contains(string(out), "git CLI 찾지 못함") {
 		t.Fatalf("missing git guidance:\n%s", out)
+	}
+	// The guidance must be reachable without any external command: an empty
+	// PATH has no dirname either. macOS bash happens to survive a failed
+	// `cd ""` (it keeps the current directory), so without this assertion the
+	// bug only shows on Linux runners.
+	if strings.Contains(string(out), "dirname: command not found") {
+		t.Fatalf("script depends on an external dirname:\n%s", out)
 	}
 	if _, err := os.Stat(filepath.Join(project, "src-missing-git")); !os.IsNotExist(err) {
 		t.Fatalf("script created a destination without git: %v", err)

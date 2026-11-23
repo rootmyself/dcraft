@@ -21,6 +21,7 @@ func TestRegistryAcceptsARepeatableStringFlag(t *testing.T) {
 	reg := core.NewRegistry()
 	desc := core.Descriptor{
 		Name: "backup", Title: "백업", Summary: "요약", Usage: "dcraft backup",
+		Section: core.SectionData,
 		Flags: []core.Flag{
 			{Name: "output", Shorthand: "o", Kind: core.FlagString, Usage: "출력 폴더"},
 			{Name: "volume", Kind: core.FlagList, Usage: "볼륨 키"},
@@ -35,7 +36,8 @@ func TestRegistryStillRejectsAnUnsupportedFlagKind(t *testing.T) {
 	reg := core.NewRegistry()
 	desc := core.Descriptor{
 		Name: "backup", Title: "백업", Summary: "요약", Usage: "dcraft backup",
-		Flags: []core.Flag{{Name: "volume", Kind: core.FlagKind("map"), Usage: "볼륨"}},
+		Section: core.SectionData,
+		Flags:   []core.Flag{{Name: "volume", Kind: core.FlagKind("map"), Usage: "볼륨"}},
 	}
 	if err := reg.Register(&flagFeature{desc: desc}); err == nil {
 		t.Fatal("unsupported flag kind was accepted")

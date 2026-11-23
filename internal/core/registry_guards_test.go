@@ -10,7 +10,8 @@ import (
 func TestRegistryRejectsReadOnlyFeatureThatRecordsHistory(t *testing.T) {
 	reg := core.NewRegistry()
 	err := reg.Register(&requirementFeature{desc: core.Descriptor{
-		Name: "sample", Title: "샘플", Summary: "샘플입니다.", Usage: "dcraft sample",
+		Name: "sample", Title: "샘플", Summary: "샘플.", Usage: "dcraft sample",
+		Section:  core.SectionInspect,
 		ReadOnly: true, RecordsHistory: true,
 	}})
 	if err == nil || !strings.Contains(err.Error(), "read-only") {
@@ -21,7 +22,8 @@ func TestRegistryRejectsReadOnlyFeatureThatRecordsHistory(t *testing.T) {
 func TestRegistryRejectsMutatingPrimaryWithoutApproval(t *testing.T) {
 	reg := core.NewRegistry()
 	err := reg.Register(&requirementFeature{desc: core.Descriptor{
-		Name: "sample", Title: "샘플", Summary: "샘플입니다.", Usage: "dcraft sample",
+		Name: "sample", Title: "샘플", Summary: "샘플.", Usage: "dcraft sample",
+		Section: core.SectionInspect,
 		Primary: true,
 	}})
 	if err == nil || !strings.Contains(err.Error(), "primary") {
@@ -32,7 +34,8 @@ func TestRegistryRejectsMutatingPrimaryWithoutApproval(t *testing.T) {
 func TestRegistryAcceptsReadOnlyPrimary(t *testing.T) {
 	reg := core.NewRegistry()
 	err := reg.Register(&requirementFeature{desc: core.Descriptor{
-		Name: "status", Title: "상태", Summary: "상태입니다.", Usage: "dcraft status",
+		Name: "status", Title: "상태", Summary: "상태.", Usage: "dcraft status",
+		Section:  core.SectionInspect,
 		ReadOnly: true, Primary: true,
 	}})
 	if err != nil {
@@ -43,7 +46,8 @@ func TestRegistryAcceptsReadOnlyPrimary(t *testing.T) {
 func TestRegistryAcceptsMutatingPrimaryWithApproval(t *testing.T) {
 	reg := core.NewRegistry()
 	err := reg.Register(&requirementFeature{desc: core.Descriptor{
-		Name: "restore", Title: "복원", Summary: "복원합니다.", Usage: "dcraft restore",
+		Name: "restore", Title: "복원", Summary: "복원.", Usage: "dcraft restore",
+		Section: core.SectionData,
 		Primary: true, Approval: core.ApprovalDataRestore,
 	}})
 	if err != nil {

@@ -345,7 +345,7 @@ func TestPlanShowsTheExactFileAndDoesNotSave(t *testing.T) {
 		"image: busybox:1.36",
 		"8080:80",
 		"dcraft up",
-		"저장은 실행이 아닙니다",
+		"저장은 실행이 아님",
 	} {
 		if !strings.Contains(plan.Text, want) {
 			t.Fatalf("plan missing %q:\n%s", want, plan.Text)
@@ -475,12 +475,12 @@ func TestWizardPreviewUsesTheSameGeneratorAndNeverSaves(t *testing.T) {
 	}
 	text, err := controller.WizardPreview(map[string]string{
 		"from": "dockerfile", "service-name": "app", "context": ".", "dockerfile": "Dockerfile",
-		"output": "compose.yaml", "port": "8080:80",
+		"output": "compose.yaml", "port": "8080:80", "volume": "cache:/data:ro,Z", "env-var": "KEY=one,two",
 	})
 	if err != nil {
 		t.Fatalf("preview: %v", err)
 	}
-	for _, want := range []string{"build:", "dockerfile: Dockerfile", "8080:80", "dcraft up"} {
+	for _, want := range []string{"build:", "dockerfile: Dockerfile", "8080:80", "cache:/data:ro,Z", "- KEY=one,two", "dcraft up"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("preview missing %q:\n%s", want, text)
 		}

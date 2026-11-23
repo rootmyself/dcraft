@@ -1,12 +1,12 @@
 package tui
 
 import (
-	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/rootmyself/dcraft/internal/core"
+	"github.com/rootmyself/dcraft/internal/ui/tui/visual"
 )
 
 // beginWizard starts the guided flow for a feature that declares the Wizard
@@ -91,12 +91,51 @@ func (m *Model) wizardTextInput() bool {
 	return len(step.Options) == 0 && step.AllowCustom
 }
 
+// wizardStepIsMulti reports whether the current question is a checkbox list.
+func (m *Model) wizardStepIsMulti() bool {
+	if m.phase != phaseWizardStep || m.wizardStep < 0 || m.wizardStep >= len(m.wizardSpec.Steps) {
+		return false
+	}
+	step := m.wizardSpec.Steps[m.wizardStep]
+	return len(step.Options) > 0 && step.Multi
+}
+
+// wizardStepIsOptional reports whether the current question may be answered
+// with an empty value.
+func (m *Model) wizardStepIsOptional() bool {
+	if m.phase != phaseWizardStep || m.wizardStep < 0 || m.wizardStep >= len(m.wizardSpec.Steps) {
+		return false
+	}
+	step := m.wizardSpec.Steps[m.wizardStep]
+	return len(step.Options) == 0 && step.AllowCustom && step.Optional
+}
+
 func (m *Model) initWizardStep() {
 	if m.wizardStep < 0 || m.wizardStep >= len(m.wizardSpec.Steps) {
 		return
 	}
 	step := m.wizardSpec.Steps[m.wizardStep]
 	m.notice = ""
+	m.wizardNotice = ""
+	m.wizardEditing = false
+	// Each question starts at the top of the screen: a scroll position kept
+	// from the previous step would hide the question being asked.
+	m.body = visual.Viewport{}
+	if step.List {
+		m.wizardItems = nil
+		value, answered := m.wizardAnswers[step.Name]
+		if !answered {
+			value = step.Default
+		}
+		for _, item := range strings.Split(value, "\n") {
+			if item = strings.TrimSpace(item); item != "" {
+				m.wizardItems = append(m.wizardItems, item)
+			}
+		}
+		m.wizardChoice = len(m.wizardItems)
+		m.wizardInput = ""
+		return
+	}
 	if len(step.Options) > 0 {
 		wanted := step.Default
 		if previous, ok := m.wizardAnswers[step.Name]; ok && previous != "" {
@@ -117,8 +156,15 @@ func (m *Model) initWizardStep() {
 				}
 			}
 		}
+		if m.phase == phaseWizardStep {
+			// Coming back to a choice step must show the restored card, not
+			// the top of a list the reader already walked past.
+			m.followWizardCursor()
+		}
 		return
 	}
+	m.wizardChoice = 0
+	m.wizardChecked = map[string]bool{}
 	m.wizardInput = m.wizardAnswers[step.Name]
 	if m.wizardInput == "" {
 		m.wizardInput = step.Default
@@ -126,18 +172,30 @@ func (m *Model) initWizardStep() {
 }
 
 func (m *Model) updateWizard(msg tea.KeyMsg) tea.Cmd {
+	if msg.String() == "?" && m.helpAvailable() && !m.wizardTextInput() {
+		// "?" is a typed character in a free-text answer; only a step with a
+		// fixed choice list treats it as the help key.
+		m.openHelp()
+		return nil
+	}
 	switch m.phase {
 	case phaseWizardStep:
 		if m.wizardStep < 0 || m.wizardStep >= len(m.wizardSpec.Steps) {
 			return nil
 		}
 		step := m.wizardSpec.Steps[m.wizardStep]
+		if step.List {
+			m.updateWizardList(msg, step)
+			return nil
+		}
 		if len(step.Options) > 0 {
 			switch msg.String() {
 			case "up", "k":
 				m.wizardChoice = (m.wizardChoice - 1 + len(step.Options)) % len(step.Options)
+				m.followWizardCursor()
 			case "down", "j":
 				m.wizardChoice = (m.wizardChoice + 1) % len(step.Options)
+				m.followWizardCursor()
 			case " ":
 				if step.Multi {
 					value := step.Options[m.wizardChoice].Value
@@ -176,7 +234,10 @@ func (m *Model) updateWizard(msg tea.KeyMsg) tea.Cmd {
 		case "enter":
 			value := strings.TrimSpace(m.wizardInput)
 			if value == "" && !step.Optional {
-				m.notice = msgWizardNeedValue
+				// The guidance belongs to this field: the reader must see
+				// which answer is missing, not a detached notice.
+				m.wizardNotice = msgWizardNeedValue
+				m.notice = ""
 				return nil
 			}
 			m.wizardAnswers[step.Name] = value
@@ -186,6 +247,7 @@ func (m *Model) updateWizard(msg tea.KeyMsg) tea.Cmd {
 				m.previousWizardStep()
 			}
 		case "backspace":
+			m.wizardNotice = ""
 			runes := []rune(m.wizardInput)
 			if len(runes) > 0 {
 				m.wizardInput = string(runes[:len(runes)-1])
@@ -194,6 +256,7 @@ func (m *Model) updateWizard(msg tea.KeyMsg) tea.Cmd {
 			}
 		default:
 			if len(msg.Runes) > 0 {
+				m.wizardNotice = ""
 				m.wizardInput += string(msg.Runes)
 			}
 		}
@@ -212,6 +275,75 @@ func (m *Model) updateWizard(msg tea.KeyMsg) tea.Cmd {
 		}
 	}
 	return nil
+}
+
+func (m *Model) updateWizardList(msg tea.KeyMsg, step core.WizardStep) {
+	switch msg.String() {
+	case "up":
+		if !m.wizardEditing && m.wizardChoice > 0 {
+			m.wizardChoice--
+			m.followWizardCursor()
+		}
+	case "down":
+		if !m.wizardEditing && m.wizardChoice < len(m.wizardItems) {
+			m.wizardChoice++
+			m.followWizardCursor()
+		}
+	case "left":
+		if !m.wizardEditing {
+			m.wizardAnswers[step.Name] = strings.Join(m.wizardItems, "\n")
+			m.previousWizardStep()
+		}
+	case "enter":
+		value := strings.TrimSpace(m.wizardInput)
+		if m.wizardEditing {
+			if value == "" {
+				m.wizardNotice = msgWizardNeedValue
+				return
+			}
+			m.wizardItems[m.wizardChoice] = value
+			m.wizardEditing = false
+			m.wizardInput = ""
+		} else if m.wizardChoice < len(m.wizardItems) {
+			m.wizardEditing = true
+			m.wizardInput = m.wizardItems[m.wizardChoice]
+		} else if value != "" {
+			m.wizardItems = append(m.wizardItems, value)
+			m.wizardChoice = len(m.wizardItems)
+			m.wizardInput = ""
+		} else if len(m.wizardItems) == 0 && !step.Optional {
+			m.wizardNotice = msgWizardNeedValue
+			return
+		} else {
+			m.wizardAnswers[step.Name] = strings.Join(m.wizardItems, "\n")
+			m.advanceWizard()
+		}
+		m.wizardNotice = ""
+		m.followWizardCursor()
+	case "backspace", "delete":
+		m.wizardNotice = ""
+		if m.wizardEditing || (m.wizardChoice == len(m.wizardItems) && m.wizardInput != "") {
+			runes := []rune(m.wizardInput)
+			if len(runes) > 0 {
+				m.wizardInput = string(runes[:len(runes)-1])
+			}
+		} else if len(m.wizardItems) > 0 {
+			i := m.wizardChoice
+			if i == len(m.wizardItems) {
+				i--
+			}
+			m.wizardItems = append(m.wizardItems[:i], m.wizardItems[i+1:]...)
+			if m.wizardChoice > len(m.wizardItems) {
+				m.wizardChoice = len(m.wizardItems)
+			}
+			m.followWizardCursor()
+		}
+	default:
+		if len(msg.Runes) > 0 && (m.wizardEditing || m.wizardChoice == len(m.wizardItems)) {
+			m.wizardInput += string(msg.Runes)
+			m.wizardNotice = ""
+		}
+	}
 }
 
 // wizardStepVisible evaluates a step's single dependency against the answers
@@ -282,6 +414,9 @@ func (m *Model) advanceWizard() {
 	}
 	text, err := wizard.WizardPreview(m.wizardAnswers)
 	m.phase = phaseWizardPreview
+	// The preview starts at its top: a scroll position from the option list
+	// would hide the first applied value.
+	m.body = visual.Viewport{}
 	m.wizardPreview = text
 	m.wizardPreviewErr = err
 	m.notice = ""
@@ -358,6 +493,8 @@ func (m *Model) cancelWizard() {
 	m.wizardReturnRes = nil
 	m.wizardReturnFeat = nil
 	m.currentStage = nil
+	m.stages = nil
+	m.planStages = nil
 	m.phase = phaseReady
 	m.notice = msgWizardCanceled
 }
@@ -379,98 +516,28 @@ func (m *Model) wizardView() string {
 	var b strings.Builder
 	switch m.phase {
 	case phaseWizardLoading:
-		b.WriteString(titleStyle.Render(msgWizardLoading))
+		b.WriteString(m.title(msgWizardLoading))
 		b.WriteString("\n")
 		return b.String()
 	case phaseWizardStep:
-		if m.wizardSpec.Title != "" {
-			b.WriteString(titleStyle.Render(m.wizardSpec.Title))
-			b.WriteString("\n\n")
-		}
 		if m.wizardStep < 0 || m.wizardStep >= len(m.wizardSpec.Steps) {
 			return b.String()
 		}
-		step := m.wizardSpec.Steps[m.wizardStep]
-		ordinal, total := m.wizardProgress()
-		fmt.Fprintf(&b, "%s %d/%d\n", msgWizardProgress, ordinal, total)
-		b.WriteString(titleStyle.Render(step.Title))
-		b.WriteString("\n\n")
-		b.WriteString(step.Prompt)
-		b.WriteString("\n\n")
-		if len(step.Options) > 0 {
-			for i, option := range step.Options {
-				marker := "  "
-				if i == m.wizardChoice {
-					marker = "> "
-				}
-				if step.Multi {
-					box := "[ ]"
-					if m.wizardChecked[option.Value] {
-						box = "[x]"
-					}
-					fmt.Fprintf(&b, "%s%s %s\n", marker, box, option.Label)
-					continue
-				}
-				fmt.Fprintf(&b, "%s%s\n", marker, option.Label)
-			}
-		} else if step.AllowCustom {
-			input := m.wizardInput
-			if input == "" {
-				input = " "
-			}
-			fmt.Fprintf(&b, "%s%s_\n", msgWizardInputLabel, input)
-			hint := step.CustomHint
-			if step.Optional {
-				if hint != "" {
-					hint += " · "
-				}
-				hint += msgWizardOptionalHint
-			}
-			if hint != "" {
-				b.WriteString(hintStyle.Render(hint))
-				b.WriteString("\n")
-			}
-		}
+		screen := m.wizardStepScreen(m.wizardSpec.Steps[m.wizardStep])
+		b.WriteString(strings.Join(screen.lines(), "\n"))
+		b.WriteString("\n")
 	case phaseWizardPreview:
-		if approvals := m.previewApprovals(); len(approvals) > 0 {
-			for _, kind := range approvals {
-				fmt.Fprintf(&b, "%s: %s (%s)\n", msgWizardRequiredApprovals, kind.KoreanLabel(), kind)
-			}
-			b.WriteString("enter 계획 확인 · left 이전 단계 · esc 취소\n\n")
-		}
-		b.WriteString(m.wizardPreview)
+		// The preview is the applied-values panel. Approvals are listed inside
+		// it and the keys live in the footer, so nothing is stated twice.
+		b.WriteString(strings.Join(m.wizardPreviewPanel(), "\n"))
 		b.WriteString("\n")
 	}
 	if m.notice != "" {
 		b.WriteString("\n")
-		b.WriteString(noticeStyle.Render(m.notice))
+		b.WriteString(m.noticeText(m.notice))
 		b.WriteString("\n")
 	}
 	return b.String()
-}
-
-func (m *Model) wizardHints() string {
-	switch m.phase {
-	case phaseWizardStep:
-		if m.wizardTextInput() {
-			step := m.wizardSpec.Steps[m.wizardStep]
-			if step.Optional {
-				return msgHintWizardOptional
-			}
-			return msgHintWizardInput
-		}
-		if m.wizardStep >= 0 && m.wizardStep < len(m.wizardSpec.Steps) && m.wizardSpec.Steps[m.wizardStep].Multi {
-			return msgHintWizardMulti
-		}
-		return msgHintWizardChoice
-	case phaseWizardPreview:
-		if m.wizardPreviewErr != nil {
-			return msgHintWizardInvalid
-		}
-		return msgHintWizardPreview
-	default:
-		return msgHintWizardLoading
-	}
 }
 
 func wizardSpecFrom(data any) (core.WizardSpec, bool) {

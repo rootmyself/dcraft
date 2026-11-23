@@ -106,7 +106,7 @@ func (d *BindDestination) Match(m backup.Manifest, explicitSource bool) ([]strin
 		if !explicitSource {
 			return fmt.Errorf("%w: %s %q, target %q", ErrTargetMismatch, field, have, want)
 		}
-		warnings = append(warnings, fmt.Sprintf("%s가 백업과 다릅니다: 백업 %q → 대상 %q (명시적 매핑)", field, have, want))
+		warnings = append(warnings, fmt.Sprintf("%s가 백업과 다름: 백업 %q → 대상 %q (명시적 매핑)", field, have, want))
 		return nil
 	}
 	if err := mismatch("project", m.Source.Project, d.project); err != nil {
@@ -117,9 +117,9 @@ func (d *BindDestination) Match(m backup.Manifest, explicitSource bool) ([]strin
 	}
 	if !d.matchesArchivedPath(m.Source.HostPath) {
 		if !d.explicitPath {
-			return nil, fmt.Errorf("%w: 연결 폴더 경로가 백업과 다릅니다: 백업 %q, 현재 선언 %q (의도한 경로 매핑이면 --bind와 --allow-path-mismatch를 함께 지정하세요)", ErrTargetMismatch, m.Source.HostPath, d.currentPath())
+			return nil, fmt.Errorf("%w: 연결 폴더 경로가 백업과 다름: 백업 %q, 현재 선언 %q (의도한 경로 매핑이면 --bind와 --allow-path-mismatch를 함께 지정)", ErrTargetMismatch, m.Source.HostPath, d.currentPath())
 		}
-		warnings = append(warnings, fmt.Sprintf("연결 폴더 경로가 백업과 다릅니다: 백업 %q → 대상 %q (명시적 경로 매핑)", m.Source.HostPath, d.currentPath()))
+		warnings = append(warnings, fmt.Sprintf("연결 폴더 경로가 백업과 다름: 백업 %q → 대상 %q (명시적 경로 매핑)", m.Source.HostPath, d.currentPath()))
 	}
 	return warnings, nil
 }

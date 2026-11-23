@@ -33,7 +33,8 @@ func (s *stubHooks) Execute(context.Context, core.HookRequest) (core.HookExecuti
 
 func hookUpDescriptor() core.Descriptor {
 	return core.Descriptor{
-		Name: "up", Title: "시작", Summary: "스택을 시작합니다.", Usage: "dcraft up",
+		Name: "up", Title: "시작", Summary: "스택 시작.", Usage: "dcraft up",
+		Section:        core.SectionOperate,
 		RecordsHistory: true, Hooks: core.HookUpUpdate,
 	}
 }
@@ -105,7 +106,7 @@ func TestTUIDecliningScriptTrustRunsNothing(t *testing.T) {
 	if up.runs != 0 || hooks.executes != 0 || hooks.approves != 0 {
 		t.Fatalf("decline ran work: feature=%d exec=%d approve=%d", up.runs, hooks.executes, hooks.approves)
 	}
-	if !strings.Contains(m.View(), "아무것도 실행하지 않았습니다") {
+	if !strings.Contains(m.View(), "아무것도 실행하지 않았음") {
 		t.Fatalf("decline result not shown:\n%s", m.View())
 	}
 }

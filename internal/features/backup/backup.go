@@ -24,6 +24,7 @@ func (f *Feature) Descriptor() core.Descriptor {
 		Title:          backupimpl.MsgTitle,
 		Summary:        backupimpl.MsgSummary,
 		Usage:          backupimpl.MsgUsage,
+		Section:        core.SectionData,
 		RecordsHistory: true,
 		Wizard:         true,
 		Flags: []core.Flag{
@@ -32,19 +33,19 @@ func (f *Feature) Descriptor() core.Descriptor {
 				Shorthand: "o",
 				Kind:      core.FlagString,
 				Required:  true,
-				Usage:     "백업을 저장할 폴더 (필수, 예: ./dcraft-backups). 상대 경로는 현재 작업 폴더 기준이며 dcraft는 숨은 기본 위치를 선택하지 않습니다.",
+				Usage:     "백업을 저장할 폴더 (필수, 예: ./dcraft-backups). 상대 경로는 현재 작업 폴더 기준이며 dcraft는 숨은 기본 위치를 선택하지 않음.",
 			},
 			{
 				Name:     "volume",
 				Kind:     core.FlagList,
 				Required: false,
-				Usage:    "백업할 이름 있는 데이터 볼륨 키 (반복 지정 가능, 예: --volume data). --bind와 함께 사용할 수 있습니다.",
+				Usage:    "백업할 이름 있는 데이터 볼륨 키 (반복 지정 가능, 예: --volume data). --bind와 함께 사용 가능.",
 			},
 			{
 				Name:     "bind",
 				Kind:     core.FlagList,
 				Required: false,
-				Usage:    "백업할 호스트 연결 폴더 (반복 지정 가능, 예: --bind /srv/app/data). 현재 스택의 Compose 파일이 선언한 폴더만 지정할 수 있습니다.",
+				Usage:    "백업할 호스트 연결 폴더 (반복 지정 가능, 예: --bind /srv/app/data). 현재 스택의 Compose 파일이 선언한 폴더만 지정 가능.",
 			},
 		},
 	}

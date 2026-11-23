@@ -43,16 +43,16 @@ func splitCommand(input string) ([]string, error) {
 		}
 	}
 	if escaped {
-		return nil, fmt.Errorf("명령이 역슬래시로 끝납니다")
+		return nil, fmt.Errorf("명령이 역슬래시로 끝남")
 	}
 	if inSingle || inDouble {
-		return nil, fmt.Errorf("명령의 따옴표가 닫히지 않았습니다")
+		return nil, fmt.Errorf("명령의 따옴표가 닫히지 않았음")
 	}
 	if hasToken {
 		args = append(args, current.String())
 	}
 	if len(args) == 0 {
-		return nil, fmt.Errorf("명령이 비어 있습니다")
+		return nil, fmt.Errorf("명령이 비어 있음")
 	}
 	return args, nil
 }

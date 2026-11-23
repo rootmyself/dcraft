@@ -419,8 +419,8 @@ func TestSecretsTUIWizardOffersAWSAndSavesTheShape(t *testing.T) {
 	env := fake.env(t, t.TempDir())
 
 	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
-		{wait: "> 스택 상태 (status)", send: "up"},
-		{wait: "> 비밀값 연결 (secrets)", send: "\r"},
+		{wait: "[↑↓] 이동", send: menuDown(t, "secrets")},
+		{wait: "▸ 비밀값 연결", send: "\r"},
 		{wait: "서비스 선택", send: "\r"}, // api is the first sorted service
 		{wait: "전달 시점 선택", send: "\r"},
 		{wait: "전달 방식 선택", send: "\r"},
@@ -434,15 +434,15 @@ func TestSecretsTUIWizardOffersAWSAndSavesTheShape(t *testing.T) {
 		{wait: "AWS profile 선택", send: "\r"}, // skip
 		{wait: "저장할 비밀값 연결", send: ""},
 		{wait: "AWS Secrets Manager", send: "\r"},
-		{wait: "비밀값 참조를 저장했습니다", send: ""},
+		{wait: "비밀값 참조 저장", send: ""},
 	})
 	if code != 0 {
 		t.Fatalf("TUI exit = %d\n%s", code, output)
 	}
 	for _, want := range []string{
-		"AWS Secrets Manager", "database.password", "ap-northeast-2", "자격 증명", "비밀값 참조를 저장했습니다",
+		"AWS Secrets Manager", "database.password", "ap-northeast-2", "자격 증명", "비밀값 참조 저장",
 	} {
-		if !strings.Contains(output, want) {
+		if !screenContains(output, want) {
 			t.Fatalf("TUI output missing %q:\n%s", want, output)
 		}
 	}

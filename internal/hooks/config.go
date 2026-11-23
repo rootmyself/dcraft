@@ -385,7 +385,7 @@ func configLockBusy(path string) *core.Error {
 		Detail:   path,
 		NextActions: []string{
 			msgConfigLockActionOne,
-			"다른 dcraft 명령이 끝난 뒤 다시 실행하세요.",
+			"다른 dcraft 명령이 끝난 뒤 다시 실행.",
 		},
 	})
 }

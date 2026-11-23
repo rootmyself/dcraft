@@ -58,6 +58,7 @@ func (f *Feature) Descriptor() core.Descriptor {
 		Title:            msgTitle,
 		Summary:          msgSummary,
 		Usage:            msgUsage,
+		Section:          core.SectionInspect,
 		ReadOnly:         true,
 		SupportsServices: true,
 		AcceptsArgs:      true,
@@ -162,17 +163,35 @@ func (f *Feature) Run(ctx context.Context, in core.Invocation) (any, error) {
 
 // Present implements core.Presenter for successful results.
 func (f *Feature) Present(res core.Result, width int) string {
+	return core.ValueLinesText(presentLines(res))
+}
+
+// Document implements core.ViewPresenter. The service and the command are
+// declared kinds, so the TUI can paint them while the CLI text stays byte for
+// byte the same.
+func (f *Feature) Document(res core.Result) core.Document {
+	return core.Document{Blocks: []core.Block{{Kind: core.BlockValueLines, Lines: presentLines(res)}}}
+}
+
+func presentLines(res core.Result) []core.ValueLine {
 	payload, ok := res.Data.(Payload)
 	if !ok {
-		return msgNoPayload
+		return []core.ValueLine{{{Text: msgNoPayload}}}
 	}
 	report := payload.Exec
-	var b strings.Builder
-	fmt.Fprintf(&b, "%s\n", msgFinished)
-	fmt.Fprintf(&b, "%s: %s · %s #%d\n", msgServiceLabel, report.Service, report.Instance, report.Index)
-	fmt.Fprintf(&b, "%s: %s\n", msgCommandLabel, strings.Join(report.Command, " "))
-	fmt.Fprintf(&b, "%s: %d · %s", msgExitLabel, report.ExitCode, msgServicesRunning)
-	return strings.TrimRight(b.String(), "\n")
+	return []core.ValueLine{
+		{{Text: msgFinished}},
+		{
+			{Text: msgServiceLabel + ": "},
+			{Text: report.Service, Kind: core.ValueService},
+			{Text: fmt.Sprintf(" · %s #%d", report.Instance, report.Index)},
+		},
+		{
+			{Text: msgCommandLabel + ": "},
+			{Text: strings.Join(report.Command, " "), Kind: core.ValueCommand},
+		},
+		{{Text: fmt.Sprintf("%s: %d · %s", msgExitLabel, report.ExitCode, msgServicesRunning)}},
+	}
 }
 
 // Inputs implements core.InputProvider: the TUI lists running instances and

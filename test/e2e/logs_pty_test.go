@@ -32,11 +32,18 @@ type ptySession struct {
 
 func startPTY(t *testing.T, dir string, env []string, args ...string) *ptySession {
 	t.Helper()
+	return startPTYWithTerm(t, dir, env, "xterm-256color", args...)
+}
+
+// startPTYWithTerm is startPTY with an explicit TERM, so a test can exercise the
+// color-profile decision on a real terminal.
+func startPTYWithTerm(t *testing.T, dir string, env []string, termName string, args ...string) *ptySession {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	t.Cleanup(cancel)
 	cmd := exec.CommandContext(ctx, binaryPath, args...)
 	cmd.Dir = dir
-	cmd.Env = append(append([]string{}, env...), "TERM=xterm-256color")
+	cmd.Env = append(append([]string{}, env...), "TERM="+termName)
 	master, err := pty.Start(cmd)
 	if err != nil {
 		t.Fatalf("start pty: %v", err)
@@ -63,7 +70,7 @@ func startPTY(t *testing.T, dir string, env []string, args ...string) *ptySessio
 func (s *ptySession) waitFor(text string, timeout time.Duration) {
 	s.t.Helper()
 	deadline := time.Now().Add(timeout)
-	for !strings.Contains(s.out.String(), text) {
+	for !screenContains(s.out.String(), text) {
 		if time.Now().After(deadline) {
 			_ = s.cmd.Process.Kill()
 			s.t.Fatalf("pty output never contained %q:\n%s", text, s.out.String())
@@ -111,12 +118,10 @@ func (s *ptySession) wait() int {
 	}
 }
 
-// assertRestored proves the terminal is not left in raw mode after a normal
-// exit or a failure.
-// menuDownPresses returns how many down-arrow presses move the menu cursor
-// from the primary status feature to the named feature. The menu order is the
-// registration order, so this stays correct when another ticket adds a feature.
-func menuDownPresses(t *testing.T, name string) int {
+// navOrder returns the real menu order the TUI renders: section order, then
+// registration order inside each section. It is derived from the registry so
+// it stays correct when a feature is added.
+func navOrder(t *testing.T) []core.Feature {
 	t.Helper()
 	reg := core.NewRegistry()
 	all.Register(reg, &deps.Deps{
@@ -125,7 +130,19 @@ func menuDownPresses(t *testing.T, name string) int {
 		Downloader: &noopDownloader{},
 		Installer:  &noopInstaller{},
 	})
-	features := reg.All()
+	var out []core.Feature
+	for _, group := range reg.BySection() {
+		out = append(out, group.Features...)
+	}
+	return out
+}
+
+// menuDownPresses returns how many down-arrow presses move the menu cursor
+// from the primary status feature to the named feature. The menu is grouped by
+// descriptor section, so this walks the same order the screen draws.
+func menuDownPresses(t *testing.T, name string) int {
+	t.Helper()
+	features := navOrder(t)
 	statusIdx, targetIdx := -1, -1
 	for i, f := range features {
 		switch f.Descriptor().Name {
@@ -151,6 +168,8 @@ func (s *ptySession) pressMenuDown(count int) {
 	s.press(keys...)
 }
 
+// assertRestored proves the terminal is not left in raw mode after a normal
+// exit or a failure.
 func (s *ptySession) assertRestored() {
 	s.t.Helper()
 	after, err := term.GetState(int(s.master.Fd()))
@@ -222,11 +241,11 @@ func TestPTYTUILogsScreenReturnsToTheMenuAndKeepsServices(t *testing.T) {
 	project := liveProject(t)
 	env := fake.env(t, t.TempDir(), map[string]string{"DOCKER_FAKE_LOG_FOLLOW_LINE": "followed line"})
 	s := startPTY(t, project, env)
-	s.waitFor("스택 상태 (status)", 15*time.Second)
+	s.waitFor("[↑↓] 이동", 15*time.Second)
 	s.pressMenuDown(menuDownPresses(t, "logs"))
 	s.waitFor("서비스 선택", 15*time.Second)
 	s.press("\r")
-	s.waitFor("로그 보기 (logs)", 15*time.Second)
+	s.waitFor("로그 보기", 15*time.Second)
 	s.waitFor("followed line", 15*time.Second)
 	s.send("q")
 	s.waitFor("마지막 실시간 출력", 15*time.Second)
@@ -245,7 +264,7 @@ func TestPTYTUIExecScreenShowsTargetRunsAndReturnsToTheMenu(t *testing.T) {
 	project := liveProject(t)
 	env := fake.env(t, t.TempDir(), map[string]string{"DOCKER_FAKE_EXEC_STDOUT": "remote-stdout"})
 	s := startPTY(t, project, env)
-	s.waitFor("스택 상태 (status)", 15*time.Second)
+	s.waitFor("[↑↓] 이동", 15*time.Second)
 	s.pressMenuDown(menuDownPresses(t, "exec"))
 	s.waitFor("실행 전 확인", 15*time.Second)
 	if !strings.Contains(s.out.String(), "서비스 인스턴스") || !strings.Contains(s.out.String(), "명령") {
@@ -254,7 +273,7 @@ func TestPTYTUIExecScreenShowsTargetRunsAndReturnsToTheMenu(t *testing.T) {
 	s.press("\r") // choose the default instance, move to command
 	s.press("d", "a", "t", "e")
 	s.press("\r") // submit
-	s.waitFor("명령을 실행했습니다", 20*time.Second)
+	s.waitFor("명령 실행", 20*time.Second)
 	s.send("q")
 	code := s.wait()
 	if code != 0 {
@@ -264,6 +283,78 @@ func TestPTYTUIExecScreenShowsTargetRunsAndReturnsToTheMenu(t *testing.T) {
 	if !strings.Contains(s.out.String(), "remote-stdout") {
 		t.Fatalf("exec output missing:\n%s", s.out.String())
 	}
+	fake.assertNoSubcommand(t, "stop")
+	fake.assertNoSubcommand(t, "down")
+}
+
+// menuDown is the raw key sequence that moves the cursor from the primary
+// status feature to the named feature through the sectioned menu.
+func menuDown(t *testing.T, name string) string {
+	t.Helper()
+	return strings.Repeat("\x1b[B", menuDownPresses(t, name))
+}
+
+// The live log screen scrolls under a header that stays put, and detaching
+// restores the terminal. The position row is real output of the real binary, not
+// a unit-test fixture.
+func TestPTYTUILogsScreenScrollsUnderAPinnedHeaderAndRestoresTerminal(t *testing.T) {
+	fake := newFakeLiveDocker(t)
+	project := liveProject(t)
+	env := fake.env(t, t.TempDir(), map[string]string{"DOCKER_FAKE_LOG_FOLLOW_LINE": "followed line"})
+	s := startPTY(t, project, env)
+	s.waitFor("[↑↓] 이동", 15*time.Second)
+	s.pressMenuDown(menuDownPresses(t, "logs"))
+	s.waitFor("서비스 선택", 15*time.Second)
+	s.press("\r")
+	s.waitFor("실시간 로그", 15*time.Second)
+	s.waitFor("followed line", 15*time.Second)
+	// The pinned header states what is being watched while the band scrolls.
+	for _, want := range []string{"서비스: 스택 전체", "인스턴스: 전체", "명령: logs"} {
+		s.waitFor(want, 15*time.Second)
+	}
+	// The faked stream is short, so the position row may be absent; scrolling
+	// keys must still be harmless and must not detach the screen.
+	s.press("g", "G")
+	s.waitFor("followed line", 15*time.Second)
+	s.send("q")
+	s.waitFor("마지막 실시간 출력", 15*time.Second)
+	s.send("q")
+	code := s.wait()
+	if code != 0 {
+		t.Fatalf("TUI exit = %d\n%s", code, s.out.String())
+	}
+	s.assertRestored()
+	fake.assertNoSubcommand(t, "stop")
+	fake.assertNoSubcommand(t, "down")
+}
+
+// A long stream exercises the real viewport: PgUp moves the visible rows while
+// the header rows above them stay unchanged, and ctrl+] ends an attached command
+// with the terminal restored.
+func TestPTYTUIExecAttachDetachesWithCtrlBracketAndRestoresTerminal(t *testing.T) {
+	fake := newFakeLiveDocker(t)
+	project := liveProject(t)
+	env := fake.env(t, t.TempDir(), map[string]string{"DOCKER_FAKE_EXEC_ECHO": "1"})
+	s := startPTY(t, project, env)
+	s.waitFor("[↑↓] 이동", 15*time.Second)
+	s.pressMenuDown(menuDownPresses(t, "exec"))
+	s.waitFor("실행 전 확인", 15*time.Second)
+	s.press("\r") // default instance
+	s.press("r", "e", "a", "d", "-", "l", "i", "n", "e")
+	s.press("\r")
+	s.waitFor("ready", 20*time.Second)
+	// Forwarding is proven by the child reading what the TUI relayed.
+	s.send("hello\n")
+	s.waitFor("got:hello", 20*time.Second)
+	// ctrl+] detaches instead of reaching the child a second time.
+	s.send("\x1d")
+	s.waitFor("마지막 실시간 출력", 15*time.Second)
+	s.send("q")
+	code := s.wait()
+	if code != 0 {
+		t.Fatalf("TUI exit = %d\n%s", code, s.out.String())
+	}
+	s.assertRestored()
 	fake.assertNoSubcommand(t, "stop")
 	fake.assertNoSubcommand(t, "down")
 }

@@ -260,6 +260,15 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation, action Action)
 		var callErr error
 		switch action {
 		case ActionUp:
+			// A caller that asked for progress gets the operation's own tool
+			// output while it runs. A backend without the optional capability
+			// keeps capture-only behavior, so no interface loses its result.
+			if in.IO.Progress != nil {
+				if streaming, ok := c.life.(stack.ProgressLifecycle); ok {
+					opResult, callErr = streaming.UpProgress(ctx, opTarget, services, in.IO.Progress)
+					break
+				}
+			}
 			opResult, callErr = c.life.Up(ctx, opTarget, services)
 		case ActionStop:
 			opResult, callErr = c.life.Stop(ctx, opTarget, services)

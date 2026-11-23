@@ -495,7 +495,7 @@ func TestPlanIsReadOnlyAndShowsTheTargetSafetyAndOverwriteImpact(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Plan: %v", err)
 	}
-	for _, want := range []string{"복원 계획", "data → proj_data", "app", "안전 백업 위치", "병합이 아닙니다", "잠시 중지"} {
+	for _, want := range []string{"복원 계획", "data → proj_data", "app", "안전 백업 위치", "병합이 아님", "잠시 중지"} {
 		if !strings.Contains(plan.Text, want) {
 			t.Fatalf("plan missing %q:\n%s", want, plan.Text)
 		}

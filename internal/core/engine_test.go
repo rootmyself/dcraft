@@ -86,8 +86,9 @@ func (f *verifyingFeature) Verify(ctx context.Context, in core.Invocation, paylo
 func readOnlyDescriptor(name string) core.Descriptor {
 	return core.Descriptor{
 		Name:     name,
+		Section:  core.SectionInspect,
 		Title:    "스택 상태",
-		Summary:  "현재 스택 상태를 확인합니다.",
+		Summary:  "현재 스택 상태 확인.",
 		Usage:    "dcraft " + name,
 		ReadOnly: true,
 	}
@@ -222,6 +223,7 @@ func TestEnginePassesSelectionAndFeatureOptions(t *testing.T) {
 	feature := &testFeature{
 		desc: core.Descriptor{
 			Name: "logs", Title: "로그", Summary: "로그를 봅니다.", Usage: "dcraft logs",
+			Section:  core.SectionInspect,
 			ReadOnly: true, SupportsServices: true, AcceptsArgs: true,
 		},
 		run: func(ctx context.Context, in core.Invocation) (any, error) {
@@ -262,7 +264,7 @@ func TestEngineTargetFailureStopsBeforePreflight(t *testing.T) {
 	h := newHarness(t, feature)
 	h.resolver.err = core.Fail(core.Diagnostic{
 		Category: core.CategoryNoConfiguration, Severity: core.SeverityError,
-		Message: "대상 폴더에서 Compose 설정을 찾지 못했습니다.",
+		Message: "대상 폴더에서 Compose 설정 찾기 실패.",
 	})
 	h.resolver.target = core.Target{ProjectDir: "/project"}
 
@@ -310,7 +312,7 @@ func TestEnginePreflightFailureStopsFeature(t *testing.T) {
 		Tools: core.ToolInfo{ComposeVersion: "5.7.0"},
 		Diagnostics: []core.Diagnostic{{
 			Category: core.CategoryEngineUnreachable, Severity: core.SeverityError,
-			Message: "Docker Engine에 연결할 수 없습니다.", NextActions: []string{"시작하세요"},
+			Message: "Docker Engine에 연결 불가.", NextActions: []string{"시작"},
 		}},
 	}
 	res := h.run(t, core.Request{Feature: "status"})
@@ -338,7 +340,8 @@ func TestEngineRequiresExplicitApprovalEvenWhenInteractive(t *testing.T) {
 	ran := false
 	feature := &testFeature{
 		desc: core.Descriptor{
-			Name: "install", Title: "설치", Summary: "Compose를 설치합니다.", Usage: "dcraft install",
+			Name: "install", Title: "설치", Summary: "Compose를 설치.", Usage: "dcraft install",
+			Section:  core.SectionConfig,
 			Approval: core.ApprovalInstall,
 		},
 		run: func(context.Context, core.Invocation) (any, error) { ran = true; return nil, nil },
@@ -381,7 +384,7 @@ func TestEngineFeatureErrorPreservesDiagnosticCategory(t *testing.T) {
 			return nil, core.RunStage(in.Reporter, "inspect_stack", "스택 조회", func() error {
 				return core.Fail(core.Diagnostic{
 					Category: core.CategoryInvalidConfiguration, Severity: core.SeverityError,
-					Message: "Compose 설정을 읽을 수 없습니다.",
+					Message: "Compose 설정을 읽을 수 없음.",
 				})
 			})
 		},
@@ -418,7 +421,8 @@ func TestEngineRawFeatureErrorBecomesInternalDiagnostic(t *testing.T) {
 func TestEngineVerifierRunsBeforeSuccessAndHistory(t *testing.T) {
 	feature := &verifyingFeature{
 		testFeature: &testFeature{desc: core.Descriptor{
-			Name: "update", Title: "갱신", Summary: "갱신합니다.", Usage: "dcraft update", RecordsHistory: true,
+			Name: "update", Title: "갱신", Summary: "갱신.", Usage: "dcraft update", RecordsHistory: true,
+			Section: core.SectionOperate,
 		}},
 		verify: func(ctx context.Context, in core.Invocation, payload any) error { return nil },
 	}
@@ -442,7 +446,8 @@ func TestEngineVerifierRunsBeforeSuccessAndHistory(t *testing.T) {
 func TestEngineVerificationFailureMarksFailureAndSkipsHistory(t *testing.T) {
 	feature := &verifyingFeature{
 		testFeature: &testFeature{desc: core.Descriptor{
-			Name: "update", Title: "갱신", Summary: "갱신합니다.", Usage: "dcraft update", RecordsHistory: true,
+			Name: "update", Title: "갱신", Summary: "갱신.", Usage: "dcraft update", RecordsHistory: true,
+			Section: core.SectionOperate,
 		}},
 		verify: func(ctx context.Context, in core.Invocation, payload any) error {
 			return errors.New("healthcheck timed out")
@@ -474,7 +479,8 @@ func TestEngineSkipsHistoryForReadOnlyFeatures(t *testing.T) {
 
 func TestEngineHistoryFailureIsWarningNotFalseFailure(t *testing.T) {
 	feature := &testFeature{desc: core.Descriptor{
-		Name: "update", Title: "갱신", Summary: "갱신합니다.", Usage: "dcraft update", RecordsHistory: true,
+		Name: "update", Title: "갱신", Summary: "갱신.", Usage: "dcraft update", RecordsHistory: true,
+		Section: core.SectionOperate,
 	}}
 	h := newHarness(t, feature)
 	h.state.err = errors.New("disk full")
@@ -493,7 +499,7 @@ func TestEngineHistoryFailureIsWarningNotFalseFailure(t *testing.T) {
 func TestEngineCancellationReportsCanceledStageAndEffects(t *testing.T) {
 	started := make(chan struct{})
 	feature := &testFeature{
-		desc: core.Descriptor{Name: "update", Title: "갱신", Summary: "갱신합니다.", Usage: "dcraft update"},
+		desc: core.Descriptor{Name: "update", Title: "갱신", Summary: "갱신.", Usage: "dcraft update", Section: core.SectionOperate},
 		run: func(ctx context.Context, in core.Invocation) (any, error) {
 			close(started)
 			<-ctx.Done()
@@ -665,7 +671,8 @@ func TestReadOnlyFeaturesReceiveTheResolvedProjectIdentity(t *testing.T) {
 
 func TestMutatingFeaturesResolveIdentityThemselves(t *testing.T) {
 	feature := &testFeature{desc: core.Descriptor{
-		Name: "up", Title: "시작", Summary: "시작합니다.", Usage: "dcraft up",
+		Name: "up", Title: "시작", Summary: "시작.", Usage: "dcraft up",
+		Section: core.SectionOperate,
 	}}
 	h := newHarness(t, feature)
 	reader := &fakeIdentityReader{name: "hello-world-1"}
