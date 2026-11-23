@@ -60,9 +60,10 @@ func (f *Feature) Descriptor() core.Descriptor {
 		Section: core.SectionConfig,
 		// Alias editing is local project-config work. It needs no engine or
 		// Compose, so it declares the smallest published preflight set.
-		Requires:       core.Requirements{core.RequirementDockerCLI},
-		TargetOptional: true,
-		Wizard:         true,
+		Requires:         core.Requirements{core.RequirementDockerCLI},
+		TargetOptional:   true,
+		Wizard:           true,
+		EnvironmentAdmin: true,
 		Flags: []core.Flag{
 			{Name: "add", Kind: core.FlagBool, Usage: msgFlagAdd},
 			{Name: "list", Kind: core.FlagBool, Usage: msgFlagList},

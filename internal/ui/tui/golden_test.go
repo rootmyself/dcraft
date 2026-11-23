@@ -80,6 +80,8 @@ func goldenScreens() []goldenScreen {
 		{name: "wizard", build: goldenWizard},
 		{name: "wizard-list", build: goldenWizardList},
 		{name: "wizard-examples", build: goldenWizardExamples},
+		{name: "environment-actions", build: goldenEnvironmentActions},
+		{name: "environment-switch", build: goldenEnvironmentSwitch},
 		{name: "failure", build: goldenFailure},
 		{name: "empty-stack", build: goldenEmptyStack},
 		{name: "logs", build: goldenLogs},
@@ -463,6 +465,21 @@ func goldenMenuStatus(t *testing.T) *Model {
 	t.Helper()
 	features := replaceFeature(goldenBaseFeatures(), "status", goldenStatusFeature(goldenSnapshot()))
 	return newGoldenModel(t, features...)
+}
+
+func goldenEnvironmentActions(t *testing.T) *Model {
+	m := goldenMenuStatus(t)
+	m.phase = phaseEnvironmentActions
+	return m
+}
+
+func goldenEnvironmentSwitch(t *testing.T) *Model {
+	m := goldenMenuStatus(t)
+	m.phase = phaseSelectingEnvironment
+	m.envSwitch = true
+	m.envs = []core.Environment{{Name: "staging"}, {Name: "production"}}
+	m.envSelected = 1
+	return m
 }
 
 // goldenServiceSelection pins a scope table with more rows than any approved

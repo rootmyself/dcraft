@@ -1,5 +1,14 @@
 package tui
 
+const (
+	msgEnvActionsTitle = "실행환경"
+	msgEnvNewAlias     = "새 별칭"
+	msgEnvSwitch       = "전환"
+	msgEnvCurrent      = " (현재)"
+	msgEnvReloadFailed = "실행환경 목록을 불러오지 못했습니다: "
+	msgEnvSwitchFailed = "전환할 실행환경을 불러오지 못했습니다."
+)
+
 // Korean user-facing TUI text.
 const (
 	msgListEditing          = " (수정 중)"
