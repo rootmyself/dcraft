@@ -6,6 +6,7 @@ const (
 	msgPlanning             = "작업 계획을 확인하는 중…"
 	msgApprovalConfirmTitle = "승인 확인"
 	msgMenu                 = "작업"
+	msgKeyMenu              = "메뉴"
 	msgNoPrimary            = "대화형 화면을 열 수 없습니다: 등록된 기본 화면이 없습니다."
 	msgNoEngine             = "작업을 실행할 준비가 되지 않았습니다."
 	msgNoEngineAction       = "dcraft를 다시 빌드하거나 설치한 뒤 실행하세요."

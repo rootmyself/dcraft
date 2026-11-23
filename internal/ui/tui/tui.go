@@ -582,22 +582,34 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.active == nil || m.phase != phaseReady {
 				return m, nil
 			}
+			if m.resultDismissed && m.result != nil {
+				m.resultDismissed = false
+				return m, nil
+			}
 			return m, m.start(m.active)
 		case "up", "k":
 			if m.navMenuVisible() {
-				m.moveSelection(-1)
+				if m.selectionVisible() {
+					m.moveSelection(-1)
+				} else if m.resultScrolls() {
+					m.applyScroll(func(v *visual.Viewport) { v.Move(-1) })
+				}
 			}
 			return m, nil
 		case "down", "j":
 			if m.navMenuVisible() {
-				m.moveSelection(1)
+				if m.selectionVisible() {
+					m.moveSelection(1)
+				} else if m.resultScrolls() {
+					m.applyScroll(func(v *visual.Viewport) { v.Move(1) })
+				}
 			}
 			return m, nil
 		case "enter":
 			// While the result sheet covers the menu, or a filter has hidden
 			// the navigation, the highlighted feature is not visible; running
 			// it would act on an unseen selection.
-			if m.navMenuVisible() && !m.menuHidden() {
+			if m.selectionVisible() {
 				if f := m.selectedFeature(); f != nil {
 					return m, m.start(f)
 				}

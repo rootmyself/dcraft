@@ -211,24 +211,68 @@ func TestEscDismissesALongResultAndRestoresTheMenu(t *testing.T) {
 	}
 }
 
-// While the sheet covers the menu, enter must not run an invisible selection.
-func TestEnterDoesNotRunWhileTheResultSheetCoversTheMenu(t *testing.T) {
+func TestEnterRunsVisibleSelectionOverScrollingResult(t *testing.T) {
+	for _, width := range []int{120, 80} {
+		t.Run(itoa(width), func(t *testing.T) {
+			f := &documentOnlyFeature{desc: descriptor("status", true), doc: bigStackDocument(25)}
+			logs := &stubFeature{desc: descriptor("logs", false), body: "로그 본문"}
+			m := newTestModel(t, f, logs)
+			m.theme = *plainTheme()
+			initModel(t, m)
+			resize(t, m, width, 24)
+			pressKey(t, m, tea.KeyMsg{Type: tea.KeyDown})
+			if !strings.Contains(m.View(), "제목 logs") {
+				t.Fatalf("selected feature not visible:\n%s", m.View())
+			}
+			runs := logs.runs
+
+			cmd := pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
+			feed(t, m, execute(t, cmd))
+			if logs.runs != runs+1 {
+				t.Fatalf("enter did not run visible selection: %d -> %d", runs, logs.runs)
+			}
+		})
+	}
+}
+
+func TestHiddenMenuScrollsAndEscRestoresSelection(t *testing.T) {
 	f := &documentOnlyFeature{desc: descriptor("status", true), doc: bigStackDocument(25)}
 	logs := &stubFeature{desc: descriptor("logs", false), body: "로그 본문"}
 	m := newTestModel(t, f, logs)
 	m.theme = *plainTheme()
 	initModel(t, m)
-	resize(t, m, 120, 24)
-	runs := logs.runs
-
-	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	m = nm.(*Model)
-	feed(t, m, execute(t, cmd))
-	if logs.runs != runs {
-		t.Fatalf("enter ran a hidden selection: %d -> %d", runs, logs.runs)
+	resize(t, m, 40, 24)
+	if !strings.Contains(m.View(), "[esc] 메뉴") {
+		t.Fatalf("missing menu hint:\n%s", m.View())
 	}
-	if m.result == nil {
-		t.Fatal("result dropped")
+	before := m.View()
+	if cmd := pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter}); cmd != nil {
+		t.Fatal("enter acted on hidden menu")
+	}
+	pressKey(t, m, tea.KeyMsg{Type: tea.KeyDown})
+	if m.View() == before {
+		t.Fatal("down did not scroll the result")
+	}
+	pressKey(t, m, tea.KeyMsg{Type: tea.KeyUp})
+	if m.View() != before {
+		t.Fatal("up did not restore the previous result position")
+	}
+	pressKey(t, m, tea.KeyMsg{Type: tea.KeyEsc})
+	if !strings.Contains(m.View(), "제목 logs") {
+		t.Fatalf("esc did not restore the menu:\n%s", m.View())
+	}
+	if cmd := pressKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")}); cmd != nil {
+		t.Fatal("reopening the last result ran a command")
+	}
+	if !strings.Contains(m.View(), "svc-1") {
+		t.Fatalf("r did not reopen the last result:\n%s", m.View())
+	}
+	pressKey(t, m, tea.KeyMsg{Type: tea.KeyEsc})
+	pressKey(t, m, tea.KeyMsg{Type: tea.KeyDown})
+	cmd := pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
+	feed(t, m, execute(t, cmd))
+	if logs.runs != 1 {
+		t.Fatalf("restored selection ran %d times", logs.runs)
 	}
 }
 

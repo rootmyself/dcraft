@@ -21,7 +21,7 @@ db                       ✓ 실행 중
 
 안내
   1. 상태를 새로 고치려면 r을 누르세요.
-[↑↓] 이동  [enter] 실행  [q] 종료
+[esc] 메뉴  [↑↓] 스크롤  [q] 종료
 
 === 40x30 ===
  dcraft · acme-platform · staging

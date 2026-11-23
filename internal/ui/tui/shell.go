@@ -352,7 +352,7 @@ func (m *Model) resultBody() bodyLayout {
 	// The list is also hidden while the result scrolls: two competing scroll
 	// lists would fight for the same keys. esc puts the result away and brings
 	// the menu back, so the feature list is never unreachable.
-	if len(m.features) > 1 && !m.sidebarVisible() && !m.menuHidden() && !m.resultDismissed {
+	if m.featureListVisible() {
 		lines = append(lines, m.sectionLabel(msgMenu))
 		budget := 0
 		if m.height > 0 {
@@ -689,6 +689,15 @@ func (m *Model) menuHidden() bool {
 		return false
 	}
 	return m.resultScrolls()
+}
+
+// featureListVisible is shared by the renderer and the navigation keys.
+func (m *Model) featureListVisible() bool {
+	return m.navMenuVisible() && !m.sidebarVisible() && !m.menuHidden()
+}
+
+func (m *Model) selectionVisible() bool {
+	return m.navMenuVisible() && (m.sidebarVisible() || m.navLine() != "" || m.featureListVisible())
 }
 
 // screenTitle is the current feature's title. The stack identity lives in the
