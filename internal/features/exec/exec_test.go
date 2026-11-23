@@ -440,6 +440,35 @@ func TestExecInputsFailWhenNothingIsRunning(t *testing.T) {
 	}
 }
 
+// The document declares the service and the command so the TUI can paint them;
+// the CLI text is the same line body.
+func TestExecDocumentTagsServiceAndCommand(t *testing.T) {
+	f := New(&fakeBackend{}, &fakeStreamer{})
+	payload := Payload{Exec: Report{
+		Service: "web", Instance: "p-web-2", Index: 1,
+		Command: []string{"printf", "hi"}, ExitCode: 0,
+	}}
+	res := core.Result{Outcome: core.OutcomeSuccess, Data: payload}
+	doc := f.Document(res)
+	if len(doc.Blocks) != 1 || doc.Blocks[0].Kind != core.BlockValueLines {
+		t.Fatalf("document = %+v", doc)
+	}
+	kinds := map[core.ValueKind]int{}
+	var text []string
+	for _, line := range doc.Blocks[0].Lines {
+		text = append(text, line.Text())
+		for _, run := range line {
+			kinds[run.Kind]++
+		}
+	}
+	if kinds[core.ValueService] != 1 || kinds[core.ValueCommand] != 1 {
+		t.Fatalf("kinds = %v, want one service and one command", kinds)
+	}
+	if got, want := strings.Join(text, "\n"), f.Present(res, 0); got != want {
+		t.Fatalf("document text = %q, want presenter text %q", got, want)
+	}
+}
+
 func TestExecPresenterShowsTheResolvedTarget(t *testing.T) {
 	f := New(&fakeBackend{}, &fakeStreamer{})
 	payload := Payload{Exec: Report{

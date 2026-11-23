@@ -125,6 +125,8 @@ func RenderDocumentLayoutOptions(th Theme, doc core.Document, width int, opts Re
 			add(heading)
 		case core.BlockParagraph:
 			add(Wrap(block.Text, width))
+		case core.BlockValueLines:
+			add(renderValueLines(th, block.Lines, width))
 		case core.BlockKeyValues:
 			add(renderPairs(th, block.Pairs, width))
 		case core.BlockBadges:
@@ -185,6 +187,12 @@ func unlaidDocument(th Theme, doc core.Document) []string {
 			add([]string{block.Text})
 		case core.BlockParagraph:
 			add(strings.Split(strings.TrimRight(block.Text, "\n"), "\n"))
+		case core.BlockValueLines:
+			var out []string
+			for _, line := range block.Lines {
+				out = append(out, paintValueLine(th, line))
+			}
+			add(out)
 		case core.BlockKeyValues:
 			var out []string
 			for _, p := range block.Pairs {

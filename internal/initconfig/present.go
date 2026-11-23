@@ -1,7 +1,6 @@
 package initconfig
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/rootmyself/dcraft/internal/core"
@@ -11,45 +10,71 @@ import (
 // in the CLI plan or the TUI wizard preview, so this screen repeats the effects
 // and the next command rather than a second full file dump.
 func Present(res core.Result, width int) string {
+	return strings.Join(textLines(presentLines(res)), "\n") + "\n"
+}
+
+// Document implements core.ViewPresenter: the saved path, the validated command
+// and the next command are declared kinds. The CLI keeps the same text.
+func Document(res core.Result) core.Document {
+	return core.Document{Blocks: []core.Block{{Kind: core.BlockValueLines, Lines: presentLines(res)}}}
+}
+
+func presentLines(res core.Result) []core.ValueLine {
 	report, ok := payloadReport(res.Data)
 	if !ok {
-		return fmt.Sprintf("%s\n%s: %s\n", msgSaved, msgPreviewNext, msgNextCommand)
+		return []core.ValueLine{
+			{{Text: msgSaved}},
+			{{Text: msgPreviewNext + ": "}, {Text: msgNextCommand, Kind: core.ValueCommand}},
+		}
 	}
-	var b strings.Builder
-	b.WriteString(msgSaved)
-	b.WriteString("\n")
-	fmt.Fprintf(&b, "%s: %s\n", msgSavedPath, report.Path)
-	fmt.Fprintf(&b, "%s: %s", msgSavedService, report.Service)
+	lines := []core.ValueLine{
+		{{Text: msgSaved}},
+		{{Text: msgSavedPath + ": "}, {Text: report.Path, Kind: core.ValuePath}},
+		{{Text: msgSavedService + ": "}, {Text: report.Service, Kind: core.ValueService}},
+	}
 	if report.Mode == string(ModeDockerfile) {
-		b.WriteString(" (Dockerfile 빌드)")
+		lines[len(lines)-1] = append(lines[len(lines)-1], core.TextRun{Text: " (Dockerfile 빌드)"})
 	} else {
-		b.WriteString(" (이미지)")
+		lines[len(lines)-1] = append(lines[len(lines)-1], core.TextRun{Text: " (이미지)"})
 	}
-	b.WriteString("\n")
 	if report.ProjectName != "" {
-		fmt.Fprintf(&b, "프로젝트 이름(Compose 파생): %s\n", report.ProjectName)
+		lines = append(lines, core.ValueLine{
+			{Text: "프로젝트 이름(Compose 파생): "},
+			{Text: report.ProjectName, Kind: core.ValueProject},
+		})
 	}
 	if report.Validation.Command != "" {
-		fmt.Fprintf(&b, "%s: %s 통과\n", msgSavedCheck, report.Validation.Command)
+		lines = append(lines, core.ValueLine{
+			{Text: msgSavedCheck + ": "},
+			{Text: report.Validation.Command, Kind: core.ValueCommand},
+			{Text: " 통과"},
+		})
 	}
 	if report.Overwritten {
-		fmt.Fprintf(&b, "%s: %s\n", msgSavedChanged, msgSavedReplace)
+		lines = append(lines, core.ValueLine{{Text: msgSavedChanged + ": " + msgSavedReplace}})
 	} else {
-		fmt.Fprintf(&b, "%s: %s\n", msgSavedChanged, msgSavedNew)
+		lines = append(lines, core.ValueLine{{Text: msgSavedChanged + ": " + msgSavedNew}})
 	}
 	for _, notice := range report.Notices {
-		fmt.Fprintf(&b, "- %s\n", notice)
+		lines = append(lines, core.ValueLine{{Text: "- " + notice}})
 	}
-	fmt.Fprintf(&b, "\n%s: %s\n", msgPreviewNext, report.NextCommand)
+	lines = append(lines, nil, core.ValueLine{
+		{Text: msgPreviewNext + ": "},
+		{Text: report.NextCommand, Kind: core.ValueCommand},
+	})
 	if report.NextCommand == msgNextCommand {
-		b.WriteString(msgPreviewInDir)
-		b.WriteString("\n")
+		lines = append(lines, core.ValueLine{{Text: msgPreviewInDir}})
 	}
-	b.WriteString(msgNoRun)
-	b.WriteString("\n")
-	b.WriteString(msgSavedNoOther)
-	b.WriteString("\n")
-	return b.String()
+	lines = append(lines, core.ValueLine{{Text: msgNoRun}}, core.ValueLine{{Text: msgSavedNoOther}})
+	return lines
+}
+
+func textLines(lines []core.ValueLine) []string {
+	out := make([]string, len(lines))
+	for i, line := range lines {
+		out[i] = line.Text()
+	}
+	return out
 }
 
 func payloadReport(data any) (Report, bool) {

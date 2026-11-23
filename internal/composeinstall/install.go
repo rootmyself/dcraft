@@ -353,35 +353,49 @@ func installPlan(rel Release, dest string) string {
 
 // Present implements core.Presenter for a successful install.
 func (f *Feature) Present(res core.Result, width int) string {
+	return core.ValueLinesText(presentLines(res))
+}
+
+// Document implements core.ViewPresenter: the install target is a path, the
+// source is a URL, and the CLI text stays unchanged.
+func (f *Feature) Document(res core.Result) core.Document {
+	return core.Document{Blocks: []core.Block{{Kind: core.BlockValueLines, Lines: presentLines(res)}}}
+}
+
+func presentLines(res core.Result) []core.ValueLine {
 	payload, ok := payloadFrom(res.Data)
 	if !ok {
-		return msgPlanTitle
+		return []core.ValueLine{{{Text: msgPlanTitle}}}
 	}
 	info := payload.Install
-	var b strings.Builder
+	var lines []core.ValueLine
 	if info.AlreadyAvailable {
-		fmt.Fprintf(&b, "%s\n", msgAlreadyAvailable)
-		fmt.Fprintf(&b, "- %s: %s\n", msgPlanTarget, info.Destination)
+		lines = append(lines,
+			core.ValueLine{{Text: msgAlreadyAvailable}},
+			core.ValueLine{{Text: "- " + msgPlanTarget + ": "}, {Text: info.Destination, Kind: core.ValuePath}},
+		)
 		if info.RecheckOutput != "" {
-			fmt.Fprintf(&b, "- %s: %s\n", msgPlanVersion, info.RecheckOutput)
+			lines = append(lines, core.ValueLine{{Text: fmt.Sprintf("- %s: %s", msgPlanVersion, info.RecheckOutput)}})
 		}
 	} else {
-		fmt.Fprintf(&b, "%s\n", msgStatusInstalled)
-		fmt.Fprintf(&b, "- %s: %s\n", msgPlanVersion, info.Version)
-		fmt.Fprintf(&b, "- %s: %s\n", msgPlanTarget, info.Destination)
-		fmt.Fprintf(&b, "- %s: %s\n", msgPlanSourceLabel, info.Source)
+		lines = append(lines,
+			core.ValueLine{{Text: msgStatusInstalled}},
+			core.ValueLine{{Text: fmt.Sprintf("- %s: %s", msgPlanVersion, info.Version)}},
+			core.ValueLine{{Text: "- " + msgPlanTarget + ": "}, {Text: info.Destination, Kind: core.ValuePath}},
+			core.ValueLine{{Text: "- " + msgPlanSourceLabel + ": "}, {Text: info.Source, Kind: core.ValueURL}},
+		)
 		if info.ChecksumVerified {
-			fmt.Fprintf(&b, "- 무결성: SHA-256 확인됨\n")
+			lines = append(lines, core.ValueLine{{Text: "- 무결성: SHA-256 확인됨"}})
 		}
 		if info.RecheckOutput != "" {
-			fmt.Fprintf(&b, "- 재확인: %s\n", info.RecheckOutput)
+			lines = append(lines, core.ValueLine{{Text: fmt.Sprintf("- 재확인: %s", info.RecheckOutput)}})
 		}
 	}
-	b.WriteString("\n")
-	b.WriteString(msgGuidanceOne)
-	b.WriteString("\n")
-	b.WriteString(msgGuidanceTwo)
-	return strings.TrimRight(b.String(), "\n")
+	lines = append(lines, nil,
+		core.ValueLine{{Text: msgGuidanceOne}},
+		core.ValueLine{{Text: msgGuidanceTwo}},
+	)
+	return lines
 }
 
 func payloadFrom(data any) (Payload, bool) {

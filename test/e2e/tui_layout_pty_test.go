@@ -74,6 +74,10 @@ func lastFrame(screen string) []string {
 // about SGR, not about every escape sequence.
 var sgrOnly = regexp.MustCompile("\x1b\\[[0-9;]*m")
 
+// sixteenSGR matches an SGR sequence carrying at least one of the 16 ANSI
+// colors (30-37, 90-97, 40-47, 100-107).
+var sixteenSGR = regexp.MustCompile("\x1b\\[[0-9;]*(3[0-7]|9[0-7]|4[0-7]|10[0-7])[0-9;]*m")
+
 // overWideRows returns every non-empty row of the last painted frame that is
 // wider than width.
 func overWideRows(screen string, width int) []string {
@@ -252,10 +256,13 @@ func TestPTYTUIRendersPerColorProfile(t *testing.T) {
 		name  string
 		term  string
 		color bool
+		// sixteen marks a terminal that must receive the nearest 16 colors,
+		// never a 256-color or truecolor sequence.
+		sixteen bool
 	}{
 		{name: "truecolor", term: "xterm-256color", color: true},
 		{name: "256", term: "xterm-256color", color: true},
-		{name: "16color", term: "xterm", color: false},
+		{name: "16color", term: "xterm", color: true, sixteen: true},
 		{name: "dumb", term: "dumb", color: false},
 	}
 	for _, tc := range cases {
@@ -283,7 +290,16 @@ func TestPTYTUIRendersPerColorProfile(t *testing.T) {
 					t.Fatalf("%s: frame missing %q:\n%s", tc.name, want, visibleText(tail))
 				}
 			}
-			if tc.color {
+			if tc.sixteen {
+				for _, bad := range []string{"38;2", "38;5", "48;2", "48;5"} {
+					if strings.Contains(tail, bad) {
+						t.Fatalf("%s: 16-color terminal received %q:\n%q", tc.name, bad, tail)
+					}
+				}
+				if !sixteenSGR.MatchString(tail) {
+					t.Fatalf("%s: no 16-color sequence:\n%q", tc.name, tail)
+				}
+			} else if tc.color {
 				if !strings.Contains(tail, ";38;2;") && !strings.Contains(tail, ";38;5;") {
 					t.Fatalf("%s: no color sequence in a color-capable terminal:\n%q", tc.name, tail)
 				}

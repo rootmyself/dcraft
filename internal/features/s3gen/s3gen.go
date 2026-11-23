@@ -367,35 +367,46 @@ func inputError(err error) *core.Error {
 
 // Present renders the saved script, its identity and the explicit next commands.
 func (f *Feature) Present(res core.Result, width int) string {
+	return core.ValueLinesText(presentLines(res))
+}
+
+// Document implements core.ViewPresenter: the S3 source is a URL, the script
+// and destination are paths, and the next commands are commands; the CLI text
+// is unchanged.
+func (f *Feature) Document(res core.Result) core.Document {
+	return core.Document{Blocks: []core.Block{{Kind: core.BlockValueLines, Lines: presentLines(res)}}}
+}
+
+func presentLines(res core.Result) []core.ValueLine {
 	payload, ok := res.Data.(Payload)
 	if !ok {
 		if ptr, ptrOK := res.Data.(*Payload); ptrOK && ptr != nil {
 			payload = *ptr
 		} else {
-			return "S3 스크립트 생성 결과를 표시할 수 없습니다."
+			return []core.ValueLine{{{Text: "S3 스크립트 생성 결과를 표시할 수 없습니다."}}}
 		}
 	}
 	report := payload.Generator
-	var b strings.Builder
-	b.WriteString(msgDoneHeader)
-	b.WriteString("\n\n")
-	fmt.Fprintf(&b, "%s: %s\n", msgDoneScript, report.Script)
-	fmt.Fprintf(&b, "%s: %s\n", msgDoneSource, report.Source)
-	fmt.Fprintf(&b, "%s: %s\n", msgDoneDest, report.Destination)
-	fmt.Fprintf(&b, "%s: %s\n", msgDoneMode, report.Mode)
+	lines := []core.ValueLine{
+		{{Text: msgDoneHeader}},
+		nil,
+		{{Text: msgDoneScript + ": "}, {Text: report.Script, Kind: core.ValuePath}},
+		{{Text: msgDoneSource + ": "}, {Text: report.Source, Kind: core.ValueURL}},
+		{{Text: msgDoneDest + ": "}, {Text: report.Destination, Kind: core.ValuePath}},
+		{{Text: msgDoneMode + ": " + report.Mode}},
+	}
 	if report.Replaced {
-		fmt.Fprintf(&b, "%s: 기존 파일 교체\n", msgDoneSave)
+		lines = append(lines, core.ValueLine{{Text: msgDoneSave + ": 기존 파일 교체"}})
 	} else {
-		fmt.Fprintf(&b, "%s: 새 파일 생성\n", msgDoneSave)
+		lines = append(lines, core.ValueLine{{Text: msgDoneSave + ": 새 파일 생성"}})
 	}
-	fmt.Fprintf(&b, "%s: sha256:%s\n", msgDoneSHA, report.SHA256)
-	b.WriteString("\n")
+	lines = append(lines, core.ValueLine{{Text: msgDoneSHA + ": sha256:" + report.SHA256}}, nil)
 	for _, notice := range report.Notices {
-		fmt.Fprintf(&b, "- %s\n", notice)
+		lines = append(lines, core.ValueLine{{Text: "- " + notice}})
 	}
-	b.WriteString("\n다음 명령:\n")
+	lines = append(lines, nil, core.ValueLine{{Text: "다음 명령:"}})
 	for _, command := range report.NextCommands {
-		fmt.Fprintf(&b, "  %s\n", command)
+		lines = append(lines, core.ValueLine{{Text: "  "}, {Text: command, Kind: core.ValueCommand}})
 	}
-	return strings.TrimRight(b.String(), "\n")
+	return lines
 }

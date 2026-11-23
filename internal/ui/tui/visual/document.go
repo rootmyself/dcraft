@@ -518,6 +518,27 @@ func renderPairs(th Theme, pairs []core.Pair, width int) []string {
 	return lines
 }
 
+// renderValueLines paints one line body. Each run is painted by its declared
+// kind before wrapping, so the existing ANSI-safe wrap keeps a coloured run
+// intact across rows and plain labels stay in the default foreground.
+func renderValueLines(th Theme, lines []core.ValueLine, width int) []string {
+	var out []string
+	for _, line := range lines {
+		out = append(out, Wrap(paintValueLine(th, line), width)...)
+	}
+	return out
+}
+
+// paintValueLine paints every declared run of one line. The text is unchanged;
+// only a run with a kind receives paint.
+func paintValueLine(th Theme, line core.ValueLine) string {
+	var b strings.Builder
+	for _, run := range line {
+		b.WriteString(paintValue(th, run.Kind, run.Text))
+	}
+	return b.String()
+}
+
 func paintValue(th Theme, kind core.ValueKind, value string) string {
 	switch kind {
 	case core.ValuePath:

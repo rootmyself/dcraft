@@ -1,5 +1,7 @@
 package core
 
+import "strings"
+
 // BlockKind names the seven neutral body blocks a feature can publish. The
 // document is deliberately colorless and width-free: the TUI decides how to
 // paint and fold it, the CLI never renders it at all.
@@ -20,6 +22,9 @@ const (
 	BlockCallout BlockKind = "callout"
 	// BlockDivider is a horizontal rule between groups.
 	BlockDivider BlockKind = "divider"
+	// BlockValueLines is line-oriented text in which the feature declares each
+	// value's kind. It renders like a paragraph but paints the declared runs.
+	BlockValueLines BlockKind = "value-lines"
 )
 
 // Document is the neutral result body the TUI renders. It carries no color,
@@ -32,11 +37,42 @@ type Document struct {
 // Block is one document node. Only the fields named by Kind are read.
 type Block struct {
 	Kind    BlockKind
-	Text    string // heading / paragraph text
-	Pairs   []Pair // key-values block
-	Table   *Table // table block
-	Badges  []Badge
-	Callout CalloutKind
+	Text    string      // heading / paragraph text
+	Pairs   []Pair      // key-values block
+	Table   *Table      // table block
+	Badges  []Badge     // badges block
+	Callout CalloutKind // callout block
+	Lines   []ValueLine // value-lines block
+}
+
+// TextRun is one declared segment of a line. An empty Kind is plain text, such
+// as a label or punctuation; a value kind paints only that segment.
+type TextRun struct {
+	Text string
+	Kind ValueKind
+}
+
+// ValueLine is one line of a value-classified body. The feature declares the
+// runs; the renderer never infers a kind from the text.
+type ValueLine []TextRun
+
+// Text is the line as the CLI prints it.
+func (l ValueLine) Text() string {
+	var b strings.Builder
+	for _, run := range l {
+		b.WriteString(run.Text)
+	}
+	return b.String()
+}
+
+// ValueLinesText is the plain text of a value-classified body. It is the bridge
+// that keeps a feature's CLI presenter and its TUI document on one formatter.
+func ValueLinesText(lines []ValueLine) string {
+	text := make([]string, len(lines))
+	for i, line := range lines {
+		text[i] = line.Text()
+	}
+	return strings.Join(text, "\n")
 }
 
 // ValueKind describes a value's meaning independently of its presentation.

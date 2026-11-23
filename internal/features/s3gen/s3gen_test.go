@@ -385,6 +385,34 @@ func TestWizardStepsCollectTheSameInputsAndPreviewSavesNothing(t *testing.T) {
 	}
 }
 
+// The TUI document declares the S3 source as a URL, the paths, and the next
+// commands; the CLI text stays the same.
+func TestS3genDocumentTagsURLPathsAndCommands(t *testing.T) {
+	feature := New()
+	res := core.Result{Outcome: core.OutcomeSuccess, Data: Payload{Generator: Report{
+		Script: "scripts/s3-sync.sh", Source: "s3://bucket/prefix", Destination: "src",
+		Mode: "sync", SHA256: "abc", NextCommands: []string{"dcraft hooks --add --stage pre"},
+	}}}
+	doc := feature.Document(res)
+	if len(doc.Blocks) != 1 || doc.Blocks[0].Kind != core.BlockValueLines {
+		t.Fatalf("document = %+v", doc)
+	}
+	kinds := map[core.ValueKind]int{}
+	var text []string
+	for _, line := range doc.Blocks[0].Lines {
+		text = append(text, line.Text())
+		for _, run := range line {
+			kinds[run.Kind]++
+		}
+	}
+	if kinds[core.ValueURL] != 1 || kinds[core.ValuePath] != 2 || kinds[core.ValueCommand] != 1 {
+		t.Fatalf("kinds = %v, want one url, two paths and one command", kinds)
+	}
+	if got, want := strings.Join(text, "\n"), feature.Present(res, 0); got != want {
+		t.Fatalf("document text = %q, want presenter text %q", got, want)
+	}
+}
+
 func hasCategory(res core.Result, category core.Category) bool {
 	for _, d := range res.Diagnostics {
 		if d.Category == category {

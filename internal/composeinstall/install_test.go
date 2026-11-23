@@ -391,6 +391,35 @@ func TestRecheckFailureReportsInstalledFileButFails(t *testing.T) {
 	}
 }
 
+// The TUI document declares the install target as a path and the source as a
+// URL; the CLI text is unchanged.
+func TestComposeInstallDocumentTagsURLAndPath(t *testing.T) {
+	feature := &Feature{}
+	res := core.Result{Outcome: core.OutcomeSuccess, Data: Payload{Install: Info{
+		Changed: true, Version: "v2.39.1",
+		Source:      "https://github.com/docker/compose/releases/download/v2.39.1/docker-compose",
+		Destination: "/home/me/.docker/cli-plugins/docker-compose",
+	}}}
+	doc := feature.Document(res)
+	if len(doc.Blocks) != 1 || doc.Blocks[0].Kind != core.BlockValueLines {
+		t.Fatalf("document = %+v", doc)
+	}
+	kinds := map[core.ValueKind]int{}
+	var text []string
+	for _, line := range doc.Blocks[0].Lines {
+		text = append(text, line.Text())
+		for _, run := range line {
+			kinds[run.Kind]++
+		}
+	}
+	if kinds[core.ValueURL] != 1 || kinds[core.ValuePath] != 1 {
+		t.Fatalf("kinds = %v, want one url and one path", kinds)
+	}
+	if got, want := strings.Join(text, "\n"), feature.Present(res, 0); got != want {
+		t.Fatalf("document text = %q, want presenter text %q", got, want)
+	}
+}
+
 func customRelease(t *testing.T, assetName string, asset []byte) ([]byte, []byte) {
 	t.Helper()
 	var rel releaseResponse

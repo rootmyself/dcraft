@@ -138,6 +138,12 @@ func (f *Feature) Present(res core.Result, width int) string {
 	return initimpl.Present(res, width)
 }
 
+// Document implements core.ViewPresenter: the saved path and the next command
+// carry declared value kinds in the TUI while the CLI text is unchanged.
+func (f *Feature) Document(res core.Result) core.Document {
+	return initimpl.Document(res)
+}
+
 // CanceledDiagnostic describes the atomic save window honestly.
 func (f *Feature) CanceledDiagnostic() core.Diagnostic {
 	return initimpl.CanceledDiagnostic()

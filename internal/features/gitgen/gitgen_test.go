@@ -324,6 +324,35 @@ func TestWizardStepsCollectTheSameInputsAndPreviewSavesNothing(t *testing.T) {
 	}
 }
 
+// The TUI document declares the script paths and the next commands; the CLI
+// text is byte for byte the presenter text, including its blank lines.
+func TestGitgenDocumentTagsPathsAndCommands(t *testing.T) {
+	feature := New()
+	res := core.Result{Outcome: core.OutcomeSuccess, Data: Payload{Generator: Report{
+		Script: "scripts/git-sync.sh", Destination: "src", Ref: "main", RefKind: "branch",
+		SHA256: "abc", NextCommands: []string{"dcraft hooks --add --stage pre"},
+		Notices: []string{"신뢰 승인이 필요합니다."},
+	}}}
+	doc := feature.Document(res)
+	if len(doc.Blocks) != 1 || doc.Blocks[0].Kind != core.BlockValueLines {
+		t.Fatalf("document = %+v", doc)
+	}
+	kinds := map[core.ValueKind]int{}
+	var text []string
+	for _, line := range doc.Blocks[0].Lines {
+		text = append(text, line.Text())
+		for _, run := range line {
+			kinds[run.Kind]++
+		}
+	}
+	if kinds[core.ValuePath] != 2 || kinds[core.ValueCommand] != 1 {
+		t.Fatalf("kinds = %v, want two paths and one command", kinds)
+	}
+	if got, want := strings.Join(text, "\n"), feature.Present(res, 0); got != want {
+		t.Fatalf("document text = %q, want presenter text %q", got, want)
+	}
+}
+
 func hasCategory(res core.Result, category core.Category) bool {
 	for _, d := range res.Diagnostics {
 		if d.Category == category {
