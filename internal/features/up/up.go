@@ -26,6 +26,7 @@ func (f *Feature) Descriptor() core.Descriptor {
 		Section:          core.SectionOperate,
 		RecordsHistory:   true,
 		SupportsServices: true,
+		StreamsProgress:  true,
 		Hooks:            core.HookUpUpdate,
 	}
 }

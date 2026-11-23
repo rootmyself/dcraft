@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -25,6 +26,19 @@ import (
 // build without them. Readiness and health are later-ticket work; dcraft does
 // not claim the application is healthy here.
 func (c *Compose) Up(ctx context.Context, t core.Target, services []string) (stack.OpResult, error) {
+	return c.up(ctx, t, services, nil)
+}
+
+// UpProgress implements stack.ProgressLifecycle. It runs the same up operation
+// with plain, colorless Compose progress and sends the command's own stdout and
+// stderr to progress while it runs. Container logs are not tailed. A runner
+// without the streaming capability keeps captured output, so the call still
+// succeeds and never blocks the screen on a promise it cannot keep.
+func (c *Compose) UpProgress(ctx context.Context, t core.Target, services []string, progress io.Writer) (stack.OpResult, error) {
+	return c.up(ctx, t, services, progress)
+}
+
+func (c *Compose) up(ctx context.Context, t core.Target, services []string, progress io.Writer) (stack.OpResult, error) {
 	noBuild, guardNotice, err := c.noBuildGuard(ctx, t, services)
 	if err != nil {
 		return stack.OpResult{}, err
@@ -40,13 +54,24 @@ func (c *Compose) Up(ctx context.Context, t core.Target, services []string) (sta
 		return stack.OpResult{}, ctxErr
 	}
 	sub := []string{"up", "--detach"}
+	if progress != nil {
+		// Plain progress and no ANSI keep the stream readable in a text
+		// viewport; the container run itself is unaffected.
+		sub = append([]string{"--progress", "plain", "--ansi", "never"}, sub...)
+	}
 	if noBuild {
 		// A build-phase secret can only be delivered by an explicit dcraft
 		// build. Never let Compose run an implicit build without it.
 		sub = append(sub, "--no-build")
 	}
 	args := composeArgsWith(t, prep.Files, append(sub, services...)...)
-	res, err := c.run(ctx, execx.Command{Name: "docker", Args: args, Dir: t.ProjectDir, Env: composeEnv(prep.Env)})
+	cmd := execx.Command{Name: "docker", Args: args, Dir: t.ProjectDir, Env: composeEnv(prep.Env)}
+	var res execx.Result
+	if progress != nil {
+		res, err = c.runProgress(ctx, cmd, progress)
+	} else {
+		res, err = c.run(ctx, cmd)
+	}
 	notices := append([]string{}, prep.Notices...)
 	if guardNotice != "" {
 		notices = append(notices, guardNotice)
@@ -68,6 +93,20 @@ func (c *Compose) Up(ctx context.Context, t core.Target, services []string) (sta
 	}
 	prep.Commit()
 	return out, nil
+}
+
+// runProgress uses the optional streaming capability of the command boundary.
+// The runner is a narrow interface, so an implementation that only captures
+// keeps the capture path instead of failing the operation.
+func (c *Compose) runProgress(ctx context.Context, cmd execx.Command, progress io.Writer) (execx.Result, error) {
+	streamer, ok := c.runner.(execx.Streamer)
+	if !ok {
+		return c.run(ctx, cmd)
+	}
+	return streamer.RunStream(ctx, cmd, execx.Stream{
+		Stdout: progress,
+		Stderr: progress,
+	})
 }
 
 // noBuildGuard reports whether an implicit Compose build must be suppressed
