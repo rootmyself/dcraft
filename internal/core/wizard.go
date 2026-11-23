@@ -49,6 +49,8 @@ type WizardStep struct {
 	// nothing checked selects the highlighted option, preserving the simple
 	// one-choice flow.
 	Multi bool `json:"multi,omitempty"`
+	// List collects ordered, newline-separated free-form items.
+	List bool `json:"list,omitempty"`
 	// CustomHint describes the expected free-form value.
 	CustomHint string `json:"custom_hint,omitempty"`
 	// Default is preselected for a choice step or prefilled for an input step.

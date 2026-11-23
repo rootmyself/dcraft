@@ -82,7 +82,7 @@ func (c *Controller) Run(ctx context.Context, in core.Invocation) (any, error) {
 // Plan shows the exact generated file, destination, project name, effects and
 // next command without writing anything.
 func (c *Controller) Plan(ctx context.Context, in core.Invocation) (core.Plan, error) {
-	prepared, err := c.prepare(ctx, in, false, true)
+	prepared, err := c.prepare(ctx, in, in.Option("wizard") == "apply", true)
 	if err != nil {
 		return core.Plan{}, err
 	}
@@ -447,15 +447,15 @@ func (c *Controller) WizardSteps(ctx context.Context, in core.Invocation) (core.
 			},
 			{
 				Name: "port", Title: msgWizardPortTitle, Prompt: msgWizardPortPrompt,
-				AllowCustom: true, Optional: true, CustomHint: msgWizardPortHint,
+				AllowCustom: true, List: true, Optional: true, CustomHint: msgWizardPortHint,
 			},
 			{
 				Name: "volume", Title: msgWizardVolumeTitle, Prompt: msgWizardVolumePrompt,
-				AllowCustom: true, Optional: true, CustomHint: msgWizardVolumeHint,
+				AllowCustom: true, List: true, Optional: true, CustomHint: msgWizardVolumeHint,
 			},
 			{
 				Name: "env-var", Title: msgWizardEnvTitle, Prompt: msgWizardEnvPrompt,
-				AllowCustom: true, Optional: true, CustomHint: msgWizardEnvHint,
+				AllowCustom: true, List: true, Optional: true, CustomHint: msgWizardEnvHint,
 			},
 			{
 				Name: "command", Title: msgWizardCommandTitle, Prompt: msgWizardCommandPrompt,

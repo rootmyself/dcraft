@@ -150,6 +150,13 @@ func (m *Model) screenKeycaps() []visual.Keycap {
 			{Key: "q", Label: msgKeyQuit, Priority: 0},
 			{Key: "?", Label: msgKeyHelp, Priority: 3},
 		}
+		if m.wizardTextInput() && m.wizardSpec.Steps[m.wizardStep].List {
+			esc := msgListCancel
+			if m.wizardEditing {
+				esc = msgListCancelEdit
+			}
+			return []visual.Keycap{{Key: "↑↓", Label: msgListSelect, Priority: 1}, {Key: "enter", Label: msgListEnter, Priority: 0}, {Key: "esc", Label: esc, Priority: 0}}
+		}
 		if m.wizardTextInput() {
 			// A free-text step accepts "?" as a character and has no list to
 			// move through; the row names only the keys that act here.

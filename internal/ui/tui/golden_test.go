@@ -77,6 +77,7 @@ func goldenScreens() []goldenScreen {
 		{name: "confirm-modal", build: goldenConfirmModal},
 		{name: "progress", build: goldenProgress},
 		{name: "wizard", build: goldenWizard},
+		{name: "wizard-list", build: goldenWizardList},
 		{name: "failure", build: goldenFailure},
 		{name: "empty-stack", build: goldenEmptyStack},
 		{name: "logs", build: goldenLogs},
@@ -598,6 +599,22 @@ func goldenWizard(t *testing.T) *Model {
 		t.Fatalf("phase = %v, want the first wizard step", m.phase)
 	}
 	resize(t, m, 120, 30)
+	return m
+}
+
+func goldenWizardList(t *testing.T) *Model {
+	t.Helper()
+	m := goldenWizard(t)
+	m.wizardSpec = core.WizardSpec{Title: "설정", Steps: []core.WizardStep{{
+		Name: "volume", Title: "볼륨", Prompt: "볼륨 입력", AllowCustom: true, List: true, Optional: true,
+		CustomHint: "한 줄에 하나",
+	}}}
+	m.wizardStep = 0
+	m.initWizardStep()
+	feed(t, m, []tea.Msg{
+		tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("cache:/data:ro,Z")},
+		tea.KeyMsg{Type: tea.KeyEnter},
+	})
 	return m
 }
 

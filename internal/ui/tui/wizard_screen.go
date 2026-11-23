@@ -53,6 +53,36 @@ func (m *Model) wizardStepScreen(step core.WizardStep) wizardStepScreen {
 		screen.head = append(screen.head, "")
 	}
 
+	if step.List {
+		for i, item := range m.wizardItems {
+			marker := "  "
+			if i == m.wizardChoice {
+				marker = "> "
+			}
+			if i == m.wizardChoice && m.wizardEditing {
+				item += msgListEditing
+			}
+			start := len(screen.cards)
+			screen.cards = append(screen.cards, wrapWithPrefix(item, marker+"* ", "    ", width, m.theme.Glyphs.Ell)...)
+			screen.ranges = append(screen.ranges, [2]int{start, len(screen.cards)})
+		}
+		screen.ranges = append(screen.ranges, [2]int{len(screen.cards), len(screen.cards)})
+		marker := "  "
+		if m.wizardChoice == len(m.wizardItems) || m.wizardEditing {
+			marker = "> "
+		}
+		screen.tail = append(screen.tail, marker+m.wizardInput+cursorGlyph)
+		for _, line := range m.wrapTo(fmt.Sprintf(msgListHint, len(m.wizardItems)), width) {
+			screen.tail = append(screen.tail, m.hintText(line))
+		}
+		if m.wizardNotice != "" {
+			screen.tail = append(screen.tail, m.noticeText(m.wizardNotice))
+		}
+		if step.CustomHint != "" {
+			screen.tail = append(screen.tail, m.wrapTo(step.CustomHint, width)...)
+		}
+		return screen
+	}
 	if len(step.Options) > 0 {
 		if step.Multi {
 			screen.cards, screen.ranges = m.wizardCheckboxes(step)
@@ -397,6 +427,15 @@ func (m *Model) wizardAnswerLines(width int) []string {
 		label := step.Title
 		if strings.TrimSpace(label) == "" {
 			label = step.Name
+		}
+		if step.List && strings.TrimSpace(value) != "" {
+			out = append(out, m.wrapTo(label+":", width)...)
+			for _, item := range strings.Split(value, "\n") {
+				if item = strings.TrimSpace(item); item != "" {
+					out = append(out, wrapWithPrefix(item, "* ", "  ", width, m.theme.Glyphs.Ell)...)
+				}
+			}
+			continue
 		}
 		text := label + ": " + wizardAnswerDisplay(step, value)
 		for _, line := range m.wrapTo(text, width) {

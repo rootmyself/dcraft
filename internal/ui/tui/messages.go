@@ -2,6 +2,12 @@ package tui
 
 // Korean user-facing TUI text.
 const (
+	msgListEditing          = " (수정 중)"
+	msgListHint             = "%d개 · ↑↓ 선택 · enter 추가/수정/완료 · 삭제 · esc 수정 취소/마법사 취소"
+	msgListCancel           = "마법사 취소"
+	msgListCancelEdit       = "수정 취소"
+	msgListSelect           = "선택"
+	msgListEnter            = "추가/완료"
 	msgWorking              = "작업을 실행하는 중…"
 	msgPlanning             = "작업 계획을 확인하는 중…"
 	msgApprovalConfirmTitle = "승인 확인"
