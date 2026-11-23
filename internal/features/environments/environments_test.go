@@ -195,6 +195,14 @@ func TestWizardCollectsAndPreviewsCreation(t *testing.T) {
 		t.Fatalf("steps: %v", err)
 	}
 	spec := payload.(core.WizardSpec)
+	for _, step := range spec.Steps {
+		if !strings.Contains(step.CustomHint, "예: ") || !strings.Contains(step.CustomHint, " · ") {
+			t.Errorf("%s: expected multiple formatted examples in hint, got %q", step.Name, step.CustomHint)
+		}
+		if step.Name != "name" && !strings.Contains(step.CustomHint, "한 줄에 하나") {
+			t.Errorf("%s: list hint should explain one item per line: %q", step.Name, step.CustomHint)
+		}
+	}
 	names := make([]string, 0, len(spec.Steps))
 	for _, step := range spec.Steps {
 		names = append(names, step.Name)

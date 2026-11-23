@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/rootmyself/dcraft/internal/core"
+	"github.com/rootmyself/dcraft/internal/features/environments"
 	"github.com/rootmyself/dcraft/internal/features/status"
 	"github.com/rootmyself/dcraft/internal/stack"
 	"github.com/rootmyself/dcraft/internal/ui/tui/visual"
@@ -77,10 +78,30 @@ func goldenScreens() []goldenScreen {
 		{name: "confirm-modal", build: goldenConfirmModal},
 		{name: "progress", build: goldenProgress},
 		{name: "wizard", build: goldenWizard},
+		{name: "wizard-examples", build: goldenWizardExamples},
 		{name: "failure", build: goldenFailure},
 		{name: "empty-stack", build: goldenEmptyStack},
 		{name: "logs", build: goldenLogs},
 	}
+}
+
+func goldenWizardExamples(t *testing.T) *Model {
+	t.Helper()
+	feature := environments.New()
+	payload, err := feature.Run(context.Background(), core.Invocation{
+		Target:  core.Target{ProjectDir: t.TempDir()},
+		Options: map[string]string{"wizard": "steps"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	desc := core.Descriptor{Name: "secrets", Title: "실행환경 별칭", Summary: "실행환경 별칭을 만듭니다.", Usage: "dcraft environments", Section: core.SectionConfig, Wizard: true}
+	stub := &wizardStub{desc: desc, steps: payload.(core.WizardSpec)}
+	m := newGoldenModel(t, replaceFeature(goldenBaseFeatures(), "secrets", stub)...)
+	if err := chooseFeatureNamed(t, m, "secrets"); err != nil {
+		t.Fatal(err)
+	}
+	return m
 }
 
 func TestGoldenMatrix(t *testing.T) {

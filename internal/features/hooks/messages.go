@@ -45,7 +45,7 @@ const (
 	msgWizardPostLabel    = "사후 (본 작업 완료 후)"
 	msgWizardScriptTitle  = "스크립트 경로 입력"
 	msgWizardScriptPrompt = "프로젝트 기준 상대 경로 또는 절대 로컬 경로를 입력하세요."
-	msgWizardScriptHint   = "예: scripts/pre-deploy.sh"
+	msgWizardScriptHint   = "예: scripts/pre-deploy.sh · hooks/migrate.sh · ./scripts/check-db.sh"
 	msgWizardPreviewTitle = "다음 등록을 적용할까요?"
 
 	msgWizardWorkdirPrefix = "실행 위치: "

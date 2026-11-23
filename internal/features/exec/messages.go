@@ -60,9 +60,9 @@ const (
 	msgNothingRunningActionTwo = "dcraft status로 현재 상태를 확인하세요."
 
 	msgFieldInstance        = "서비스 인스턴스"
-	msgFieldInstanceHelp    = "실행 중인 인스턴스를 선택합니다. 서비스가 여러 개면 접속할 인스턴스를 직접 고르세요."
+	msgFieldInstanceHelp    = "실행 중인 인스턴스 선택 · 예: nginx-1 · node-api-1 · postgres-1"
 	msgFieldCommand         = "명령"
-	msgFieldCommandHelp     = "이미지 안에서 실행할 명령과 인자입니다. 셸 확장은 하지 않으며 따옴표로 인자를 묶을 수 있습니다."
+	msgFieldCommandHelp     = "이미지 안의 명령과 인자 · 예: sh · node --version · psql -U postgres (셸 확장 없음, 따옴표로 인자 묶기 가능)"
 	msgPickInstance         = "접속할 서비스 인스턴스를 선택하세요."
 	msgPickInstanceAction   = "dcraft status로 실행 중인 인스턴스를 확인하세요."
 	msgInvalidCommand       = "명령 형식이 올바르지 않습니다."
