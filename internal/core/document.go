@@ -39,8 +39,25 @@ type Block struct {
 	Callout CalloutKind
 }
 
+// ValueKind describes a value's meaning independently of its presentation.
+type ValueKind string
+
+const (
+	ValuePlain   ValueKind = ""
+	ValuePath    ValueKind = "path"
+	ValueURL     ValueKind = "url"
+	ValueImage   ValueKind = "image"
+	ValueCommand ValueKind = "command"
+	ValueTime    ValueKind = "time"
+	ValueService ValueKind = "service"
+	ValueProject ValueKind = "project"
+)
+
 // Pair is one key-value row.
-type Pair struct{ Key, Value string }
+type Pair struct {
+	Key, Value string
+	Kind       ValueKind
+}
 
 // Table is a table block. Columns declare order and relative width weight;
 // the renderer owns cell widths and may drop columns it cannot fit.
@@ -90,6 +107,7 @@ type Row struct {
 // Cell is one table cell.
 type Cell struct {
 	Text string
+	Kind ValueKind
 	// Badge renders Text with the state icon + Korean label instead of a
 	// bare word. Style is semantic only; the renderer picks the color.
 	Badge BadgeKind

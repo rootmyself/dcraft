@@ -17,14 +17,13 @@ import (
 )
 
 // Profile is the terminal color capability that decides whether the resolved
-// theme may emit color. 16-color and non-TTY terminals degrade to no color;
-// 256-color and truecolor terminals keep it.
+// theme may emit color. Non-TTY terminals degrade to no color.
 type Profile int
 
 const (
 	// ProfileNone is a non-TTY or otherwise colorless output.
 	ProfileNone Profile = iota
-	// Profile16 is a 16-color terminal; the palette needs more colors.
+	// Profile16 is a 16-color terminal.
 	Profile16
 	// Profile256 is a 256-color terminal.
 	Profile256
@@ -49,7 +48,7 @@ type Inputs struct {
 	UTF8 bool
 }
 
-// Token is one of the six semantic colors the whole TUI is allowed to use.
+// Token names a semantic color.
 // Background and foreground are the terminal's own colors, not tokens.
 type Token int
 
@@ -66,6 +65,12 @@ const (
 	TokenMuted
 	// TokenSurface is the only token painted as a background plate.
 	TokenSurface
+	TokenInfo
+	TokenCode
+	TokenName
+	TokenURL
+	TokenCommand
+	TokenProject
 )
 
 // String is the token name used in tests and reports.
@@ -83,24 +88,38 @@ func (t Token) String() string {
 		return "muted"
 	case TokenSurface:
 		return "surface"
+	case TokenInfo:
+		return "info"
+	case TokenCode:
+		return "code"
+	case TokenName:
+		return "name"
+	case TokenURL:
+		return "url"
+	case TokenCommand:
+		return "command"
+	case TokenProject:
+		return "project"
 	default:
 		return "unknown"
 	}
 }
 
 // Palette is one resolved theme. BG and FG are the terminal's own background
-// and foreground; the six tokens carry meaning only.
+// and foreground; the tokens carry meaning only.
 type Palette struct {
-	Name    string
-	Dark    bool
-	BG      string
-	FG      string
-	Accent  string
-	Success string
-	Warning string
-	Danger  string
-	Muted   string
-	Surface string
+	Name                  string
+	Dark                  bool
+	BG                    string
+	FG                    string
+	Accent                string
+	Success               string
+	Warning               string
+	Danger                string
+	Muted                 string
+	Surface               string
+	Info, Code, NameColor string
+	URL, Command, Project string
 }
 
 // Color resolves a semantic token to its approved #rrggbb value.
@@ -118,6 +137,18 @@ func (p Palette) Color(t Token) (string, bool) {
 		return p.Muted, true
 	case TokenSurface:
 		return p.Surface, true
+	case TokenInfo:
+		return p.Info, true
+	case TokenCode:
+		return p.Code, true
+	case TokenName:
+		return p.NameColor, true
+	case TokenURL:
+		return p.URL, true
+	case TokenCommand:
+		return p.Command, true
+	case TokenProject:
+		return p.Project, true
 	default:
 		return "", false
 	}
@@ -192,9 +223,10 @@ func (g Glyphs) SpinnerFrame(i int) string {
 type Theme struct {
 	Palette Palette
 	// Color is false when the terminal must receive plain text: NO_COLOR,
-	// 16-color, non-TTY, or TERM=dumb.
-	Color  bool
-	Glyphs Glyphs
+	// non-TTY, or TERM=dumb.
+	Color   bool
+	Glyphs  Glyphs
+	Profile Profile
 }
 
 // Resolved reports whether this theme came from Resolve. The zero Theme means
@@ -211,6 +243,7 @@ func DarkPalette() Palette {
 		Name: "dark", Dark: true, BG: "#10131a", FG: "#d8dee9",
 		Accent: "#7aa2f7", Success: "#5fd08a", Warning: "#e5b567",
 		Danger: "#f07178", Muted: "#9aa5b8", Surface: "#1b2130",
+		Info: "#5fd7ff", URL: "#5f5fff", Code: "#ffff55", Command: "#ff5555", NameColor: "#55ff77", Project: "#ff55ff",
 	}
 }
 
@@ -221,6 +254,7 @@ func LightPalette() Palette {
 		Name: "light", Dark: false, BG: "#ffffff", FG: "#1f2430",
 		Accent: "#2f5bd1", Success: "#1b7a43", Warning: "#8a5a00",
 		Danger: "#b4232f", Muted: "#5b6472", Surface: "#f1f4f9",
+		Info: "#005f87", URL: "#003faf", Code: "#875f00", Command: "#af0000", NameColor: "#008700", Project: "#8700af",
 	}
 }
 
@@ -244,12 +278,12 @@ func Resolve(in Inputs) Theme {
 		pal = DarkPalette()
 	}
 	color := !in.NoColor && !strings.EqualFold(strings.TrimSpace(in.Term), "dumb") &&
-		(in.Profile == Profile256 || in.Profile == ProfileTrueColor)
+		(in.Profile == Profile16 || in.Profile == Profile256 || in.Profile == ProfileTrueColor)
 	glyphs := UTF8Glyphs()
 	if !in.UTF8 {
 		glyphs = ASCIIGlyphs()
 	}
-	return Theme{Palette: pal, Color: color, Glyphs: glyphs}
+	return Theme{Palette: pal, Color: color, Glyphs: glyphs, Profile: in.Profile}
 }
 
 // Plain returns a resolved theme that never emits escape sequences. Tests and
@@ -268,7 +302,7 @@ func (t Theme) Paint(tok Token, s string) string {
 	if !ok {
 		return s
 	}
-	return sgr(hex, "", false) + s + "\x1b[0m"
+	return t.sgr(hex, "", false) + s + "\x1b[0m"
 }
 
 // Bold is Paint with the bold attribute.
@@ -280,7 +314,7 @@ func (t Theme) Bold(tok Token, s string) string {
 	if !ok {
 		return s
 	}
-	return sgr(hex, "", true) + s + "\x1b[0m"
+	return t.sgr(hex, "", true) + s + "\x1b[0m"
 }
 
 // PaintOn wraps s in a foreground token over a background token.
@@ -308,7 +342,45 @@ func (t Theme) style(fg, bg Token, bold bool, s string) string {
 	} else if b, ok := t.Palette.Color(bg); ok {
 		bgHex = b
 	}
-	return sgr(fgHex, bgHex, bold) + s + "\x1b[0m"
+	return t.sgr(fgHex, bgHex, bold) + s + "\x1b[0m"
+}
+
+func (t Theme) sgr(fg, bg string, bold bool) string {
+	if t.Profile != Profile16 {
+		return sgr(fg, bg, bold)
+	}
+	codes := []string{"0"}
+	if bold {
+		codes = append(codes, "1")
+	}
+	if fg != "" {
+		codes = append(codes, strconv.Itoa(ansi16(fg, false)))
+	}
+	if bg != "" {
+		codes = append(codes, strconv.Itoa(ansi16(bg, true)))
+	}
+	return "\x1b[" + strings.Join(codes, ";") + "m"
+}
+
+func ansi16(hex string, background bool) int {
+	colors := [16][3]int{{0, 0, 0}, {128, 0, 0}, {0, 128, 0}, {128, 128, 0}, {0, 0, 128}, {128, 0, 128}, {0, 128, 128}, {192, 192, 192}, {128, 128, 128}, {255, 0, 0}, {0, 255, 0}, {255, 255, 0}, {0, 0, 255}, {255, 0, 255}, {0, 255, 255}, {255, 255, 255}}
+	r, g, b := HexRGB(hex)
+	best, distance := 0, math.MaxInt
+	for i, c := range colors {
+		d := (r-c[0])*(r-c[0]) + (g-c[1])*(g-c[1]) + (b-c[2])*(b-c[2])
+		if d < distance {
+			best, distance = i, d
+		}
+	}
+	base := 30
+	if background {
+		base = 40
+	}
+	if best >= 8 {
+		base += 60
+		best -= 8
+	}
+	return base + best
 }
 
 // sgr builds a 24-bit SGR sequence.
