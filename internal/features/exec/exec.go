@@ -152,6 +152,24 @@ func (f *Feature) Run(ctx context.Context, in core.Invocation) (any, error) {
 	}
 
 	in.Reporter.Begin(stageAttach, msgStageAttach)
+	// An interactive attach that starts with bash asks the target first, so the
+	// OCI "no such file" error never reaches the screen. The probe is one
+	// non-interactive exec with discarded streams: it is not a stage and prints
+	// nothing. Only exit 0 (bash present) and exit 1 (bash absent) decide; an
+	// inconclusive probe attaches the requested argv unchanged.
+	if attach && isBashCommand(req.Command) {
+		probe, probeErr := f.probeBash(ctx, in.Target, req)
+		if probeErr != nil {
+			in.Reporter.End(stageAttach, core.StageCanceled, msgTerminalRestored)
+			return nil, probeErr
+		}
+		if probe == probeBashAbsent {
+			req.Command = append([]string{shellSh}, req.Command[1:]...)
+			report.Command = append([]string{}, req.Command...)
+			report.Substituted = true
+			report.Notices = append(report.Notices, msgBashAbsent)
+		}
+	}
 	result, streamErr := f.streamer.Exec(ctx, in.Target, req, streams)
 	// An image without bash still gets a shell: one retry with /bin/sh, and the
 	// substitution is stated. Any other failure is reported unchanged.

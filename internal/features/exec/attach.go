@@ -2,12 +2,15 @@ package exec
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 
 	"github.com/rootmyself/dcraft/internal/core"
 	"github.com/rootmyself/dcraft/internal/selector"
+	"github.com/rootmyself/dcraft/internal/stack"
 )
 
 // The attach screen always offers the two shells first, then this project's
@@ -238,6 +241,79 @@ func forgetCommand(projectDir, command string) (any, error) {
 		})
 	}
 	return Payload{Exec: Report{Command: []string{command}, Notices: []string{fmt.Sprintf(msgForgotCommand, command)}}}, nil
+}
+
+// bashProbeResult is the pre-attach check's answer. Only an explicit "absent"
+// changes the command; everything else keeps the argv the reader asked for.
+type bashProbeResult int
+
+const (
+	// probeInconclusive means the probe could not decide, so the requested
+	// argv runs unchanged and substitutionRetry stays the safety net.
+	probeInconclusive bashProbeResult = iota
+	// probeBashPresent means the requested bash starts.
+	probeBashPresent
+	// probeBashAbsent means the requested bash cannot start.
+	probeBashAbsent
+)
+
+// bashProbeCommand asks the instance the only question that predicts the
+// attach: does this exact argv0 start? It uses the argv0 the reader chose
+// instead of a fixed list of paths, so a bash on PATH (a distribution that
+// keeps it in /usr/local/bin) is not mistaken for an image without bash, and a
+// bare `bash` that PATH cannot resolve is not mistaken for one that can.
+//
+// `--version` is the harmless argument: bash prints and exits 0 without reading
+// a startup file, so the probe cannot change container state. dcraft still
+// never wraps the reader's argv in `sh -c`.
+func bashProbeCommand(command []string) []string {
+	return []string{command[0], "--version"}
+}
+
+// probeBash asks the instance whether the requested bash starts before an
+// interactive attach runs, so an image without it never prints the OCI runtime
+// error to the reader's terminal before landing in sh. It goes through the same
+// streaming boundary as the attach and discards both outputs, so the probe can
+// never write to the terminal and cannot consume the reader's input.
+//
+// A failed or undecidable probe is not a failure: the attach runs the requested
+// argv unchanged. Only a cancellation ends the run, because the reader already
+// asked to leave.
+func (f *Feature) probeBash(ctx context.Context, target core.Target, req stack.ExecRequest) (bashProbeResult, error) {
+	probe := stack.ExecRequest{
+		Service: req.Service,
+		Index:   req.Index,
+		Command: bashProbeCommand(req.Command),
+		TTY:     false,
+	}
+	result, streamErr := f.streamer.Exec(ctx, target, probe, core.IO{Stdout: io.Discard, Stderr: io.Discard})
+	if streamErr != nil {
+		// A canceled probe is the reader leaving, not an undecidable answer:
+		// reporting it as inconclusive would attach behind their back.
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return probeInconclusive, ctxErr
+		}
+		if errors.Is(streamErr, context.Canceled) || errors.Is(streamErr, context.DeadlineExceeded) {
+			return probeInconclusive, streamErr
+		}
+		return probeInconclusive, nil
+	}
+	switch result.ExitCode {
+	case 0:
+		return probeBashPresent, nil
+	case 126, 127:
+		// The runtime's own "cannot start it" statuses: not executable, or not
+		// found. Any other status means bash ran and reported something, which
+		// says nothing about whether it exists.
+		return probeBashAbsent, nil
+	}
+	return probeInconclusive, nil
+}
+
+// isBashCommand reports whether the effective argv starts with bash: the pinned
+// path or the bare name. The rest of the argv never changes the decision.
+func isBashCommand(command []string) bool {
+	return len(command) > 0 && (command[0] == shellBash || command[0] == "bash")
 }
 
 // substitutionRetry is the one retry the attach makes on its own: an image
