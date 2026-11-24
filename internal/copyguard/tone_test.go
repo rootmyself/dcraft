@@ -30,6 +30,14 @@ func TestProductCopyDetailsAreComplete(t *testing.T) {
 	requireNoMatch(t, danglingDetail, "parenthesised detail ending in a space")
 }
 
+// TestProductCopyHasNoTranslationese guards the phrases the copy pass removed.
+// Each one is a habit rather than a fact: it appears whenever the text was
+// assembled from clauses instead of written as a sentence. The list is short on
+// purpose, so every entry can be justified when a legitimate use appears.
+func TestProductCopyHasNoTranslationese(t *testing.T) {
+	requireNoMatch(t, translationese, "translationese or stock connective")
+}
+
 // formalEnding matches the endings the guide forbids. "세요" covers ~하세요,
 // ~으세요, and ~세요; "십시오" covers the honorific imperative; the question
 // endings keep a new prompt from becoming a sentence again.
@@ -41,10 +49,22 @@ var formalEnding = regexp.MustCompile(`(니다|세요|십시오|까요|나요)`)
 // deliberately ends in a space.
 var danglingDetail = regexp.MustCompile(`[ \t]\)`)
 
+// translationese matches the stock connectives the copy pass removed. They read
+// as translation rather than Korean: a calque of "through this", an essay
+// opener that announces its own point, and the noun-compounding "about X".
+// "에 대한" is matched only as a whole phrase because "안에 있어" (located
+// inside) and "PATH에 있어야" are literal Korean and are legitimate.
+var translationese = regexp.MustCompile(`(이를 통해|핵심은|결론적으로|중요한 것은|관점에서|에 대한 [가-힣])`)
+
 // toneAllowlist names strings that may keep a formal ending because they quote
 // another tool's output or show an exact command/example. Keep each entry next
 // to the file it excuses and state why.
 var toneAllowlist = map[string][]string{}
+
+// translationeseAllowlist names strings that legitimately contain a phrase the
+// guard matches. An exact path, a quoted product name or another tool's wording
+// is data, not prose. Add an entry only with the reason next to it.
+var translationeseAllowlist = map[string][]string{}
 
 type violation struct {
 	file string
@@ -138,6 +158,11 @@ func scanFile(t *testing.T, path, rel string, rule *regexp.Regexp) []violation {
 
 func allowed(rel, text string) bool {
 	for _, entry := range toneAllowlist[rel] {
+		if strings.Contains(text, entry) {
+			return true
+		}
+	}
+	for _, entry := range translationeseAllowlist[rel] {
 		if strings.Contains(text, entry) {
 			return true
 		}

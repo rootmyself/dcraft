@@ -3,7 +3,7 @@ package update
 // Korean user-facing registration text owned by the update feature.
 const (
 	msgTitle             = "갱신"
-	msgSummary           = "현재 설정으로 로컬 이미지를 빌드하고 이미지 전용 서비스를 취득한 뒤 변경된 컨테이너만 적용하며, 제한 시간 안에 실행 상태 확인."
+	msgSummary           = "현재 설정으로 로컬 이미지 빌드. 이미지 전용 서비스 취득 뒤 변경된 컨테이너만 적용. 제한 시간 안에 실행 상태 확인."
 	msgUsage             = "dcraft update [--no-cache] [--build-pull] [--no-pull] [--force-recreate] [--timeout 초] [-s 서비스]"
 	msgFlagNoCache       = "로컬 빌드 캐시를 사용하지 않음. 모든 빌드 단계를 다시 실행해 시간이 더 걸리며, 베이스 이미지 취득과는 다름."
 	msgFlagBuildPull     = "로컬 빌드의 베이스 이미지를 새로 받음. 이미지 전용 서비스의 태그 취득과는 다름."

@@ -40,7 +40,7 @@ const (
 	msgStateEmpty      = "서비스 없음"
 
 	msgObserveFailed = "현재 상태 확인 실패. dcraft status로 다시 확인."
-	msgRenameNotice  = "이 대상은 이전에 '%s' 이름 사용. 이제 '%s' 이름을 사용하며, 이전 프로젝트의 컨테이너는 dcraft 관리 밖에 남을 수 있음."
+	msgRenameNotice  = "이 대상은 이전에 '%s' 이름 사용. 이제 '%s' 이름 사용. 이전 프로젝트의 컨테이너는 dcraft 관리 밖에 남을 수 있음."
 
 	msgRecoverUpOne      = "dcraft status로 현재 상태 확인."
 	msgRecoverUpTwo      = "docker compose logs로 서비스 로그 확인."

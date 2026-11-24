@@ -127,7 +127,7 @@ AWS Secrets Manager 원본은 설치된 AWS CLI의 기존 자격 증명 사용. 
 	msgBuildNoFallback = "dcraft는 값을 이미지 설정이나 history에 넣지 않지만, Dockerfile이 값을 출력하거나 이미지에 복사하는 동작은 막을 수 없음."
 
 	msgAWSCredentialDisclosure = "AWS Secrets Manager 원본은 설치된 AWS CLI의 기존 자격 증명(환경변수, 공유 설정, SSO, 인스턴스 역할)을 사용. dcraft는 자격 증명을 설정·상태·생성 스크립트에 저장하지 않음."
-	msgAWSFetchPolicy          = "dcraft는 현재 작업이 실제 참조하는 AWS 원본만 조회하며, 한 작업에서 같은 원본은 한 번만 조회. 선언만 된 다른 참조는 조회하지 않고, 조회한 값을 다음 작업으로 저장하거나 비교하지 않음."
+	msgAWSFetchPolicy          = "dcraft는 현재 작업이 실제 참조하는 AWS 원본만 조회. 한 작업에서 같은 원본은 한 번만 조회. 선언만 된 다른 참조는 조회하지 않음. 조회한 값은 다음 작업으로 저장하거나 비교하지 않음."
 
 	msgListTitle         = "비밀값 연결"
 	msgListEmpty         = "저장된 비밀값 참조가 없음."
