@@ -1,0 +1,220 @@
+package exec
+
+import (
+	"context"
+	"fmt"
+	"strconv"
+	"strings"
+
+	"github.com/rootmyself/dcraft/internal/core"
+	"github.com/rootmyself/dcraft/internal/selector"
+	"github.com/rootmyself/dcraft/internal/stack"
+)
+
+// The attach screen always offers the two shells first, then this project's
+// recent commands, then one row to type something new. The pinned shells are
+// not deletable: they are the way to get a shell when nothing else works.
+const (
+	// shellBash is the default command. It is what a reader usually wants.
+	shellBash = "/bin/bash"
+	// shellSh is the fallback when the image has no bash.
+	shellSh = "/bin/sh"
+	// commandNew is the row that reveals the text field. It carries no command
+	// of its own.
+	commandNew = ""
+)
+
+// commandChoices is the ordered option list: pinned shells, recent commands,
+// then the row that asks for a typed command.
+func commandChoices(history History) []core.InputOption {
+	options := []core.InputOption{
+		{Value: shellBash, Label: shellBash + msgShellDefault},
+		{Value: shellSh, Label: shellSh + msgShellFallback},
+	}
+	for _, command := range history.Commands {
+		options = append(options, core.InputOption{Value: command, Label: msgRecentPrefix + command})
+	}
+	options = append(options, core.InputOption{Value: commandNew, Label: msgNewCommand})
+	return options
+}
+
+// commandHistory loads this project's store for the attach screen. A store that
+// cannot be read is stated on screen; the screen still works.
+func commandHistory(projectDir string) (History, string) {
+	if strings.TrimSpace(projectDir) == "" {
+		return History{}, ""
+	}
+	return trackingHistory(projectDir)
+}
+
+// Inputs offers the command selection too. A read-only inspection still needs a
+// running instance first, so the instance list comes from the same snapshot.
+func (f *Feature) Inputs(ctx context.Context, in core.Invocation) ([]core.InputField, error) {
+	if f.backend == nil {
+		return nil, core.Fail(core.Diagnostic{
+			Category:    core.CategoryInternal,
+			Severity:    core.SeverityError,
+			Message:     msgNoBackend,
+			NextActions: []string{msgNoBackendAction},
+		})
+	}
+	snap, err := f.backend.Inspect(ctx, in.Target)
+	if err != nil {
+		return nil, err
+	}
+	var options []core.InputOption
+	for _, svc := range selector.Services(snap) {
+		for _, inst := range svc.Instances {
+			if !inst.Running {
+				continue
+			}
+			options = append(options, core.InputOption{
+				Value: fmt.Sprintf("%s|%d", svc.Name, inst.Index),
+				Label: fmt.Sprintf("%s · %s (실행 중)", svc.Name, inst.Name),
+			})
+		}
+	}
+	if len(options) == 0 {
+		return nil, core.Fail(core.Diagnostic{
+			Category:    core.CategoryInstanceStopped,
+			Severity:    core.SeverityError,
+			Message:     msgNothingRunning,
+			NextActions: []string{msgNothingRunningActionOne, msgNothingRunningActionTwo},
+		})
+	}
+	history, historyErr := commandHistory(in.Target.ProjectDir)
+	commandHelp := msgFieldCommandHelp
+	if guidance := history.IgnoreGuidance(); guidance != "" {
+		commandHelp += "\n" + guidance
+	}
+	if historyErr != "" {
+		commandHelp += "\n" + msgHistoryUnreadable
+	}
+	// The screen warns before the reader types: a command can be stored, and a
+	// command that looks like it carries a credential is not stored at all.
+	commandHelp += "\n" + msgCredentialRisk
+	fields := []core.InputField{
+		{
+			Key:      fieldInstance,
+			Label:    msgFieldInstance,
+			Help:     msgFieldInstanceHelp,
+			Kind:     core.InputChoice,
+			Options:  options,
+			Required: true,
+		},
+		{
+			Key:     fieldCommandChoice,
+			Label:   msgFieldCommandChoice,
+			Help:    msgFieldCommandChoiceHelp,
+			Kind:    core.InputChoice,
+			Options: commandChoices(history),
+		},
+	}
+	// The typed command stays visible so a command that is not in the store can
+	// still be run. The new-command row is what uses it; selecting a stored
+	// command ignores it.
+	fields = append(fields, core.InputField{
+		Key:   fieldCommand,
+		Label: msgFieldCommand,
+		Help:  commandHelp,
+		Kind:  core.InputText,
+	})
+	return fields, nil
+}
+
+// looksLikeCredential reports whether a typed command appears to carry a value
+// that should not be stored. It is a warning, never a block: dcraft cannot know
+// what an argument means.
+func looksLikeCredential(command string) bool {
+	lower := strings.ToLower(command)
+	for _, needle := range []string{
+		"password=", "passwd=", "token=", "secret=", "api_key=", "apikey=",
+		"authorization:", "bearer ", "-p\"", "--password", "AWS_SECRET_ACCESS_KEY",
+	} {
+		if strings.Contains(lower, needle) {
+			return true
+		}
+	}
+	return false
+}
+
+// WithInputs resolves the chosen row into the argv the run uses. A stored
+// command is split with the same rules as a typed one, so both paths behave
+// identically.
+func (f *Feature) WithInputs(req core.Request, values map[string]string) (core.Request, error) {
+	target := strings.TrimSpace(values[fieldInstance])
+	service, index, ok := strings.Cut(target, "|")
+	service = strings.TrimSpace(service)
+	if !ok || service == "" {
+		return req, core.Fail(core.Diagnostic{
+			Category:    core.CategorySelectionRequired,
+			Severity:    core.SeverityError,
+			Message:     msgPickInstance,
+			NextActions: []string{msgPickInstanceAction},
+		})
+	}
+	if _, err := strconv.Atoi(index); err != nil {
+		return req, core.Fail(core.Diagnostic{
+			Category:    core.CategorySelectionRequired,
+			Severity:    core.SeverityError,
+			Message:     msgPickInstance,
+			NextActions: []string{msgPickInstanceAction},
+		})
+	}
+	raw := strings.TrimSpace(values[fieldCommandChoice])
+	if raw == commandNew {
+		raw = strings.TrimSpace(values[fieldCommand])
+	}
+	if raw == "" {
+		return req, core.Fail(core.Diagnostic{
+			Category:    core.CategorySelectionRequired,
+			Severity:    core.SeverityError,
+			Message:     msgCommandRequired,
+			NextActions: []string{msgCommandRequiredActionOne, msgCommandRequiredActionTwo},
+		})
+	}
+	argv, err := splitCommand(raw)
+	if err != nil {
+		return req, core.FailCause(err, core.Diagnostic{
+			Category:    core.CategorySelectionRequired,
+			Severity:    core.SeverityError,
+			Message:     msgInvalidCommand,
+			NextActions: []string{msgInvalidCommandAction},
+		})
+	}
+	req.Services = []string{service}
+	if req.Options == nil {
+		req.Options = map[string]string{}
+	}
+	req.Options["index"] = index
+	req.Args = argv
+	return req, nil
+}
+
+// rememberCommand stores what actually ran. It runs after a successful attach,
+// so a command that failed to start is not offered again.
+func rememberCommand(projectDir string, command []string) {
+	if strings.TrimSpace(projectDir) == "" || len(command) == 0 {
+		return
+	}
+	history, err := LoadHistory(projectDir, false)
+	if err != nil {
+		return
+	}
+	_ = history.Remember(command)
+}
+
+// substitutionRetry is the one retry the attach makes on its own: an image
+// without bash still gets a shell. Everything else is reported unchanged.
+func substitutionRetry(command []string, output string) ([]string, bool) {
+	if len(command) == 0 || (command[0] != shellBash && command[0] != "bash") {
+		return nil, false
+	}
+	if !looksLikeMissingCommand(output) {
+		return nil, false
+	}
+	return append([]string{shellSh}, command[1:]...), true
+}
+
+var _ = stack.ExecRequest{}
+var _ = context.Background

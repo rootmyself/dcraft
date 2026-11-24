@@ -43,8 +43,10 @@ type Report struct {
 	Command  []string `json:"command"`
 	TTY      bool     `json:"tty"`
 	ExitCode int      `json:"exit_code"`
-	Stdout   string   `json:"stdout,omitempty"`
-	Stderr   string   `json:"stderr,omitempty"`
+	// Substituted reports that bash was missing and /bin/sh ran instead.
+	Substituted bool   `json:"substituted,omitempty"`
+	Stdout      string `json:"stdout,omitempty"`
+	Stderr      string `json:"stderr,omitempty"`
 }
 
 // Payload is the feature result payload. JSON consumers read data.exec.
@@ -142,6 +144,15 @@ func (f *Feature) Run(ctx context.Context, in core.Invocation) (any, error) {
 
 	in.Reporter.Begin(stageAttach, msgStageAttach)
 	result, streamErr := f.streamer.Exec(ctx, in.Target, req, streams)
+	// An image without bash still gets a shell: one retry with /bin/sh, and the
+	// substitution is stated. Any other failure is reported unchanged.
+	if substituted, ok := substitutionRetry(req.Command, result.Output); ok && streamErr == nil && result.ExitCode != 0 {
+		req.Command = substituted
+		report.Command = append([]string{}, substituted...)
+		in.Reporter.Begin(stageAttach, msgStageAttach)
+		result, streamErr = f.streamer.Exec(ctx, in.Target, req, streams)
+		report.Substituted = true
+	}
 	switch {
 	case errors.Is(streamErr, context.Canceled), errors.Is(streamErr, context.DeadlineExceeded), ctx.Err() != nil:
 		in.Reporter.End(stageAttach, core.StageCanceled, msgTerminalRestored)
@@ -157,6 +168,12 @@ func (f *Feature) Run(ctx context.Context, in core.Invocation) (any, error) {
 	if in.JSON {
 		report.Stdout = capturedOut.String()
 		report.Stderr = capturedErr.String()
+	}
+	// The store keeps exactly what ran, and only after it ran: a command that
+	// failed to start is not offered again. A command that looks like it
+	// carries a credential is never stored, even though it still ran.
+	if !looksLikeCredential(strings.Join(report.Command, " ")) {
+		rememberCommand(in.Target.ProjectDir, report.Command)
 	}
 	return Payload{Exec: report}, nil
 }
@@ -179,8 +196,12 @@ func presentLines(res core.Result) []core.ValueLine {
 		return []core.ValueLine{{{Text: msgNoPayload}}}
 	}
 	report := payload.Exec
+	finished := msgFinished
+	if report.Substituted {
+		finished += " " + msgSubstituted
+	}
 	return []core.ValueLine{
-		{{Text: msgFinished}},
+		{{Text: finished}},
 		{
 			{Text: msgServiceLabel + ": "},
 			{Text: report.Service, Kind: core.ValueService},
@@ -192,103 +213,6 @@ func presentLines(res core.Result) []core.ValueLine {
 		},
 		{{Text: fmt.Sprintf("%s: %d · %s", msgExitLabel, report.ExitCode, msgServicesRunning)}},
 	}
-}
-
-// Inputs implements core.InputProvider: the TUI lists running instances and
-// asks for a command line. A CLI run never calls this; it requires -s and the
-// argv after `--`.
-func (f *Feature) Inputs(ctx context.Context, in core.Invocation) ([]core.InputField, error) {
-	if len(in.Services) > 0 && len(in.Args) > 0 {
-		return nil, nil
-	}
-	if f.backend == nil {
-		return nil, core.Fail(core.Diagnostic{
-			Category:    core.CategoryInternal,
-			Severity:    core.SeverityError,
-			Message:     msgNoBackend,
-			NextActions: []string{msgNoBackendAction},
-		})
-	}
-	snap, err := f.backend.Inspect(ctx, in.Target)
-	if err != nil {
-		return nil, err
-	}
-	var options []core.InputOption
-	for _, svc := range selector.Services(snap) {
-		for _, inst := range svc.Instances {
-			if !inst.Running {
-				continue
-			}
-			options = append(options, core.InputOption{
-				Value: fmt.Sprintf("%s|%d", svc.Name, inst.Index),
-				Label: fmt.Sprintf("%s · %s (실행 중)", svc.Name, inst.Name),
-			})
-		}
-	}
-	if len(options) == 0 {
-		return nil, core.Fail(core.Diagnostic{
-			Category:    core.CategoryInstanceStopped,
-			Severity:    core.SeverityError,
-			Message:     msgNothingRunning,
-			NextActions: []string{msgNothingRunningActionOne, msgNothingRunningActionTwo},
-		})
-	}
-	return []core.InputField{
-		{
-			Key:      fieldInstance,
-			Label:    msgFieldInstance,
-			Help:     msgFieldInstanceHelp,
-			Kind:     core.InputChoice,
-			Options:  options,
-			Required: true,
-		},
-		{
-			Key:      fieldCommand,
-			Label:    msgFieldCommand,
-			Help:     msgFieldCommandHelp,
-			Kind:     core.InputText,
-			Required: true,
-		},
-	}, nil
-}
-
-// WithInputs implements core.InputProvider.
-func (f *Feature) WithInputs(req core.Request, values map[string]string) (core.Request, error) {
-	target := strings.TrimSpace(values[fieldInstance])
-	service, index, ok := strings.Cut(target, "|")
-	service = strings.TrimSpace(service)
-	if !ok || service == "" {
-		return req, core.Fail(core.Diagnostic{
-			Category:    core.CategorySelectionRequired,
-			Severity:    core.SeverityError,
-			Message:     msgPickInstance,
-			NextActions: []string{msgPickInstanceAction},
-		})
-	}
-	if _, err := strconv.Atoi(index); err != nil {
-		return req, core.Fail(core.Diagnostic{
-			Category:    core.CategorySelectionRequired,
-			Severity:    core.SeverityError,
-			Message:     msgPickInstance,
-			NextActions: []string{msgPickInstanceAction},
-		})
-	}
-	argv, err := splitCommand(values[fieldCommand])
-	if err != nil {
-		return req, core.FailCause(err, core.Diagnostic{
-			Category:    core.CategorySelectionRequired,
-			Severity:    core.SeverityError,
-			Message:     msgInvalidCommand,
-			NextActions: []string{msgInvalidCommandAction},
-		})
-	}
-	req.Services = []string{service}
-	if req.Options == nil {
-		req.Options = map[string]string{}
-	}
-	req.Options["index"] = index
-	req.Args = argv
-	return req, nil
 }
 
 // composeIndex returns the Compose --index value for the selected service. A

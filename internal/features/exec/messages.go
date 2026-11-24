@@ -2,8 +2,9 @@ package exec
 
 const (
 	// Input field keys consumed by WithInputs and rendered by the TUI.
-	fieldInstance = "instance"
-	fieldCommand  = "command"
+	fieldInstance      = "instance"
+	fieldCommand       = "command"
+	fieldCommandChoice = "command-choice"
 )
 
 // Korean user-facing text owned by the exec feature.
@@ -59,18 +60,34 @@ const (
 	msgNothingRunningActionOne = "dcraft up으로 스택을 시작한 뒤 다시 시도."
 	msgNothingRunningActionTwo = "dcraft status로 현재 상태 확인."
 
-	msgFieldInstance        = "서비스 인스턴스"
-	msgFieldInstanceHelp    = "실행 중인 인스턴스 선택 · 예: nginx-1 · node-api-1 · postgres-1"
-	msgFieldCommand         = "명령"
-	msgFieldCommandHelp     = "이미지 안의 명령과 인자 · 예: sh · node --version · psql -U postgres (셸 확장 없음, 따옴표로 인자 묶기 가능)"
-	msgPickInstance         = "접속할 서비스 인스턴스 선택."
-	msgPickInstanceAction   = "dcraft status로 실행 중인 인스턴스 확인."
-	msgInvalidCommand       = "명령 형식이 올바르지 않음."
-	msgInvalidCommandAction = "따옴표를 닫고 다시 입력. 예: printf '%s' hello"
+	msgShellDefault      = " (기본)"
+	msgShellFallback     = " (bash가 없을 때)"
+	msgRecentPrefix      = "최근: "
+	msgNewCommand        = "새 명령 직접 입력"
+	msgHistoryUnreadable = "최근 명령 기록을 읽지 못했음. 이번 선택은 기록하지 않음."
+	msgHistoryIgnore     = "최근 명령은 %s에 저장됨. git에 올리지 않으려면 .gitignore에 그 경로를 추가."
+
+	msgFieldCommandChoice     = "명령 선택"
+	msgFieldCommandChoiceHelp = "기본 셸 또는 이 프로젝트에서 최근 실행한 명령 선택 · 삭제는 선택 화면에서"
+	msgFieldInstance          = "서비스 인스턴스"
+	msgFieldInstanceHelp      = "실행 중인 인스턴스 선택 · 예: nginx-1 · node-api-1 · postgres-1"
+	msgFieldCommand           = "명령"
+	msgFieldCommandHelp       = "이미지 안의 명령과 인자 · 예: sh · node --version · psql -U postgres (셸 확장 없음, 따옴표로 인자 묶기 가능)"
+	msgPickInstance           = "접속할 서비스 인스턴스 선택."
+	msgPickInstanceAction     = "dcraft status로 실행 중인 인스턴스 확인."
+	msgInvalidCommand         = "명령 형식이 올바르지 않음."
+	msgInvalidCommandAction   = "따옴표를 닫고 다시 입력. 예: printf '%s' hello"
 
 	msgFinished        = "명령 실행 완료."
+	msgSubstituted     = "이미지에 bash가 없어 /bin/sh로 대체 실행."
 	msgServiceLabel    = "서비스"
 	msgCommandLabel    = "명령"
 	msgExitLabel       = "종료 코드"
 	msgServicesRunning = "서비스는 계속 실행 중."
 )
+
+// The attach screen warns when the typed command looks like it carries a
+// credential. dcraft never inspects the value; it only names the risk so a
+// command that would be stored in the project folder is not stored with a
+// secret by accident.
+const msgCredentialRisk = "명령에 비밀값이 들어 있는 것으로 보임. 그대로 실행은 가능하지만 최근 명령에 저장되므로 값 노출 확인."
