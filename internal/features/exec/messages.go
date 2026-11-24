@@ -86,8 +86,12 @@ const (
 	msgInvalidCommand         = "명령 형식이 올바르지 않음."
 	msgInvalidCommandAction   = "따옴표를 닫고 다시 입력. 예: printf '%s' hello"
 
-	msgFinished        = "명령 실행 완료."
-	msgSubstituted     = "이미지에 bash가 없어 /bin/sh로 대체 실행."
+	msgFinished    = "명령 실행 완료."
+	msgSubstituted = "이미지에 bash가 없어 /bin/sh로 대체 실행."
+	// msgBashAbsent is the run's own notice, produced by the pre-attach probe
+	// rather than by a failed first attempt. It says what the probe found, so
+	// the reader knows dcraft checked instead of guessing.
+	msgBashAbsent      = "접속 전 확인 결과 이미지에 bash 없음. /bin/sh로 대체 실행, 나머지 인자는 그대로."
 	msgServiceLabel    = "서비스"
 	msgCommandLabel    = "명령"
 	msgExitLabel       = "종료 코드"

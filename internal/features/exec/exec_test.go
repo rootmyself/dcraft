@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -48,6 +49,16 @@ type fakeStreamer struct {
 	result stack.ExecResult
 	err    error
 	block  bool
+	// sequence answers the calls in order before falling back to result/err.
+	// It is how a test states "the probe says X, then the attach says Y".
+	sequence []fakeAnswer
+}
+
+// fakeAnswer is one scripted answer for fakeStreamer. An empty answer with a
+// nil error is a success with exit 0.
+type fakeAnswer struct {
+	result stack.ExecResult
+	err    error
 }
 
 func (f *fakeStreamer) Logs(ctx context.Context, target core.Target, req stack.LogsRequest, streams core.IO) error {
@@ -56,7 +67,13 @@ func (f *fakeStreamer) Logs(ctx context.Context, target core.Target, req stack.L
 
 func (f *fakeStreamer) Exec(ctx context.Context, target core.Target, req stack.ExecRequest, streams core.IO) (stack.ExecResult, error) {
 	f.mu.Lock()
+	index := len(f.calls)
 	f.calls = append(f.calls, recordedExec{req: req, streams: streams})
+	var answer fakeAnswer
+	scripted := index < len(f.sequence)
+	if scripted {
+		answer = f.sequence[index]
+	}
 	f.mu.Unlock()
 	if f.out != "" && streams.Stdout != nil {
 		_, _ = streams.Stdout.Write([]byte(f.out))
@@ -67,6 +84,9 @@ func (f *fakeStreamer) Exec(ctx context.Context, target core.Target, req stack.E
 	if f.block {
 		<-ctx.Done()
 		return stack.ExecResult{}, ctx.Err()
+	}
+	if scripted {
+		return answer.result, answer.err
 	}
 	return f.result, f.err
 }
@@ -640,6 +660,32 @@ func TestExecRetriesWithShWhenBashIsMissing(t *testing.T) {
 	}
 }
 
+// The retry stays the safety net behind the probe: when bash disappears between
+// the probe and the attach, the run still ends in sh rather than failing.
+func TestExecRetriesWhenBashDisappearsAfterTheProbe(t *testing.T) {
+	streamer := &fakeStreamer{sequence: []fakeAnswer{
+		{result: stack.ExecResult{ExitCode: 0}}, // probe: bash exists
+		{result: stack.ExecResult{ExitCode: 127, Output: `OCI runtime exec failed: exec: "/bin/bash": stat /bin/bash: no such file or directory`}},
+		{}, // the retry runs sh
+	}}
+	f := New(&fakeBackend{snap: scaledSnapshot()}, streamer)
+	payload, err := f.Run(context.Background(), ttyInvocation([]string{"/bin/bash"}, &fakeReporter{}))
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	calls := streamer.recorded()
+	if len(calls) != 3 {
+		t.Fatalf("calls = %d, want the probe, the attach, and the retry", len(calls))
+	}
+	if got := strings.Join(calls[2].req.Command, " "); got != "/bin/sh" {
+		t.Fatalf("retry command = %q", got)
+	}
+	report := payload.(Payload).Exec
+	if !report.Substituted || strings.Join(report.Command, " ") != "/bin/sh" {
+		t.Fatalf("payload = %+v, want the sh run reported", report)
+	}
+}
+
 // The retry happens only for a missing command, never for a real failure.
 func TestSubstitutionRetryIsNarrow(t *testing.T) {
 	if _, ok := substitutionRetry([]string{"psql"}, "psql: error"); ok {
@@ -653,6 +699,203 @@ func TestSubstitutionRetryIsNarrow(t *testing.T) {
 	} else if strings.Join(got, " ") != "/bin/sh -c echo hi" {
 		t.Fatalf("retry = %v", got)
 	}
+}
+
+// ttyInvocation is an interactive attach: the caller relays a terminal and -T
+// is absent, which is what turns the pre-attach probe on.
+func ttyInvocation(args []string, reporter core.Reporter) core.Invocation {
+	in := invocation([]string{"db"}, args, nil, core.IO{Stdout: &strings.Builder{}, TTY: true}, reporter)
+	in.Target.ProjectDir = "/p"
+	return in
+}
+
+// An interactive attach with bash asks the target before running the shell, so
+// an image without bash lands in sh without printing the OCI error first.
+func TestExecTTYBashProbeAbsentRunsShFromTheStart(t *testing.T) {
+	streamer := &fakeStreamer{sequence: []fakeAnswer{
+		{result: stack.ExecResult{ExitCode: 1}}, // probe: neither bash path exists
+		{},                                      // attach: sh starts
+	}}
+	f := New(&fakeBackend{snap: scaledSnapshot()}, streamer)
+	payload, err := f.Run(context.Background(), ttyInvocation([]string{"/bin/bash"}, &fakeReporter{}))
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	calls := streamer.recorded()
+	if len(calls) != 2 {
+		t.Fatalf("calls = %d, want the probe and the attach", len(calls))
+	}
+	if got := strings.Join(calls[0].req.Command, " "); got != "test -x /bin/bash -o -x /usr/bin/bash" {
+		t.Fatalf("probe command = %q", got)
+	}
+	if calls[0].req.TTY {
+		t.Fatal("the probe allocated a terminal")
+	}
+	if calls[0].streams.Stdout != io.Discard || calls[0].streams.Stderr != io.Discard {
+		t.Fatal("the probe's output could reach the terminal")
+	}
+	if got := strings.Join(calls[1].req.Command, " "); got != "/bin/sh" {
+		t.Fatalf("attach command = %q, want /bin/sh", got)
+	}
+	if !calls[1].req.TTY {
+		t.Fatal("the attach did not allocate a terminal")
+	}
+	report := payload.(Payload).Exec
+	if !report.Substituted {
+		t.Fatal("the substitution was not reported")
+	}
+	if strings.Join(report.Command, " ") != "/bin/sh" {
+		t.Fatalf("reported command = %v, want the argv that ran", report.Command)
+	}
+	if !containsSubstitutionNotice(report.Notices) {
+		t.Fatalf("notices = %v, want the substitution notice", report.Notices)
+	}
+}
+
+// A probe that finds bash changes nothing: the requested argv runs and no
+// substitution is reported.
+func TestExecTTYBashProbePresentRunsTheRequestedArgv(t *testing.T) {
+	streamer := &fakeStreamer{sequence: []fakeAnswer{
+		{result: stack.ExecResult{ExitCode: 0}}, // probe: bash exists
+		{},                                      // attach
+	}}
+	f := New(&fakeBackend{snap: scaledSnapshot()}, streamer)
+	payload, err := f.Run(context.Background(), ttyInvocation([]string{"/bin/bash", "-l"}, &fakeReporter{}))
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	calls := streamer.recorded()
+	if len(calls) != 2 {
+		t.Fatalf("calls = %d, want the probe and the attach", len(calls))
+	}
+	if got := strings.Join(calls[1].req.Command, " "); got != "/bin/bash -l" {
+		t.Fatalf("attach command = %q, want the requested argv", got)
+	}
+	report := payload.(Payload).Exec
+	if report.Substituted {
+		t.Fatal("a present bash was reported as substituted")
+	}
+	if strings.Join(report.Command, " ") != "/bin/bash -l" {
+		t.Fatalf("reported command = %v", report.Command)
+	}
+	if containsSubstitutionNotice(report.Notices) {
+		t.Fatalf("notices = %v, want no substitution notice", report.Notices)
+	}
+}
+
+// An undecidable probe never fails the run and never changes the argv: the
+// existing retry stays the safety net.
+func TestExecTTYBashProbeInconclusiveAttachesUnchanged(t *testing.T) {
+	cases := []struct {
+		name  string
+		first fakeAnswer
+	}{
+		{name: "stream error", first: fakeAnswer{err: errors.New("docker daemon busy")}},
+		{name: "exit two", first: fakeAnswer{result: stack.ExecResult{ExitCode: 2}}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			streamer := &fakeStreamer{sequence: []fakeAnswer{tc.first, {}}}
+			f := New(&fakeBackend{snap: scaledSnapshot()}, streamer)
+			payload, err := f.Run(context.Background(), ttyInvocation([]string{"/bin/bash"}, &fakeReporter{}))
+			if err != nil {
+				t.Fatalf("an inconclusive probe failed the run: %v", err)
+			}
+			calls := streamer.recorded()
+			if len(calls) != 2 {
+				t.Fatalf("calls = %d, want the probe and the attach", len(calls))
+			}
+			if got := strings.Join(calls[1].req.Command, " "); got != "/bin/bash" {
+				t.Fatalf("attach command = %q, want the requested argv", got)
+			}
+			report := payload.(Payload).Exec
+			if report.Substituted {
+				t.Fatal("an inconclusive probe reported a substitution")
+			}
+			if containsSubstitutionNotice(report.Notices) {
+				t.Fatalf("notices = %v, want no substitution notice", report.Notices)
+			}
+		})
+	}
+}
+
+// The probe belongs to the interactive attach only: a non-interactive or JSON
+// run never spends an extra docker exec.
+func TestExecNonInteractiveAndJSONRunsNeverProbe(t *testing.T) {
+	cases := []struct {
+		name    string
+		streams core.IO
+		options map[string]string
+		json    bool
+	}{
+		{name: "no tty flag", streams: core.IO{TTY: true}, options: map[string]string{"no-tty": "true"}},
+		{name: "caller not a tty", streams: core.IO{}},
+		{name: "json", streams: core.IO{TTY: true}, json: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			streamer := &fakeStreamer{}
+			f := New(&fakeBackend{snap: scaledSnapshot()}, streamer)
+			streams := tc.streams
+			streams.Stdout = &strings.Builder{}
+			in := invocation([]string{"db"}, []string{"/bin/bash"}, tc.options, streams, &fakeReporter{})
+			in.JSON = tc.json
+			if _, err := f.Run(context.Background(), in); err != nil {
+				t.Fatalf("Run: %v", err)
+			}
+			if got := streamer.callCount(); got != 1 {
+				t.Fatalf("calls = %d, want exactly the attach", got)
+			}
+		})
+	}
+}
+
+// Only bash is guessed for. Any other command runs as typed on the first and
+// only call.
+func TestExecTTYNonBashCommandsNeverProbe(t *testing.T) {
+	for _, command := range [][]string{{"date"}, {"/bin/sh"}, {"sh"}} {
+		streamer := &fakeStreamer{}
+		f := New(&fakeBackend{snap: scaledSnapshot()}, streamer)
+		if _, err := f.Run(context.Background(), ttyInvocation(command, &fakeReporter{})); err != nil {
+			t.Fatalf("run %v: %v", command, err)
+		}
+		calls := streamer.recorded()
+		if len(calls) != 1 {
+			t.Fatalf("%v: calls = %d, want no probe", command, len(calls))
+		}
+		if got := strings.Join(calls[0].req.Command, " "); got != strings.Join(command, " ") {
+			t.Fatalf("%v: attach command = %q", command, got)
+		}
+	}
+}
+
+// A canceled probe ends the run: the reader already left, so nothing attaches
+// behind their back.
+func TestExecCanceledBashProbeCancelsTheRun(t *testing.T) {
+	streamer := &fakeStreamer{sequence: []fakeAnswer{{err: context.Canceled}}}
+	reporter := &fakeReporter{}
+	f := New(&fakeBackend{snap: scaledSnapshot()}, streamer)
+	_, err := f.Run(context.Background(), ttyInvocation([]string{"/bin/bash"}, reporter))
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %v, want a canceled run", err)
+	}
+	if got := streamer.callCount(); got != 1 {
+		t.Fatalf("calls = %d, want the canceled probe only", got)
+	}
+	st, ok := reporter.find(stageAttach)
+	if !ok || st.Status != core.StageCanceled {
+		t.Fatalf("attach stage = %+v", st)
+	}
+}
+
+// containsSubstitutionNotice reports whether the run stated the sh fallback.
+func containsSubstitutionNotice(notices []string) bool {
+	for _, notice := range notices {
+		if strings.Contains(notice, "/bin/sh") && strings.Contains(notice, "대체") {
+			return true
+		}
+	}
+	return false
 }
 
 // A command that looks like it carries a credential still runs but is never

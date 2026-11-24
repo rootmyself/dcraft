@@ -2,12 +2,15 @@ package exec
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 
 	"github.com/rootmyself/dcraft/internal/core"
 	"github.com/rootmyself/dcraft/internal/selector"
+	"github.com/rootmyself/dcraft/internal/stack"
 )
 
 // The attach screen always offers the two shells first, then this project's
@@ -16,6 +19,10 @@ import (
 const (
 	// shellBash is the default command. It is what a reader usually wants.
 	shellBash = "/bin/bash"
+	// shellBashAlt is the second common bash location. The pre-attach probe
+	// checks both so a distribution that keeps bash in /usr/bin is not
+	// mistaken for an image without bash.
+	shellBashAlt = "/usr/bin/bash"
 	// shellSh is the fallback when the image has no bash.
 	shellSh = "/bin/sh"
 	// commandNew is the row that reveals the text field. It carries no command
@@ -238,6 +245,73 @@ func forgetCommand(projectDir, command string) (any, error) {
 		})
 	}
 	return Payload{Exec: Report{Command: []string{command}, Notices: []string{fmt.Sprintf(msgForgotCommand, command)}}}, nil
+}
+
+// bashProbeResult is the pre-attach check's answer. Only an explicit "absent"
+// changes the command; everything else keeps the argv the reader asked for.
+type bashProbeResult int
+
+const (
+	// probeInconclusive means the probe could not decide, so the requested
+	// argv runs unchanged and substitutionRetry stays the safety net.
+	probeInconclusive bashProbeResult = iota
+	// probeBashPresent means bash exists at a known path.
+	probeBashPresent
+	// probeBashAbsent means neither known bash path exists.
+	probeBashAbsent
+)
+
+// probeCommand is the exact argv the probe runs. `test -x A -o -x B` is POSIX
+// sh syntax and needs no shell of its own.
+func probeCommand() []string {
+	return []string{"test", "-x", shellBash, "-o", "-x", shellBashAlt}
+}
+
+// probeBash asks the instance whether bash exists before an interactive attach
+// runs, so an image without bash never prints the OCI runtime error to the
+// reader's terminal before landing in sh. It goes through the same streaming
+// boundary as the attach and discards both outputs, so the probe can never
+// write to the terminal and cannot consume the reader's input.
+//
+// A failed or undecidable probe is not a failure: the attach runs the requested
+// argv unchanged. Only a cancellation ends the run, because the reader already
+// asked to leave.
+func (f *Feature) probeBash(ctx context.Context, target core.Target, req stack.ExecRequest) (bashProbeResult, error) {
+	probe := stack.ExecRequest{
+		Service: req.Service,
+		Index:   req.Index,
+		Command: probeCommand(),
+		TTY:     false,
+	}
+	result, streamErr := f.streamer.Exec(ctx, target, probe, core.IO{Stdout: io.Discard, Stderr: io.Discard})
+	if streamErr != nil {
+		// A canceled probe is the reader leaving, not an undecidable answer:
+		// reporting it as inconclusive would attach behind their back.
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return probeInconclusive, ctxErr
+		}
+		if errors.Is(streamErr, context.Canceled) || errors.Is(streamErr, context.DeadlineExceeded) {
+			return probeInconclusive, streamErr
+		}
+		return probeInconclusive, nil
+	}
+	switch result.ExitCode {
+	case 0:
+		return probeBashPresent, nil
+	case 1:
+		// The only exit the probe trusts as "bash is absent". A missing `test`
+		// binary exits 126/127 through the same OCI error and stays
+		// inconclusive, so dcraft never guesses sh for that reason.
+		return probeBashAbsent, nil
+	}
+	return probeInconclusive, nil
+}
+
+// isBashCommand reports whether the effective argv starts with bash. Both the
+// pinned path and the bare name are probed; the rest of the argv never changes
+// the decision.
+func isBashCommand(command []string) bool {
+	return len(command) > 0 && (command[0] == shellBash || command[0] == "bash")
 }
 
 // substitutionRetry is the one retry the attach makes on its own: an image
