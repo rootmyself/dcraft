@@ -2,6 +2,7 @@ package termview
 
 import (
 	"fmt"
+	"io"
 	"os/exec"
 	"strings"
 	"testing"
@@ -188,14 +189,16 @@ func TestResizeKeepsScrollback(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	before := v.ScrollbackLen()
+	before := v.Window(0, 0).Total
 	v.Resize(20, 2)
-	if got := v.ScrollbackLen(); got < before {
-		t.Fatalf("scrollback shrank from %d to %d", before, got)
+	if got := v.Window(0, 0).Total; got < before {
+		t.Fatalf("total refused from %d to %d", before, got)
 	}
+	// The grid keeps the largest size it has had: a shrink cannot truncate the
+	// bottom of the buffer, so Size reports the grid actually in use.
 	cols, rows := v.Size()
-	if cols != 20 || rows != 2 {
-		t.Fatalf("size = %dx%d, want 20x2", cols, rows)
+	if cols != 40 || rows != 5 {
+		t.Fatalf("size = %dx%d, want the kept 40x5", cols, rows)
 	}
 }
 
@@ -413,20 +416,56 @@ func TestAltScreenHidesScrollbackAndKeepsPaintedRows(t *testing.T) {
 	}
 }
 
-// A shrink must not discard rows that were on screen: the emulator drops them
-// and does not push them into the scrollback itself.
-func TestShrinkKeepsTheRowsItDrops(t *testing.T) {
+// A shrink must not discard what was on screen. The emulator truncates the
+// bottom of its buffer, which is where a shell's prompt and a log's newest lines
+// live, so the grid keeps its largest size and the viewport shows the tail.
+func TestShrinkLosesNoRows(t *testing.T) {
 	v := NewPipe(40, 30)
-	for i := 0; i < 29; i++ {
-		if _, err := v.Write([]byte(fmt.Sprintf("L%d\r\n", i))); err != nil {
+	for i := 0; i < 9; i++ {
+		if _, err := v.Write([]byte(fmt.Sprintf("row%d\r\n", i))); err != nil {
 			t.Fatal(err)
 		}
 	}
-	before := v.Window(0, 0).Total
-	v.Resize(40, 12)
-	after := v.Window(0, 0).Total
-	if after < before {
-		t.Fatalf("total fell from %d to %d; dropped rows were lost", before, after)
+	before := v.Lines()
+	v.Resize(40, 4)
+
+	after := v.Lines()
+	if len(after) != len(before) {
+		t.Fatalf("row count fell from %d to %d", len(before), len(after))
+	}
+	// The newest row is the one a reader is watching; it must survive.
+	joined := make([]string, 0, len(after))
+	for _, line := range after {
+		joined = append(joined, Text(line.Cells))
+	}
+	if got := joined[len(joined)-1]; got != "row8" {
+		t.Fatalf("last row = %q, want row8 (newest output): %q", got, joined)
+	}
+	// No row may appear twice: a duplicate means the salvage copied a row that
+	// survived anyway instead of the one being dropped.
+	seen := map[string]bool{}
+	for _, row := range joined {
+		if row == "" {
+			continue
+		}
+		if seen[row] {
+			t.Fatalf("row %q appears twice: %q", row, joined)
+		}
+		seen[row] = true
+	}
+}
+
+// A narrower window keeps the text, so widening restores it instead of showing
+// a row that was truncated away.
+func TestNarrowShrinkKeepsTheRowContent(t *testing.T) {
+	v := NewPipe(40, 5)
+	if _, err := v.Write([]byte("the-whole-line\r\n")); err != nil {
+		t.Fatal(err)
+	}
+	v.Resize(10, 5)
+	v.Resize(40, 5)
+	if got := Text(v.Lines()[0].Cells); got != "the-whole-line" {
+		t.Fatalf("row = %q, want the whole line after widening again", got)
 	}
 }
 
@@ -449,5 +488,37 @@ func TestWindowReadsOnlyTheRequestedRows(t *testing.T) {
 	}
 	if got := Text(win.Rows[0].Cells); got != "line-190" {
 		t.Fatalf("first row = %q, want line-190", got)
+	}
+}
+
+// A write after Close fails instead of feeding a pump that has stopped. The
+// child is gone, so accepting the bytes would silently drop them.
+func TestWriteAfterCloseFails(t *testing.T) {
+	v := New(20, 3)
+	if err := v.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	if _, err := v.Write([]byte("late")); err != io.ErrClosedPipe {
+		t.Fatalf("Write after Close = %v, want io.ErrClosedPipe", err)
+	}
+}
+
+// A window requested past the last row reports an empty range at the end, so a
+// caller's index arithmetic stays legal.
+func TestWindowClampsStartPastTheEnd(t *testing.T) {
+	v := NewPipe(20, 5)
+	if _, err := v.Write([]byte("one\r\n")); err != nil {
+		t.Fatal(err)
+	}
+	total := v.Window(0, 0).Total
+	win := v.Window(total+10, total+20)
+	if win.Start != total {
+		t.Fatalf("Start = %d, want the total %d", win.Start, total)
+	}
+	if len(win.Rows) != 0 {
+		t.Fatalf("rows = %d, want none", len(win.Rows))
+	}
+	if win.Start > win.Total {
+		t.Fatalf("Start %d is past Total %d", win.Start, win.Total)
 	}
 }

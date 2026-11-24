@@ -146,8 +146,9 @@ func (m *Model) resizeLive() {
 	if m.live != nil && m.live.view != nil {
 		cols, rows := m.liveGridSize()
 		m.live.view.Resize(cols, rows)
-		m.req.IO.Width = cols
-		m.req.IO.Height = rows
+		// The grid never shrinks (a shorter buffer would truncate the newest
+		// rows), so the recorded size is the grid's, not the window's.
+		m.req.IO.Width, m.req.IO.Height = m.live.view.Size()
 	}
 	// The running `up` log is a grid too: a resize must reach it or its lines
 	// wrap at the old column count.

@@ -101,6 +101,9 @@ type View struct {
 	// closeOnce makes Close idempotent: the emulator's own Close is not
 	// concurrency-safe, so it must run exactly once and after the pump.
 	closeOnce sync.Once
+	// closed is this view's own closed flag. A write after Close must fail
+	// instead of feeding a pump that has stopped.
+	closed bool
 }
 
 // New creates a view for a child that owns a pseudo-terminal. Its output already
@@ -166,6 +169,13 @@ func (v *View) pumpInput() {
 func (v *View) Write(p []byte) (int, error) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
+	if v.closed {
+		// The emulator's own closed flag is not used: Close cannot set it
+		// without racing the pump. This view's flag is what reports a write
+		// after close, so a late write cannot block on a synchronous reply pipe
+		// nobody is reading.
+		return 0, io.ErrClosedPipe
+	}
 	out := p
 	if v.opts.Onlcr {
 		out = v.lfToCRLF(p)
@@ -220,7 +230,15 @@ func (v *View) lfToCRLF(p []byte) []byte {
 	return out
 }
 
-// Resize changes the grid.
+// Resize changes the grid. It only ever grows: the emulator truncates the bottom
+// of the screen when the grid gets shorter, which throws away the newest rows a
+// reader is looking at (a shell's prompt is on the bottom row). Keeping the grid
+// at the largest size it has had means a resize never destroys output, and the
+// viewport simply draws the tail of it.
+//
+// Width works the same way: a narrower window draws the left part of each row
+// and cuts the rest with the frame's own marker, so widening again restores
+// what was there.
 func (v *View) Resize(cols, rows int) {
 	if cols < 1 {
 		cols = 1
@@ -230,46 +248,17 @@ func (v *View) Resize(cols, rows int) {
 	}
 	v.mu.Lock()
 	defer v.mu.Unlock()
+	if cols < v.cols {
+		cols = v.cols
+	}
+	if rows < v.rows {
+		rows = v.rows
+	}
 	if v.cols == cols && v.rows == rows {
 		return
 	}
-	// The emulator drops screen rows when the grid shrinks and does not push them
-	// into the scrollback, so a shorter window would lose output that was on
-	// screen. Salvage them first: the reader can still reach them with PgUp.
-	if rows < v.rows {
-		v.salvageDroppedRowsLocked(rows)
-	}
 	v.cols, v.rows = cols, rows
 	v.emu.Resize(cols, rows)
-}
-
-// salvageDroppedRowsLocked moves the rows a shrink would discard into the
-// scrollback. Only the main screen keeps history; a full-screen child redraws
-// itself on resize and its old rows are not output the reader wants.
-func (v *View) salvageDroppedRowsLocked(newRows int) {
-	if v.emu.IsAltScreen() {
-		return
-	}
-	sb := v.emu.Scrollback()
-	if sb == nil {
-		return
-	}
-	for y := 0; y < v.rows-newRows; y++ {
-		// A blank row is not output: the screen is always its full height, so
-		// salvaging its trailing blanks would inflate the scrollback and make the
-		// position counter state rows the reader never saw.
-		if v.screenRowBlankLocked(y) {
-			continue
-		}
-		line := make(uv.Line, v.cols)
-		for x := 0; x < v.cols; x++ {
-			c := v.cellAt(x, y)
-			line[x] = uv.Cell{Content: c.Content, Width: c.Width, Style: uv.Style{
-				Fg: c.Color.Fg, Bg: c.Color.Bg, Attrs: c.Color.Attrs,
-			}}
-		}
-		sb.Push(line)
-	}
 }
 
 // Size is the grid's current size.
@@ -302,6 +291,9 @@ func (v *View) SendText(text string) {
 // the pump's Read return EOF, which is the whole effect Close needed.
 func (v *View) Close() error {
 	v.closeOnce.Do(func() {
+		v.mu.Lock()
+		v.closed = true
+		v.mu.Unlock()
 		v.in.close()
 		if pipe, ok := v.emu.InputPipe().(io.Closer); ok {
 			_ = pipe.Close()
@@ -369,6 +361,13 @@ func (v *View) Window(start, end int) Window {
 	total := v.drawnRowsLocked()
 	if start < 0 {
 		start = 0
+	}
+	// Clamp start after the total is known, so a range past the end reports an
+	// empty window at the end rather than a start beyond the total. A caller
+	// that computes start+i or total-start from the result then gets a legal
+	// index.
+	if start > total {
+		start = total
 	}
 	if end > total {
 		end = total
@@ -452,6 +451,8 @@ func (v *View) drawnRowsLocked() int {
 }
 
 // screenRowBlankLocked reports whether one screen row has nothing drawn on it.
+// It returns at the first cell that draws something, so a full screen costs one
+// or two cells per row rather than a full row.
 func (v *View) screenRowBlankLocked(y int) bool {
 	for x := 0; x < v.cols; x++ {
 		if !isBlankCell(v.cellAt(x, y)) {
