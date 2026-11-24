@@ -1742,12 +1742,16 @@ Published for later screens; do not create a second selection model.
   command exits by itself). `?` is a character a shell needs, so the attach
   screen has no help chip. The last screen remains visible in the management
   view.
-- The child's grid is the size of the band it is drawn in, not the whole
+- The child's grid starts at the size of the band it is drawn in, not the whole
   terminal: a child sized to the window would draw under dcraft's header and
-  footer. `WindowSizeMsg` reflows the grid. The child's own pseudo-terminal keeps
-  the size it was started with: `execx.RunStream` sizes it once and has no
-  `TIOCSWINSZ` path, so a full-screen child that redraws on `SIGWINCH` does not
-  follow a resize yet. That is a known bound, not a promise.
+  footer. It then only grows: the emulator truncates the bottom of its buffer
+  when the grid gets shorter, which is where a shell's prompt and a log's newest
+  lines live, so a shrink would destroy the output a reader is watching. A
+  smaller window draws the tail of the largest grid instead, and a narrower one
+  cuts each row at the frame's marker so widening restores it. The child's own
+  pseudo-terminal keeps the size it was started with: `execx.RunStream` sizes it
+  once and has no `TIOCSWINSZ` path, so a full-screen child that redraws on
+  `SIGWINCH` does not follow a resize yet. That is a known bound, not a promise.
 - `NO_COLOR`, `TERM=dumb` and a non-TTY output keep their no-escape guarantee:
   the grid's cells are painted only when the theme may emit paint, so a child's
   own colour can never smuggle an escape into a colorless frame. The caret is
