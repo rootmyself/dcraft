@@ -233,7 +233,7 @@ func NewModel(ctx context.Context, opts Options) *Model {
 		m.marqueeTick = tea.Tick
 	}
 	if m.marqueeInterval <= 0 {
-		m.marqueeInterval = 100 * time.Millisecond
+		m.marqueeInterval = defaultMarqueeInterval
 	}
 	if m.spinnerInterval <= 0 {
 		m.spinnerInterval = defaultSpinnerInterval
