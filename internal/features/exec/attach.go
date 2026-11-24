@@ -8,7 +8,6 @@ import (
 
 	"github.com/rootmyself/dcraft/internal/core"
 	"github.com/rootmyself/dcraft/internal/selector"
-	"github.com/rootmyself/dcraft/internal/stack"
 )
 
 // The attach screen always offers the two shells first, then this project's
@@ -40,11 +39,20 @@ func commandChoices(history History) []core.InputOption {
 
 // commandHistory loads this project's store for the attach screen. A store that
 // cannot be read is stated on screen; the screen still works.
+// commandHistory reads this project's store for the screen. A read-only screen
+// creates nothing: the file appears only when a command is actually recorded, so
+// opening the form leaves the project untouched. The screen still states the
+// ignore rule on the run that creates it, because the recorded result carries
+// the history it wrote.
 func commandHistory(projectDir string) (History, string) {
 	if strings.TrimSpace(projectDir) == "" {
 		return History{}, ""
 	}
-	return trackingHistory(projectDir)
+	history, err := LoadHistory(projectDir, false)
+	if err != nil {
+		return History{ProjectDir: projectDir}, err.Error()
+	}
+	return history, ""
 }
 
 // Inputs offers the command selection too. A read-only inspection still needs a
@@ -84,9 +92,6 @@ func (f *Feature) Inputs(ctx context.Context, in core.Invocation) ([]core.InputF
 	}
 	history, historyErr := commandHistory(in.Target.ProjectDir)
 	commandHelp := msgFieldCommandHelp
-	if guidance := history.IgnoreGuidance(); guidance != "" {
-		commandHelp += "\n" + guidance
-	}
 	if historyErr != "" {
 		commandHelp += "\n" + msgHistoryUnreadable
 	}
@@ -192,16 +197,19 @@ func (f *Feature) WithInputs(req core.Request, values map[string]string) (core.R
 }
 
 // rememberCommand stores what actually ran. It runs after a successful attach,
-// so a command that failed to start is not offered again.
-func rememberCommand(projectDir string, command []string) {
+// so a command that failed to start is not offered again. It is also the only
+// writer: opening the screen never creates the file.
+func rememberCommand(projectDir string, command []string) RememberOutcome {
 	if strings.TrimSpace(projectDir) == "" || len(command) == 0 {
-		return
+		return RememberOutcome{}
 	}
-	history, err := LoadHistory(projectDir, false)
-	if err != nil {
-		return
+	history, err := trackingHistory(projectDir)
+	if err != "" {
+		return RememberOutcome{Err: fmt.Errorf("%s", err)}
 	}
-	_ = history.Remember(command)
+	out := RememberOutcome{Created: history.created}
+	out.Err = history.Remember(command)
+	return out
 }
 
 // substitutionRetry is the one retry the attach makes on its own: an image
@@ -215,6 +223,3 @@ func substitutionRetry(command []string, output string) ([]string, bool) {
 	}
 	return append([]string{shellSh}, command[1:]...), true
 }
-
-var _ = stack.ExecRequest{}
-var _ = context.Background

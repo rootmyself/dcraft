@@ -140,7 +140,7 @@ Dockerfile의 EXPOSE/CMD는 자동으로 읽지 않음. 포트와 명령은 직�
 	msgWizardEnvHint        = "한 줄에 하나 · 예: NODE_ENV=production · POSTGRES_DB=app · ALLOWED_HOSTS=web,api"
 	msgWizardCommandTitle   = "명령"
 	msgWizardCommandPrompt  = "이미지의 기본 CMD를 덮어쓸 명령. 비우면 이미지 기본값 사용."
-	msgWizardCommandHint    = "예: nginx -g 'daemon off;' · node server.js · postgres -c log_statement=all"
+	msgWizardCommandHint    = "한 줄에 하나 · 예: nginx -g 'daemon off;' · node server.js · postgres -c log_statement=all"
 	msgWizardRestartTitle   = "재시작 정책"
 	msgWizardRestartPrompt  = "컨테이너 재시작 정책 선택. 지정하지 않으면 Compose 기본값 사용."
 	msgWizardRestartNone    = "지정 안 함 (Compose 기본값)"

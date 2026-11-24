@@ -8,9 +8,6 @@ import "strings"
 // above or below it. Both the CLI text and the TUI render through this rule,
 // which is why it lives beside the text builders instead of in one interface.
 
-// SectionText returns the separator and the label, with no trailing newline.
-func SectionText(label string) string { return "\n" + label }
-
 // WriteSection writes one blank line and then the label with its own newline.
 // Content written next stays attached to the label. A body that opens with a
 // label passes through NormalizeSections, which drops the leading blank line.
@@ -18,6 +15,21 @@ func WriteSection(b *strings.Builder, label string) {
 	b.WriteString("\n")
 	b.WriteString(label)
 	b.WriteString("\n")
+}
+
+// CollapseBlankRuns keeps at most one blank line in a row. The document renderer
+// and a string-backed screen both need it: a paragraph may carry a leading blank
+// line and the block gap adds another, which would draw a two-line hole instead
+// of a section boundary.
+func CollapseBlankRuns(lines []string) []string {
+	out := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" && len(out) > 0 && strings.TrimSpace(out[len(out)-1]) == "" {
+			continue
+		}
+		out = append(out, line)
+	}
+	return out
 }
 
 // NormalizeSections collapses every run of blank lines to one and trims the

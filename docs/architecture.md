@@ -937,8 +937,10 @@ The theme is twelve semantic tokens — the six state tokens `accent`, `success`
 `info`, `code`, `name`, `url`, `command`, `project` — a light and a dark palette,
 a color on/off decision and the UTF-8/ASCII glyph set. Background and foreground
 are the terminal's own colors; `surface` is the only token painted as a
-background plate. The 4.5:1 contrast floor is asserted for the state tokens; the
-value tokens paint classified runs and are not held to it.
+background plate. The 4.5:1 contrast floor is asserted for every token, `muted` included;
+`muted` also keeps 2.5:1 from the foreground so secondary text reads as
+secondary. The value tokens are not held to a contrast floor, but each carries
+more chroma than `muted` and resolves to a color no other value token uses.
 
 `visual.Resolve` is a pure function of explicit inputs: `DCRAFT_THEME`
 (`auto|light|dark`), `NO_COLOR`, `TERM`, the terminal color profile, the
@@ -948,8 +950,9 @@ inputs through an injected `getenv`, so no renderer reads the environment.
 result; a redraw cannot change color mid-session. Color is off only for
 `NO_COLOR`, `TERM=dumb` and non-TTY output, and `Theme.Paint`/`Bold` then return
 the string unchanged — so no escape sequence can reach a colorless path. A
-16-color terminal keeps color: each token is mapped to the nearest of the 16
-basic ANSI colors instead of a 24-bit value. A non-UTF-8 locale swaps only the
+16-color terminal keeps color: each token is mapped to its own reviewed slot
+among the 16 basic ANSI colors instead of a 24-bit value. Nearest-RGB was tried
+and rejected because it collapsed dark accent, warning and URL onto plain white. A non-UTF-8 locale swaps only the
 decorative glyphs for one-cell ASCII forms; the Korean labels stay.
 
 Every state is an icon plus a Korean label plus a color, in that order of
@@ -1017,6 +1020,9 @@ reliability: color is the third channel, never the only one.
   preview panel lists every collected answer as the apply will send it; a long
   preview scrolls. An approval-gated apply routes through the same generic
   confirmation panel — there is exactly one approval surface.
+- A sidebar click on a screen that holds answers raises the one-decision
+  discard panel: `enter` discards them and navigates, `esc` keeps them and
+  stays. It reuses the confirmation surface and its two buttons.
 - `?` opens a help panel that lists the keycaps of the screen it was opened from
   (it reads the same row the footer draws); `esc` closes it and runs nothing. A
   screen whose `?` is text (a filter field, a wizard answer) does not advertise
@@ -1694,9 +1700,13 @@ Published for later screens; do not create a second selection model.
   positional arguments and the shared `--` terminator; `-s/--service`,
   `-i/--index`, `-T/--no-tty`.
 - The argv is passed to `docker compose exec` unchanged after the service.
-  dcraft never invokes `sh -c` and never guesses a shell. The image must
-  contain the command; a missing command is `exec_failed` (exit 1) with Korean
-  guidance, not a silent shell fallback.
+  dcraft never invokes `sh -c`. The interactive screen offers `/bin/bash` and
+  `/bin/sh` as pinned choices, and `/bin/bash` is the default; a CLI run still
+  requires the argv after `--` and is never guessed. When an *interactive*
+  attach starts with bash and the container reports the command missing, the one
+  retry runs the same argv with `/bin/sh` and the result states the
+  substitution; any other failure is reported unchanged. A non-interactive or
+  JSON run never retries.
 - A pseudo-terminal is allocated only when the caller can relay an interactive
   terminal and `-T` is absent. `-T`, piped input, and JSON mode never allocate
   one.
@@ -2599,11 +2609,11 @@ Tested seams:
   remote non-zero mapping with `exit_code`, missing command and stopped service;
 - execx streaming: piped and pty modes, input forwarding, output capture and
   context cancellation, and terminal restoration after success and failure;
-- TUI visual system: golden snapshot matrix of fifteen main screens (menu+status,
+- TUI visual system: golden snapshot matrix of sixteen main screens (menu+status,
   service selection, confirmation panel, progress, progress-logs, wizard,
   wizard-list, wizard-examples, environment-actions, environment-switch, failure,
-  empty stack, logs, detail, long value) at 40/80/120/200 columns × 18/30/50
-  rows, committed once with the painted theme and once colorless, with the
+  empty stack, logs, live-hostile, detail, long value) at 40/80/120/200 columns
+  × 18/30/50 rows, committed once with the painted theme and once colorless, with the
   colorless set asserted to be the stripped painted set byte for byte;
   40-column frame integrity on every screen; Korean display-cell width (a
   syllable is two cells, never split by truncation); long path truncation with

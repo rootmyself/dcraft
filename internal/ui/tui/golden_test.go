@@ -800,8 +800,6 @@ func goldenEmptyStack(t *testing.T) *Model {
 	return newGoldenModel(t, features...)
 }
 
-// goldenLogs is a live log screen with more output than the window can show, so
-// the pinned header, the scrolling band and the position row are all visible.
 // goldenLiveHostileModel draws a live log whose lines carry the control
 // characters a hostile child can print: a carriage-return rewrite, tabs, a
 // cursor move, an OSC title and a 400-cell line. The snapshot proves the sidebar
@@ -840,6 +838,8 @@ func goldenLiveHostileModel(t *testing.T) *Model {
 	return m
 }
 
+// goldenLogs is a live log screen with more output than the window can show, so
+// the pinned header, the scrolling band and the position row are all visible.
 func goldenLogs(t *testing.T) *Model {
 	t.Helper()
 	features := goldenBaseFeatures()

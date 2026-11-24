@@ -5,6 +5,7 @@ package hooks
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -335,17 +336,39 @@ func (f *Feature) applyWizard(ctx context.Context, in core.Invocation) (any, err
 	if len(scripts) == 0 {
 		return nil, inputError(msgMissingInput, "script")
 	}
-	// One registered script per answer, in the order the reader entered them.
-	// A failure stops the wave: the report states what ran and what did not.
-	var last any
-	for _, script := range scripts {
+	// One registration per answer, in the order the reader entered them. A
+	// failure partway stops the rest: the error names the script that failed,
+	// because earlier items are already saved and the reader has to know which
+	// ones landed.
+	for i, script := range scripts {
 		payload, err := f.change(ctx, in, action, script, in.Option("stage"))
 		if err != nil {
-			return nil, err
+			if i == 0 {
+				return nil, err
+			}
+			return nil, partialScriptsError(err, scripts[:i], scripts[i])
 		}
-		last = payload
+		if i == len(scripts)-1 {
+			return payload, nil
+		}
 	}
-	return last, nil
+	return nil, inputError(msgMissingInput, "script")
+}
+
+// partialScriptsError states which scripts were saved before one failed. The
+// underlying diagnostic is kept so the cause is not replaced by the count.
+func partialScriptsError(cause error, saved []string, failed string) error {
+	var ce *core.Error
+	diags := []core.Diagnostic{{
+		Category:    core.CategoryHookInputInvalid,
+		Severity:    core.SeverityError,
+		Message:     fmt.Sprintf(msgPartialScripts, len(saved), failed),
+		NextActions: []string{msgInputActionOne},
+	}}
+	if errors.As(cause, &ce) && len(ce.Diagnostics) > 0 {
+		diags[0].Detail = ce.Diagnostics[0].Message
+	}
+	return core.FailCause(cause, diags[0])
 }
 
 // answerScripts decodes the script answer. The step is a list, so each item is

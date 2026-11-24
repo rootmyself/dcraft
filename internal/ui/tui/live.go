@@ -579,29 +579,22 @@ func (w *liveWriter) Write(p []byte) (int, error) {
 func (w *liveWriter) flush() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if w.pending != "" {
-		// The stream ended while a row was still being rewritten. The last
-		// drawn row is what the reader saw, so that is what is kept.
-		row := w.pending
-		w.pending, w.partial = "", ""
-		w.emit(row)
+	// A row still being rewritten is its latest segment: the text after the last
+	// carriage return is what the reader saw, so any earlier segment is stale.
+	row := strings.TrimSuffix(w.partial, "\r")
+	if row == "" {
 		return
 	}
-	if w.partial != "" {
-		w.emit(strings.TrimSuffix(w.partial, "\r"))
-		w.partial = ""
-	}
+	w.pending, w.partial = "", ""
+	w.emit(row)
 }
 
 func (w *liveWriter) emit(line string) {
 	if w.closed {
 		return
 	}
-	// The child may print carriage returns, tabs and cursor escapes. They are
-	// not cells the terminal draws, so they are removed before the line is
-	// measured or kept; otherwise a hostile line passes the width check and
-	// then moves the cursor over the sidebar.
-	line = visual.SanitizeLine(line)
+	// The writer keeps raw text; liveState.append is the one place a line is
+	// sanitized, so the kept tail and the drawn rows come from the same rule.
 	w.tail = append(w.tail, line)
 	if len(w.tail) > liveLineLimit {
 		w.tail = w.tail[len(w.tail)-liveLineLimit:]
@@ -625,7 +618,14 @@ func (w *liveWriter) droppedLines() int {
 func (w *liveWriter) tailLines() []string {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	return append([]string{}, w.tail...)
+	// The kept tail is shown on the management screen, so it runs through the
+	// same sanitizer as a drawn row: a control byte must not reach the terminal
+	// from either path.
+	out := make([]string, len(w.tail))
+	for i, line := range w.tail {
+		out[i] = visual.SanitizeLine(line)
+	}
+	return out
 }
 
 func (w *liveWriter) close() {

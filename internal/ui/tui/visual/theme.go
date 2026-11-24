@@ -238,18 +238,17 @@ func (t Theme) Ellipsis() string { return t.Glyphs.Ell }
 
 // DarkPalette targets a dark terminal background.
 //
-// The state tokens clear 4.5:1 contrast on both BG and Surface. Muted keeps 3:1
-// against both, and sits far enough from FG in brightness to read as secondary
-// at a glance: the earlier value was 1.84:1 against FG, which is why a label
-// and a value looked alike. A border or rule is structure, not text, so 3:1 is
-// the right floor for it. The value-classification tokens are decorative, but
+// Every token clears 4.5:1 contrast on both BG and Surface, including muted.
+// Muted also sits far enough from FG in brightness to read as secondary at a
+// glance: the earlier value was 1.84:1 against FG, which is why a label and a
+// value looked alike. The value-classification tokens are decorative, but
 // they keep enough chroma to separate path, URL, image, command, service and
 // project from each other without relying on color alone.
 func DarkPalette() Palette {
 	return Palette{
 		Name: "dark", Dark: true, BG: "#10131a", FG: "#d8dee9",
 		Accent: "#7aa2f7", Success: "#5fd08a", Warning: "#e5b567",
-		Danger: "#f07178", Muted: "#6f7c93", Surface: "#1b2130",
+		Danger: "#f07178", Muted: "#7f8ca6", Surface: "#1b2130",
 		Info: "#4fd8ff", URL: "#8b8bff", Code: "#ffe000", Command: "#ff3b3b", NameColor: "#3dff6e", Project: "#ff3bff",
 	}
 }
@@ -261,7 +260,7 @@ func LightPalette() Palette {
 	return Palette{
 		Name: "light", Dark: false, BG: "#ffffff", FG: "#1f2430",
 		Accent: "#2f5bd1", Success: "#1b7a43", Warning: "#8a5a00",
-		Danger: "#b4232f", Muted: "#747d8f", Surface: "#f1f4f9",
+		Danger: "#b4232f", Muted: "#666f80", Surface: "#f1f4f9",
 		Info: "#0057c2", URL: "#0036d6", Code: "#7a4b00", Command: "#c40000", NameColor: "#00702b", Project: "#8c0090",
 	}
 }

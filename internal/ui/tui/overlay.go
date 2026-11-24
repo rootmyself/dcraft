@@ -200,6 +200,16 @@ func (m *Model) updateDiscardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.discardInput()
 		return m, m.start(m.features[index])
+	default:
+		m.scrollOverlayKey(msg)
+	}
+	return m, nil
+}
+
+// scrollOverlayKey applies the panel's shared navigation keys. Both panels use
+// it, so a key means the same thing on each.
+func (m *Model) scrollOverlayKey(msg tea.KeyMsg) {
+	switch msg.String() {
 	case "up", "k":
 		m.scrollOverlay(-1)
 	case "down", "j":
@@ -213,7 +223,6 @@ func (m *Model) updateDiscardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "end", "G":
 		m.confirmScroll = m.overlayMaxTop()
 	}
-	return m, nil
 }
 
 // discardInput drops the current screen's collected answers. It runs only after
@@ -313,24 +322,8 @@ func (m *Model) updateConfirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "enter":
 		return m.approveConfirmation()
-	case "up", "k":
-		m.scrollOverlay(-1)
-		return m, nil
-	case "down", "j":
-		m.scrollOverlay(1)
-		return m, nil
-	case "pgup":
-		m.scrollOverlay(-m.overlayPage())
-		return m, nil
-	case "pgdown":
-		m.scrollOverlay(m.overlayPage())
-		return m, nil
-	case "home", "g":
-		m.confirmScroll = 0
-		return m, nil
-	case "end", "G":
-		m.confirmScroll = m.overlayMaxTop()
-		return m, nil
+	default:
+		m.scrollOverlayKey(msg)
 	}
 	return m, nil
 }

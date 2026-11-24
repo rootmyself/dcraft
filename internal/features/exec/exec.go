@@ -44,9 +44,12 @@ type Report struct {
 	TTY      bool     `json:"tty"`
 	ExitCode int      `json:"exit_code"`
 	// Substituted reports that bash was missing and /bin/sh ran instead.
-	Substituted bool   `json:"substituted,omitempty"`
-	Stdout      string `json:"stdout,omitempty"`
-	Stderr      string `json:"stderr,omitempty"`
+	Substituted bool `json:"substituted,omitempty"`
+	// Notices are the one-time guidance this run produced, such as the ignore
+	// rule for a newly created command store.
+	Notices []string `json:"notices,omitempty"`
+	Stdout  string   `json:"stdout,omitempty"`
+	Stderr  string   `json:"stderr,omitempty"`
 }
 
 // Payload is the feature result payload. JSON consumers read data.exec.
@@ -173,7 +176,12 @@ func (f *Feature) Run(ctx context.Context, in core.Invocation) (any, error) {
 	// failed to start is not offered again. A command that looks like it
 	// carries a credential is never stored, even though it still ran.
 	if !looksLikeCredential(strings.Join(report.Command, " ")) {
-		rememberCommand(in.Target.ProjectDir, report.Command)
+		remember := rememberCommand(in.Target.ProjectDir, report.Command)
+		if remember.Created {
+			// The file exists for the first time, so this is the one place the
+			// ignore rule can be stated.
+			report.Notices = append(report.Notices, fmt.Sprintf(msgHistoryIgnore, historyIgnoreLine))
+		}
 	}
 	return Payload{Exec: report}, nil
 }

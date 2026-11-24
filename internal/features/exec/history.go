@@ -7,8 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/rootmyself/dcraft/internal/core"
 )
 
 // Recent commands are the attach screen's memory of what the reader ran in this
@@ -178,6 +176,7 @@ func dedupeCommands(values []string) []string {
 
 // trackingHistory keeps the history load off the attach path's error channel:
 // a store that cannot be read is reported on screen and the attach continues.
+// It creates the store, so it is called only where a command is recorded.
 func trackingHistory(projectDir string) (History, string) {
 	history, err := LoadHistory(projectDir, true)
 	if err != nil {
@@ -186,4 +185,11 @@ func trackingHistory(projectDir string) (History, string) {
 	return history, ""
 }
 
-var _ = core.SchemaVersion
+// RememberOutcome states what the store did with a completed command, so the
+// result can print the ignore rule on the run that creates the file.
+type RememberOutcome struct {
+	// Created reports that this run wrote the store for the first time.
+	Created bool
+	// Err is a store that could not be written. The command still ran.
+	Err error
+}

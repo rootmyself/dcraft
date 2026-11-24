@@ -674,3 +674,29 @@ func TestExecDoesNotStoreCommandsThatLookLikeCredentials(t *testing.T) {
 		t.Fatalf("a credential-looking command was stored: %v", history.Commands)
 	}
 }
+
+// Opening the screen leaves the project untouched; the file appears on the run
+// that records a command, and that run states the ignore rule.
+func TestExecScreenCreatesNothingAndTheFirstRunStatesTheIgnoreRule(t *testing.T) {
+	project := t.TempDir()
+	f := New(&fakeBackend{snap: scaledSnapshot()}, &fakeStreamer{})
+	in := invocation(nil, nil, nil, core.IO{}, &fakeReporter{})
+	in.Target.ProjectDir = project
+	if _, err := f.Inputs(context.Background(), in); err != nil {
+		t.Fatalf("Inputs: %v", err)
+	}
+	if _, statErr := os.Stat(HistoryPath(project)); !os.IsNotExist(statErr) {
+		t.Fatal("opening the form created the history file")
+	}
+
+	in = invocation([]string{"web"}, []string{"date"}, map[string]string{"index": "1"}, core.IO{Stdout: &strings.Builder{}}, &fakeReporter{})
+	in.Target.ProjectDir = project
+	data, err := f.Run(context.Background(), in)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	notices := data.(Payload).Exec.Notices
+	if len(notices) != 1 || !strings.Contains(notices[0], ".dcraft/") {
+		t.Fatalf("notices = %v, want the ignore rule once", notices)
+	}
+}

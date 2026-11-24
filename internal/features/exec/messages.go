@@ -90,4 +90,4 @@ const (
 // credential. dcraft never inspects the value; it only names the risk so a
 // command that would be stored in the project folder is not stored with a
 // secret by accident.
-const msgCredentialRisk = "명령에 비밀값이 들어 있는 것으로 보임. 그대로 실행은 가능하지만 최근 명령에 저장되므로 값 노출 확인."
+const msgCredentialRisk = "명령에 비밀값이 들어 있는 것으로 보임. 그대로 실행은 가능하지만 최근 명령에는 저장하지 않음."

@@ -830,3 +830,21 @@ func TestLiveKeepsChildColorInTheBand(t *testing.T) {
 	}
 	detachLive(t, m, q, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 }
+
+// A row still being rewritten when the stream ends keeps the text after its last
+// carriage return, which is what the reader saw. The stale prefix is not output.
+func TestLiveStreamEndKeepsTheLastRewrite(t *testing.T) {
+	ch := make(chan string, 8)
+	w := &liveWriter{ch: ch}
+	_, _ = w.Write([]byte("50%\r60"))
+	w.flush()
+	w.close()
+	close(ch)
+	var rows []string
+	for row := range ch {
+		rows = append(rows, row)
+	}
+	if strings.Join(rows, "|") != "60" {
+		t.Fatalf("rows = %v, want the last rewrite only", rows)
+	}
+}
