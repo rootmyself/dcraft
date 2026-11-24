@@ -86,6 +86,7 @@ func goldenScreens() []goldenScreen {
 		{name: "failure", build: goldenFailure},
 		{name: "empty-stack", build: goldenEmptyStack},
 		{name: "logs", build: goldenLogs},
+		{name: "live-hostile", build: goldenLiveHostileModel},
 		{name: "detail", build: goldenDetailView},
 		{name: "long-value", build: goldenLongValue},
 	}
@@ -801,6 +802,44 @@ func goldenEmptyStack(t *testing.T) *Model {
 
 // goldenLogs is a live log screen with more output than the window can show, so
 // the pinned header, the scrolling band and the position row are all visible.
+// goldenLiveHostileModel draws a live log whose lines carry the control
+// characters a hostile child can print: a carriage-return rewrite, tabs, a
+// cursor move, an OSC title and a 400-cell line. The snapshot proves the sidebar
+// column survives them, because every row is drawn at one fixed width.
+//
+// It carries no colour SGR on purpose: a colourless snapshot must not contain an
+// escape sequence, and the child's own paint is not the theme's. Survival of a
+// colour SGR is asserted where the line is sanitized and on the live screen.
+func goldenLiveHostileModel(t *testing.T) *Model {
+	t.Helper()
+	features := goldenBaseFeatures()
+	m := newGoldenModel(t, features...)
+	logs := featureNamed(t, features, "logs")
+	lines := []string{
+		"api-1  | \x1b[2A\x1b[K100%\r90%\tdone\x1b]0;title\x07",
+		"api-1  | " + strings.Repeat("x", 400),
+		"api-1  | error connection refused",
+	}
+	m.active = logs
+	m.phase = phaseLoading
+	m.req = core.Request{Feature: "logs", Target: goldenTarget()}
+	ch := make(chan string, 1)
+	m.live = &liveState{
+		mode:   core.LiveStream,
+		writer: &liveWriter{ch: ch},
+		ch:     ch,
+	}
+	// Feed the fixture through the same entry point as a live line, so the
+	// snapshot shows the sanitized text the screen would draw.
+	for _, line := range lines {
+		m.live.append(line)
+	}
+	m.live.writer.tail = append([]string{}, lines...)
+	m.liveCh = ch
+	m.liveFollow = true
+	return m
+}
+
 func goldenLogs(t *testing.T) *Model {
 	t.Helper()
 	features := goldenBaseFeatures()

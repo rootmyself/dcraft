@@ -39,7 +39,9 @@ const liveChannelCapacity = 512
 // counted so the position indicator can say that older output is no longer
 // reachable instead of pretending the stream started at the cap.
 func (l *liveState) append(line string) {
-	l.lines = append(l.lines, line)
+	// Sanitize once, where the line enters the model. Every later reader
+	// (the viewport, the scrollbar, the kept tail) then measures real cells.
+	l.lines = append(l.lines, visual.SanitizeLine(line))
 	if over := len(l.lines) - liveLineLimit; over > 0 {
 		l.lines = l.lines[over:]
 		l.dropped += over
@@ -537,6 +539,10 @@ func keyBytes(msg tea.KeyMsg) []byte {
 type liveWriter struct {
 	mu      sync.Mutex
 	partial string
+	// pending is the row a carriage return is still rewriting. A progress bar
+	// prints `10%\r20%\r…` without a newline; each segment replaces the last,
+	// so the screen draws one row instead of one row per update.
+	pending string
 	closed  bool
 	ch      chan string
 	tail    []string
@@ -550,20 +556,37 @@ func (w *liveWriter) Write(p []byte) (int, error) {
 	defer w.mu.Unlock()
 	w.partial += string(p)
 	for {
-		index := strings.IndexByte(w.partial, '\n')
-		if index < 0 {
-			break
+		newline := strings.IndexByte(w.partial, '\n')
+		rewrite := strings.IndexByte(w.partial, '\r')
+		switch {
+		case newline < 0 && rewrite < 0:
+			return len(p), nil
+		case newline >= 0 && (rewrite < 0 || newline < rewrite):
+			// The newline ends the row. A rewrite replaced whatever the row
+			// held, so the last segment is the row and the pending text before
+			// it is not output.
+			segment := strings.TrimSuffix(w.partial[:newline], "\r")
+			w.partial = w.partial[newline+1:]
+			w.pending = ""
+			w.emit(segment)
+		default:
+			w.pending = w.partial[:rewrite]
+			w.partial = w.partial[rewrite+1:]
 		}
-		line := strings.TrimSuffix(w.partial[:index], "\r")
-		w.partial = w.partial[index+1:]
-		w.emit(line)
 	}
-	return len(p), nil
 }
 
 func (w *liveWriter) flush() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	if w.pending != "" {
+		// The stream ended while a row was still being rewritten. The last
+		// drawn row is what the reader saw, so that is what is kept.
+		row := w.pending
+		w.pending, w.partial = "", ""
+		w.emit(row)
+		return
+	}
 	if w.partial != "" {
 		w.emit(strings.TrimSuffix(w.partial, "\r"))
 		w.partial = ""
@@ -574,6 +597,11 @@ func (w *liveWriter) emit(line string) {
 	if w.closed {
 		return
 	}
+	// The child may print carriage returns, tabs and cursor escapes. They are
+	// not cells the terminal draws, so they are removed before the line is
+	// measured or kept; otherwise a hostile line passes the width check and
+	// then moves the cursor over the sidebar.
+	line = visual.SanitizeLine(line)
 	w.tail = append(w.tail, line)
 	if len(w.tail) > liveLineLimit {
 		w.tail = w.tail[len(w.tail)-liveLineLimit:]

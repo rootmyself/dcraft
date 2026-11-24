@@ -9,6 +9,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/rootmyself/dcraft/internal/core"
 	"github.com/rootmyself/dcraft/internal/ui/tui/visual"
@@ -156,14 +157,15 @@ func TestLiveLogsScrollUnderAPinnedHeader(t *testing.T) {
 	}
 }
 
-// Application output is user data: the TUI draws it exactly as it arrived,
-// including its own escape sequences, tabs and spacing. It never re-colors a log
-// line, never rewraps it and never strips what the process wrote.
-func TestLiveLogLinesPassThroughVerbatim(t *testing.T) {
+// Application output is user data, but the screen still measures what the
+// terminal will draw. A tab is expanded to four spaces and a colour SGR is kept,
+// so a coloured line reads the same without any control byte reaching the
+// terminal. Everything else on the line is untouched: no re-color, no rewrap.
+func TestLiveLogLinesKeepTheirTextAndPaint(t *testing.T) {
 	source := []string{
 		`proj-web-1  | 2026-11-20T10:00:00Z GET /healthz 200 3ms`,
 		"\x1b[31mproj-web-1  | error:\x1b[0m connection refused",
-		"proj-web-1  | \tindented\twith\ttabs",
+		"proj-web-1  |     indented    with    tabs",
 		`proj-web-1  | {"level":"info","msg":"json stays one line"}`,
 		"proj-web-1  | 한국어 로그 줄도 그대로",
 	}
@@ -753,6 +755,78 @@ func TestLiveLogColorDoesNotLeakIntoTheTUIChrome(t *testing.T) {
 				t.Fatalf("TUI chrome added an escape on row %d: %q", i, line)
 			}
 		}
+	}
+	detachLive(t, m, q, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+}
+
+// A hostile log line must not reach the sidebar. Its carriage return, tab and
+// cursor escapes are removed before the line is measured, so the width check
+// sees the cells the terminal draws and the pane keeps its column.
+func TestLiveHostileLineDoesNotCrossTheSidebarColumn(t *testing.T) {
+	hostile := "proj-web-1  | \x1b[2A\x1b[K100%\r90%\tdone\x1b]0;title\x07"
+	live := streamingLogs(t, func(ctx context.Context, in core.Invocation) (any, error) {
+		fmt.Fprintln(in.IO.Stdout, hostile)
+		fmt.Fprintln(in.IO.Stdout, strings.Repeat("x", 400))
+		<-ctx.Done()
+		return nil, ctx.Err()
+	})
+	m := newTestModel(t, live)
+	q := startCmds(m.Init())
+	resize(t, m, 120, 30)
+	waitView(t, m, q, "done")
+
+	// Every frame row is a fixed width, and a row that overflowed the body
+	// would have moved the sidebar or pushed the line past the terminal. The
+	// hostile line is drawn as its sanitized text, so the sidebar's right
+	// border is at the same column on every body row.
+	border := visual.SidebarWidth(120) - 1
+	for i, line := range viewLines(t, m) {
+		if i == 0 || i == len(viewLines(t, m))-1 {
+			continue
+		}
+		if got := visual.Width(line); got != 120 {
+			t.Fatalf("row %d width = %d, want 120: %q", i, got, line)
+		}
+		if !strings.Contains(line, "│") {
+			continue
+		}
+		if strings.Count(line[:border+1], "│") == 0 && strings.Contains(line, "│") {
+			// A body row that lost the pane border was overwritten.
+			t.Fatalf("row %d lost the sidebar border: %q", i, line)
+		}
+	}
+
+	view := ansi.Strip(m.View())
+	if strings.Contains(view, "\x1b") {
+		t.Fatalf("an escape reached the frame: %q", view)
+	}
+	for _, want := range []string{"90%", "done"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("sanitized output lost %q:\n%s", want, view)
+		}
+	}
+	if strings.Contains(view, "100%") {
+		t.Fatalf("the rewritten progress tail survived:\n%s", view)
+	}
+}
+
+// A child's colour SGR survives into the band, because coloured tool output is
+// still readable output. It is the child's paint, never the screen's.
+func TestLiveKeepsChildColorInTheBand(t *testing.T) {
+	live := streamingLogs(t, func(ctx context.Context, in core.Invocation) (any, error) {
+		fmt.Fprintln(in.IO.Stdout, "\x1b[31merror:\x1b[0m connection refused")
+		<-ctx.Done()
+		return nil, ctx.Err()
+	})
+	m := newTestModel(t, live)
+	q := startCmds(m.Init())
+	resize(t, m, 120, 24)
+	waitView(t, m, q, "connection refused")
+	if !strings.Contains(m.View(), "\x1b[31m") {
+		t.Fatalf("child colour was dropped:\n%q", m.View())
+	}
+	if !strings.Contains(ansi.Strip(m.View()), "error: connection refused") {
+		t.Fatalf("text changed:\n%s", ansi.Strip(m.View()))
 	}
 	detachLive(t, m, q, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 }

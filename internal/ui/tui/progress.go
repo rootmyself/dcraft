@@ -22,7 +22,9 @@ type progressState struct {
 // append keeps the updated tail bounded. Dropped lines are counted because the
 // viewport must state that older output is no longer reachable.
 func (p *progressState) append(line string) {
-	p.lines = append(p.lines, line)
+	// Same one rule as the live log: sanitize at the point the line enters,
+	// so the width check and the scrollbar see the drawn cells.
+	p.lines = append(p.lines, visual.SanitizeLine(line))
 	if over := len(p.lines) - liveLineLimit; over > 0 {
 		p.lines = p.lines[over:]
 		p.dropped += over
@@ -158,7 +160,8 @@ func (m *Model) progressBody() (bodyLayout, bool) {
 	width := m.bodyWidth()
 	for _, line := range m.progress.lines[start:end] {
 		// Logs are never rewrapped: a line that does not fit is cut with the
-		// explicit marker, keeping column alignment intact.
+		// explicit marker, keeping column alignment intact. The line was
+		// sanitized when it entered the model, so this measures drawn cells.
 		if width > 0 {
 			line = visual.Fit(line, width, m.theme.Glyphs.Ell)
 		}
