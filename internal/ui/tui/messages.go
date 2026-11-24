@@ -127,7 +127,6 @@ const (
 	msgLiveCommand       = "명령"
 	msgLiveStopped       = "실시간 화면 닫음. 서비스는 계속 실행 중."
 	msgLiveKeepsRunning  = "서비스는 계속 실행 중"
-	msgLiveDropped       = "오래된 줄 %d개 버림"
 	msgLiveScrollKeys    = "PgUp/PgDn · g/G"
 	msgLastOutput        = "마지막 실시간 출력"
 	msgLastOutputOmitted = "마지막 실시간 출력 (앞 %d줄 생략)"

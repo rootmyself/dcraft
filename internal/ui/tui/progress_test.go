@@ -171,24 +171,24 @@ func TestProgressLogHidesWhenFewerThanThreeRowsRemain(t *testing.T) {
 	if !strings.Contains(view, "작업을 실행하는 중") {
 		t.Fatalf("timeline screen was not kept:\n%s", view)
 	}
-	if m.progress == nil || len(m.progress.lines) == 0 {
-		t.Fatal("the progress lines were not collected")
+	if m.progress == nil || m.progress.view == nil || len(m.progress.view.Lines()) == 0 {
+		t.Fatal("the progress output was not collected")
 	}
 }
 
-func TestProgressLogStatesDroppedLines(t *testing.T) {
+// The running log keeps what scrolled off the top instead of dropping it, so a
+// long compose run stays readable with PgUp and the position row states the real
+// total.
+func TestProgressLogKeepsLongOutputReachable(t *testing.T) {
 	lines := numberedLines(450)
 	m, _, _ := startProgressModel(t, lines, "line-449")
 
 	view := m.View()
-	if !strings.Contains(view, fmt.Sprintf(msgLiveDropped, 50)) {
-		t.Fatalf("dropped-line notice missing:\n%s", view)
-	}
 	if !strings.Contains(view, "line-449") {
-		t.Fatalf("the retained tail is not visible:\n%s", view)
+		t.Fatalf("the tail is not visible:\n%s", view)
 	}
-	if strings.Contains(view, "line-00") {
-		t.Fatalf("the tail cap was not applied:\n%s", view)
+	if got := len(m.progress.view.Lines()); got < len(lines) {
+		t.Fatalf("the log holds %d lines, want at least %d", got, len(lines))
 	}
 }
 

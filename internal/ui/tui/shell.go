@@ -56,11 +56,12 @@ func (m *Model) screenKeycaps() []visual.Keycap {
 		}
 	}
 	if m.live != nil && m.live.mode == core.LiveAttach {
-		// Attach ends with ctrl+], never with ctrl+c (which is forwarded to
-		// the child), so the live row would be wrong.
+		// Attach ends with ctrl+], never with ctrl+c (which is forwarded to the
+		// child), so the live row would be wrong. "?" is a character a shell
+		// needs, so it is forwarded too and the help chip is gone: advertising a
+		// key that types into the child would be a lie.
 		return []visual.Keycap{
 			{Key: "ctrl+]", Label: msgKeyDetach, Priority: 0},
-			{Key: "?", Label: msgKeyHelp, Priority: 3},
 		}
 	}
 	if m.live != nil && m.liveScrolls() {
@@ -979,10 +980,11 @@ func (m *Model) environmentView() string {
 // panel that fills the frame would hide the event the reader came to read.
 const minResultRows = 6
 
-// liveTailLines is the kept live output shown on the management screen. The
-// content is raw process output and is passed through unchanged; only the frame
-// around it is the TUI's. It is drawn as a titled panel so the retained output
-// reads as one block with the rest of the screen instead of a bare list.
+// liveTailLines is the kept live output shown on the management screen. Its
+// content is the child's terminal screen, rendered to text and paint by
+// termview, so it is the rows the reader just saw rather than the raw bytes the
+// child wrote. It is drawn as a titled panel so the retained output reads as one
+// block with the rest of the screen instead of a bare list.
 //
 // reserve is how many body rows the screen below the panel still needs. The
 // panel keeps what is left, states the lines it had to leave out, and never

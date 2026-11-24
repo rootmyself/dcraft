@@ -1,75 +1,112 @@
 package tui
 
 import (
-	"fmt"
-	"io"
 	"strings"
 	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/rootmyself/dcraft/internal/core"
+	"github.com/rootmyself/dcraft/internal/ui/tui/termview"
 	"github.com/rootmyself/dcraft/internal/ui/tui/visual"
 )
 
-// liveState is the TUI side of an attached process: the child writes to a
-// liveWriter, and for core.LiveAttach the user's keys are forwarded through a
-// byte reader. Nothing here owns stack lifetime: leaving the screen cancels
-// the run context and detaches, it never stops a service.
+// liveState is the TUI side of an attached command or a log stream. Its output
+// is a terminal screen, not a list of lines: a shell writes a prompt with no
+// newline, echoes each key and redraws the line when the user edits it, and none
+// of that survives a line-buffered reader. The grid in termview keeps the
+// child's cursor and cells, and this file lays those rows out in the frame.
+//
+// Nothing here owns stack lifetime: leaving the screen cancels the run context
+// and detaches, it never stops a service.
 type liveState struct {
-	mode     core.LiveMode
-	writer   *liveWriter
-	keys     *keyReader
-	ch       chan string
-	lines    []string
-	dropped  int
-	notice   string
+	mode core.LiveMode
+	// view is the child's terminal screen.
+	view *termview.View
+	// writer is the stream the feature writes to. It feeds the grid and signals
+	// the repaint, so one write is one screen update without a per-line message.
+	writer *liveWriter
+	// notice is the one state message under the output, such as "중단 중".
+	notice string
+	// stopping reports that a detach has been requested.
 	stopping bool
-	once     sync.Once
+	// once closes the view exactly once when the run ends.
+	once sync.Once
 }
 
-const liveLineLimit = 400
+// liveNotifyCapacity is the repaint signal's buffer. One is enough: the signal
+// coalesces a burst of output into a single repaint, and a full buffer means a
+// repaint is already pending.
+const liveNotifyCapacity = 1
 
-// liveChannelCapacity is the buffered delivery channel between the child and the
-// render loop. It absorbs a burst without blocking the child; a longer burst
-// drops lines, which the indicator then states.
-const liveChannelCapacity = 512
+// liveTailRows is how many of the child's screen rows the management view keeps
+// as the last output after a detach. It is a memory of what was on screen, not a
+// log, so forty rows is plenty.
+const liveTailRows = 40
 
-// append adds one output line and keeps the tail bounded. Dropped lines are
-// counted so the position indicator can say that older output is no longer
-// reachable instead of pretending the stream started at the cap.
-func (l *liveState) append(line string) {
-	// Sanitize once, where the line enters the model. Every later reader
-	// (the viewport, the scrollbar, the kept tail) then measures real cells.
-	l.lines = append(l.lines, visual.SanitizeLine(line))
-	if over := len(l.lines) - liveLineLimit; over > 0 {
-		l.lines = l.lines[over:]
-		l.dropped += over
+// liveWriter fans the child's bytes into the grid and signals the render loop.
+// The signal is non-blocking, so a child that prints faster than the screen
+// repaints never waits on the interface.
+type liveWriter struct {
+	view   *termview.View
+	notify chan struct{}
+	mu     sync.Mutex
+	closed bool
+}
+
+func (w *liveWriter) Write(p []byte) (int, error) {
+	n, err := w.view.Write(p)
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.closed {
+		return n, err
 	}
+	select {
+	case w.notify <- struct{}{}:
+	default:
+	}
+	return n, err
 }
 
-func (l *liveState) close() {
-	l.once.Do(func() {
-		l.writer.close()
-		close(l.ch)
-		if l.keys != nil {
-			l.keys.close()
-		}
-	})
+// close stops the writer signalling the render loop. The caller closes the
+// channel after this returns, so no send can follow the close: a feature
+// goroutine may still be writing when its run is cancelled.
+func (w *liveWriter) close() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.closed = true
 }
 
-// setupLive wires a live feature's streams. Only LiveAttach receives an input
-// pipe and TTY semantics; logs are output-only and stay colorless.
+// setupLive wires a live feature's streams. Both modes get a grid: a log stream
+// and an attached command differ in whether the child reads input, not in how
+// its output is drawn.
 func (m *Model) setupLive(f core.Feature) {
 	live, ok := f.(core.LiveFeature)
 	if !ok {
 		m.req.IO = core.IO{}
 		return
 	}
-	ch := make(chan string, liveChannelCapacity)
-	writer := &liveWriter{ch: ch}
+	// The screen state exists before the size is measured: the header block is
+	// part of the row budget and liveHeaderLines reads the screen kind. Measuring
+	// first would size the child's terminal too tall, so a full-screen child would
+	// draw under the header and footer.
+	ch := make(chan struct{}, liveNotifyCapacity)
 	m.liveCh = ch
-	m.live = &liveState{mode: live.LiveMode(), writer: writer, ch: ch, lines: []string{}}
+	m.live = &liveState{mode: live.LiveMode()}
+	cols, rows := m.liveGridSize()
+	var view *termview.View
+	if live.LiveMode() == core.LiveAttach {
+		// An attached command owns a pseudo-terminal and draws with cursor
+		// movement, so its bytes already carry the terminal's newline rule.
+		view = termview.New(cols, rows)
+	} else {
+		// A log stream is not a terminal: `docker compose logs` writes bare
+		// newlines, so the view applies the terminal driver's rule itself.
+		view = termview.NewPipe(cols, rows)
+	}
+	writer := &liveWriter{view: view, notify: ch}
+	m.live.view = view
+	m.live.writer = writer
 	// A live screen starts at the tail: the newest output is what the reader
 	// came to see. Scrolling up stops following until the bottom is reached.
 	m.liveTop = 0
@@ -77,53 +114,78 @@ func (m *Model) setupLive(f core.Feature) {
 	m.req.IO = core.IO{
 		Stdout: writer,
 		Stderr: writer,
-		Width:  m.width,
-		Height: m.height,
+		Width:  cols,
+		Height: rows,
 	}
 	if m.live.mode == core.LiveAttach {
-		m.live.keys = newKeyReader()
-		m.req.IO.Stdin = m.live.keys
+		// Keys reach the child through the grid's input stream, which is also
+		// where the terminal's own replies to the child travel.
+		m.req.IO.Stdin = view.Input()
 		m.req.IO.TTY = true
 	}
 }
 
-func (m *Model) closeLive() {
-	if m.live != nil {
-		m.live.writer.flush()
-		m.live.close()
-		m.live = nil
-		m.liveCh = nil
+// liveGridSize is the grid the child draws into: the body region the screen has
+// for it, not the whole terminal. A child sized to the full window would draw
+// under dcraft's header and footer.
+func (m *Model) liveGridSize() (cols, rows int) {
+	cols = m.bodyWidth()
+	if cols < 1 {
+		cols = 80
+	}
+	rows = m.liveBandRows()
+	if rows < 1 {
+		rows = 24
+	}
+	return cols, rows
+}
+
+// resizeLive keeps the child's grid the size of the band it is drawn in, so a
+// full-screen child such as an editor fills the band and a resize reaches it.
+func (m *Model) resizeLive() {
+	if m.live != nil && m.live.view != nil {
+		cols, rows := m.liveGridSize()
+		m.live.view.Resize(cols, rows)
+		// The grid never shrinks (a shorter buffer would truncate the newest
+		// rows), so the recorded size is the grid's, not the window's.
+		m.req.IO.Width, m.req.IO.Height = m.live.view.Size()
+	}
+	// The running `up` log is a grid too: a resize must reach it or its lines
+	// wrap at the old column count.
+	if m.progress != nil && m.progress.view != nil {
+		cols := m.bodyWidth()
+		if cols < 1 {
+			cols = 80
+		}
+		rows := m.progressLogRows()
+		if rows < 1 {
+			rows = 8
+		}
+		m.progress.view.Resize(cols, rows)
 	}
 }
 
-// drainLive moves already-produced lines into the render list before the
-// channel is closed. A fast command can finish before the TUI processes every
-// live message; its output still belongs on screen.
-func (m *Model) drainLive() {
-	if m.live == nil || m.liveCh == nil {
+// closeLive ends the screen: the child's input closes, the grid is released and
+// the screen state is cleared. The caller keeps what it wants first.
+func (m *Model) closeLive() {
+	if m.live == nil {
 		return
 	}
-	for {
-		select {
-		case line, ok := <-m.liveCh:
-			if !ok {
-				return
-			}
-			m.live.append(line)
-		default:
-			return
+	m.live.once.Do(func() {
+		// Stop the writer signalling before the channel closes: a feature
+		// goroutine may still be writing when its run is cancelled.
+		if m.live.writer != nil {
+			m.live.writer.close()
 		}
-	}
-}
-
-func lastLines(lines []string, limit int) []string {
-	if len(lines) == 0 {
-		return nil
-	}
-	if len(lines) > limit {
-		lines = lines[len(lines)-limit:]
-	}
-	return append([]string{}, lines...)
+		if m.live.view != nil {
+			_ = m.live.view.Close()
+		}
+		if m.liveCh != nil {
+			close(m.liveCh)
+		}
+	})
+	m.live = nil
+	m.liveCh = nil
 }
 
 func tailOrKeep(tail, previous []string) []string {
@@ -146,29 +208,29 @@ func (m *Model) requestFor(f core.Feature) core.Request {
 	return req
 }
 
-func waitLiveCmd(ch chan string) tea.Cmd {
+// waitLiveCmd asks for one repaint. The grid is written by the child's own
+// goroutine, so the screen learns about new output through this signal rather
+// than through a per-line message: a burst of output costs one repaint, not
+// hundreds.
+func waitLiveCmd(ch chan struct{}) tea.Cmd {
 	return func() tea.Msg {
-		line, ok := <-ch
-		if !ok {
+		if _, ok := <-ch; !ok {
 			return nil
 		}
-		return liveLineMsg{line: line}
+		return liveTickMsg{}
 	}
 }
 
 func (m *Model) updateLiveKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if msg.String() == "?" && m.helpAvailable() {
-		// The live row advertises help; the overlay opens over the output
-		// instead of being forwarded to the attached process.
-		m.openHelp()
-		return m, nil
-	}
+	// An attached command owns the keyboard. The only key dcraft keeps is the
+	// detach chord, because every other key is something a shell or an editor
+	// needs: "?" is a character, ctrl+c interrupts the child, tab completes.
 	if m.live.mode == core.LiveAttach {
 		if msg.String() == "ctrl+]" {
 			return m.stopLive(), nil
 		}
-		if bytes := keyBytes(msg); len(bytes) > 0 && m.live.keys != nil {
-			m.live.keys.write(bytes)
+		if bytes := keyBytes(msg); len(bytes) > 0 && m.live.view != nil {
+			m.live.view.SendText(string(bytes))
 		}
 		return m, nil
 	}
@@ -187,10 +249,10 @@ func (m *Model) updateLiveKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// liveScrolls reports whether the output band overflows the window. It is the
-// same computation the frame draws, so a key is never advertised by accident.
+// liveScrolls reports whether the output overflows the band. It is the same
+// computation the frame draws, so a key is never advertised by accident.
 func (m *Model) liveScrolls() bool {
-	if m.live == nil {
+	if m.live == nil || m.live.view == nil {
 		return false
 	}
 	return m.liveViewport().Overflow()
@@ -198,7 +260,7 @@ func (m *Model) liveScrolls() bool {
 
 // liveScroll moves the output window and records whether the reader is still
 // following the tail. Following resumes at the bottom; scrolling up stops it so
-// arriving lines do not drag the reader away from what they were reading.
+// arriving output does not drag the reader away from what they were reading.
 func (m *Model) liveScroll(key string) {
 	v := m.liveViewport()
 	switch key {
@@ -223,14 +285,48 @@ func (m *Model) stopLive() *Model {
 	}
 	m.live.stopping = true
 	m.live.notice = msgCanceling
-	m.lastLive = lastLines(m.live.writer.tailLines(), 12)
+	m.lastLive = m.captureLiveTail()
 	if m.runCancel != nil {
 		m.runCancel()
 	}
-	if m.live.keys != nil {
-		m.live.keys.close()
+	if m.live.view != nil {
+		_ = m.live.view.Close()
 	}
 	return m
+}
+
+// captureLiveTail is what the management screen keeps after a detach: the rows
+// the child's screen was showing, so the reader keeps the context they left in.
+func (m *Model) captureLiveTail() []string {
+	if m.live == nil || m.live.view == nil {
+		return nil
+	}
+	total := m.live.view.Window(0, 0).Total
+	start := total - liveTailRows
+	if start < 0 {
+		start = 0
+	}
+	// Only the tail is needed, so only the tail is read: the scrollback can hold
+	// thousands of rows the panel will never show.
+	win := m.live.view.Window(start, total)
+	palette := m.livePalette()
+	out := make([]string, 0, len(win.Rows))
+	for _, line := range win.Rows {
+		if text := termview.Paint(line.Cells, palette); text != "" {
+			out = append(out, text)
+		}
+	}
+	return out
+}
+
+// livePalette is the paint decision for the child's cells. A colorless terminal
+// gets text only, so NO_COLOR and TERM=dumb keep their no-escape guarantee: the
+// child's own colours never smuggle an escape into dcraft's frame.
+func (m *Model) livePalette() termview.Palette {
+	if !m.theme.Color {
+		return nil
+	}
+	return termview.NewPalette()
 }
 
 // liveHeaderLines is the fixed block above the output. It states the screen
@@ -238,6 +334,11 @@ func (m *Model) stopLive() *Model {
 // instance and the command. None of these scroll: the context of what is being
 // watched stays on screen while the output moves.
 func (m *Model) liveHeaderLines() []string {
+	if m.live == nil {
+		// setupLive measures the band before the screen exists; the header is
+		// empty then and the measurement uses the same row count either way.
+		return nil
+	}
 	var state []string
 	if m.live.mode == core.LiveAttach {
 		// msgLiveAttached is the existing attach text; the running-state line
@@ -307,31 +408,39 @@ func (m *Model) liveBandRows() int {
 	return available
 }
 
-// liveNeedsPositionRow reports whether the position row is shown. It appears
-// when the output overflows or when the tail cap dropped older lines, because
-// both are facts the reader cannot see in the band alone.
-func (m *Model) liveNeedsPositionRow() bool {
-	if m.live == nil {
-		return false
-	}
-	return m.liveDropped() > 0 || len(m.live.lines) > m.liveBandRows()
-}
-
 // liveViewport is the output window: the band, minus the position row when it is
 // shown. Following is applied last so the window reaches the final line instead
 // of stopping one short.
 func (m *Model) liveViewport() visual.Viewport {
-	if m.live == nil {
+	if m.live == nil || m.live.view == nil {
 		return visual.Viewport{}
 	}
-	total := len(m.live.lines)
+	return m.liveViewportOf(m.liveRowCount())
+}
+
+// liveRowCount is how many rows the grid holds, read without materialising them
+// so a key handler that only needs the window never pays for the rows.
+func (m *Model) liveRowCount() int {
+	if m.live == nil || m.live.view == nil {
+		return 0
+	}
+	return m.live.view.Window(0, 0).Total
+}
+
+// liveViewportOf is the one window computation over a given total. The layout
+// pass reads the total once and draws a window of the same grid, so the counter,
+// the drawn rows and the keys cannot describe different moments.
+func (m *Model) liveViewportOf(total int) visual.Viewport {
+	if m.live == nil || m.live.view == nil {
+		return visual.Viewport{}
+	}
 	height := m.liveBandRows()
 	if height <= 0 {
 		// Unknown size: nothing is off screen yet, and the next WindowSizeMsg
 		// reflows it.
 		return visual.Viewport{Height: total, Total: total}
 	}
-	if m.liveNeedsPositionRow() {
+	if total > height {
 		// The indicator gets its own row instead of covering the last output
 		// line: a covered line would be unreachable at the bottom.
 		height--
@@ -346,49 +455,14 @@ func (m *Model) liveViewport() visual.Viewport {
 	return v
 }
 
-// liveCounter is the position statement: the visible range, the reachable
-// total, and an explicit note when the tail cap forced older lines out. Dropped
-// output is stated rather than silently missing.
-func (m *Model) liveCounter(v visual.Viewport) string {
-	counter := v.Counter()
-	if counter == "" {
-		return ""
-	}
-	if dropped := m.liveDropped(); dropped > 0 {
-		counter += " · " + fmt.Sprintf(msgLiveDropped, dropped)
-	}
-	return counter
-}
-
-// liveDropped is how many produced lines the window can no longer reach: the
-// ones the tail cap evicted plus the ones a full delivery channel skipped. Both
-// are output the reader could have seen, so the indicator states their sum
-// instead of implying the stream started at the cap.
-func (m *Model) liveDropped() int {
-	if m.live == nil {
-		return 0
-	}
-	dropped := m.live.dropped
-	if m.live.writer != nil {
-		dropped += m.live.writer.droppedLines()
-	}
-	return dropped
-}
-
 // livePositionRow is the one-row position indicator directly above the keycap
 // footer: `46-59/60` on the left and the keys that move it on the right. It is
-// empty when everything fits and nothing was dropped, so a short log costs no
-// row.
+// empty when everything fits, so a short screen costs no row.
 func (m *Model) livePositionRow(v visual.Viewport) string {
-	if !m.liveNeedsPositionRow() {
+	if !v.Overflow() {
 		return ""
 	}
-	left := m.liveCounter(v)
-	if left == "" {
-		// Only the dropped-lines note remains, which is still a fact worth
-		// stating even when the retained lines fit.
-		left = fmt.Sprintf(msgLiveDropped, m.liveDropped())
-	}
+	left := v.Counter()
 	right := msgLiveScrollKeys
 	if m.live.mode == core.LiveAttach {
 		// Every key belongs to the child here; naming the TUI's scroll keys
@@ -412,40 +486,15 @@ func (m *Model) livePositionRow(v visual.Viewport) string {
 	return m.hintText(left) + strings.Repeat(" ", gap) + m.hintText(right)
 }
 
-// attachLogScrollbar paints the approved one-cell gutter over the log band. The
-// output lines are arbitrary child text and are never re-wrapped, so the gutter
-// takes the last body cell and a line that already reached it is cut with the
-// explicit marker; the reader keeps the position row and the counter.
-func (m *Model) attachLogScrollbar(rows []string, vp visual.Viewport) []string {
-	width := m.bodyWidth()
-	if width <= 1 {
-		return rows
-	}
-	gutter := visual.Scrollbar(m.theme, len(rows), vp.Top, vp.Visible(), vp.Total)
-	if len(gutter) == 0 {
-		return rows
-	}
-	out := make([]string, len(rows))
-	for i, line := range rows {
-		cell := " "
-		if i < len(gutter) {
-			cell = gutter[i]
-		}
-		out[i] = visual.Fit(line, width-1, m.theme.Glyphs.Ell) + cell
-	}
-	return out
-}
-
-// liveLayout is the live screen: fixed header, scrolling output band, position
-// row and the stopping notice. It is one layout pass; the keys and the
-// indicator use liveViewport too, so what is drawn and what PgUp moves cannot
-// disagree.
+// liveLayout is the live screen: fixed header, the child's screen, position row
+// and the stopping notice. It is one layout pass; the keys and the indicator use
+// liveViewport too, so what is drawn and what PgUp moves cannot disagree.
 //
 // The position row sits flush above the keycap footer, not directly under the
 // output: it is the last thing before the keys, where a status line belongs, and
-// a short log leaves it in the same place instead of floating mid-screen.
+// a short screen leaves it in the same place instead of floating mid-screen.
 func (m *Model) liveLayout() bodyLayout {
-	vp := m.liveViewport()
+	vp := m.liveViewportOf(m.liveRowCount())
 	header := m.liveHeaderLines()
 	notice := m.liveNoticeLines()
 	position := m.livePositionRow(vp)
@@ -461,15 +510,8 @@ func (m *Model) liveLayout() bodyLayout {
 	}
 	lines = append(lines, header...)
 	lines = append(lines, "")
-	start, end := vp.Window()
-	output := append([]string{}, m.live.lines[start:end]...)
-	// The log viewport is the second scrolling content list the contract gives
-	// a scrollbar. The output band is the live feed, not a table, so the gutter
-	// is added over the drawn rows instead of narrowing the child's own output.
-	if vp.Overflow() && len(output) > 0 {
-		output = m.attachLogScrollbar(output, vp)
-	}
-	lines = append(lines, output...)
+
+	lines = append(lines, m.liveOutputRows(vp)...)
 
 	if position != "" {
 		// Pad the gap so the position and the notice are the final body rows.
@@ -485,7 +527,74 @@ func (m *Model) liveLayout() bodyLayout {
 	lines = append(lines, notice...)
 
 	m.liveTop = vp.Top
-	return bodyLayout{lines: lines, viewport: vp, scrolls: m.liveNeedsPositionRow()}
+	return bodyLayout{lines: lines, viewport: vp, scrolls: vp.Overflow()}
+}
+
+// liveOutputRows draws the window's rows from the child's grid. The cursor is
+// painted into the cell it sits on when the child still shows it, so the reader
+// can see where typing will land; a full-screen child that hides it keeps its
+// own highlight.
+func (m *Model) liveOutputRows(vp visual.Viewport) []string {
+	if m.live == nil || m.live.view == nil {
+		return nil
+	}
+	start, end := vp.Window()
+	// One snapshot carries the rows and the caret, so a write cannot move the
+	// caret onto a row from a different moment than the cells drawn.
+	win := m.live.view.Window(start, end)
+	palette := m.livePalette()
+	// Only an attached command has a caret, and only a painted screen can show
+	// one: the inversion is an escape, and NO_COLOR promises none.
+	cursorLine, cursorX := -1, 0
+	if m.live.mode == core.LiveAttach && palette != nil {
+		cursorLine, cursorX = win.CursorRow, win.CursorX
+	}
+
+	width := m.bodyWidth()
+	out := make([]string, 0, len(win.Rows))
+	for i, line := range win.Rows {
+		cells := line.Cells
+		if start+i == cursorLine {
+			cells = withCursorAt(cells, cursorX)
+		}
+		row := termview.Paint(cells, palette)
+		// The scrolling band carries the approved one-cell gutter. The child
+		// drew to the full grid width, so the last cell is what the gutter
+		// takes; the row is cut with the explicit marker instead of widening.
+		if width > 1 && vp.Overflow() {
+			row = visual.Fit(row, width-1, m.theme.Glyphs.Ell)
+		}
+		out = append(out, row)
+	}
+	if width > 1 && vp.Overflow() && len(out) > 0 {
+		gutter := visual.Scrollbar(m.theme, len(out), vp.Top, vp.Visible(), vp.Total)
+		for i := range out {
+			cell := " "
+			if i < len(gutter) {
+				cell = gutter[i]
+			}
+			out[i] += cell
+		}
+	}
+	return out
+}
+
+// withCursorAt inverts the cell at x, so a shell prompt shows where typing
+// lands. A colorless terminal never reaches here: the inversion is an escape
+// sequence, and NO_COLOR promises none.
+func withCursorAt(cells []termview.Cell, x int) []termview.Cell {
+	// A wide rune owns a cell plus a placeholder that draws nothing. Inverting
+	// the placeholder would have to materialise a space, making the row one cell
+	// wider than the grid, so the caret belongs on the rune.
+	if x > 0 && x < len(cells) && cells[x].Width == 0 {
+		x--
+	}
+	if x < 0 || x >= len(cells) {
+		return cells
+	}
+	out := append([]termview.Cell{}, cells...)
+	out[x].Color.Attrs ^= termview.AttrReverse
+	return out
 }
 
 // keyBytes converts a Bubble Tea key to the bytes a terminal would send. It
@@ -522,6 +631,40 @@ func keyBytes(msg tea.KeyMsg) []byte {
 		return []byte("\x1b[5~")
 	case tea.KeyPgDown:
 		return []byte("\x1b[6~")
+	case tea.KeyShiftTab:
+		return []byte("\x1b[Z")
+	case tea.KeyShiftUp:
+		return []byte("\x1b[1;2A")
+	case tea.KeyShiftDown:
+		return []byte("\x1b[1;2B")
+	case tea.KeyShiftRight:
+		return []byte("\x1b[1;2C")
+	case tea.KeyShiftLeft:
+		return []byte("\x1b[1;2D")
+	case tea.KeyF1:
+		return []byte("\x1bOP")
+	case tea.KeyF2:
+		return []byte("\x1bOQ")
+	case tea.KeyF3:
+		return []byte("\x1bOR")
+	case tea.KeyF4:
+		return []byte("\x1bOS")
+	case tea.KeyF5:
+		return []byte("\x1b[15~")
+	case tea.KeyF6:
+		return []byte("\x1b[17~")
+	case tea.KeyF7:
+		return []byte("\x1b[18~")
+	case tea.KeyF8:
+		return []byte("\x1b[19~")
+	case tea.KeyF9:
+		return []byte("\x1b[20~")
+	case tea.KeyF10:
+		return []byte("\x1b[21~")
+	case tea.KeyF11:
+		return []byte("\x1b[23~")
+	case tea.KeyF12:
+		return []byte("\x1b[24~")
 	}
 	s := msg.String()
 	if len(s) == 6 && strings.HasPrefix(s, "ctrl+") {
@@ -531,161 +674,4 @@ func keyBytes(msg tea.KeyMsg) []byte {
 		}
 	}
 	return nil
-}
-
-// liveWriter turns arbitrary process output into whole lines for the TUI. It
-// never blocks the child: if the renderer falls behind, lines are dropped
-// rather than stalling the stream.
-type liveWriter struct {
-	mu      sync.Mutex
-	partial string
-	// pending is the row a carriage return is still rewriting. A progress bar
-	// prints `10%\r20%\r…` without a newline; each segment replaces the last,
-	// so the screen draws one row instead of one row per update.
-	pending string
-	closed  bool
-	ch      chan string
-	tail    []string
-	// dropped counts lines the delivery channel skipped because the renderer
-	// fell behind. They are real output, so the indicator states them.
-	dropped int
-}
-
-func (w *liveWriter) Write(p []byte) (int, error) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	w.partial += string(p)
-	for {
-		newline := strings.IndexByte(w.partial, '\n')
-		rewrite := strings.IndexByte(w.partial, '\r')
-		switch {
-		case newline < 0 && rewrite < 0:
-			return len(p), nil
-		case newline >= 0 && (rewrite < 0 || newline < rewrite):
-			// The newline ends the row. A rewrite replaced whatever the row
-			// held, so the last segment is the row and the pending text before
-			// it is not output.
-			segment := strings.TrimSuffix(w.partial[:newline], "\r")
-			w.partial = w.partial[newline+1:]
-			w.pending = ""
-			w.emit(segment)
-		case newline == rewrite+1:
-			// CRLF is one line terminator, not a rewrite followed by an empty
-			// row: the text before it is the row, and the newline closes it.
-			segment := w.partial[:rewrite]
-			w.partial = w.partial[newline+1:]
-			w.pending = ""
-			w.emit(segment)
-		default:
-			w.pending = w.partial[:rewrite]
-			w.partial = w.partial[rewrite+1:]
-		}
-	}
-}
-
-func (w *liveWriter) flush() {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	// A row still being rewritten is its latest segment: the text after the last
-	// carriage return is what the reader saw, so any earlier segment is stale.
-	row := strings.TrimSuffix(w.partial, "\r")
-	if row == "" {
-		return
-	}
-	w.pending, w.partial = "", ""
-	w.emit(row)
-}
-
-func (w *liveWriter) emit(line string) {
-	if w.closed {
-		return
-	}
-	// The writer keeps raw text; liveState.append is the one place a line is
-	// sanitized, so the kept tail and the drawn rows come from the same rule.
-	w.tail = append(w.tail, line)
-	if len(w.tail) > liveLineLimit {
-		w.tail = w.tail[len(w.tail)-liveLineLimit:]
-	}
-	select {
-	case w.ch <- line:
-	default:
-		// The renderer is behind. Dropping is what keeps the child from
-		// blocking, and the count makes the loss visible.
-		w.dropped++
-	}
-}
-
-// droppedLines reports how many lines the delivery channel skipped.
-func (w *liveWriter) droppedLines() int {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	return w.dropped
-}
-
-func (w *liveWriter) tailLines() []string {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	// The kept tail is shown on the management screen, so it runs through the
-	// same sanitizer as a drawn row: a control byte must not reach the terminal
-	// from either path.
-	out := make([]string, len(w.tail))
-	for i, line := range w.tail {
-		out[i] = visual.SanitizeLine(line)
-	}
-	return out
-}
-
-func (w *liveWriter) close() {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	w.closed = true
-}
-
-// keyReader is an in-memory stdin for an attached process. The TUI writes
-// bytes with write; close makes Read return EOF, which detaches a command
-// waiting on stdin.
-type keyReader struct {
-	mu     sync.Mutex
-	ch     chan []byte
-	buf    []byte
-	closed bool
-}
-
-func newKeyReader() *keyReader {
-	return &keyReader{ch: make(chan []byte, 64)}
-}
-
-func (k *keyReader) Read(p []byte) (int, error) {
-	for len(k.buf) == 0 {
-		chunk, ok := <-k.ch
-		if !ok {
-			return 0, io.EOF
-		}
-		k.buf = chunk
-	}
-	n := copy(p, k.buf)
-	k.buf = k.buf[n:]
-	return n, nil
-}
-
-func (k *keyReader) write(bytes []byte) {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	if k.closed {
-		return
-	}
-	select {
-	case k.ch <- bytes:
-	default:
-	}
-}
-
-func (k *keyReader) close() {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	if k.closed {
-		return
-	}
-	k.closed = true
-	close(k.ch)
 }

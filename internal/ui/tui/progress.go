@@ -7,84 +7,86 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/rootmyself/dcraft/internal/core"
+	"github.com/rootmyself/dcraft/internal/ui/tui/termview"
 	"github.com/rootmyself/dcraft/internal/ui/tui/visual"
 )
 
-// progressState is the running `up` log: the command's own plain output lines
-// and the writer that feeds them from the feature goroutine. It shares the live
-// screen's 400-line tail budget so both output views behave the same way.
+// progressState is the running `up` output. It is the same grid the live screen
+// uses, so a compose progress line, a carriage return and a colour are read by
+// one rule instead of two.
 type progressState struct {
-	writer  *liveWriter
-	lines   []string
-	dropped int
-}
-
-// append keeps the updated tail bounded. Dropped lines are counted because the
-// viewport must state that older output is no longer reachable.
-func (p *progressState) append(line string) {
-	// Same one rule as the live log: sanitize at the point the line enters,
-	// so the width check and the scrollbar see the drawn cells.
-	p.lines = append(p.lines, visual.SanitizeLine(line))
-	if over := len(p.lines) - liveLineLimit; over > 0 {
-		p.lines = p.lines[over:]
-		p.dropped += over
-	}
-}
-
-func (p *progressState) totalDropped() int {
-	if p == nil {
-		return 0
-	}
-	dropped := p.dropped
-	if p.writer != nil {
-		dropped += p.writer.droppedLines()
-	}
-	return dropped
+	writer *liveWriter
+	view   *termview.View
 }
 
 // setupProgress creates the opt-in writer for one run. It is separate from the
 // live screen's stdout/stderr so an `up` run keeps its normal result document.
 func (m *Model) setupProgress() {
-	ch := make(chan string, liveChannelCapacity)
-	writer := &liveWriter{ch: ch}
-	m.progress = &progressState{writer: writer, lines: []string{}}
+	// The running screen splits its body between the stage timeline and this
+	// log, so the grid is sized to the same band the log is drawn in.
+	cols := m.bodyWidth()
+	if cols < 1 {
+		cols = 80
+	}
+	rows := m.progressLogRows()
+	if rows < 1 {
+		rows = 8
+	}
+	view := termview.NewPipe(cols, rows)
+	ch := make(chan struct{}, liveNotifyCapacity)
+	writer := &liveWriter{view: view, notify: ch}
+	m.progress = &progressState{writer: writer, view: view}
 	m.progressCh = ch
 	m.progressTop = 0
 	m.progressFollow = true
 	m.req.IO.Progress = writer
 }
 
-// closeProgress flushes the final partial line, closes the delivery channel and
-// drops the lines. A completed run keeps no post-run log panel: the result
-// document is what the reader came to see.
+// progressFixedRows is the chrome the running log screen spends before the log:
+// the optional navigation row, the title block (which already counts its blank
+// separator) and the heading. It is stated once so the rows the grid is sized
+// to, the window the geometry computes and the rows the body draws cannot
+// disagree.
+func (m *Model) progressFixedRows() int {
+	return m.navRowCount() + m.titleRows() + 1 // heading
+}
+
+// progressLogRows is the row count the running screen gives the log viewport,
+// before a WindowSizeMsg has settled the geometry.
+func (m *Model) progressLogRows() int {
+	budget := m.bodyBudget()
+	if budget <= 0 {
+		return 0
+	}
+	return budget - m.progressFixedRows()
+}
+
+// closeProgress closes the delivery channel and drops the log. A completed run
+// keeps no post-run log panel: the result document is what the reader came to
+// see.
 func (m *Model) closeProgress() {
 	if m.progress == nil {
 		m.req.IO.Progress = nil
 		return
 	}
-	m.progress.writer.flush()
-	m.progress.writer.close()
+	if m.progress.view != nil {
+		_ = m.progress.view.Close()
+	}
+	// Stop the writer signalling before the channel closes: a feature goroutine
+	// may still be writing when its run is cancelled.
+	if m.progress.writer != nil {
+		m.progress.writer.close()
+	}
 	close(m.progressCh)
 	m.progress = nil
 	m.progressCh = nil
 	m.req.IO.Progress = nil
 }
 
-func waitProgressCmd(ch chan string) tea.Cmd {
-	return func() tea.Msg {
-		line, ok := <-ch
-		if !ok {
-			return nil
-		}
-		return progressLineMsg{line: line}
-	}
-}
-
 // progressLayout is one composed running screen: the windowed timeline, the
 // optional dropped-line notice and the log viewport.
 type progressLayout struct {
 	timeline []string
-	dropped  string
 	viewport visual.Viewport
 	showLog  bool
 }
@@ -94,15 +96,18 @@ type progressLayout struct {
 // fewer than three rows would remain. The viewport, the keys and the hint all
 // read this result, so the drawn rows and the scroll position cannot disagree.
 func (m *Model) progressGeometry() progressLayout {
-	if m.progress == nil || len(m.progress.lines) == 0 {
+	if m.progress == nil || m.progress.view == nil {
+		return progressLayout{}
+	}
+	total := m.progress.view.Window(0, 0).Total
+	if total == 0 {
 		return progressLayout{}
 	}
 	budget := m.bodyBudget()
 	if budget <= 0 {
 		return progressLayout{}
 	}
-	fixed := m.navRowCount() + m.titleRows() + 1 // heading
-	available := budget - fixed
+	available := budget - m.progressFixedRows()
 	if available < 1 {
 		available = 1
 	}
@@ -115,25 +120,15 @@ func (m *Model) progressGeometry() progressLayout {
 	if remaining < 3 {
 		return progressLayout{}
 	}
-	dropped := m.progress.totalDropped()
 	height := remaining
-	if dropped > 0 {
-		// The notice is pinned above the viewport, so it spends one of the
-		// rows the viewport would otherwise use.
-		height--
+	if height < 1 {
+		height = 1
 	}
-	if height < 3 {
-		return progressLayout{}
-	}
-	viewport := visual.Viewport{Top: m.progressTop, Height: height, Total: len(m.progress.lines)}.Clamp()
+	v := visual.Viewport{Top: m.progressTop, Height: height, Total: total}.Clamp()
 	if m.progressFollow {
-		viewport.End()
+		v.End()
 	}
-	lay := progressLayout{timeline: timeline, viewport: viewport, showLog: true}
-	if dropped > 0 {
-		lay.dropped = fmt.Sprintf(msgLiveDropped, dropped)
-	}
-	return lay
+	return progressLayout{timeline: timeline, viewport: v, showLog: true}
 }
 
 // progressBody is the running screen when the log viewport is visible. The
@@ -153,19 +148,13 @@ func (m *Model) progressBody() (bodyLayout, bool) {
 	}
 	lines = append(lines, m.progressHeading(msgWorking))
 	lines = append(lines, lay.timeline...)
-	if lay.dropped != "" {
-		lines = append(lines, m.hintText(lay.dropped))
-	}
 	start, end := lay.viewport.Window()
-	width := m.bodyWidth()
-	for _, line := range m.progress.lines[start:end] {
-		// Logs are never rewrapped: a line that does not fit is cut with the
-		// explicit marker, keeping column alignment intact. The line was
-		// sanitized when it entered the model, so this measures drawn cells.
-		if width > 0 {
-			line = visual.Fit(line, width, m.theme.Glyphs.Ell)
-		}
-		lines = append(lines, line)
+	// Read only the rows this window draws, from one snapshot: the geometry's
+	// total and the drawn rows then describe the same moment.
+	win := m.progress.view.Window(start, end)
+	palette := m.livePalette()
+	for _, line := range win.Rows {
+		lines = append(lines, termview.Paint(line.Cells, palette))
 	}
 	m.progressTop = lay.viewport.Top
 	return bodyLayout{lines: lines, viewport: lay.viewport, scrolls: false}, true
@@ -295,4 +284,16 @@ func (m *Model) timelineRowLines(row timelineRow) []string {
 		}
 	}
 	return out
+}
+
+// waitProgressCmd asks for one repaint of the running log. The grid is written
+// by the feature's goroutine, so a burst of compose output costs one repaint
+// rather than one message per line.
+func waitProgressCmd(ch chan struct{}) tea.Cmd {
+	return func() tea.Msg {
+		if _, ok := <-ch; !ok {
+			return nil
+		}
+		return progressTickMsg{}
+	}
 }

@@ -616,3 +616,13 @@ func TestWizardFooterHidesEnterWhileThePreviewIsInvalid(t *testing.T) {
 		t.Fatal("a saveable preview does not offer enter")
 	}
 }
+
+// paintedTheme is the resolved theme a colour terminal gets: the same palette
+// production uses, so a test can assert that paint reaches the frame.
+func paintedTheme() *visual.Theme {
+	th := visual.Resolve(visual.Inputs{
+		ThemeSetting: "dark", Profile: visual.ProfileTrueColor,
+		DarkBackground: true, UTF8: true,
+	})
+	return &th
+}
