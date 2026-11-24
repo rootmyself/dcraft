@@ -18,6 +18,7 @@ import (
 	"github.com/rootmyself/dcraft/internal/deps"
 	"github.com/rootmyself/dcraft/internal/execx/execxtest"
 	"github.com/rootmyself/dcraft/internal/features/all"
+	"github.com/rootmyself/dcraft/internal/ui/tui/visual"
 )
 
 // ptySession runs the dcraft binary under a real pseudo-terminal so terminal
@@ -260,10 +261,6 @@ func TestPTYTUILogsScreenReturnsToTheMenuAndKeepsServices(t *testing.T) {
 }
 
 func TestPTYTUIExecScreenShowsTargetRunsAndReturnsToTheMenu(t *testing.T) {
-	// #74: attach mode never delivers the child's stdout to the screen, so the
-	// output this scenario asserts never arrives. The gap predates the TUI
-	// polish tickets and is tracked there; unskip when it is fixed.
-	t.Skip("blocked by #74: attach mode does not keep the child's stdout")
 	fake := newFakeLiveDocker(t)
 	project := liveProject(t)
 	env := fake.env(t, t.TempDir(), map[string]string{"DOCKER_FAKE_EXEC_STDOUT": "remote-stdout"})
@@ -341,9 +338,6 @@ func TestPTYTUILogsScreenScrollsUnderAPinnedHeaderAndRestoresTerminal(t *testing
 // the header rows above them stay unchanged, and ctrl+] ends an attached command
 // with the terminal restored.
 func TestPTYTUIExecAttachDetachesWithCtrlBracketAndRestoresTerminal(t *testing.T) {
-	// #74: the attached child never prints, so "ready" never arrives. The gap
-	// predates the TUI polish tickets and is tracked there.
-	t.Skip("blocked by #74: attach mode does not keep the child's stdout")
 	fake := newFakeLiveDocker(t)
 	project := liveProject(t)
 	env := fake.env(t, t.TempDir(), map[string]string{"DOCKER_FAKE_EXEC_ECHO": "1"})
@@ -373,10 +367,15 @@ func TestPTYTUIExecAttachDetachesWithCtrlBracketAndRestoresTerminal(t *testing.T
 	fake.assertNoSubcommand(t, "down")
 }
 
-// A log line that carries a tab and a carriage return must not push a row past
-// the sidebar column. The fake prints the hostile line on one row; the frame's
-// width is fixed, so an unsanitized line would move the cursor or widen the row.
-func TestPTYTUILiveLogSanitizesTabAndCarriageReturn(t *testing.T) {
+// A log line that carries a tab, a carriage return and a cursor move must not
+// push a row past the sidebar column. The grid consumes those sequences as
+// terminal state, so the frame keeps its width and the sidebar its column.
+//
+// The child's bytes no longer reach the terminal, which is the point: the escape
+// that used to overwrite the sidebar now only moves the grid's own cursor. The
+// visible result of a rewrite is whatever a terminal would show, not a cleaned-up
+// join of the raw segments.
+func TestPTYTUILiveLogHostileLineKeepsTheFrame(t *testing.T) {
 	fake := newFakeLiveDocker(t)
 	project := liveProject(t)
 	env := fake.env(t, t.TempDir(), map[string]string{"DOCKER_FAKE_LOG_HOSTILE": "1"})
@@ -386,18 +385,28 @@ func TestPTYTUILiveLogSanitizesTabAndCarriageReturn(t *testing.T) {
 	s.waitFor("서비스 선택", 15*time.Second)
 	s.press("\r")
 	s.waitFor("실시간 로그", 15*time.Second)
-	// The rewritten row is what survives: the progress tail before the carriage
-	// return is replaced, and the tab became spaces.
 	s.waitFor("done", 20*time.Second)
 	tail := s.out.String()
-	if strings.Contains(tail, "100%") {
-		t.Fatalf("the rewritten progress tail reached the terminal:\n%q", tail)
-	}
+	// The hostile sequences are the grid's, never the real terminal's: the OSC
+	// title must not reach the terminal as a title.
 	if strings.Contains(tail, "\x1b]0;") {
 		t.Fatalf("an OSC title reached the terminal:\n%q", tail)
 	}
+	// The frame keeps its width, so no row can cross the sidebar column.
 	if bad := overWideRows(tail, 120); len(bad) > 0 {
 		t.Fatalf("a log row is wider than the terminal: %q", bad[0])
+	}
+	// The cursor move stayed inside the grid: the sidebar border is intact on
+	// every body row.
+	rows := lastFrame(tail)
+	border := visual.SidebarWidth(120) - 1
+	for i, row := range rows {
+		if i == 0 || i == len(rows)-1 {
+			continue
+		}
+		if strings.Contains(row, "│") && len(row) > border && !strings.Contains(row[:border+1], "│") {
+			t.Fatalf("row %d lost the sidebar border: %q", i, row)
+		}
 	}
 	s.send("q")
 	s.waitFor("마지막 실시간 출력", 15*time.Second)

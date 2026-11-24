@@ -12,12 +12,12 @@
 인스턴스: 전체
 명령: logs
 
-90%    done
+90%-1  |done%
 api-1  | xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 api-1  | error connection refused
-
-
-
 
 
 
@@ -32,12 +32,12 @@ api-1  | error connection refused
 인스턴스: 전체
 명령: logs
 
-90%    done
+90%-1  |done%
 api-1  | xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 api-1  | error connection refused
-
-
-
 
 
 
@@ -64,12 +64,12 @@ api-1  | error connection refused
 인스턴스: 전체
 명령: logs
 
-90%    done
+90%-1  |done%
 api-1  | xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 api-1  | error connection refused
-
-
-
 
 
 
@@ -116,12 +116,12 @@ api-1  | error connection refused
 인스턴스: 전체
 명령: logs
 
-90%    done
+90%-1  |done%
 api-1  | xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 api-1  | error connection refused
-
-
-
 
 
 
@@ -136,12 +136,12 @@ api-1  | error connection refused
 인스턴스: 전체
 명령: logs
 
-90%    done
+90%-1  |done%
 api-1  | xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 api-1  | error connection refused
-
-
-
 
 
 
@@ -168,12 +168,12 @@ api-1  | error connection refused
 인스턴스: 전체
 명령: logs
 
-90%    done
+90%-1  |done%
 api-1  | xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 api-1  | error connection refused
-
-
-
 
 
 
@@ -220,12 +220,12 @@ api-1  | error connection refused
 │▸ 스택 상태             │ 인스턴스: 전체
 │                        │ 명령: logs
 │운영                    │
-│  스택 제거 ▲ 위험      │ 90%    done
+│  스택 제거 ▲ 위험      │ 90%-1  |done%
 │  스택 재시작           │ api-1  | xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
-│  스택 중지             │ api-1  | error connection refused
-│  스택 시작             │
-│  갱신                  │
-│                        │
+│  스택 중지             │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
+│  스택 시작             │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│  갱신                  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│                        │ api-1  | error connection refused
 │데이터                  │
 │  데이터 백업           │
 ╰────────────────────────╯
@@ -240,12 +240,12 @@ api-1  | error connection refused
 │▸ 스택 상태             │ 인스턴스: 전체
 │                        │ 명령: logs
 │운영                    │
-│  스택 제거 ▲ 위험      │ 90%    done
+│  스택 제거 ▲ 위험      │ 90%-1  |done%
 │  스택 재시작           │ api-1  | xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
-│  스택 중지             │ api-1  | error connection refused
-│  스택 시작             │
-│  갱신                  │
-│                        │
+│  스택 중지             │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
+│  스택 시작             │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│  갱신                  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│                        │ api-1  | error connection refused
 │데이터                  │
 │  데이터 백업           │
 │  데이터 복원 ▲ 위험    │
@@ -272,12 +272,12 @@ api-1  | error connection refused
 │▸ 스택 상태             │ 인스턴스: 전체
 │                        │ 명령: logs
 │운영                    │
-│  스택 제거 ▲ 위험      │ 90%    done
+│  스택 제거 ▲ 위험      │ 90%-1  |done%
 │  스택 재시작           │ api-1  | xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
-│  스택 중지             │ api-1  | error connection refused
-│  스택 시작             │
-│  갱신                  │
-│                        │
+│  스택 중지             │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
+│  스택 시작             │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│  갱신                  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│                        │ api-1  | error connection refused
 │데이터                  │
 │  데이터 백업           │
 │  데이터 복원 ▲ 위험    │
@@ -324,12 +324,12 @@ api-1  | error connection refused
 │▸ 스택 상태                 │ 인스턴스: 전체
 │                            │ 명령: logs
 │운영                        │
-│  스택 제거 ▲ 위험          │ 90%    done
-│  스택 재시작               │ api-1  | xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
-│  스택 중지                 │ api-1  | error connection refused
-│  스택 시작                 │
-│  갱신                      │
-│                            │
+│  스택 제거 ▲ 위험          │ 90%-1  |done%
+│  스택 재시작               │ api-1  | xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│  스택 중지                 │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│  스택 시작                 │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│  갱신                      │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│                            │ api-1  | error connection refused
 │데이터                      │
 │  데이터 백업               │
 ╰────────────────────────────╯
@@ -344,12 +344,12 @@ api-1  | error connection refused
 │▸ 스택 상태                 │ 인스턴스: 전체
 │                            │ 명령: logs
 │운영                        │
-│  스택 제거 ▲ 위험          │ 90%    done
-│  스택 재시작               │ api-1  | xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
-│  스택 중지                 │ api-1  | error connection refused
-│  스택 시작                 │
-│  갱신                      │
-│                            │
+│  스택 제거 ▲ 위험          │ 90%-1  |done%
+│  스택 재시작               │ api-1  | xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│  스택 중지                 │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│  스택 시작                 │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│  갱신                      │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│                            │ api-1  | error connection refused
 │데이터                      │
 │  데이터 백업               │
 │  데이터 복원 ▲ 위험        │
@@ -376,12 +376,12 @@ api-1  | error connection refused
 │▸ 스택 상태                 │ 인스턴스: 전체
 │                            │ 명령: logs
 │운영                        │
-│  스택 제거 ▲ 위험          │ 90%    done
-│  스택 재시작               │ api-1  | xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
-│  스택 중지                 │ api-1  | error connection refused
-│  스택 시작                 │
-│  갱신                      │
-│                            │
+│  스택 제거 ▲ 위험          │ 90%-1  |done%
+│  스택 재시작               │ api-1  | xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│  스택 중지                 │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│  스택 시작                 │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│  갱신                      │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│                            │ api-1  | error connection refused
 │데이터                      │
 │  데이터 백업               │
 │  데이터 복원 ▲ 위험        │

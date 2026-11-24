@@ -178,7 +178,7 @@ type Model struct {
 	// live is non-nil while a feature attaches to a running process. The TUI
 	// renders its output and forwards keys for core.LiveAttach.
 	live   *liveState
-	liveCh chan string
+	liveCh chan struct{}
 	// liveTop is the first visible output row and liveFollow keeps the window
 	// on the tail. The header above the output is fixed and never scrolls, so
 	// the service, instance, command and the "still running" state stay
@@ -188,7 +188,7 @@ type Model struct {
 	// progress is the opt-in output of a long `up` run. It is cleared when the
 	// run completes: there is no post-run log panel.
 	progress       *progressState
-	progressCh     chan string
+	progressCh     chan struct{}
 	progressTop    int
 	progressFollow bool
 	// lastLive keeps the tail of the last live output so the management view
@@ -283,9 +283,9 @@ type inputsMsg struct {
 	report  core.InputsReport
 }
 
-type liveLineMsg struct{ line string }
+type liveTickMsg struct{}
 
-type progressLineMsg struct{ line string }
+type progressTickMsg struct{}
 
 type environmentListMsg struct {
 	envs []core.Environment
@@ -331,6 +331,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		// The child's grid is the body band, so a resize must reach it: a
+		// full-screen child that keeps the old size draws outside its region.
+		m.resizeLive()
 		return m, nil
 	case stageMsg:
 		st := msg.stage
@@ -460,17 +463,15 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.form = newFormState(msg.feature, msg.report.Fields, m.req)
 		m.phase = phaseForm
 		return m, nil
-	case liveLineMsg:
+	case liveTickMsg:
 		if m.live == nil {
 			return m, nil
 		}
-		m.live.append(msg.line)
 		return m, waitLiveCmd(m.liveCh)
-	case progressLineMsg:
+	case progressTickMsg:
 		if m.progress == nil {
 			return m, nil
 		}
-		m.progress.append(msg.line)
 		return m, waitProgressCmd(m.progressCh)
 	case resultMsg:
 		if m.wizardCanceled {
@@ -522,15 +523,13 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.resultDismissed = false
 		m.resetScrollState()
 		if m.live != nil {
-			m.live.writer.flush()
-			m.drainLive()
 			if res.Outcome == core.OutcomeCanceled {
 				m.notice = msgLiveStopped
 			}
-			m.lastLive = tailOrKeep(lastLines(m.live.writer.tailLines(), 12), m.lastLive)
-			m.live.close()
-			m.live = nil
-			m.liveCh = nil
+			// A detach already kept the screen; a run that ended on its own
+			// keeps it here, before the view is released.
+			m.lastLive = tailOrKeep(m.captureLiveTail(), m.lastLive)
+			m.closeLive()
 		}
 		if created != "" && m.engine != nil && m.engine.SupportsEnvironments() {
 			m.envCreated = created

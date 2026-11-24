@@ -18,6 +18,7 @@ import (
 	"github.com/rootmyself/dcraft/internal/features/environments"
 	"github.com/rootmyself/dcraft/internal/features/status"
 	"github.com/rootmyself/dcraft/internal/stack"
+	"github.com/rootmyself/dcraft/internal/ui/tui/termview"
 	"github.com/rootmyself/dcraft/internal/ui/tui/visual"
 )
 
@@ -651,8 +652,12 @@ func goldenProgressLogs(t *testing.T) *Model {
 		"web-1  | Container web-1  Started",
 		"api-1  | Container api-1  Started",
 	}
-	ch := make(chan string, 1)
-	m.progress = &progressState{writer: &liveWriter{ch: ch}, lines: lines}
+	view := termview.NewPipe(120, len(lines)+1)
+	for _, line := range lines {
+		_, _ = fmt.Fprintln(view, line)
+	}
+	ch := make(chan struct{}, 1)
+	m.progress = &progressState{writer: &liveWriter{view: view, notify: ch}, view: view}
 	m.progressCh = ch
 	m.progressFollow = true
 	return m
@@ -821,18 +826,12 @@ func goldenLiveHostileModel(t *testing.T) *Model {
 	m.active = logs
 	m.phase = phaseLoading
 	m.req = core.Request{Feature: "logs", Target: goldenTarget()}
-	ch := make(chan string, 1)
-	m.live = &liveState{
-		mode:   core.LiveStream,
-		writer: &liveWriter{ch: ch},
-		ch:     ch,
-	}
-	// Feed the fixture through the same entry point as a live line, so the
-	// snapshot shows the sanitized text the screen would draw.
+	view := termview.NewPipe(120, len(lines)+1)
 	for _, line := range lines {
-		m.live.append(line)
+		_, _ = fmt.Fprintln(view, line)
 	}
-	m.live.writer.tail = append([]string{}, lines...)
+	ch := make(chan struct{}, 1)
+	m.live = &liveState{mode: core.LiveStream, view: view}
 	m.liveCh = ch
 	m.liveFollow = true
 	return m
@@ -854,13 +853,12 @@ func goldenLogs(t *testing.T) *Model {
 	m.active = logs
 	m.phase = phaseLoading
 	m.req = core.Request{Feature: "logs", Target: goldenTarget()}
-	ch := make(chan string, 1)
-	m.live = &liveState{
-		mode:   core.LiveStream,
-		writer: &liveWriter{ch: ch, tail: lines},
-		ch:     ch,
-		lines:  lines,
+	view := termview.NewPipe(120, 20)
+	for _, line := range lines {
+		_, _ = fmt.Fprintln(view, line)
 	}
+	ch := make(chan struct{}, 1)
+	m.live = &liveState{mode: core.LiveStream, view: view}
 	m.liveCh = ch
 	m.liveFollow = true
 	return m

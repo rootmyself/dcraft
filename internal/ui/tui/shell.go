@@ -56,11 +56,12 @@ func (m *Model) screenKeycaps() []visual.Keycap {
 		}
 	}
 	if m.live != nil && m.live.mode == core.LiveAttach {
-		// Attach ends with ctrl+], never with ctrl+c (which is forwarded to
-		// the child), so the live row would be wrong.
+		// Attach ends with ctrl+], never with ctrl+c (which is forwarded to the
+		// child), so the live row would be wrong. "?" is a character a shell
+		// needs, so it is forwarded too and the help chip is gone: advertising a
+		// key that types into the child would be a lie.
 		return []visual.Keycap{
 			{Key: "ctrl+]", Label: msgKeyDetach, Priority: 0},
-			{Key: "?", Label: msgKeyHelp, Priority: 3},
 		}
 	}
 	if m.live != nil && m.liveScrolls() {

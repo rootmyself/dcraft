@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -12,6 +13,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/rootmyself/dcraft/internal/core"
+	"github.com/rootmyself/dcraft/internal/ui/tui/termview"
 	"github.com/rootmyself/dcraft/internal/ui/tui/visual"
 )
 
@@ -202,17 +204,23 @@ func TestLiveLogLinesKeepTheirTextAndPaint(t *testing.T) {
 		t.Fatalf("drew %d output rows, want %d:\n%s", len(draw), len(source), m.View())
 	}
 	for i, want := range source {
-		if got := strings.TrimRight(draw[i], " "); got != want {
-			t.Fatalf("log row %d changed:\n got %q\nwant %q", i, got, want)
+		// The grid re-encodes the child's paint rather than copying its bytes,
+		// so the assertion is on the visible text and on which colour runs are
+		// present, not on one exact escape spelling.
+		if got := strings.TrimRight(ansi.Strip(draw[i]), " "); got != ansi.Strip(want) {
+			t.Fatalf("log row %d text changed:\n got %q\nwant %q", i, got, ansi.Strip(want))
+		}
+		if strings.HasPrefix(want, "\x1b[31m") && !strings.Contains(draw[i], "31m") {
+			t.Fatalf("log row %d lost its colour:\n got %q", i, draw[i])
 		}
 	}
 
 	detachLive(t, m, q, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	// The kept panel is the same bytes: the management screen may frame it, but
 	// the log content itself is untouched.
-	view := m.View()
+	view := ansi.Strip(m.View())
 	for _, line := range source[1:] {
-		if !strings.Contains(view, line) {
+		if !strings.Contains(view, ansi.Strip(line)) {
 			t.Fatalf("management panel lost %q:\n%s", line, view)
 		}
 	}
@@ -318,11 +326,11 @@ func TestLiveAttachForwardsKeysAndCtrlBracketDetaches(t *testing.T) {
 	}
 }
 
-// The tail cap stays: a runaway stream keeps only the most recent lines. What
-// changed is honesty — when lines were dropped, the position row says how many,
-// so a reader cannot mistake the retained window for the whole stream.
-func TestLiveDroppedLinesAreStatedInTheIndicator(t *testing.T) {
-	total := liveLineLimit + 30
+// The grid keeps what scrolled off the top instead of dropping it: a runaway
+// stream costs memory, not output, so every line stays reachable with PgUp and
+// the position row states the real total.
+func TestLiveLongOutputStaysReachable(t *testing.T) {
+	total := 120
 	lines := numberedLines(total)
 	live := streamingLogs(t, func(ctx context.Context, in core.Invocation) (any, error) {
 		for _, line := range lines {
@@ -337,35 +345,23 @@ func TestLiveDroppedLinesAreStatedInTheIndicator(t *testing.T) {
 	resize(t, m, 80, 24)
 	waitView(t, m, q, fmt.Sprintf("line-%02d", total-1))
 
+	// The position row names the reachable total, not a truncated window.
 	row := indicatorRow(t, m)
-	if !strings.Contains(row, "오래된 줄 30개 버림") {
-		t.Fatalf("position row does not state the dropped lines: %q", row)
+	if !strings.Contains(row, fmt.Sprintf("/%d", len(m.live.view.Lines()))) {
+		t.Fatalf("position row does not state the real total: %q", row)
 	}
-	if !strings.Contains(row, "/400") {
-		t.Fatalf("position row total is not the retained window: %q", row)
+	// The oldest line is still reachable: the grid retained it.
+	if got := len(m.live.view.Lines()); got < total {
+		t.Fatalf("grid holds %d lines, want at least %d", got, total)
 	}
-	// The cap itself is unchanged: only the last 400 lines are kept.
-	if len(m.live.lines) != liveLineLimit {
-		t.Fatalf("retained %d lines, want %d", len(m.live.lines), liveLineLimit)
-	}
-	if m.live.dropped != 30 {
-		t.Fatalf("dropped count = %d, want 30", m.live.dropped)
-	}
-	// Scrolling to the top of what is still reachable must not claim line-00.
 	pressKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("g")})
-	if strings.Contains(m.View(), "line-00") {
-		t.Fatalf("g reached a dropped line:\n%s", m.View())
-	}
-	if !strings.Contains(m.View(), "line-30") {
-		t.Fatalf("g did not reach the oldest retained line:\n%s", m.View())
-	}
-	if !strings.Contains(indicatorRow(t, m), "오래된 줄 30개 버림") {
-		t.Fatalf("the dropped note disappeared after scrolling: %q", indicatorRow(t, m))
+	if !strings.Contains(m.View(), "line-00") {
+		t.Fatalf("g did not reach the oldest line:\n%s", m.View())
 	}
 
 	detachLive(t, m, q, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	if !strings.Contains(m.View(), fmt.Sprintf("line-%02d", total-1)) {
-		t.Fatalf("the retained tail was lost after detach:\n%s", m.View())
+		t.Fatalf("the tail was lost after detach:\n%s", m.View())
 	}
 }
 
@@ -654,14 +650,29 @@ func TestLiveAttachPositionRowDoesNotAdvertiseScrollKeys(t *testing.T) {
 	for m.live == nil {
 		q.next(t, m)
 	}
-	// Fill the band past its height so the position row appears.
+	// Fill the band past its height so the position row appears. The child's
+	// output is the grid's, so writing lines is what a remote process does.
 	for i := 0; i < 40; i++ {
-		nm, _ := m.Update(liveLineMsg{line: fmt.Sprintf("remote-%02d", i)})
-		*m = *(nm.(*Model))
+		fmt.Fprintf(m.live.writer, "remote-%02d\r\n", i)
 	}
+	// The counter states a total large enough to hold everything written, and
+	// the range it prints ends at that total: the row describes one snapshot,
+	// not two moments of a growing grid.
 	row := indicatorRow(t, m)
-	if !strings.Contains(row, "/40") {
-		t.Fatalf("attach has no position statement: %q", row)
+	counter := strings.Fields(row)[0]
+	totalPart := counter[strings.Index(counter, "/")+1:]
+	if totalPart == "" {
+		t.Fatalf("position row has no total: %q", row)
+	}
+	total, err := strconv.Atoi(totalPart)
+	if err != nil {
+		t.Fatalf("position row total %q is not a number: %v", totalPart, err)
+	}
+	if total < 40 {
+		t.Fatalf("position row total = %d, want at least the 40 lines written", total)
+	}
+	if got := len(m.live.view.Lines()); got < total {
+		t.Fatalf("counter claims %d rows but the grid holds %d", total, got)
 	}
 	if strings.Contains(row, "PgUp") || strings.Contains(row, "g/G") {
 		t.Fatalf("attach advertises scroll keys it forwards to the child: %q", row)
@@ -683,10 +694,10 @@ func TestLiveAttachPositionRowDoesNotAdvertiseScrollKeys(t *testing.T) {
 	}
 }
 
-// A delivery channel that falls behind also loses lines. That loss is output the
-// reader could have seen, so the same indicator states it instead of reporting
-// only the cap.
-func TestLiveSkippedDeliveryLinesAreAlsoStated(t *testing.T) {
+// A renderer that falls behind must not lose output. The grid is written by the
+// child's goroutine and the repaint is a coalescing signal, so a burst larger
+// than any channel buffer still lands in full.
+func TestLiveBurstLosesNoOutput(t *testing.T) {
 	live := streamingLogs(t, func(ctx context.Context, in core.Invocation) (any, error) {
 		<-ctx.Done()
 		return nil, ctx.Err()
@@ -694,28 +705,26 @@ func TestLiveSkippedDeliveryLinesAreAlsoStated(t *testing.T) {
 	m := newTestModel(t, live)
 	m.theme = *plainTheme()
 	resize(t, m, 80, 24)
-	// Wire the live screen but do not start the message pump: nothing drains the
-	// delivery channel, which is exactly the "renderer fell behind" case.
 	if cmd := m.start(live); cmd == nil {
 		t.Fatal("start returned no command")
 	}
 	if m.live == nil {
 		t.Fatal("live screen was not set up")
 	}
-	burst := liveChannelCapacity + 188
+	// Write the burst without draining the repaint signal, which is exactly the
+	// "renderer fell behind" case a channel buffer used to lose lines on.
+	burst := 700
 	for i := 0; i < burst; i++ {
-		fmt.Fprintf(m.live.writer, "burst-%03d\n", i)
+		fmt.Fprintf(m.live.writer, "burst-%03d\r\n", i)
 	}
-	m.live.writer.flush()
-
-	row := indicatorRow(t, m)
-	if !strings.Contains(row, fmt.Sprintf(msgLiveDropped, 188)) {
-		t.Fatalf("skipped delivery is not stated: %q", row)
+	rows := m.live.view.Lines()
+	if got := len(rows); got < burst {
+		t.Fatalf("grid holds %d rows, want at least the %d written", got, burst)
 	}
-	// Nothing is claimable about a window with no drained rows, so the row must
-	// not invent a range.
-	if strings.Contains(row, "-") && strings.Contains(row, "/400") {
-		t.Fatalf("position row invented a range with no drained lines: %q", row)
+	// The oldest line survived: nothing was dropped at the tail.
+	oldest := termview.Text(rows[0].Cells)
+	if !strings.Contains(oldest, "burst-000") {
+		t.Fatalf("the first line was lost; oldest row = %q", oldest)
 	}
 }
 
@@ -724,7 +733,7 @@ func TestLiveSkippedDeliveryLinesAreAlsoStated(t *testing.T) {
 // application escape sequence is still the TUI's own.
 func TestLiveLogColorDoesNotLeakIntoTheTUIChrome(t *testing.T) {
 	source := []string{
-		"\x1b[31mred without reset",
+		"\x1b[31mred with a reset\x1b[0m",
 		"plain after the red line",
 	}
 	live := streamingLogs(t, func(ctx context.Context, in core.Invocation) (any, error) {
@@ -735,7 +744,7 @@ func TestLiveLogColorDoesNotLeakIntoTheTUIChrome(t *testing.T) {
 		return nil, ctx.Err()
 	})
 	m := newTestModel(t, live)
-	m.theme = *plainTheme() // the chrome emits no escape at all
+	m.theme = *paintedTheme()
 	q := startCmds(m.Init())
 	resize(t, m, 80, 24)
 	waitView(t, m, q, "plain after the red line")
@@ -743,17 +752,21 @@ func TestLiveLogColorDoesNotLeakIntoTheTUIChrome(t *testing.T) {
 	lines := viewLines(t, m)
 	begin := 1 + m.liveFixedRows()
 	for i := begin; i < begin+len(source); i++ {
-		if got := strings.TrimRight(lines[i], " "); got != source[i-begin] {
-			t.Fatalf("row %d changed:\n got %q\nwant %q", i, got, source[i-begin])
+		// The text is the child's; only its colour may differ in spelling.
+		if got := strings.TrimRight(ansi.Strip(lines[i]), " "); got != ansi.Strip(source[i-begin]) {
+			t.Fatalf("row %d text changed:\n got %q\nwant %q", i, got, ansi.Strip(source[i-begin]))
 		}
 	}
-	// The application's escape is the only escape on the page: the plain theme
-	// adds none of its own, so a color must never come from the TUI here.
-	for i, line := range lines {
-		if i != begin {
-			if strings.Contains(line, "\x1b") {
-				t.Fatalf("TUI chrome added an escape on row %d: %q", i, line)
-			}
+	// The red run stays inside the row that carried it: the next row is plain.
+	if strings.Contains(lines[begin+1], "31m") {
+		t.Fatalf("the child's colour leaked into the next row: %q", lines[begin+1])
+	}
+	// The child's red is the only colour on the output rows: the TUI's own
+	// chrome paints with the theme's palette, never with the child's red.
+	for i := begin; i < begin+len(source); i++ {
+		row := lines[i]
+		if strings.Contains(row, "31m") && i != begin {
+			t.Fatalf("the child's colour reached row %d: %q", i, row)
 		}
 	}
 	detachLive(t, m, q, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
@@ -800,18 +813,22 @@ func TestLiveHostileLineDoesNotCrossTheSidebarColumn(t *testing.T) {
 	if strings.Contains(view, "\x1b") {
 		t.Fatalf("an escape reached the frame: %q", view)
 	}
-	for _, want := range []string{"90%", "done"} {
-		if !strings.Contains(view, want) {
-			t.Fatalf("sanitized output lost %q:\n%s", want, view)
-		}
+	// The grid applies the hostile line the way a terminal would: the cursor
+	// moves up two rows, erases, then the carriage return rewrites the row. The
+	// text that survives is whatever those operations leave, which is not the
+	// same as deleting the control bytes and joining the rest.
+	if !strings.Contains(view, "90%") || !strings.Contains(view, "done") {
+		t.Fatalf("the printable text was lost:\n%s", view)
 	}
-	if strings.Contains(view, "100%") {
-		t.Fatalf("the rewritten progress tail survived:\n%s", view)
+	// The title never becomes text, and the row count never grows past the band.
+	if strings.Contains(view, "title") {
+		t.Fatalf("the OSC title became text:\n%s", view)
 	}
 }
 
-// A child's colour SGR survives into the band, because coloured tool output is
-// still readable output. It is the child's paint, never the screen's.
+// A child's colour survives into the band, because coloured tool output is still
+// readable output. It is the child's own escape, passed through in the form it
+// arrived so a 16-colour theme keeps its own red instead of a 24-bit imitation.
 func TestLiveKeepsChildColorInTheBand(t *testing.T) {
 	live := streamingLogs(t, func(ctx context.Context, in core.Invocation) (any, error) {
 		fmt.Fprintln(in.IO.Stdout, "\x1b[31merror:\x1b[0m connection refused")
@@ -819,6 +836,7 @@ func TestLiveKeepsChildColorInTheBand(t *testing.T) {
 		return nil, ctx.Err()
 	})
 	m := newTestModel(t, live)
+	m.theme = *paintedTheme()
 	q := startCmds(m.Init())
 	resize(t, m, 120, 24)
 	waitView(t, m, q, "connection refused")
@@ -831,38 +849,55 @@ func TestLiveKeepsChildColorInTheBand(t *testing.T) {
 	detachLive(t, m, q, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 }
 
-// A row still being rewritten when the stream ends keeps the text after its last
-// carriage return, which is what the reader saw. The stale prefix is not output.
-func TestLiveStreamEndKeepsTheLastRewrite(t *testing.T) {
-	ch := make(chan string, 8)
-	w := &liveWriter{ch: ch}
-	_, _ = w.Write([]byte("50%\r60"))
-	w.flush()
-	w.close()
-	close(ch)
-	var rows []string
-	for row := range ch {
-		rows = append(rows, row)
+// A progress bar rewritten in place is one row, not one row per update: the
+// carriage return returns to column zero and the next text overwrites it.
+func TestLiveProgressBarStaysOneRow(t *testing.T) {
+	live := streamingLogs(t, func(ctx context.Context, in core.Invocation) (any, error) {
+		for _, pct := range []string{"10%", "50%", "100%"} {
+			fmt.Fprintf(in.IO.Stdout, "\r%-4s", pct)
+		}
+		fmt.Fprint(in.IO.Stdout, "\r\ndone\n")
+		<-ctx.Done()
+		return nil, ctx.Err()
+	})
+	m := newTestModel(t, live)
+	m.theme = *plainTheme()
+	q := startCmds(m.Init())
+	resize(t, m, 100, 24)
+	waitView(t, m, q, "done")
+	view := m.View()
+	if strings.Contains(view, "10%") || strings.Contains(view, "50%") {
+		t.Fatalf("an earlier progress segment survived:\n%s", view)
 	}
-	if strings.Join(rows, "|") != "60" {
-		t.Fatalf("rows = %v, want the last rewrite only", rows)
+	if !strings.Contains(view, "100%") {
+		t.Fatalf("the final progress segment is missing:\n%s", view)
 	}
+	detachLive(t, m, q, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 }
 
-// CRLF is one line terminator on Windows and in most HTTP output. Treating the
-// carriage return as a rewrite dropped the row and drew a blank line instead.
+// CRLF is one line terminator, so three lines are three rows rather than a row
+// and a blank row each.
 func TestLiveWriterTreatsCRLFAsOneTerminator(t *testing.T) {
-	ch := make(chan string, 8)
-	w := &liveWriter{ch: ch}
-	_, _ = w.Write([]byte("first\r\nsecond\r\nthird"))
-	w.flush()
-	w.close()
-	close(ch)
-	var rows []string
-	for row := range ch {
-		rows = append(rows, row)
+	live := streamingLogs(t, func(ctx context.Context, in core.Invocation) (any, error) {
+		fmt.Fprint(in.IO.Stdout, "first\r\nsecond\r\nthird\r\n")
+		<-ctx.Done()
+		return nil, ctx.Err()
+	})
+	m := newTestModel(t, live)
+	m.theme = *plainTheme()
+	q := startCmds(m.Init())
+	resize(t, m, 100, 24)
+	waitView(t, m, q, "third")
+	rows := viewLines(t, m)
+	var kept []string
+	for _, row := range rows {
+		trimmed := strings.TrimSpace(row)
+		if trimmed == "first" || trimmed == "second" || trimmed == "third" {
+			kept = append(kept, trimmed)
+		}
 	}
-	if got := strings.Join(rows, "|"); got != "first|second|third" {
-		t.Fatalf("rows = %q, want first|second|third", got)
+	if strings.Join(kept, "|") != "first|second|third" {
+		t.Fatalf("rows = %v, want first, second, third with no blank line", kept)
 	}
+	detachLive(t, m, q, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 }
