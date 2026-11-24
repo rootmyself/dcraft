@@ -1704,14 +1704,17 @@ Published for later screens; do not create a second selection model.
   `/bin/sh` as pinned choices, and `/bin/bash` is the default; a CLI run still
   requires the argv after `--` and is never guessed.
 - Before an *interactive* attach whose argv starts with `/bin/bash` or `bash`,
-  dcraft asks the instance once with `test -x /bin/bash -o -x /usr/bin/bash`,
+  dcraft asks the instance once by running that same argv0 with `--version`,
   through the same streaming boundary, with both outputs discarded and no TTY.
   This is not a stage and prints nothing. Exit 0 runs the requested argv
-  unchanged. Exit 1 runs `/bin/sh` with the rest of the same argv and the result
-  states the substitution, so the OCI "no such file" error never reaches the
-  screen. Any other exit, a stream error, or a cancellation is inconclusive:
-  the requested argv runs unchanged and the retry below stays the safety net.
-  A probe never fails the run, and a non-interactive or JSON run never probes.
+  unchanged. Exit 126 or 127, the runtime's own "cannot start it" statuses, runs
+  `/bin/sh` with the rest of the same argv and the result states the
+  substitution, so the OCI "no such file" error never reaches the screen. The
+  probe uses the argv0 the reader chose rather than a fixed path list, so a bash
+  on `PATH` is not mistaken for a missing one. Any other exit, a stream error, or
+  a cancellation is inconclusive: the requested argv runs unchanged and the retry
+  below stays the safety net. A probe never fails the run, and a non-interactive
+  or JSON run never probes.
 - The retry remains for a bash that is absent at attach time after a probe that
   said otherwise: when an interactive attach that starts with bash reports the
   command missing, the one retry runs the same argv with `/bin/sh` and the

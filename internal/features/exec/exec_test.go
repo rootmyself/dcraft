@@ -713,8 +713,8 @@ func ttyInvocation(args []string, reporter core.Reporter) core.Invocation {
 // an image without bash lands in sh without printing the OCI error first.
 func TestExecTTYBashProbeAbsentRunsShFromTheStart(t *testing.T) {
 	streamer := &fakeStreamer{sequence: []fakeAnswer{
-		{result: stack.ExecResult{ExitCode: 1}}, // probe: neither bash path exists
-		{},                                      // attach: sh starts
+		{result: stack.ExecResult{ExitCode: 127}}, // probe: the runtime cannot start bash
+		{}, // attach: sh starts
 	}}
 	f := New(&fakeBackend{snap: scaledSnapshot()}, streamer)
 	payload, err := f.Run(context.Background(), ttyInvocation([]string{"/bin/bash"}, &fakeReporter{}))
@@ -725,7 +725,9 @@ func TestExecTTYBashProbeAbsentRunsShFromTheStart(t *testing.T) {
 	if len(calls) != 2 {
 		t.Fatalf("calls = %d, want the probe and the attach", len(calls))
 	}
-	if got := strings.Join(calls[0].req.Command, " "); got != "test -x /bin/bash -o -x /usr/bin/bash" {
+	// The probe asks the exact argv0 the reader chose, so a bash on PATH is
+	// not mistaken for a missing one and a bare name is not assumed present.
+	if got := strings.Join(calls[0].req.Command, " "); got != "/bin/bash --version" {
 		t.Fatalf("probe command = %q", got)
 	}
 	if calls[0].req.TTY {
@@ -749,6 +751,34 @@ func TestExecTTYBashProbeAbsentRunsShFromTheStart(t *testing.T) {
 	}
 	if !containsSubstitutionNotice(report.Notices) {
 		t.Fatalf("notices = %v, want the substitution notice", report.Notices)
+	}
+}
+
+// A bare `bash` is probed by its own name, so the answer belongs to the argv the
+// reader will actually run. An image whose bash lives outside the pinned paths
+// (or that resolves through PATH) must not be downgraded to sh.
+func TestExecTTYProbeAsksTheRequestedArgv0(t *testing.T) {
+	streamer := &fakeStreamer{sequence: []fakeAnswer{
+		{result: stack.ExecResult{ExitCode: 0}}, // probe: bare bash starts
+		{},                                      // attach
+	}}
+	f := New(&fakeBackend{snap: scaledSnapshot()}, streamer)
+	payload, err := f.Run(context.Background(), ttyInvocation([]string{"bash", "-l"}, &fakeReporter{}))
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	calls := streamer.recorded()
+	if len(calls) != 2 {
+		t.Fatalf("calls = %d, want the probe and the attach", len(calls))
+	}
+	if got := strings.Join(calls[0].req.Command, " "); got != "bash --version" {
+		t.Fatalf("probe command = %q, want the bare name the reader typed", got)
+	}
+	if got := strings.Join(calls[1].req.Command, " "); got != "bash -l" {
+		t.Fatalf("attach command = %q", got)
+	}
+	if payload.(Payload).Exec.Substituted {
+		t.Fatal("a bash that starts was downgraded to sh")
 	}
 }
 
@@ -792,6 +822,9 @@ func TestExecTTYBashProbeInconclusiveAttachesUnchanged(t *testing.T) {
 	}{
 		{name: "stream error", first: fakeAnswer{err: errors.New("docker daemon busy")}},
 		{name: "exit two", first: fakeAnswer{result: stack.ExecResult{ExitCode: 2}}},
+		// bash started and then refused the probe command: the binary exists,
+		// so this says nothing about whether the attach can run.
+		{name: "bash rejected the probe", first: fakeAnswer{result: stack.ExecResult{ExitCode: 1}}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

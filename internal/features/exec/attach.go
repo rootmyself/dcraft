@@ -19,10 +19,6 @@ import (
 const (
 	// shellBash is the default command. It is what a reader usually wants.
 	shellBash = "/bin/bash"
-	// shellBashAlt is the second common bash location. The pre-attach probe
-	// checks both so a distribution that keeps bash in /usr/bin is not
-	// mistaken for an image without bash.
-	shellBashAlt = "/usr/bin/bash"
 	// shellSh is the fallback when the image has no bash.
 	shellSh = "/bin/sh"
 	// commandNew is the row that reveals the text field. It carries no command
@@ -255,23 +251,30 @@ const (
 	// probeInconclusive means the probe could not decide, so the requested
 	// argv runs unchanged and substitutionRetry stays the safety net.
 	probeInconclusive bashProbeResult = iota
-	// probeBashPresent means bash exists at a known path.
+	// probeBashPresent means the requested bash starts.
 	probeBashPresent
-	// probeBashAbsent means neither known bash path exists.
+	// probeBashAbsent means the requested bash cannot start.
 	probeBashAbsent
 )
 
-// probeCommand is the exact argv the probe runs. `test -x A -o -x B` is POSIX
-// sh syntax and needs no shell of its own.
-func probeCommand() []string {
-	return []string{"test", "-x", shellBash, "-o", "-x", shellBashAlt}
+// bashProbeCommand asks the instance the only question that predicts the
+// attach: does this exact argv0 start? It uses the argv0 the reader chose
+// instead of a fixed list of paths, so a bash on PATH (a distribution that
+// keeps it in /usr/local/bin) is not mistaken for an image without bash, and a
+// bare `bash` that PATH cannot resolve is not mistaken for one that can.
+//
+// `--version` is the harmless argument: bash prints and exits 0 without reading
+// a startup file, so the probe cannot change container state. dcraft still
+// never wraps the reader's argv in `sh -c`.
+func bashProbeCommand(command []string) []string {
+	return []string{command[0], "--version"}
 }
 
-// probeBash asks the instance whether bash exists before an interactive attach
-// runs, so an image without bash never prints the OCI runtime error to the
-// reader's terminal before landing in sh. It goes through the same streaming
-// boundary as the attach and discards both outputs, so the probe can never
-// write to the terminal and cannot consume the reader's input.
+// probeBash asks the instance whether the requested bash starts before an
+// interactive attach runs, so an image without it never prints the OCI runtime
+// error to the reader's terminal before landing in sh. It goes through the same
+// streaming boundary as the attach and discards both outputs, so the probe can
+// never write to the terminal and cannot consume the reader's input.
 //
 // A failed or undecidable probe is not a failure: the attach runs the requested
 // argv unchanged. Only a cancellation ends the run, because the reader already
@@ -280,7 +283,7 @@ func (f *Feature) probeBash(ctx context.Context, target core.Target, req stack.E
 	probe := stack.ExecRequest{
 		Service: req.Service,
 		Index:   req.Index,
-		Command: probeCommand(),
+		Command: bashProbeCommand(req.Command),
 		TTY:     false,
 	}
 	result, streamErr := f.streamer.Exec(ctx, target, probe, core.IO{Stdout: io.Discard, Stderr: io.Discard})
@@ -298,18 +301,17 @@ func (f *Feature) probeBash(ctx context.Context, target core.Target, req stack.E
 	switch result.ExitCode {
 	case 0:
 		return probeBashPresent, nil
-	case 1:
-		// The only exit the probe trusts as "bash is absent". A missing `test`
-		// binary exits 126/127 through the same OCI error and stays
-		// inconclusive, so dcraft never guesses sh for that reason.
+	case 126, 127:
+		// The runtime's own "cannot start it" statuses: not executable, or not
+		// found. Any other status means bash ran and reported something, which
+		// says nothing about whether it exists.
 		return probeBashAbsent, nil
 	}
 	return probeInconclusive, nil
 }
 
-// isBashCommand reports whether the effective argv starts with bash. Both the
-// pinned path and the bare name are probed; the rest of the argv never changes
-// the decision.
+// isBashCommand reports whether the effective argv starts with bash: the pinned
+// path or the bare name. The rest of the argv never changes the decision.
 func isBashCommand(command []string) bool {
 	return len(command) > 0 && (command[0] == shellBash || command[0] == "bash")
 }
