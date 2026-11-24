@@ -100,6 +100,15 @@ func (m *Model) wizardStepIsMulti() bool {
 	return len(step.Options) > 0 && step.Multi
 }
 
+// wizardStepIsList reports whether the current question edits a selectable
+// list: its items, plus the row that adds one. The keyboard and the wheel both
+// ask this, so a list is one kind of answer in exactly one place. It is not
+// wizardTextInput: a list accepts custom text too, but its cursor moves over
+// rows.
+func (m *Model) wizardStepIsList() bool {
+	return m.wizardTextInput() && m.wizardSpec.Steps[m.wizardStep].List
+}
+
 // wizardStepIsOptional reports whether the current question may be answered
 // with an empty value.
 func (m *Model) wizardStepIsOptional() bool {
@@ -320,7 +329,15 @@ func (m *Model) updateWizardList(msg tea.KeyMsg, step core.WizardStep) {
 		}
 		m.wizardNotice = ""
 		m.followWizardCursor()
-	case "backspace", "delete":
+	case "backspace", "delete", "d":
+		// `d` is the delete key on every list screen: the backup source
+		// checkboxes use it, so the free-form list uses it too. While a value
+		// is being typed, `d` is a character and reaches the input below.
+		if msg.String() == "d" && m.isTypingWizardList() {
+			m.wizardInput += "d"
+			m.wizardNotice = ""
+			return
+		}
 		m.wizardNotice = ""
 		if m.wizardEditing || (m.wizardChoice == len(m.wizardItems) && m.wizardInput != "") {
 			runes := []rune(m.wizardInput)
@@ -344,6 +361,16 @@ func (m *Model) updateWizardList(msg tea.KeyMsg, step core.WizardStep) {
 			m.wizardNotice = ""
 		}
 	}
+}
+
+// isTypingWizardList reports whether a list answer is receiving characters. The
+// edit buffer and the add row both type, empty buffer included: pressing a
+// letter there starts a value. A selected item does not.
+func (m *Model) isTypingWizardList() bool {
+	if m.wizardEditing {
+		return true
+	}
+	return m.wizardChoice == len(m.wizardItems)
 }
 
 // wizardStepVisible evaluates a step's single dependency against the answers

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -210,6 +211,14 @@ func TestWizardCollectsAndPreviewsCreation(t *testing.T) {
 	}
 	if strings.Join(names, ",") != "name,files,env_files,profiles" {
 		t.Fatalf("steps = %v", names)
+	}
+	// A successful apply issues the alias this step collects, and the step name
+	// is what the TUI reads, so the declaration must name a real step.
+	if spec.EnvironmentAnswer != "name" {
+		t.Fatalf("environment answer step = %q, want name", spec.EnvironmentAnswer)
+	}
+	if !slices.Contains(names, spec.EnvironmentAnswer) {
+		t.Fatalf("environment answer step %q is not a step: %v", spec.EnvironmentAnswer, names)
 	}
 	if spec.Steps[0].Default != "" {
 		t.Fatalf("alias name has an implicit default: %q", spec.Steps[0].Default)

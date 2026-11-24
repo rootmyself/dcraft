@@ -548,6 +548,8 @@ type core.Feature interface {
 | `TargetOptional` | feature does not operate on a Compose project; a folder without Compose files is valid |
 | `AcceptsArgs` | allows positional args; flags then stop at the first arg |
 | `Wizard` | TUI entry uses the generic guided flow (`core.Wizard`) instead of the generic confirmation screen; the CLI path is unchanged |
+| `EnvironmentAdmin` | the TUI entry first shows the environment administration screen (issue a new alias or switch the active target) instead of running the feature directly; the feature itself is unchanged |
+| `StreamsProgress` | the feature can report its own tool output through `Invocation.IO.Progress` while it runs (`up`); the CLI never supplies that writer, so its captured output is unchanged |
 | `Flags []core.Flag` | feature-owned flags parsed by the shared CLI |
 | `Hooks` | registered host-script scope; `HookUpUpdate` only on `up`/`update`, rejected on read-only features |
 | `Destructive` | irreversibly destroys or replaces user data or a running stack; independent of `Approval`, rejected on read-only features |
@@ -614,8 +616,11 @@ own Korean usage diagnostic (exit 2). For `AcceptsArgs` features, options come
 before positional args (the rest is passed through unchanged, e.g. `exec`).
 Interactive collection uses the published `core.Wizard` flow (§14): the feature
 supplies steps and an effect preview, the TUI only collects answers and runs the
-same engine path with `wizard=apply`. A feature must not add a TUI branch or a
-second engine path for input.
+same engine path with `wizard=apply`. `WizardSpec.EnvironmentAnswer` names the
+step whose answer becomes the current environment after a successful apply, so
+the TUI selects a newly issued alias without branching on the feature or its
+step names. A feature must not add a TUI branch or a second engine path for
+input.
 
 Contract changes (new shared service, new flag kind, new approval kind, new
 result field) must be requested from the integration owner with the reason and
@@ -891,10 +896,16 @@ row H            footer   (one row of keycaps)
 #### Document model
 
 `core.Document` is the neutral body a feature can publish: heading, paragraph,
-key-value list, table, badges, callout, divider — seven blocks, no color, no
-width, no terminal knowledge. `core.ViewPresenter` is the optional capability
-(`Document(core.Result) core.Document`); the existing `core.Presenter` interface
-and its signature are unchanged.
+key-value list, table, badges, callout, divider and value-lines — eight blocks,
+no color, no width, no terminal knowledge. `core.ViewPresenter` is the optional
+capability (`Document(core.Result) core.Document`); the existing `core.Presenter`
+interface and its signature are unchanged.
+
+Value-lines is the block that carries the classified value runs: a feature
+declares each run's `core.ValueKind` (`path`, `url`, `image`, `command`, `time`,
+`service`, `project`) and the renderer only paints it. A kind is never inferred
+from the text. `path` and `time` reuse the `info`/`muted` tokens; `image` reuses
+`code` and `service` reuses `name`.
 
 The resolution order is fixed and applied in one place
 (`resolveResult`): `ViewPresenter`, then `Presenter`, then
@@ -921,21 +932,28 @@ cut, so `○ 컨테이너 없음` becomes `○ 미생성` rather than `○ 컨�
 
 #### Theme
 
-The theme is six semantic tokens (`accent`, `success`, `warning`, `danger`,
-`muted`, `surface`), a light and a dark palette, a color on/off decision and the
-UTF-8/ASCII glyph set. Background and foreground are the terminal's own colors;
-`surface` is the only token painted as a background plate.
+The theme is twelve semantic tokens — the six state tokens `accent`, `success`,
+`warning`, `danger`, `muted`, `surface`, and the six value-classification tokens
+`info`, `code`, `name`, `url`, `command`, `project` — a light and a dark palette,
+a color on/off decision and the UTF-8/ASCII glyph set. Background and foreground
+are the terminal's own colors; `surface` is the only token painted as a
+background plate. The 4.5:1 contrast floor is asserted for every token, `muted` included;
+`muted` also keeps 2.5:1 from the foreground so secondary text reads as
+secondary. The value tokens are not held to a contrast floor, but each carries
+more chroma than `muted` and resolves to a color no other value token uses.
 
 `visual.Resolve` is a pure function of explicit inputs: `DCRAFT_THEME`
 (`auto|light|dark`), `NO_COLOR`, `TERM`, the terminal color profile, the
 detected background brightness and the locale. `visual.Detect` gathers those
 inputs through an injected `getenv`, so no renderer reads the environment.
 `internal/ui/tui.resolveTheme` calls it once in `NewModel` and injects the
-result; a redraw cannot change color mid-session. Color is off for `NO_COLOR`,
-`TERM=dumb`, 16-color and non-TTY output, and `Theme.Paint`/`Bold` then return
+result; a redraw cannot change color mid-session. Color is off only for
+`NO_COLOR`, `TERM=dumb` and non-TTY output, and `Theme.Paint`/`Bold` then return
 the string unchanged — so no escape sequence can reach a colorless path. A
-non-UTF-8 locale swaps only the decorative glyphs for one-cell ASCII forms; the
-Korean labels stay.
+16-color terminal keeps color: each token is mapped to its own reviewed slot
+among the 16 basic ANSI colors instead of a 24-bit value. Nearest-RGB was tried
+and rejected because it collapsed dark accent, warning and URL onto plain white. A non-UTF-8 locale swaps only the
+decorative glyphs for one-cell ASCII forms; the Korean labels stay.
 
 Every state is an icon plus a Korean label plus a color, in that order of
 reliability: color is the third channel, never the only one.
@@ -1002,6 +1020,9 @@ reliability: color is the third channel, never the only one.
   preview panel lists every collected answer as the apply will send it; a long
   preview scrolls. An approval-gated apply routes through the same generic
   confirmation panel — there is exactly one approval surface.
+- A sidebar click on a screen that holds answers raises the one-decision
+  discard panel: `enter` discards them and navigates, `esc` keeps them and
+  stays. It reuses the confirmation surface and its two buttons.
 - `?` opens a help panel that lists the keycaps of the screen it was opened from
   (it reads the same row the footer draws); `esc` closes it and runs nothing. A
   screen whose `?` is text (a filter field, a wizard answer) does not advertise
@@ -1014,19 +1035,33 @@ reliability: color is the third channel, never the only one.
 
 Every pre-redesign key keeps its meaning: `↑`/`↓`/`j`/`k`, `enter`, `esc`, `r`,
 `q`, `ctrl+c`, `ctrl+]`, `space`, `tab`/`shift+tab`. Added: `/` filter, `PgUp`/
-`PgDn`, `g`/`G`, `home`/`end`, `d` detail, `?` help. Mouse input is out of
-scope.
+`PgDn`, `g`/`G`, `home`/`end`, `d` detail, `?` help.
+
+Mouse input is supported and only ever mirrors a key that already works. A
+single click on a drawn row or card selects or focuses it; a second click on the
+same target within 500ms activates it, exactly as `enter` would. The wheel
+scrolls the viewport under the pointer, or moves the cursor over a list. Click
+targets are resolved from the same layout functions that paint the rows, so a
+click cannot land somewhere the screen did not draw, and an overlay owns every
+click while it is open. The footer keycaps stay labels: they are not clickable,
+so the advertised keys are the only way to act from the footer.
+
+Mouse drags are the terminal's, not the TUI's: copy with `Shift` drag (most
+terminals) or `Option` drag (iTerm2).
 
 #### Approval: one key, on purpose
 
-The approved decision sheet's confirm footer says `[space] 승인`. The shipped
+The approved decision sheet's confirm footer says `[enter] 실행`. The shipped
 screen approves with `enter` only, and `space` deliberately does nothing. The
 reason is the constraint that approval and safety rules must not change: `enter`
 was the accept key before the redesign, the footer advertises exactly the keys
 that act, and a second accept key would widen the surface that can run an
-approval-gated operation. Declining is `esc`/`n`, and it produces the existing
-canceled result that states nothing ran. `q`/`ctrl+c` on the confirmation quit
-without running anything, because a confirmation is not an operation.
+approval-gated operation. A double click on the drawn `[ 승인 ]` button is not a
+second accept key: it resolves to the same single `enter` decision, through the
+same handler, and it cannot approve anything `enter` could not. Declining is
+`esc`/`n`, and it produces the existing canceled result that states nothing ran.
+`q`/`ctrl+c` on the confirmation quit without running anything, because a
+confirmation is not an operation.
 
 This is a recorded decision, not an oversight. `TestInvariantApprovalStaysOneKey`
 and `TestSpaceDoesNotApprove` pin it, and the footer assertion fails if a
@@ -1052,14 +1087,16 @@ Approval flow (generic, engine-enforced):
 
 #### Verification
 
-`internal/ui/tui/testdata/golden` commits the layout contract: eight main
-screens (menu+status, service selection, confirmation panel, progress, wizard,
-failure, empty stack, logs) at 40/80/120/200 columns × 18/30/50 rows, once with
-the painted theme and once with the colorless one. The committed text has
-escape sequences stripped, so a diff is a layout change rather than an ANSI byte
-change; `TestGoldenStructureDoesNotDependOnPaint` asserts that stripping the
-painted frame yields the colorless frame byte for byte, which is the NO_COLOR
-proof. The matrix is one table-driven list, so adding a screen is one entry.
+`internal/ui/tui/testdata/golden` commits the layout contract: fifteen main
+screens (menu+status, service selection, confirmation panel, progress,
+progress-logs, wizard, wizard-list, wizard-examples, environment-actions,
+environment-switch, failure, empty stack, logs, detail, long value) at
+40/80/120/200 columns × 18/30/50 rows, once with the painted theme and once with
+the colorless one. The committed text has escape sequences stripped, so a diff is
+a layout change rather than an ANSI byte change;
+`TestGoldenStructureDoesNotDependOnPaint` asserts that stripping the painted
+frame yields the colorless frame byte for byte, which is the NO_COLOR proof. The
+matrix is one table-driven list, so adding a screen is one entry.
 
 Regenerate with:
 
@@ -1663,9 +1700,13 @@ Published for later screens; do not create a second selection model.
   positional arguments and the shared `--` terminator; `-s/--service`,
   `-i/--index`, `-T/--no-tty`.
 - The argv is passed to `docker compose exec` unchanged after the service.
-  dcraft never invokes `sh -c` and never guesses a shell. The image must
-  contain the command; a missing command is `exec_failed` (exit 1) with Korean
-  guidance, not a silent shell fallback.
+  dcraft never invokes `sh -c`. The interactive screen offers `/bin/bash` and
+  `/bin/sh` as pinned choices, and `/bin/bash` is the default; a CLI run still
+  requires the argv after `--` and is never guessed. When an *interactive*
+  attach starts with bash and the container reports the command missing, the one
+  retry runs the same argv with `/bin/sh` and the result states the
+  substitution; any other failure is reported unchanged. A non-interactive or
+  JSON run never retries.
 - A pseudo-terminal is allocated only when the caller can relay an interactive
   terminal and `-T` is absent. `-T`, piped input, and JSON mode never allocate
   one.
@@ -2568,20 +2609,22 @@ Tested seams:
   remote non-zero mapping with `exit_code`, missing command and stopped service;
 - execx streaming: piped and pty modes, input forwarding, output capture and
   context cancellation, and terminal restoration after success and failure;
-- TUI visual system: golden snapshot matrix of eight main screens (menu+status,
-  service selection, confirmation panel, progress, wizard, failure, empty stack,
-  logs) at 40/80/120/200 columns × 18/30/50 rows, committed once with the painted
-  theme and once colorless, with the colorless set asserted to be the stripped
-  painted set byte for byte; 40-column frame integrity on every screen; Korean
-  display-cell width (a syllable is two cells, never split by truncation); long
-  path truncation with an explicit marker and the full value in the detail view;
-  a 25-service stack scrolled end to end with a header that never moves; the
-  theme decision as a pure function of `DCRAFT_THEME`, `NO_COLOR`, `TERM`,
-  profile, background and locale; the modal gutter never widening a row on a
-  straddling wide glyph. CLI invariants are pinned structurally: `internal/ui/cli`
-  and `internal/ui/view` have no dependency on the TUI or its visual layer,
-  `--json` keeps schema `1` and its exact key set, exit codes stay 0/1/2/130,
-  and the shared Korean failure text is identical in both interfaces.
+- TUI visual system: golden snapshot matrix of sixteen main screens (menu+status,
+  service selection, confirmation panel, progress, progress-logs, wizard,
+  wizard-list, wizard-examples, environment-actions, environment-switch, failure,
+  empty stack, logs, live-hostile, detail, long value) at 40/80/120/200 columns
+  × 18/30/50 rows, committed once with the painted theme and once colorless, with the
+  colorless set asserted to be the stripped painted set byte for byte;
+  40-column frame integrity on every screen; Korean display-cell width (a
+  syllable is two cells, never split by truncation); long path truncation with
+  an explicit marker and the full value in the detail view; a 25-service stack
+  scrolled end to end with a header that never moves; the theme decision as a
+  pure function of `DCRAFT_THEME`, `NO_COLOR`, `TERM`, profile, background and
+  locale; the modal gutter never widening a row on a straddling wide glyph. CLI
+  invariants are pinned structurally: `internal/ui/cli` and `internal/ui/view`
+  have no dependency on the TUI or its visual layer, `--json` keeps schema `1`
+  and its exact key set, exit codes stay 0/1/2/130, and the shared Korean
+  failure text is identical in both interfaces.
 - pty process tests for the TUI layout: SIGWINCH resize reflowing across the
   100-column breakpoint with no row wider than the terminal, returning to a
   screen with the cursor and the last result intact, raw-mode restoration after

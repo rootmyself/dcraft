@@ -670,3 +670,11 @@ func trimTrailingBlank(lines []string) []string {
 	}
 	return lines
 }
+
+// collapseBlankRuns keeps at most one blank line in a row. A paragraph may
+// already carry a leading blank line, and the block gap adds another one; the
+// combined result would be a two-line hole instead of a section boundary. The
+// rule itself lives in core, which the feature presenters share.
+func collapseBlankRuns(lines []string) []string {
+	return core.CollapseBlankRuns(lines)
+}

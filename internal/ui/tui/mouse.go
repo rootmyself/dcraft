@@ -35,10 +35,6 @@ const (
 	hitModalCancel
 )
 
-// hitWizardNewItem is the input row of a list question; it shares the list
-// row action with the typed-value row.
-const hitWizardNewItem = hitWizardInput
-
 // hitTarget is one resolved click region in terminal cells. index and aux name
 // the item inside the screen (feature, environment, field, option).
 type hitTarget struct {
@@ -120,7 +116,11 @@ func (m *Model) mouseTargets() []hitTarget {
 			x: bodyX + hit.x, y: 1 + hit.row, w: w, h: h,
 		})
 	}
-	if m.sidebarVisible() && m.navMenuVisible() {
+	if m.sidebarVisible() {
+		// The sidebar is drawn in every phase, so a click on it resolves in
+		// every phase. Whether that click moves, asks first, or only reports a
+		// running operation is decided by the phase, not by whether a hit
+		// exists.
 		_, navHits := visual.SidebarWithHits(m.theme, visual.SidebarWidth(m.width), visual.BodyRows(m.height), m.nav())
 		for _, nav := range navHits {
 			index := m.featureIndex(nav.Name)
@@ -193,10 +193,7 @@ func (m *Model) activateHit(hit hitTarget, double bool) tea.Cmd {
 		if hit.index < 0 || hit.index >= len(m.features) {
 			return nil
 		}
-		m.selected = hit.index
-		if double {
-			return m.start(m.features[hit.index])
-		}
+		return m.activateNav(hit.index, double)
 	case hitEnvItem:
 		if hit.index < 0 || hit.index >= len(m.envs) {
 			return nil
@@ -222,6 +219,12 @@ func (m *Model) activateHit(hit hitTarget, double bool) tea.Cmd {
 		return m.clickWizardCard(hit.index, double)
 	case hitWizardInput:
 		if m.phase != phaseWizardStep {
+			return nil
+		}
+		// The new-item row is part of the same list cursor. While a list item
+		// is being edited, moving the cursor there would commit the buffer to
+		// an index past the items, so the click is ignored like Up/Down.
+		if m.wizardEditing {
 			return nil
 		}
 		m.wizardChoice = len(m.wizardItems)
@@ -299,6 +302,12 @@ func (m *Model) clickWizardCard(index int, double bool) tea.Cmd {
 		if index < 0 || index >= len(m.wizardItems) {
 			return nil
 		}
+		// The keyboard blocks Up/Down while editing, so a click must not move
+		// the selection either: the next Enter would write the buffer into a
+		// different item. The click is ignored, the same as the keys.
+		if m.wizardEditing {
+			return nil
+		}
 		m.wizardChoice = index
 		m.followWizardCursor()
 		if double {
@@ -363,7 +372,9 @@ func (m *Model) updateWheel(msg tea.MouseMsg) tea.Cmd {
 		m.scrollOverlay(delta * mouseWheelRows)
 		return nil
 	}
-	if m.sidebarVisible() && m.navMenuVisible() && msg.X < visual.SidebarWidth(m.width) {
+	if m.sidebarVisible() && msg.X < visual.SidebarWidth(m.width) {
+		// The wheel over the pane always means the same thing: move the menu
+		// cursor. It never scrolls the body underneath, on any screen.
 		m.moveSelection(delta)
 		return nil
 	}
@@ -396,17 +407,31 @@ func (m *Model) updateWheel(msg tea.MouseMsg) tea.Cmd {
 		}
 		return nil
 	}
-	if m.phase == phaseWizardStep && !m.wizardTextInput() && m.wizardStep < len(m.wizardSpec.Steps) && !m.wizardEditing {
+	if m.phase == phaseWizardStep && m.wizardStep < len(m.wizardSpec.Steps) && !m.wizardEditing {
 		step := m.wizardSpec.Steps[m.wizardStep]
-		total := len(step.Options)
-		if step.List {
-			total = len(m.wizardItems) + 1
-		}
-		if total > 0 {
-			m.wizardChoice = (m.wizardChoice + delta + total) % total
+		if m.wizardStepIsList() {
+			// A list is a selectable list for the wheel: items plus the
+			// new-item row, clamped instead of wrapping like the arrows.
+			total := len(m.wizardItems) + 1
+			next := m.wizardChoice + delta
+			if next < 0 {
+				next = 0
+			}
+			if next >= total {
+				next = total - 1
+			}
+			m.wizardChoice = next
 			m.followWizardCursor()
+			return nil
 		}
-		return nil
+		if !m.wizardTextInput() {
+			total := len(step.Options)
+			if total > 0 {
+				m.wizardChoice = (m.wizardChoice + delta + total) % total
+				m.followWizardCursor()
+			}
+			return nil
+		}
 	}
 	if m.bodyScrolls() {
 		m.applyScroll(func(v *visual.Viewport) { v.Move(delta * mouseWheelRows) })

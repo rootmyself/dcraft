@@ -144,7 +144,7 @@ func RenderDocumentLayoutOptions(th Theme, doc core.Document, width int, opts Re
 			continue
 		}
 	}
-	layout.Lines = trimTrailingBlank(lines)
+	layout.Lines = trimTrailingBlank(collapseBlankRuns(lines))
 	if !banded {
 		layout.FixedEnd = 0
 		layout.BandEnd = len(layout.Lines)

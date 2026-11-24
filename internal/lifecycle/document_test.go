@@ -184,3 +184,40 @@ func TestLifecycleCLIPresenterUnchanged(t *testing.T) {
 		t.Fatalf("CLI output adopted the TUI numbered callout:\n%s", out)
 	}
 }
+
+// The interactive screen names the menu entry in its next actions. A reader who
+// works only in the screen should not be handed a command to type; the CLI keeps
+// its command lines, asserted separately below.
+func TestLifecycleDocumentNextActionsUseTheMenu(t *testing.T) {
+	snap := snapshot()
+	for _, action := range []string{"up", "stop", "restart", "down"} {
+		doc := lifecycle.Document(lifecycleResult(action, &snap))
+		var callout string
+		for _, b := range doc.Blocks {
+			if b.Kind == core.BlockCallout {
+				callout = b.Text
+			}
+		}
+		if callout == "" {
+			t.Fatalf("%s: no next-action callout", action)
+		}
+		if strings.Contains(callout, "dcraft ") {
+			t.Fatalf("%s: the document tells an interactive reader to type a command:\n%s", action, callout)
+		}
+		if !strings.Contains(callout, "메뉴") {
+			t.Fatalf("%s: the callout does not say where to act:\n%s", action, callout)
+		}
+	}
+}
+
+// The unread-state document still names the status screen, in menu terms.
+func TestLifecycleDocumentUnreadStateGuidanceUsesTheMenu(t *testing.T) {
+	doc := lifecycle.Document(lifecycleResult("up", nil))
+	joined := renderDoc(t, doc, 80)
+	if !strings.Contains(joined, "메뉴에서 스택 상태 선택") {
+		t.Fatalf("unread state does not say where to look:\n%s", joined)
+	}
+	if strings.Contains(joined, "dcraft status를 실행") {
+		t.Fatalf("unread state still asks an interactive reader to run a command:\n%s", joined)
+	}
+}

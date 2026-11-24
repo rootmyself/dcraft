@@ -45,7 +45,7 @@ const (
 	msgWizardPostLabel    = "사후 (본 작업 완료 후)"
 	msgWizardScriptTitle  = "스크립트 경로 입력"
 	msgWizardScriptPrompt = "프로젝트 기준 상대 경로 또는 절대 로컬 경로 입력."
-	msgWizardScriptHint   = "예: scripts/pre-deploy.sh · hooks/migrate.sh · ./scripts/check-db.sh"
+	msgWizardScriptHint   = "한 줄에 하나 · 예: scripts/pre-deploy.sh · hooks/migrate.sh · ./scripts/check-db.sh"
 	msgWizardPreviewTitle = "등록 적용 확인"
 
 	msgWizardWorkdirPrefix = "실행 위치: "
@@ -54,6 +54,7 @@ const (
 	msgWizardDirectory     = "스크립트 경로가 폴더: %s"
 	msgWizardNotExecutable = "실행 권한이 없음. 등록할 수는 있지만 실행 전에 chmod +x가 필요."
 	msgWizardNotRegistered = "등록된 스크립트 찾지 못함: %s (%s)"
+	msgPartialScripts      = "%d개 저장한 뒤 실패: %s. 저장된 항목은 그대로 남음."
 
 	msgStagePreLabel  = "사전 (up/update 전)"
 	msgStagePostLabel = "사후 (up/update 후)"

@@ -385,8 +385,9 @@ func TestWizardStepsCollectTheSameInputsAndPreviewSavesNothing(t *testing.T) {
 	}
 }
 
-// The TUI document declares the S3 source as a URL, the paths, and the next
-// commands; the CLI text stays the same.
+// The TUI document declares the S3 source as a URL and the paths, then points at
+// the menu entry that registers and approves the script. The CLI keeps the
+// exact commands.
 func TestS3genDocumentTagsURLPathsAndCommands(t *testing.T) {
 	feature := New()
 	res := core.Result{Outcome: core.OutcomeSuccess, Data: Payload{Generator: Report{
@@ -405,11 +406,21 @@ func TestS3genDocumentTagsURLPathsAndCommands(t *testing.T) {
 			kinds[run.Kind]++
 		}
 	}
-	if kinds[core.ValueURL] != 1 || kinds[core.ValuePath] != 2 || kinds[core.ValueCommand] != 1 {
-		t.Fatalf("kinds = %v, want one url, two paths and one command", kinds)
+	if kinds[core.ValueURL] != 1 || kinds[core.ValuePath] != 2 {
+		t.Fatalf("kinds = %v, want one url and two paths", kinds)
 	}
-	if got, want := strings.Join(text, "\n"), feature.Present(res, 0); got != want {
-		t.Fatalf("document text = %q, want presenter text %q", got, want)
+	if kinds[core.ValueCommand] != 0 {
+		t.Fatalf("the document still carries command runs: %v", kinds)
+	}
+	docText := strings.Join(text, "\n")
+	if !strings.Contains(docText, msgDocNext) {
+		t.Fatalf("document lost the menu guidance: %q", docText)
+	}
+	if strings.Contains(docText, "dcraft hooks --add") {
+		t.Fatalf("the document still tells an interactive reader to type the command: %q", docText)
+	}
+	if cliText := feature.Present(res, 0); !strings.Contains(cliText, "dcraft hooks --add --stage pre") {
+		t.Fatalf("CLI text lost its command: %q", cliText)
 	}
 }
 

@@ -2,6 +2,8 @@ package visual
 
 import (
 	"math"
+	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -111,14 +113,14 @@ func TestPaletteUsesApprovedHex(t *testing.T) {
 	wantDark := Palette{
 		Name: "dark", Dark: true, BG: "#10131a", FG: "#d8dee9",
 		Accent: "#7aa2f7", Success: "#5fd08a", Warning: "#e5b567",
-		Danger: "#f07178", Muted: "#9aa5b8", Surface: "#1b2130",
-		Info: "#5fd7ff", URL: "#5f5fff", Code: "#ffff55", Command: "#ff5555", NameColor: "#55ff77", Project: "#ff55ff",
+		Danger: "#f07178", Muted: "#7f8ca6", Surface: "#1b2130",
+		Info: "#4fd8ff", URL: "#8b8bff", Code: "#ffe000", Command: "#ff3b3b", NameColor: "#3dff6e", Project: "#ff3bff",
 	}
 	wantLight := Palette{
 		Name: "light", Dark: false, BG: "#ffffff", FG: "#1f2430",
 		Accent: "#2f5bd1", Success: "#1b7a43", Warning: "#8a5a00",
-		Danger: "#b4232f", Muted: "#5b6472", Surface: "#f1f4f9",
-		Info: "#005f87", URL: "#003faf", Code: "#875f00", Command: "#af0000", NameColor: "#008700", Project: "#8700af",
+		Danger: "#b4232f", Muted: "#666f80", Surface: "#f1f4f9",
+		Info: "#0057c2", URL: "#0036d6", Code: "#7a4b00", Command: "#c40000", NameColor: "#00702b", Project: "#8c0090",
 	}
 	if dark != wantDark {
 		t.Fatalf("dark palette = %+v, want %+v", dark, wantDark)
@@ -128,9 +130,9 @@ func TestPaletteUsesApprovedHex(t *testing.T) {
 	}
 }
 
-// Every foreground token stays readable on both approved backgrounds. The
-// approved floor is WCAG 4.5:1; the lowest approved value is light success on
-// surface (4.87), so the margin is real but thin and worth guarding.
+// State tokens stay readable on both approved backgrounds. The approved floor is
+// WCAG 4.5:1; the lowest approved value is dark warning on surface (5.5), so the
+// margin is real and worth guarding.
 func TestTokenContrastFloor(t *testing.T) {
 	tokens := []Token{TokenAccent, TokenSuccess, TokenWarning, TokenDanger, TokenMuted}
 	for _, p := range []Palette{DarkPalette(), LightPalette()} {
@@ -143,6 +145,51 @@ func TestTokenContrastFloor(t *testing.T) {
 				if ratio := Contrast(hex, bg); ratio < 4.5 {
 					t.Errorf("%s: %s on %s = %.2f, want >= 4.5", p.Name, tok, bg, ratio)
 				}
+			}
+		}
+	}
+}
+
+// Muted is secondary text, a label, a border or a rule. The token floor already
+// holds it to 4.5:1; this adds the separation that makes it read as secondary:
+// the earlier value sat 1.84:1 from the foreground, so a label and a value
+// looked alike.
+func TestMutedSeparatesFromForeground(t *testing.T) {
+	for _, p := range []Palette{DarkPalette(), LightPalette()} {
+		if separation := Contrast(p.FG, p.Muted); separation < 2.5 {
+			t.Errorf("%s: muted vs foreground = %.2f, want >= 2.5 so secondary text separates", p.Name, separation)
+		}
+	}
+}
+
+// Value-classification tokens stay distinguishable from each other. A reader
+// must be able to tell a path from a URL from a command, so no two of them may
+// resolve to the same color.
+func TestValueTokensAreDistinct(t *testing.T) {
+	for _, p := range []Palette{DarkPalette(), LightPalette()} {
+		seen := map[string]Token{}
+		for _, tok := range []Token{TokenInfo, TokenURL, TokenCode, TokenCommand, TokenName, TokenProject} {
+			hex, ok := p.Color(tok)
+			if !ok {
+				t.Fatalf("%s: %v has no color", p.Name, tok)
+			}
+			if other, dup := seen[hex]; dup {
+				t.Errorf("%s: %v and %v share %s", p.Name, tok, other, hex)
+			}
+			seen[hex] = tok
+		}
+	}
+}
+
+// A value token carries more chroma than the muted token, so a value is
+// distinguishable from a label without relying on brightness alone.
+func TestValueTokensCarryMoreChromaThanMuted(t *testing.T) {
+	for _, p := range []Palette{DarkPalette(), LightPalette()} {
+		muted := Chroma(p.Muted)
+		for _, tok := range []Token{TokenInfo, TokenURL, TokenCode, TokenCommand, TokenName, TokenProject} {
+			hex, _ := p.Color(tok)
+			if got := Chroma(hex); got <= muted {
+				t.Errorf("%s: %v chroma %.3f is not above muted %.3f", p.Name, tok, got, muted)
 			}
 		}
 	}
@@ -231,5 +278,50 @@ func TestDetectMapsExplicitInputs(t *testing.T) {
 	// A NO_COLOR value is authoritative even in a real-color terminal.
 	if th := Resolve(in); th.Color {
 		t.Fatal("NO_COLOR resolved to a colored theme")
+	}
+}
+
+// A 16-color terminal gives every slot a meaning, so the assignment is a reviewed
+// table. Nearest-RGB put dark success on gray and light code on black, and
+// collapsed dark accent, warning and URL onto plain white. Every token must own
+// its own slot in both palettes.
+func TestANSI16TableGivesEveryTokenItsOwnSlot(t *testing.T) {
+	for _, p := range []Palette{DarkPalette(), LightPalette()} {
+		seen := map[int]Token{}
+		for _, tok := range []Token{
+			TokenAccent, TokenSuccess, TokenWarning, TokenDanger, TokenMuted,
+			TokenInfo, TokenURL, TokenCode, TokenCommand, TokenName, TokenProject,
+		} {
+			code, ok := p.ANSI16Slot(tok)
+			if !ok {
+				t.Fatalf("%s: no 16-color slot for %v", p.Name, tok)
+			}
+			if other, dup := seen[code]; dup {
+				t.Errorf("%s: %v and %v share SGR %d", p.Name, tok, other, code)
+			}
+			seen[code] = tok
+		}
+	}
+}
+
+// The pins the screen actually emits are those table codes, so a renderer cannot
+// drift from the table without this failing.
+func TestANSI16PaintUsesTheTokenTable(t *testing.T) {
+	for _, in := range []Inputs{
+		{ThemeSetting: "dark", Profile: Profile16, DarkBackground: true, UTF8: true},
+		{ThemeSetting: "light", Profile: Profile16, DarkBackground: false, UTF8: true},
+	} {
+		th := Resolve(in)
+		for _, tok := range []Token{TokenAccent, TokenSuccess, TokenWarning, TokenDanger, TokenMuted, TokenInfo} {
+			code, _ := th.Palette.ANSI16Slot(tok)
+			want := "\x1b[0;" + strconv.Itoa(code) + "m"
+			got := th.Paint(tok, "x")
+			if !strings.HasPrefix(got, want) {
+				t.Errorf("%s: %v painted %q, want prefix %q", th.Palette.Name, tok, got, want)
+			}
+			if strings.Contains(got, "38;2") || strings.Contains(got, "38;5") {
+				t.Errorf("%s: %v leaked a 256/truecolor code: %q", th.Palette.Name, tok, got)
+			}
+		}
 	}
 }

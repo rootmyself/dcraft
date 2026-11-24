@@ -69,6 +69,10 @@ case "$sub" in
           sleep 0.3
           echo "live-project-web-1  | $DOCKER_FAKE_LOG_FOLLOW_LINE"
         fi
+        if [ -n "$DOCKER_FAKE_LOG_HOSTILE" ]; then
+          # A carriage return, a tab, a cursor move and an OSC title on one line.
+          printf 'live-project-web-1  | boot\033[2A100%%\r90%%\tdone\033]0;title\007\n'
+        fi
         while :; do sleep 1; done ;;
     esac
     exit 0 ;;

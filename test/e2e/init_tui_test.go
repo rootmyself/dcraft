@@ -63,7 +63,9 @@ func TestInitTUIWizardDeclinesWithoutWritingAndSavesAfterConfirmation(t *testing
 	steps = append(steps,
 		lifecyclePTYStep{wait: "다음 명령: dcraft up", send: "\r"},
 		lifecyclePTYStep{wait: "Compose 파일 저장.", send: ""},
-		lifecyclePTYStep{wait: "dcraft up", send: ""},
+		// The saved screen points at the menu, not the command: the file is a
+		// standard Compose input in this folder, so the menu finds it.
+		lifecyclePTYStep{wait: "메뉴에서 스택 시작 선택", send: ""},
 	)
 	output, code = runLifecyclePTYSteps(t, project, env, steps)
 	if code != 0 {

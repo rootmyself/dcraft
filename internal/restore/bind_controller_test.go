@@ -419,3 +419,56 @@ func TestParseWizardTargetUsesKindPrefixes(t *testing.T) {
 		t.Fatalf("targets = %v / %v", volumes, binds)
 	}
 }
+
+// The target question is a checkbox list, so it is read with the same keys as
+// the backup source list: space toggles, enter confirms. Its first row is the
+// automatic choice, which carries no value; nothing checked therefore means the
+// artifact's recorded target is used.
+func TestWizardTargetIsACheckboxListWithAnAutomaticRow(t *testing.T) {
+	projectDir, targetDir, artifactPath, backend := bindRestoreFixture(t)
+	controller, _, _ := newRestoreController(t, backend, "proj", &fakeSpace{available: 1 << 30})
+	spec, err := controller.WizardSteps(context.Background(), core.Invocation{
+		Target:  core.Target{ProjectDir: projectDir},
+		Options: map[string]string{"backup": artifactPath},
+	})
+	if err != nil {
+		t.Fatalf("steps: %v", err)
+	}
+	var target core.WizardStep
+	for _, step := range spec.Steps {
+		if step.Name == "target" {
+			target = step
+		}
+	}
+	if target.Name != "target" {
+		t.Fatalf("steps = %+v", spec.Steps)
+	}
+	if !target.Multi {
+		t.Fatal("target step is not a checkbox list")
+	}
+	if len(target.Options) == 0 || target.Options[0].Value != "" {
+		t.Fatalf("first row is not the automatic choice: %+v", target.Options)
+	}
+	if !strings.Contains(target.Options[0].Label, "백업에 기록된 대상") {
+		t.Fatalf("automatic row label = %q", target.Options[0].Label)
+	}
+	if len(target.Options) < 2 {
+		t.Fatalf("target list has no selectable rows: %+v", target.Options)
+	}
+	if targetDir == "" || !strings.Contains(target.Options[1].Value, "bind:") {
+		t.Fatalf("second row is not the declared folder: %+v", target.Options[1])
+	}
+}
+
+// Nothing checked keeps the artifact's target, and one checked row maps to that
+// row only. Both answers go through the same decoder.
+func TestWizardTargetAnswerKeepsAutomaticWhenNothingIsChecked(t *testing.T) {
+	volumes, binds := ParseWizardTarget("")
+	if len(volumes) != 0 || len(binds) != 0 {
+		t.Fatalf("empty answer = %v / %v, want automatic", volumes, binds)
+	}
+	volumes, binds = ParseWizardTarget("bind:/srv/app")
+	if len(volumes) != 0 || strings.Join(binds, ",") != "/srv/app" {
+		t.Fatalf("checked answer = %v / %v", volumes, binds)
+	}
+}

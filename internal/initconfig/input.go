@@ -32,7 +32,7 @@ type Input struct {
 	Ports      []string
 	Volumes    []string
 	Env        []string
-	Command    string
+	Command    []string
 	Restart    string
 	wizard     bool
 }
@@ -73,10 +73,10 @@ func collectInput(in core.Invocation, wizard bool) (Input, error) {
 		Context:    strings.TrimSpace(in.Option("context")),
 		Dockerfile: strings.TrimSpace(in.Option("dockerfile")),
 		Image:      strings.TrimSpace(in.Option("image")),
-		Ports:      optionValues(in, "port", wizard),
-		Volumes:    optionValues(in, "volume", wizard),
-		Env:        optionValues(in, "env-var", wizard),
-		Command:    strings.TrimSpace(in.Option("command")),
+		Ports:      optionValues(in, "port"),
+		Volumes:    optionValues(in, "volume"),
+		Env:        optionValues(in, "env-var"),
+		Command:    optionValues(in, "command"),
 		Restart:    strings.TrimSpace(in.Option("restart")),
 		wizard:     wizard,
 	}
@@ -142,8 +142,11 @@ func collectInput(in core.Invocation, wizard bool) (Input, error) {
 	return raw, nil
 }
 
-// optionValues preserves repeatable flags and decodes wizard answers by line.
-func optionValues(in core.Invocation, name string, wizard bool) []string {
+// optionValues decodes one repeatable value. A repeatable flag arrives as a
+// list; a collected answer arrives as newline-separated text. Those are the only
+// two encodings, so a comma inside a value stays data instead of becoming a
+// separator the reader has to remember.
+func optionValues(in core.Invocation, name string) []string {
 	if list := in.OptionList(name); len(list) > 0 {
 		out := make([]string, 0, len(list))
 		for _, value := range list {
@@ -153,30 +156,13 @@ func optionValues(in core.Invocation, name string, wizard bool) []string {
 		}
 		return out
 	}
-	if wizard {
-		var values []string
-		for _, value := range strings.Split(in.Option(name), "\n") {
-			if value = strings.TrimSpace(value); value != "" {
-				values = append(values, value)
-			}
-		}
-		return values
-	}
-	return splitComma(in.Option(name))
-}
-
-func splitComma(raw string) []string {
-	if strings.TrimSpace(raw) == "" {
-		return nil
-	}
-	parts := strings.Split(raw, ",")
-	out := make([]string, 0, len(parts))
-	for _, part := range parts {
-		if trimmed := strings.TrimSpace(part); trimmed != "" {
-			out = append(out, trimmed)
+	var values []string
+	for _, value := range strings.Split(in.Option(name), "\n") {
+		if value = strings.TrimSpace(value); value != "" {
+			values = append(values, value)
 		}
 	}
-	return out
+	return values
 }
 
 var serviceNameRe = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
@@ -325,7 +311,7 @@ func validatePort(raw string) error {
 	if strings.HasPrefix(s, "[") {
 		end := strings.Index(s, "]")
 		if end < 0 || end == 1 {
-			return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (IPv6 주소는 [주소] 형식으로 닫아야 )", raw))
+			return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (IPv6 주소는 [주소] 형식)", raw))
 		}
 		hostIP = s[1:end]
 		if net.ParseIP(hostIP) == nil {
@@ -338,7 +324,7 @@ func validatePort(raw string) error {
 		rest = rest[1:]
 		parts := strings.Split(rest, ":")
 		if len(parts) != 2 {
-			return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q ([IPv6]:호스트:컨테이너 형식이어야 )", raw))
+			return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q ([IPv6]:호스트:컨테이너 형식)", raw))
 		}
 		return validatePortParts(parts[0], parts[1], true, raw)
 	}
@@ -391,10 +377,10 @@ func validatePortParts(host, container string, allowEmptyHost bool, raw string) 
 		return err
 	}
 	if hRange.isRange() != cRange.isRange() {
-		return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (호스트와 컨테이너 포트는 둘 다 범위이거나 둘 다 단일 값이어야 )", raw))
+		return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (호스트·컨테이너 포트는 둘 다 범위 또는 둘 다 단일 값)", raw))
 	}
 	if hRange.isRange() && (hRange.end-hRange.start) != (cRange.end-cRange.start) {
-		return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (호스트와 컨테이너 포트 범위 길이가 같아야 )", raw))
+		return inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (호스트·컨테이너 포트 범위 길이가 같아야 함)", raw))
 	}
 	_ = proto
 	return nil
@@ -422,7 +408,7 @@ func parsePortRange(raw, full string) (portRange, error) {
 	}
 	start, err := strconv.Atoi(m[1])
 	if err != nil || start < 1 || start > 65535 {
-		return portRange{}, inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (포트는 1-65535 범위여야 )", full))
+		return portRange{}, inputErrDetail(msgPortInvalid, fmt.Sprintf("포트: %q (포트는 1-65535 범위)", full))
 	}
 	end := start
 	if m[2] != "" {

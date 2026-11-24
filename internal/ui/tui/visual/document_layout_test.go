@@ -216,3 +216,25 @@ func TestPanelWithEmptyBody(t *testing.T) {
 		t.Fatalf("panel is not closed: %q", lines[1])
 	}
 }
+
+// A block gap is the section boundary. A paragraph that already begins with a
+// blank line must not turn that boundary into a two-line hole.
+func TestDocumentCollapsesBlankRunsAtBlockBoundaries(t *testing.T) {
+	doc := core.Document{Blocks: []core.Block{
+		{Kind: core.BlockParagraph, Text: "첫 문단"},
+		{Kind: core.BlockParagraph, Text: "\n주의:\n  - 하나"},
+		{Kind: core.BlockParagraph, Text: "\n\n참고:\n  - 둘"},
+	}}
+	lines := RenderDocument(Plain(), doc, 80)
+	for i := 1; i < len(lines); i++ {
+		if strings.TrimSpace(lines[i]) == "" && strings.TrimSpace(lines[i-1]) == "" {
+			t.Fatalf("two blank rows at %d:\n%s", i, strings.Join(lines, "\n"))
+		}
+	}
+	joined := strings.Join(lines, "\n")
+	for _, want := range []string{"첫 문단\n\n주의:\n  - 하나", "주의:\n  - 하나\n\n참고:\n  - 둘"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("section boundary missing %q:\n%s", want, joined)
+		}
+	}
+}

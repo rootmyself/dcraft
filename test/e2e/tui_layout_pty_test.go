@@ -343,3 +343,34 @@ func TestPTYTUIRawModeIsRestoredAfterSeveralResizes(t *testing.T) {
 	}
 	s.assertRestored()
 }
+
+// The 16-color profile receives the reviewed per-token slot table, not a nearest
+// RGB guess: every state token keeps a distinct code, and no 256-color or
+// truecolor sequence appears.
+func TestPTY16ColorKeepsDistinctStateTokens(t *testing.T) {
+	fake := newFakeDocker(t)
+	project := t.TempDir()
+	writeProject(t, project)
+	env := fake.env(t, t.TempDir())
+	s := startPTYWithTerm(t, project, env, "xterm")
+	s.waitFor("[↑↓] 이동", 15*time.Second)
+	s.waitFor("스택 상태", 15*time.Second)
+	tail := s.out.String()
+	for _, bad := range []string{"38;2", "38;5", "48;2", "48;5"} {
+		if strings.Contains(tail, bad) {
+			t.Fatalf("16-color terminal received %q:\n%q", bad, tail)
+		}
+	}
+	// The status screen paints a running service green and the accent
+	// somewhere on the menu. Both must arrive as their own slots.
+	for _, code := range []string{"\x1b[0;92m", "\x1b[0;94m"} {
+		if !strings.Contains(tail, code) {
+			t.Fatalf("16-color output lacks %q:\n%q", code, tail)
+		}
+	}
+	s.send("q")
+	if code := s.wait(); code != 0 {
+		t.Fatalf("TUI exit = %d", code)
+	}
+	s.assertRestored()
+}

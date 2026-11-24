@@ -3,6 +3,9 @@ package exec
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -76,6 +79,13 @@ func (f *fakeStreamer) last(t *testing.T) recordedExec {
 		t.Fatal("streamer was not called")
 	}
 	return f.calls[len(f.calls)-1]
+}
+
+// recorded returns the requests the streamer received, in call order.
+func (f *fakeStreamer) recorded() []recordedExec {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]recordedExec{}, f.calls...)
 }
 
 func (f *fakeStreamer) callCount() int {
@@ -397,13 +407,13 @@ func TestExecCancellationRestoresTheTerminalAndDetaches(t *testing.T) {
 	}
 }
 
-func TestExecInputsListRunningInstancesAndParseTheCommandWithoutAShell(t *testing.T) {
+func TestExecInputsOfferTheDefaultShellAndParseTheCommandWithoutAShell(t *testing.T) {
 	f := New(&fakeBackend{snap: scaledSnapshot()}, &fakeStreamer{})
 	fields, err := f.Inputs(context.Background(), invocation(nil, nil, nil, core.IO{}, &fakeReporter{}))
 	if err != nil {
 		t.Fatalf("Inputs: %v", err)
 	}
-	if len(fields) != 2 || fields[0].Key != "instance" || fields[1].Key != "command" {
+	if len(fields) != 3 || fields[0].Key != "instance" || fields[1].Key != "command-choice" || fields[2].Key != "command" {
 		t.Fatalf("fields = %+v", fields)
 	}
 	var values []string
@@ -413,15 +423,36 @@ func TestExecInputsListRunningInstancesAndParseTheCommandWithoutAShell(t *testin
 	if strings.Join(values, ",") != "db|0,web|0,web|1" {
 		t.Fatalf("instance options = %v", values)
 	}
+	// The first two rows are the pinned shells: bash is the default.
+	var choices []string
+	for _, opt := range fields[1].Options {
+		choices = append(choices, opt.Value)
+	}
+	if strings.Join(choices, ",") != "/bin/bash,/bin/sh," {
+		t.Fatalf("command choices = %v", choices)
+	}
+
+	// A stored choice runs without asking for a typed command.
 	req, err := f.WithInputs(core.Request{Feature: "exec"}, map[string]string{
-		"instance": "web|1",
-		"command":  `printf '%s' "a b"`,
+		"instance": "web|1", "command-choice": "/bin/bash", "command": "",
 	})
 	if err != nil {
 		t.Fatalf("WithInputs: %v", err)
 	}
 	if strings.Join(req.Services, ",") != "web" || req.Options["index"] != "1" {
 		t.Fatalf("request target = %+v", req)
+	}
+	if strings.Join(req.Args, "|") != "/bin/bash" {
+		t.Fatalf("command = %#v", req.Args)
+	}
+
+	// The new-command row reads the typed field with the same quoting rules.
+	req, err = f.WithInputs(core.Request{Feature: "exec"}, map[string]string{
+		"instance": "web|1", "command-choice": "",
+		"command": `printf '%s' "a b"`,
+	})
+	if err != nil {
+		t.Fatalf("WithInputs: %v", err)
 	}
 	if strings.Join(req.Args, "|") != `printf|%s|a b` {
 		t.Fatalf("command = %#v", req.Args)
@@ -480,5 +511,249 @@ func TestExecPresenterShowsTheResolvedTarget(t *testing.T) {
 		if !strings.Contains(text, want) {
 			t.Fatalf("presenter missing %q:\n%s", want, text)
 		}
+	}
+}
+
+// The recent-command store lives inside the project, keeps five newest
+// de-duplicated entries, and can remove one.
+func TestHistoryKeepsFiveNewestDeDuplicatedCommands(t *testing.T) {
+	project := t.TempDir()
+	history, err := LoadHistory(project, true)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if !history.created {
+		t.Fatal("first creation was not reported, so the ignore guidance never prints")
+	}
+	if guidance := history.IgnoreGuidance(); !strings.Contains(guidance, ".dcraft/") {
+		t.Fatalf("ignore guidance = %q", guidance)
+	}
+	for i := 0; i < 7; i++ {
+		if err := history.Remember([]string{"echo", fmt.Sprintf("%d", i)}); err != nil {
+			t.Fatalf("remember %d: %v", i, err)
+		}
+	}
+	if len(history.Commands) != 5 {
+		t.Fatalf("commands = %v, want five", history.Commands)
+	}
+	if history.Commands[0] != "echo 6" || history.Commands[4] != "echo 2" {
+		t.Fatalf("commands = %v, want newest first", history.Commands)
+	}
+	// Re-running a stored command moves it to the front instead of adding it.
+	if err := history.Remember([]string{"echo", "2"}); err != nil {
+		t.Fatalf("remember: %v", err)
+	}
+	if len(history.Commands) != 5 || history.Commands[0] != "echo 2" {
+		t.Fatalf("commands = %v", history.Commands)
+	}
+	if err := history.Delete("echo 2"); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	for _, command := range history.Commands {
+		if command == "echo 2" {
+			t.Fatalf("delete kept the command: %v", history.Commands)
+		}
+	}
+	// The store is a file inside the project, and it survives a reload.
+	path := HistoryPath(project)
+	if !strings.HasPrefix(path, project) {
+		t.Fatalf("history path = %q, want it inside %q", path, project)
+	}
+	reloaded, err := LoadHistory(project, false)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if strings.Join(reloaded.Commands, ",") != strings.Join(history.Commands, ",") {
+		t.Fatalf("reload = %v, want %v", reloaded.Commands, history.Commands)
+	}
+}
+
+// A store that cannot be read is reported, not silently treated as empty: the
+// reader's commands would otherwise disappear without a word.
+func TestHistoryReportsACorruptStore(t *testing.T) {
+	project := t.TempDir()
+	if err := os.MkdirAll(filepath.Dir(HistoryPath(project)), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(HistoryPath(project), []byte("not json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadHistory(project, false); err == nil {
+		t.Fatal("corrupt store read as empty")
+	}
+}
+
+// The attach screen offers the two shells, then this project's recent commands,
+// then the new-command row.
+func TestCommandChoicesOrderPinnedHistoryAndNewRow(t *testing.T) {
+	history := History{Commands: []string{"/bin/bash", "date", "psql -U postgres"}}
+	var values []string
+	for _, option := range commandChoices(history) {
+		values = append(values, option.Value)
+	}
+	want := "/bin/bash,/bin/sh,/bin/bash,date,psql -U postgres,"
+	if strings.Join(values, ",") != want {
+		t.Fatalf("choices = %v, want %v", values, want)
+	}
+}
+
+// A successful attach records what ran, so the next screen offers it.
+func TestExecRecordsTheCommandThatRan(t *testing.T) {
+	project := t.TempDir()
+	f := New(&fakeBackend{snap: scaledSnapshot()}, &fakeStreamer{})
+	in := invocation([]string{"web"}, []string{"date"}, map[string]string{"index": "1"}, core.IO{Stdout: &strings.Builder{}}, &fakeReporter{})
+	in.Target.ProjectDir = project
+	if _, err := f.Run(context.Background(), in); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	history, err := LoadHistory(project, false)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(history.Commands) != 1 || history.Commands[0] != "date" {
+		t.Fatalf("history = %v", history.Commands)
+	}
+}
+
+// An image without bash still gets a shell: the one retry runs /bin/sh and the
+// result says the command was substituted.
+func TestExecRetriesWithShWhenBashIsMissing(t *testing.T) {
+	project := t.TempDir()
+	streamer := &fakeStreamer{
+		result: stack.ExecResult{ExitCode: 127, Output: "exec: \"/bin/bash\": executable file not found in $PATH"},
+	}
+	f := New(&fakeBackend{snap: scaledSnapshot()}, streamer)
+	in := invocation([]string{"web"}, []string{"/bin/bash"}, map[string]string{"index": "1"}, core.IO{Stdout: &strings.Builder{}}, &fakeReporter{})
+	in.Target.ProjectDir = project
+	// The fake streamer answers every call the same way, so the retry is
+	// observed through the recorded requests and the substituted flag.
+	_, err := f.Run(context.Background(), in)
+	if err == nil {
+		t.Fatal("the retry result was reported as success")
+	}
+	calls := streamer.recorded()
+	if len(calls) != 2 {
+		t.Fatalf("calls = %d, want the one retry", len(calls))
+	}
+	if strings.Join(calls[1].req.Command, " ") != "/bin/sh" {
+		t.Fatalf("retry command = %v", calls[1].req.Command)
+	}
+}
+
+// The retry happens only for a missing command, never for a real failure.
+func TestSubstitutionRetryIsNarrow(t *testing.T) {
+	if _, ok := substitutionRetry([]string{"psql"}, "psql: error"); ok {
+		t.Fatal("retried a non-shell command")
+	}
+	if _, ok := substitutionRetry([]string{"/bin/bash"}, "some other failure"); ok {
+		t.Fatal("retried a bash failure that was not a missing command")
+	}
+	if got, ok := substitutionRetry([]string{"/bin/bash", "-c", "echo hi"}, "no such file or directory"); !ok {
+		t.Fatal("missing-command bash was not retried")
+	} else if strings.Join(got, " ") != "/bin/sh -c echo hi" {
+		t.Fatalf("retry = %v", got)
+	}
+}
+
+// A command that looks like it carries a credential still runs but is never
+// written to the project store.
+func TestExecDoesNotStoreCommandsThatLookLikeCredentials(t *testing.T) {
+	project := t.TempDir()
+	f := New(&fakeBackend{snap: scaledSnapshot()}, &fakeStreamer{})
+	in := invocation([]string{"web"}, []string{"psql", "postgres://user:password=secret@db/app"},
+		map[string]string{"index": "1"}, core.IO{Stdout: &strings.Builder{}}, &fakeReporter{})
+	in.Target.ProjectDir = project
+	if _, err := f.Run(context.Background(), in); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	history, err := LoadHistory(project, false)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(history.Commands) != 0 {
+		t.Fatalf("a credential-looking command was stored: %v", history.Commands)
+	}
+}
+
+// Opening the screen leaves the project untouched; the file appears on the run
+// that records a command, and that run states the ignore rule.
+func TestExecScreenCreatesNothingAndTheFirstRunStatesTheIgnoreRule(t *testing.T) {
+	project := t.TempDir()
+	f := New(&fakeBackend{snap: scaledSnapshot()}, &fakeStreamer{})
+	in := invocation(nil, nil, nil, core.IO{}, &fakeReporter{})
+	in.Target.ProjectDir = project
+	if _, err := f.Inputs(context.Background(), in); err != nil {
+		t.Fatalf("Inputs: %v", err)
+	}
+	if _, statErr := os.Stat(HistoryPath(project)); !os.IsNotExist(statErr) {
+		t.Fatal("opening the form created the history file")
+	}
+
+	in = invocation([]string{"web"}, []string{"date"}, map[string]string{"index": "1"}, core.IO{Stdout: &strings.Builder{}}, &fakeReporter{})
+	in.Target.ProjectDir = project
+	data, err := f.Run(context.Background(), in)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	notices := data.(Payload).Exec.Notices
+	if len(notices) != 1 || !strings.Contains(notices[0], ".dcraft/") {
+		t.Fatalf("notices = %v, want the ignore rule once", notices)
+	}
+}
+
+// `dcraft exec --forget <명령>` removes one remembered command and attaches
+// nothing. Its help text points here, so the promise is real.
+func TestExecForgetsOneRememberedCommand(t *testing.T) {
+	project := t.TempDir()
+	history, err := LoadHistory(project, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range []string{"date", "psql -U postgres"} {
+		if err := history.Remember(strings.Fields(line)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f := New(&fakeBackend{snap: scaledSnapshot()}, &fakeStreamer{})
+	in := invocation(nil, nil, map[string]string{"forget": "date"}, core.IO{}, &fakeReporter{})
+	in.Target.ProjectDir = project
+	data, err := f.Run(context.Background(), in)
+	if err != nil {
+		t.Fatalf("forget: %v", err)
+	}
+	if notices := data.(Payload).Exec.Notices; len(notices) != 1 || !strings.Contains(notices[0], "date") {
+		t.Fatalf("notices = %v", notices)
+	}
+	after, err := LoadHistory(project, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(after.Commands) != 1 || after.Commands[0] != "psql -U postgres" {
+		t.Fatalf("history = %v", after.Commands)
+	}
+}
+
+// The credential warning is conditional: it names the command the reader typed,
+// not every command.
+func TestExecWarnsOnlyForCommandsThatLookLikeCredentials(t *testing.T) {
+	project := t.TempDir()
+	f := New(&fakeBackend{snap: scaledSnapshot()}, &fakeStreamer{})
+	run := func(args []string) []string {
+		in := invocation([]string{"web"}, args, map[string]string{"index": "1"}, core.IO{Stdout: &strings.Builder{}}, &fakeReporter{})
+		in.Target.ProjectDir = project
+		data, err := f.Run(context.Background(), in)
+		if err != nil {
+			t.Fatalf("run %v: %v", args, err)
+		}
+		return data.(Payload).Exec.Notices
+	}
+	for _, notice := range run([]string{"date"}) {
+		if strings.Contains(notice, "비밀값") {
+			t.Fatalf("a plain command warned about credentials: %v", notice)
+		}
+	}
+	notices := run([]string{"psql", "postgres://u:password=secret@db/app"})
+	if len(notices) != 1 || !strings.Contains(notices[0], "비밀값") {
+		t.Fatalf("notices = %v, want the credential warning", notices)
 	}
 }

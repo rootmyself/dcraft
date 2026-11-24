@@ -52,8 +52,8 @@ func Document(res core.Result) core.Document {
 		Kind:    core.BlockCallout,
 		Callout: core.CalloutInfo,
 		Text: strings.Join([]string{
-			"1. " + msgSuccessNextStatus,
-			"2. " + msgSuccessNextUpdate,
+			"1. " + msgDocNextStatus,
+			"2. " + msgDocNextUpdate,
 			"3. " + msgSuccessNextRoll,
 		}, "\n"),
 	})

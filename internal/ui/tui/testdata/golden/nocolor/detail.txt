@@ -1,0 +1,420 @@
+# dcraft TUI golden snapshot
+# screen: detail
+# theme: nocolor
+# regenerate: go test ./internal/ui/tui -run TestGolden -update
+
+=== 40x18 ===
+ dcraft · acme-platform · staging
+전체 값
+
+Compose 파일
+  /work/acme-platform/compose.yaml,
+  /work/acme-
+  platform/compose.staging.yaml
+
+
+
+
+
+
+
+
+
+
+[esc] 닫기  [↑↓] 이동  [q] 종료
+
+=== 40x30 ===
+ dcraft · acme-platform · staging
+전체 값
+
+Compose 파일
+  /work/acme-platform/compose.yaml,
+  /work/acme-
+  platform/compose.staging.yaml
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[esc] 닫기  [↑↓] 이동  [q] 종료
+
+=== 40x50 ===
+ dcraft · acme-platform · staging
+전체 값
+
+Compose 파일
+  /work/acme-platform/compose.yaml,
+  /work/acme-
+  platform/compose.staging.yaml
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[esc] 닫기  [↑↓] 이동  [q] 종료
+
+=== 80x18 ===
+ dcraft · acme-platform · staging        Docker 29.10.0 · Compose 2.39.1 · 로컬
+메뉴 · ▸ 스택 상태 · 18개 기능                                        tab 펼치기
+전체 값
+
+Compose 파일
+  /work/acme-platform/compose.yaml, /work/acme-platform/compose.staging.yaml
+api · 이미지
+  ghcr.io/acme/platform-api:2026.11.20
+worker · 이미지
+  ghcr.io/acme/platform-worker:2026.11.20
+scheduler · 이미지
+  ghcr.io/acme/platform-scheduler:2026.11.20
+migrate · 이미지
+  ghcr.io/acme/platform-api:2026.11.20 (로컬 빌드)
+legacy · 이미지
+  ghcr.io/acme/legacy:1.0
+
+[esc] 닫기  [↑↓] 이동  [PgUp/PgDn] 페이지  [g/G] 처음/끝  [q] 종료
+
+=== 80x30 ===
+ dcraft · acme-platform · staging        Docker 29.10.0 · Compose 2.39.1 · 로컬
+메뉴 · ▸ 스택 상태 · 18개 기능                                        tab 펼치기
+전체 값
+
+Compose 파일
+  /work/acme-platform/compose.yaml, /work/acme-platform/compose.staging.yaml
+api · 이미지
+  ghcr.io/acme/platform-api:2026.11.20
+worker · 이미지
+  ghcr.io/acme/platform-worker:2026.11.20
+scheduler · 이미지
+  ghcr.io/acme/platform-scheduler:2026.11.20
+migrate · 이미지
+  ghcr.io/acme/platform-api:2026.11.20 (로컬 빌드)
+legacy · 이미지
+  ghcr.io/acme/legacy:1.0
+
+
+
+
+
+
+
+
+
+
+
+
+
+[esc] 닫기  [↑↓] 이동  [PgUp/PgDn] 페이지  [g/G] 처음/끝  [q] 종료
+
+=== 80x50 ===
+ dcraft · acme-platform · staging        Docker 29.10.0 · Compose 2.39.1 · 로컬
+메뉴 · ▸ 스택 상태 · 18개 기능                                        tab 펼치기
+전체 값
+
+Compose 파일
+  /work/acme-platform/compose.yaml, /work/acme-platform/compose.staging.yaml
+api · 이미지
+  ghcr.io/acme/platform-api:2026.11.20
+worker · 이미지
+  ghcr.io/acme/platform-worker:2026.11.20
+scheduler · 이미지
+  ghcr.io/acme/platform-scheduler:2026.11.20
+migrate · 이미지
+  ghcr.io/acme/platform-api:2026.11.20 (로컬 빌드)
+legacy · 이미지
+  ghcr.io/acme/legacy:1.0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[esc] 닫기  [↑↓] 이동  [PgUp/PgDn] 페이지  [g/G] 처음/끝  [q] 종료
+
+=== 120x18 ===
+ dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
+╭ 기능 · 18 ─── esc 닫기 ╮ 전체 값
+│조회                    │
+│  서비스 접속           │ api · 이미지
+│  로그 보기             │   ghcr.io/acme/platform-api:2026.11.20
+│▸ 스택 상태             │ worker · 이미지
+│                        │   ghcr.io/acme/platform-worker:2026.11.20
+│운영                    │ scheduler · 이미지
+│  스택 제거 ▲ 위험      │   ghcr.io/acme/platform-scheduler:2026.11.20
+│  스택 재시작           │ migrate · 이미지
+│  스택 중지             │   ghcr.io/acme/platform-api:2026.11.20 (로컬 빌드)
+│  스택 시작             │
+│  갱신                  │
+│                        │
+│데이터                  │
+│  데이터 백업           │
+╰────────────────────────╯
+[esc] 닫기  [↑↓] 이동  [PgUp/PgDn] 페이지  [g/G] 처음/끝  [q] 종료
+
+=== 120x30 ===
+ dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
+╭ 기능 · 18 ─── esc 닫기 ╮ 전체 값
+│조회                    │
+│  서비스 접속           │ api · 이미지
+│  로그 보기             │   ghcr.io/acme/platform-api:2026.11.20
+│▸ 스택 상태             │ worker · 이미지
+│                        │   ghcr.io/acme/platform-worker:2026.11.20
+│운영                    │ scheduler · 이미지
+│  스택 제거 ▲ 위험      │   ghcr.io/acme/platform-scheduler:2026.11.20
+│  스택 재시작           │ migrate · 이미지
+│  스택 중지             │   ghcr.io/acme/platform-api:2026.11.20 (로컬 빌드)
+│  스택 시작             │
+│  갱신                  │
+│                        │
+│데이터                  │
+│  데이터 백업           │
+│  데이터 복원 ▲ 위험    │
+│  이전 버전 복… ▲ 위험  │
+│                        │
+│설정                    │
+│  실행환경 별칭         │
+│  Git 호스트 스크립트…  │
+│  호스트 스크립트       │
+│  Compose 설치          │
+│  S3 호스트 스크립트 …  │
+│────────────────────────│
+│ ▸ 스택 상태            │
+│ 현재 스택과 서비스 상  │
+╰────────────────────────╯
+[esc] 닫기  [↑↓] 이동  [PgUp/PgDn] 페이지  [g/G] 처음/끝  [q] 종료
+
+=== 120x50 ===
+ dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
+╭ 기능 · 18 ─── esc 닫기 ╮ 전체 값
+│조회                    │
+│  서비스 접속           │ api · 이미지
+│  로그 보기             │   ghcr.io/acme/platform-api:2026.11.20
+│▸ 스택 상태             │ worker · 이미지
+│                        │   ghcr.io/acme/platform-worker:2026.11.20
+│운영                    │ scheduler · 이미지
+│  스택 제거 ▲ 위험      │   ghcr.io/acme/platform-scheduler:2026.11.20
+│  스택 재시작           │ migrate · 이미지
+│  스택 중지             │   ghcr.io/acme/platform-api:2026.11.20 (로컬 빌드)
+│  스택 시작             │
+│  갱신                  │
+│                        │
+│데이터                  │
+│  데이터 백업           │
+│  데이터 복원 ▲ 위험    │
+│  이전 버전 복… ▲ 위험  │
+│                        │
+│설정                    │
+│  실행환경 별칭         │
+│  Git 호스트 스크립트…  │
+│  호스트 스크립트       │
+│  Compose 설치          │
+│  S3 호스트 스크립트 …  │
+│  비밀값 연결           │
+│  최초 구성             │
+│                        │
+│                        │
+│                        │
+│                        │
+│                        │
+│                        │
+│                        │
+│                        │
+│                        │
+│                        │
+│                        │
+│                        │
+│                        │
+│                        │
+│                        │
+│                        │
+│                        │
+│                        │
+│────────────────────────│
+│ ▸ 스택 상태            │
+│ 현재 스택과 서비스 상  │
+╰────────────────────────╯
+[esc] 닫기  [↑↓] 이동  [PgUp/PgDn] 페이지  [g/G] 처음/끝  [q] 종료
+
+=== 200x18 ===
+ dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
+╭ 기능 · 18 ─────── esc 닫기 ╮ 전체 값
+│조회                        │
+│  서비스 접속               │ api · 이미지
+│  로그 보기                 │   ghcr.io/acme/platform-api:2026.11.20
+│▸ 스택 상태                 │ worker · 이미지
+│                            │   ghcr.io/acme/platform-worker:2026.11.20
+│운영                        │ scheduler · 이미지
+│  스택 제거 ▲ 위험          │   ghcr.io/acme/platform-scheduler:2026.11.20
+│  스택 재시작               │ migrate · 이미지
+│  스택 중지                 │   ghcr.io/acme/platform-api:2026.11.20 (로컬 빌드)
+│  스택 시작                 │
+│  갱신                      │
+│                            │
+│데이터                      │
+│  데이터 백업               │
+╰────────────────────────────╯
+[esc] 닫기  [↑↓] 이동  [PgUp/PgDn] 페이지  [g/G] 처음/끝  [q] 종료
+
+=== 200x30 ===
+ dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
+╭ 기능 · 18 ─────── esc 닫기 ╮ 전체 값
+│조회                        │
+│  서비스 접속               │ api · 이미지
+│  로그 보기                 │   ghcr.io/acme/platform-api:2026.11.20
+│▸ 스택 상태                 │ worker · 이미지
+│                            │   ghcr.io/acme/platform-worker:2026.11.20
+│운영                        │ scheduler · 이미지
+│  스택 제거 ▲ 위험          │   ghcr.io/acme/platform-scheduler:2026.11.20
+│  스택 재시작               │ migrate · 이미지
+│  스택 중지                 │   ghcr.io/acme/platform-api:2026.11.20 (로컬 빌드)
+│  스택 시작                 │
+│  갱신                      │
+│                            │
+│데이터                      │
+│  데이터 백업               │
+│  데이터 복원 ▲ 위험        │
+│  이전 버전 복원 ▲ 위험     │
+│                            │
+│설정                        │
+│  실행환경 별칭             │
+│  Git 호스트 스크립트 생성  │
+│  호스트 스크립트           │
+│  Compose 설치              │
+│  S3 호스트 스크립트 생성   │
+│────────────────────────────│
+│ ▸ 스택 상태                │
+│ 현재 스택과 서비스 상태를  │
+╰────────────────────────────╯
+[esc] 닫기  [↑↓] 이동  [PgUp/PgDn] 페이지  [g/G] 처음/끝  [q] 종료
+
+=== 200x50 ===
+ dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
+╭ 기능 · 18 ─────── esc 닫기 ╮ 전체 값
+│조회                        │
+│  서비스 접속               │ api · 이미지
+│  로그 보기                 │   ghcr.io/acme/platform-api:2026.11.20
+│▸ 스택 상태                 │ worker · 이미지
+│                            │   ghcr.io/acme/platform-worker:2026.11.20
+│운영                        │ scheduler · 이미지
+│  스택 제거 ▲ 위험          │   ghcr.io/acme/platform-scheduler:2026.11.20
+│  스택 재시작               │ migrate · 이미지
+│  스택 중지                 │   ghcr.io/acme/platform-api:2026.11.20 (로컬 빌드)
+│  스택 시작                 │
+│  갱신                      │
+│                            │
+│데이터                      │
+│  데이터 백업               │
+│  데이터 복원 ▲ 위험        │
+│  이전 버전 복원 ▲ 위험     │
+│                            │
+│설정                        │
+│  실행환경 별칭             │
+│  Git 호스트 스크립트 생성  │
+│  호스트 스크립트           │
+│  Compose 설치              │
+│  S3 호스트 스크립트 생성   │
+│  비밀값 연결               │
+│  최초 구성                 │
+│                            │
+│                            │
+│                            │
+│                            │
+│                            │
+│                            │
+│                            │
+│                            │
+│                            │
+│                            │
+│                            │
+│                            │
+│                            │
+│                            │
+│                            │
+│                            │
+│                            │
+│                            │
+│────────────────────────────│
+│ ▸ 스택 상태                │
+│ 현재 스택과 서비스 상태를  │
+╰────────────────────────────╯
+[esc] 닫기  [↑↓] 이동  [PgUp/PgDn] 페이지  [g/G] 처음/끝  [q] 종료

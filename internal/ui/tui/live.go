@@ -39,7 +39,9 @@ const liveChannelCapacity = 512
 // counted so the position indicator can say that older output is no longer
 // reachable instead of pretending the stream started at the cap.
 func (l *liveState) append(line string) {
-	l.lines = append(l.lines, line)
+	// Sanitize once, where the line enters the model. Every later reader
+	// (the viewport, the scrollbar, the kept tail) then measures real cells.
+	l.lines = append(l.lines, visual.SanitizeLine(line))
 	if over := len(l.lines) - liveLineLimit; over > 0 {
 		l.lines = l.lines[over:]
 		l.dropped += over
@@ -537,6 +539,10 @@ func keyBytes(msg tea.KeyMsg) []byte {
 type liveWriter struct {
 	mu      sync.Mutex
 	partial string
+	// pending is the row a carriage return is still rewriting. A progress bar
+	// prints `10%\r20%\r…` without a newline; each segment replaces the last,
+	// so the screen draws one row instead of one row per update.
+	pending string
 	closed  bool
 	ch      chan string
 	tail    []string
@@ -550,30 +556,52 @@ func (w *liveWriter) Write(p []byte) (int, error) {
 	defer w.mu.Unlock()
 	w.partial += string(p)
 	for {
-		index := strings.IndexByte(w.partial, '\n')
-		if index < 0 {
-			break
+		newline := strings.IndexByte(w.partial, '\n')
+		rewrite := strings.IndexByte(w.partial, '\r')
+		switch {
+		case newline < 0 && rewrite < 0:
+			return len(p), nil
+		case newline >= 0 && (rewrite < 0 || newline < rewrite):
+			// The newline ends the row. A rewrite replaced whatever the row
+			// held, so the last segment is the row and the pending text before
+			// it is not output.
+			segment := strings.TrimSuffix(w.partial[:newline], "\r")
+			w.partial = w.partial[newline+1:]
+			w.pending = ""
+			w.emit(segment)
+		case newline == rewrite+1:
+			// CRLF is one line terminator, not a rewrite followed by an empty
+			// row: the text before it is the row, and the newline closes it.
+			segment := w.partial[:rewrite]
+			w.partial = w.partial[newline+1:]
+			w.pending = ""
+			w.emit(segment)
+		default:
+			w.pending = w.partial[:rewrite]
+			w.partial = w.partial[rewrite+1:]
 		}
-		line := strings.TrimSuffix(w.partial[:index], "\r")
-		w.partial = w.partial[index+1:]
-		w.emit(line)
 	}
-	return len(p), nil
 }
 
 func (w *liveWriter) flush() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if w.partial != "" {
-		w.emit(strings.TrimSuffix(w.partial, "\r"))
-		w.partial = ""
+	// A row still being rewritten is its latest segment: the text after the last
+	// carriage return is what the reader saw, so any earlier segment is stale.
+	row := strings.TrimSuffix(w.partial, "\r")
+	if row == "" {
+		return
 	}
+	w.pending, w.partial = "", ""
+	w.emit(row)
 }
 
 func (w *liveWriter) emit(line string) {
 	if w.closed {
 		return
 	}
+	// The writer keeps raw text; liveState.append is the one place a line is
+	// sanitized, so the kept tail and the drawn rows come from the same rule.
 	w.tail = append(w.tail, line)
 	if len(w.tail) > liveLineLimit {
 		w.tail = w.tail[len(w.tail)-liveLineLimit:]
@@ -597,7 +625,14 @@ func (w *liveWriter) droppedLines() int {
 func (w *liveWriter) tailLines() []string {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	return append([]string{}, w.tail...)
+	// The kept tail is shown on the management screen, so it runs through the
+	// same sanitizer as a drawn row: a control byte must not reach the terminal
+	// from either path.
+	out := make([]string, len(w.tail))
+	for i, line := range w.tail {
+		out[i] = visual.SanitizeLine(line)
+	}
+	return out
 }
 
 func (w *liveWriter) close() {

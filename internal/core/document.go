@@ -2,7 +2,7 @@ package core
 
 import "strings"
 
-// BlockKind names the seven neutral body blocks a feature can publish. The
+// BlockKind names the eight neutral body blocks a feature can publish. The
 // document is deliberately colorless and width-free: the TUI decides how to
 // paint and fold it, the CLI never renders it at all.
 type BlockKind string

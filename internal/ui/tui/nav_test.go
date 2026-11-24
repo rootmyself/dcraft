@@ -715,3 +715,78 @@ func TestWizardProseWrapsInTheWideLayout(t *testing.T) {
 		}
 	}
 }
+
+// A filter that matches nothing draws the empty state instead of a cursor, so
+// Enter must not run a selection the screen does not show. The arrows fall
+// through to the result body exactly as they do when the menu is hidden, and
+// clearing the filter makes the menu usable again.
+func TestEnterRunsNothingWhileTheFilterHidesEveryEntry(t *testing.T) {
+	for _, width := range []int{120, 80} {
+		t.Run(itoa(width), func(t *testing.T) {
+			long := &documentOnlyFeature{desc: descriptor("status", true), doc: bigStackDocument(25)}
+			logs := &stubFeature{desc: sectionDescriptor("logs", "로그 보기", "실시간 로그를 따라봅니다.", core.SectionInspect, false, false), body: "로그 본문"}
+			m := newTestModel(t, long, logs)
+			m.theme = *plainTheme()
+			initModel(t, m)
+			resize(t, m, width, 24)
+			if !m.resultScrolls() {
+				t.Fatalf("the result body does not scroll; the scroll half proves nothing:\n%s", m.View())
+			}
+			// The cursor is on a feature the filter will hide; without the
+			// filter the same Enter would run it.
+			pressKey(t, m, tea.KeyMsg{Type: tea.KeyDown})
+			if got := m.selectedFeature().Descriptor().Name; got != "logs" {
+				t.Fatalf("%d cols: down did not select logs, got %q", width, got)
+			}
+			cursor := m.selected
+
+			pressKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+			typeKeys(t, m, "zzzz")
+			pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
+			// Both layouts state that nothing matched: the sidebar draws the
+			// empty text, the one-row summary draws zero features.
+			view := m.View()
+			if !strings.Contains(view, "기능 없음") && !strings.Contains(view, "0개 기능") {
+				t.Fatalf("%d cols: the empty filter state is not drawn:\n%s", width, view)
+			}
+
+			runs := logs.runs
+			cmd := pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
+			feed(t, m, execute(t, cmd))
+			if logs.runs != runs {
+				t.Fatalf("%d cols: enter ran a hidden selection: %d -> %d", width, runs, logs.runs)
+			}
+			if m.phase != phaseReady {
+				t.Fatalf("%d cols: enter left the menu phase: %v", width, m.phase)
+			}
+			if m.selected != cursor {
+				t.Fatalf("%d cols: enter moved the cursor to %d, want %d", width, m.selected, cursor)
+			}
+
+			// The arrows scroll the long result, exactly as when the menu is
+			// hidden: no invisible cursor moves instead.
+			before := m.body.Top
+			pressKey(t, m, tea.KeyMsg{Type: tea.KeyDown})
+			if m.body.Top == before {
+				t.Fatalf("%d cols: down did not scroll the result body while the filter hid the menu:\n%s", width, m.View())
+			}
+			if m.selected != cursor {
+				t.Fatalf("%d cols: down moved a hidden cursor to %d, want %d", width, m.selected, cursor)
+			}
+
+			// Clearing the filter brings the selection back: Enter works again.
+			pressKey(t, m, tea.KeyMsg{Type: tea.KeyEsc})
+			if m.filter != "" {
+				t.Fatalf("%d cols: esc left the filter %q", width, m.filter)
+			}
+			if view := m.View(); !strings.Contains(view, logs.Descriptor().Title) {
+				t.Fatalf("%d cols: esc did not restore the menu:\n%s", width, view)
+			}
+			cmd = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
+			feed(t, m, execute(t, cmd))
+			if logs.runs != runs+1 {
+				t.Fatalf("%d cols: enter works again only after a cleared filter: runs %d -> %d", width, runs, logs.runs)
+			}
+		})
+	}
+}

@@ -52,7 +52,7 @@ func Present(res core.Result, width int) string {
 	b.WriteString("\n" + msgSuccessRecord + "\n")
 	fmt.Fprintf(&b, "  %s\n", msgSuccessRecordKept)
 	if len(report.Notices) > 0 {
-		b.WriteString("\n주의\n")
+		core.WriteSection(&b, "주의")
 		for _, notice := range report.Notices {
 			fmt.Fprintf(&b, "  - %s\n", notice)
 		}
@@ -61,7 +61,7 @@ func Present(res core.Result, width int) string {
 	fmt.Fprintf(&b, "  - %s\n", msgSuccessNextStatus)
 	fmt.Fprintf(&b, "  - %s\n", msgSuccessNextUpdate)
 	fmt.Fprintf(&b, "  - %s\n", msgSuccessNextData)
-	return strings.TrimRight(b.String(), "\n")
+	return core.NormalizeSections(b.String())
 }
 
 func payloadFrom(data any) (Payload, bool) {

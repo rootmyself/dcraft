@@ -203,6 +203,46 @@ func TestModalPositionRowOnlyWhenContentScrolls(t *testing.T) {
 	}
 }
 
+// The clickable button cells and the drawn button text come from one placement
+// helper, so every returned rect must overlap the "[ label ]" text it claims.
+// A second size proves the geometry is not tuned to one terminal.
+func TestModalButtonRectsMatchTheDrawnButtons(t *testing.T) {
+	th := Plain()
+	for _, size := range [][2]int{{80, 24}, {40, 18}} {
+		w, h := size[0], size[1]
+		spec := panelSpec(9, 1)
+		spec.Buttons = []string{"승인", "취소"}
+		out := ComposeModal(th, w, h, modalFrame(th, w, h), spec)
+		rects := ModalButtonRects(th, w, h, spec)
+		if len(rects) != len(spec.Buttons) {
+			t.Fatalf("%dx%d: %d rects, want %d", w, h, len(rects), len(spec.Buttons))
+		}
+		for _, rect := range rects {
+			if rect.Y < 0 || rect.Y >= h {
+				t.Fatalf("%dx%d: button %d row %d outside the frame", w, h, rect.Index, rect.Y)
+			}
+			line := ansi.Strip(out[rect.Y])
+			if rect.X < 0 || rect.X+rect.Width > Width(line) {
+				t.Fatalf("%dx%d: button %d spans %d..%d of a %d-cell row",
+					w, h, rect.Index, rect.X, rect.X+rect.Width, Width(line))
+			}
+			cell := cellsAt(line, rect.X, rect.Width)
+			want := "[ " + spec.Buttons[rect.Index] + " ]"
+			if cell != want {
+				t.Fatalf("%dx%d: button %d covers %q, want %q\n%s",
+					w, h, rect.Index, cell, want, strings.Join(out, "\n"))
+			}
+		}
+	}
+}
+
+// cellsAt returns the drawn cells [start, start+width) of a plain row.
+func cellsAt(line string, start, width int) string {
+	_, rest := splitCells(line, start)
+	part, _ := splitCells(rest, width)
+	return part
+}
+
 // The dim contract: the body keeps its text but loses its colors; the header
 // and the keycap footer keep their original contrast.
 func TestComposeModalDimsOnlyTheBody(t *testing.T) {
@@ -294,6 +334,47 @@ func TestComposeModalGuttersNeverOverflowOnStraddlingWideGlyphs(t *testing.T) {
 					t.Fatalf("%d columns shift %d row %d = %d cells: %q", w, shift, i, got, ansi.Strip(line))
 				}
 			}
+		}
+	}
+}
+
+// On a 16-color terminal the panel must paint with the nearest basic color:
+// plateSpan used the package-level 24-bit sgr and leaked `38;2`/`48;2` codes
+// into every row of the panel, buttons included.
+func TestModalPanelUses16ColorCodesOnA16ColorTerminal(t *testing.T) {
+	th := Resolve(Inputs{ThemeSetting: "dark", Profile: Profile16, DarkBackground: true, UTF8: true})
+	if !th.Color {
+		t.Fatal("the 16-color theme has color off; the test proves nothing")
+	}
+	w, h := 80, 24
+	spec := panelSpec(9, 1)
+	spec.Buttons = []string{"승인", "취소"}
+	out := ComposeModal(th, w, h, modalFrame(th, w, h), spec)
+	joined := strings.Join(out, "\n")
+	for _, leak := range []string{"38;2;", "48;2;"} {
+		if strings.Contains(joined, leak) {
+			for i, line := range out {
+				if strings.Contains(line, leak) {
+					t.Fatalf("row %d leaks a 24-bit code %q on a 16-color terminal:\n%q", i, leak, line)
+				}
+			}
+		}
+	}
+	// The panel really is painted: a 16-color SGR must be present, or the test
+	// would pass on a colorless frame.
+	buttons := ModalButtonRects(th, w, h, spec)
+	if len(buttons) == 0 {
+		t.Fatal("the panel has no buttons; the button row is not covered")
+	}
+	for _, rect := range buttons {
+		if !strings.Contains(out[rect.Y], "\x1b[") {
+			t.Fatalf("button row %d is not painted at all: %q", rect.Y, out[rect.Y])
+		}
+	}
+	top, bottom, _, _ := panelBounds(t, out, th)
+	for i := top; i <= bottom; i++ {
+		if !strings.Contains(out[i], "\x1b[") {
+			t.Fatalf("panel row %d is not painted at all: %q", i, out[i])
 		}
 	}
 }

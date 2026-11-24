@@ -11,32 +11,27 @@ import (
 // warnings are guidance that still allows success. Detail is raw tool output.
 func Diagnostics(diags []core.Diagnostic) string {
 	var b strings.Builder
-	first := true
 	for _, d := range diags {
-		if !first {
-			b.WriteString("\n")
-		}
-		first = false
 		label := "문제"
 		if d.Severity == core.SeverityWarning {
 			label = "주의"
 		} else if d.Severity == core.SeverityInfo {
 			label = "안내"
 		}
-		fmt.Fprintf(&b, "%s: %s\n", label, d.Message)
+		core.WriteSection(&b, fmt.Sprintf("%s: %s", label, d.Message))
 		if strings.TrimSpace(d.Detail) != "" {
 			for _, line := range strings.Split(strings.TrimSpace(d.Detail), "\n") {
 				fmt.Fprintf(&b, "  %s\n", line)
 			}
 		}
 		if len(d.NextActions) > 0 {
-			b.WriteString("다음 행동:\n")
+			core.WriteSection(&b, "다음 행동:")
 			for i, action := range d.NextActions {
 				fmt.Fprintf(&b, "  %d. %s\n", i+1, action)
 			}
 		}
 	}
-	return strings.TrimRight(b.String(), "\n")
+	return core.NormalizeSections(b.String())
 }
 
 // Warnings returns only non-blocking diagnostics.

@@ -1,0 +1,420 @@
+# dcraft TUI golden snapshot
+# screen: long-value
+# theme: color
+# regenerate: go test ./internal/ui/tui -run TestGolden -update
+
+=== 40x18 ===
+ dcraft · acme-platform · staging
+제목 status                      1-13/20
+
+Compose 파일의 services 항목과 .env 값을
+확인한 뒤 같은 작업을 다시 실행. Compose
+파일의 services 항목과 .env 값을 확인한
+뒤 같은 작업을 다시 실행. Compose 파일의
+services 항목과 .env 값을 확인한 뒤 같은
+작업을 다시 실행. Compose 파일의
+services 항목과 .env 값을 확인한 뒤 같은
+작업을 다시 실행. Compose 파일의
+services 항목과 .env 값을 확인한 뒤 같은
+작업을 다시 실행. Compose 파일의
+services 항목과 .env 값을 확인한 뒤 같은
+작업을 다시 실행.
+
+               ↓ 7개 더 있음 · PgUp/PgDn
+[↑↓] 이동  [enter] 실행  [q] 종료
+
+=== 40x30 ===
+ dcraft · acme-platform · staging
+제목 status
+
+Compose 파일의 services 항목과 .env 값을
+확인한 뒤 같은 작업을 다시 실행. Compose
+파일의 services 항목과 .env 값을 확인한
+뒤 같은 작업을 다시 실행. Compose 파일의
+services 항목과 .env 값을 확인한 뒤 같은
+작업을 다시 실행. Compose 파일의
+services 항목과 .env 값을 확인한 뒤 같은
+작업을 다시 실행. Compose 파일의
+services 항목과 .env 값을 확인한 뒤 같은
+작업을 다시 실행. Compose 파일의
+services 항목과 .env 값을 확인한 뒤 같은
+작업을 다시 실행.
+
+안내
+  Compose 파일의 services 항목과 .env
+  값을 확인한 뒤 같은 작업을 다시 실행.
+  Compose 파일의 services 항목과 .env
+  값을 확인한 뒤 같은 작업을 다시 실행.
+  Compose 파일의 services 항목과 .env
+  값을 확인한 뒤 같은 작업을 다시 실행.
+
+
+
+
+
+
+[↑↓] 이동  [enter] 실행  [q] 종료
+
+=== 40x50 ===
+ dcraft · acme-platform · staging
+제목 status
+
+Compose 파일의 services 항목과 .env 값을
+확인한 뒤 같은 작업을 다시 실행. Compose
+파일의 services 항목과 .env 값을 확인한
+뒤 같은 작업을 다시 실행. Compose 파일의
+services 항목과 .env 값을 확인한 뒤 같은
+작업을 다시 실행. Compose 파일의
+services 항목과 .env 값을 확인한 뒤 같은
+작업을 다시 실행. Compose 파일의
+services 항목과 .env 값을 확인한 뒤 같은
+작업을 다시 실행. Compose 파일의
+services 항목과 .env 값을 확인한 뒤 같은
+작업을 다시 실행.
+
+안내
+  Compose 파일의 services 항목과 .env
+  값을 확인한 뒤 같은 작업을 다시 실행.
+  Compose 파일의 services 항목과 .env
+  값을 확인한 뒤 같은 작업을 다시 실행.
+  Compose 파일의 services 항목과 .env
+  값을 확인한 뒤 같은 작업을 다시 실행.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[↑↓] 이동  [enter] 실행  [q] 종료
+
+=== 80x18 ===
+ dcraft · acme-platform · staging        Docker 29.10.0 · Compose 2.39.1 · 로컬
+제목 status
+
+Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+
+안내
+  Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+  Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+  Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+
+
+
+[↑↓] 이동  [enter] 실행  [q] 종료  [?] 도움말
+
+=== 80x30 ===
+ dcraft · acme-platform · staging        Docker 29.10.0 · Compose 2.39.1 · 로컬
+제목 status
+
+Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+
+안내
+  Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+  Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+  Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[↑↓] 이동  [enter] 실행  [q] 종료  [?] 도움말
+
+=== 80x50 ===
+ dcraft · acme-platform · staging        Docker 29.10.0 · Compose 2.39.1 · 로컬
+제목 status
+
+Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+
+안내
+  Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+  Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+  Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[↑↓] 이동  [enter] 실행  [q] 종료  [?] 도움말
+
+=== 120x18 ===
+ dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
+제목 status
+
+Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을
+확인한 뒤 같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행. Compose
+파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을 확인한 뒤
+같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+
+안내
+  Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을
+  확인한 뒤 같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+
+
+
+
+
+
+[↑↓] 이동  [enter] 실행  [q] 종료  [/] 찾기  [tab] 메뉴  [r] 새로고침  [?] 도움말
+
+=== 120x30 ===
+ dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
+제목 status
+
+Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을
+확인한 뒤 같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행. Compose
+파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을 확인한 뒤
+같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+
+안내
+  Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을
+  확인한 뒤 같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[↑↓] 이동  [enter] 실행  [q] 종료  [/] 찾기  [tab] 메뉴  [r] 새로고침  [?] 도움말
+
+=== 120x50 ===
+ dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
+제목 status
+
+Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을
+확인한 뒤 같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행. Compose
+파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을 확인한 뒤
+같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+
+안내
+  Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을
+  확인한 뒤 같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[↑↓] 이동  [enter] 실행  [q] 종료  [/] 찾기  [tab] 메뉴  [r] 새로고침  [?] 도움말
+
+=== 200x18 ===
+ dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
+제목 status
+
+Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을 확인한 뒤
+같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행. Compose 파일의 services
+항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+
+안내
+  Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을 확인한 뒤
+  같은 작업을 다시 실행.
+
+
+
+
+
+
+
+[↑↓] 이동  [enter] 실행  [q] 종료  [/] 찾기  [tab] 메뉴  [r] 새로고침  [?] 도움말
+
+=== 200x30 ===
+ dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
+제목 status
+
+Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을 확인한 뒤
+같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행. Compose 파일의 services
+항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+
+안내
+  Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을 확인한 뒤
+  같은 작업을 다시 실행.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[↑↓] 이동  [enter] 실행  [q] 종료  [/] 찾기  [tab] 메뉴  [r] 새로고침  [?] 도움말
+
+=== 200x50 ===
+ dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
+제목 status
+
+Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을 확인한 뒤
+같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행. Compose 파일의 services
+항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행.
+
+안내
+  Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을 확인한 뒤 같은 작업을 다시 실행. Compose 파일의 services 항목과 .env 값을 확인한 뒤
+  같은 작업을 다시 실행.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[↑↓] 이동  [enter] 실행  [q] 종료  [/] 찾기  [tab] 메뉴  [r] 새로고침  [?] 도움말

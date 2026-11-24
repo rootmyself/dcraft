@@ -877,7 +877,11 @@ func (c *Controller) WizardSteps(ctx context.Context, in core.Invocation) (core.
 
 	targetStep := core.WizardStep{
 		Name: "target", Title: msgWizardTarget, Prompt: msgWizardTargetWhy,
+		// The automatic row is a real row so it can be described and read like
+		// the others. It carries no value, which is what "nothing selected"
+		// means, so checking nothing keeps the artifact's recorded target.
 		Options: []core.WizardOption{{Value: "", Label: msgWizardTargetAuto}},
+		Multi:   true,
 	}
 	for _, src := range selectable {
 		if src.Kind == data.KindBind {

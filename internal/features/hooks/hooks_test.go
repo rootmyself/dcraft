@@ -215,3 +215,87 @@ func TestWizardApplySavesThroughTheSameRecord(t *testing.T) {
 		t.Fatalf("registration = %+v", cat.Registrations)
 	}
 }
+
+// The script step is a list, so one answer registers several scripts in one
+// pass. Each item is one registration; the order the reader entered is kept.
+func TestWizardApplyRegistersEveryListedScript(t *testing.T) {
+	dir, f, _ := setup(t)
+	if _, err := run(t, f, dir, map[string]string{"wizard": "steps"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run(t, f, dir, map[string]string{
+		"wizard": "apply", "action": "add", "stage": "pre",
+		"script": "scripts/pre.sh\nscripts/post.sh",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	cat, err := hooklib.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cat.Registrations) != 2 {
+		t.Fatalf("registrations = %+v", cat.Registrations)
+	}
+	for _, reg := range cat.Registrations {
+		if reg.Stage != hooklib.StagePre {
+			t.Fatalf("stage = %q", reg.Stage)
+		}
+	}
+}
+
+// The preview names every listed script and still refuses one missing file, so a
+// multi-script answer is never half-checked.
+func TestWizardPreviewChecksEveryListedScript(t *testing.T) {
+	dir, f, _ := setup(t)
+	if _, err := run(t, f, dir, map[string]string{"wizard": "steps"}); err != nil {
+		t.Fatal(err)
+	}
+	text, err := f.WizardPreview(map[string]string{
+		"action": "add", "stage": "pre", "script": "scripts/pre.sh\nscripts/post.sh",
+	})
+	if err != nil {
+		t.Fatalf("preview: %v", err)
+	}
+	for _, want := range []string{"scripts/pre.sh", "scripts/post.sh"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("preview missing %q:\n%s", want, text)
+		}
+	}
+	if _, err := f.WizardPreview(map[string]string{
+		"action": "add", "stage": "pre", "script": "scripts/pre.sh\nscripts/nope.sh",
+	}); err == nil {
+		t.Fatal("preview accepted one missing script in a list")
+	}
+}
+
+// A wave that fails partway says how many registrations landed before the
+// failure and which item failed, because the saved ones stay.
+func TestWizardApplyReportsAScriptThatFailedPartway(t *testing.T) {
+	dir, f, _ := setup(t)
+	if _, err := run(t, f, dir, map[string]string{"wizard": "steps"}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := run(t, f, dir, map[string]string{
+		"wizard": "apply", "action": "add", "stage": "pre",
+		"script": "scripts/pre.sh\nscripts/nope.sh\nscripts/post.sh",
+	})
+	if err == nil {
+		t.Fatal("a missing script in the middle was accepted")
+	}
+	var ce *core.Error
+	if !asCore(err, &ce) || len(ce.Diagnostics) == 0 {
+		t.Fatalf("error = %v", err)
+	}
+	d := ce.Diagnostics[0]
+	if !strings.Contains(d.Message, "1개 저장한 뒤 실패") || !strings.Contains(d.Message, "scripts/nope.sh") {
+		t.Fatalf("message = %q", d.Message)
+	}
+	// The first registration is real and stays.
+	cat, loadErr := hooklib.Load(dir)
+	if loadErr != nil {
+		t.Fatal(loadErr)
+	}
+	if len(cat.Registrations) != 1 || cat.Registrations[0].Path != "scripts/pre.sh" {
+		t.Fatalf("registrations = %+v", cat.Registrations)
+	}
+}

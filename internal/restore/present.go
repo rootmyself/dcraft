@@ -38,16 +38,16 @@ func Present(res core.Result, width int) string {
 	}
 	fmt.Fprintf(&b, "복구한 서비스: %s\n", joinOrNone(report.Restarted))
 	if len(report.Warnings) > 0 {
-		b.WriteString("\n경고:\n")
+		core.WriteSection(&b, "경고:")
 		for _, warning := range report.Warnings {
 			fmt.Fprintf(&b, "  - %s\n", warning)
 		}
 	}
-	b.WriteString("\n안내:\n")
+	core.WriteSection(&b, "안내:")
 	for _, notice := range report.Notices {
 		fmt.Fprintf(&b, "  - %s\n", notice)
 	}
-	return strings.TrimRight(b.String(), "\n")
+	return core.NormalizeSections(b.String())
 }
 
 func payloadFrom(data any) (Payload, bool) {

@@ -411,8 +411,9 @@ func TestEnvironmentIssuanceSelectsNewAlias(t *testing.T) {
 	adminDesc.EnvironmentAdmin = true
 	adminDesc.Wizard = true
 	admin := &wizardStub{desc: adminDesc, steps: core.WizardSpec{
-		Title: "별칭 발급",
-		Steps: []core.WizardStep{{Name: "name", Title: "이름", AllowCustom: true}},
+		Title:             "별칭 발급",
+		EnvironmentAnswer: "name",
+		Steps:             []core.WizardStep{{Name: "name", Title: "이름", AllowCustom: true}},
 	}}
 	resolver := envResolver()
 	reg := core.NewRegistry()
@@ -440,6 +441,46 @@ func TestEnvironmentIssuanceSelectsNewAlias(t *testing.T) {
 	feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeyUp}, tea.KeyMsg{Type: tea.KeyEnter}})
 	if resolver.lastTarget.Environment != "new" {
 		t.Fatalf("next feature target = %q, want new", resolver.lastTarget.Environment)
+	}
+}
+
+// The issued alias comes from the spec's declared answer, so the TUI selects it
+// for any EnvironmentAdmin feature, whatever its step is named.
+func TestEnvironmentIssuanceSelectsDeclaredAnswerStep(t *testing.T) {
+	status := &stubFeature{desc: descriptor("status", true), body: "body"}
+	adminDesc := descriptor("aliases", false)
+	adminDesc.EnvironmentAdmin = true
+	adminDesc.Wizard = true
+	admin := &wizardStub{desc: adminDesc, steps: core.WizardSpec{
+		Title:             "별칭 발급",
+		EnvironmentAnswer: "alias",
+		Steps:             []core.WizardStep{{Name: "alias", Title: "별칭", AllowCustom: true}},
+	}}
+	resolver := envResolver()
+	reg := core.NewRegistry()
+	for _, f := range []core.Feature{status, admin} {
+		if err := reg.Register(f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	engine := core.NewEngine(reg, resolver, stubPreflight{}, stubState{}, stubClock{})
+	engine.CWD = func() (string, error) { return "/cwd", nil }
+	engine.NewOperationID = func() string { return "op_env_create" }
+	m := NewModel(context.Background(), Options{Engine: engine, Registry: reg, Target: core.TargetRequest{Environment: "dev"}})
+	initModel(t, m)
+	feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeyEnter}, tea.KeyMsg{Type: tea.KeyEnter}})
+	feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("stage")}, tea.KeyMsg{Type: tea.KeyEnter}})
+	resolver.envs = append(resolver.envs, core.Environment{Name: "stage"})
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	for _, msg := range execute(t, cmd) {
+		_, next := m.Update(msg)
+		feed(t, m, execute(t, next))
+	}
+	if !admin.applied || resolver.envCalls != 1 {
+		t.Fatalf("issuance did not apply and reload alias, calls=%d applied=%v", resolver.envCalls, admin.applied)
+	}
+	if m.target.Environment != "stage" || m.facts.Environment != "stage" {
+		t.Fatalf("issued alias not selected: target=%q header=%q", m.target.Environment, m.facts.Environment)
 	}
 }
 
