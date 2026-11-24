@@ -73,7 +73,14 @@ const (
 	msgHelpTitle    = "도움말"
 	msgHelpClose    = "닫기"
 	msgBusyQuit     = "작업 진행 중. 지금 화면을 닫으면 일부 변경이 남을 수 있음. 완료된 뒤 종료하거나, 중단하려면 ctrl+c."
-	msgCanceling    = "중단 요청됨. 진행 중인 작업이 안전하게 끝날 때까지 대기. 일부 변경이 남을 수 있음."
+	// A sidebar click during a mutating run reports instead of navigating:
+	// dcraft has no daemon, so the progress on screen would be lost.
+	msgNavBlocked = "작업 진행 중. 완료된 뒤 메뉴로 이동 가능."
+	// The sidebar-click confirmation. Closing it keeps every answer.
+	msgDiscardTitle  = "입력 버리고 이동"
+	msgDiscardRisk   = "이 화면에서 작성 중인 값이 있음. 이동하면 값이 사라짐."
+	msgDiscardDetail = "esc는 이 화면에 머무름. 작성한 값은 그대로 남음."
+	msgCanceling     = "중단 요청됨. 진행 중인 작업이 안전하게 끝날 때까지 대기. 일부 변경이 남을 수 있음."
 
 	// Interactive inputs are collected only where a feature declares them
 	// (exec). The TUI renders labels and choices; the feature owns validation.

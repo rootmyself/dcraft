@@ -145,6 +145,13 @@ type Model struct {
 	helpOpen      bool
 	confirmScroll int
 
+	// discardOpen is the sidebar-click confirmation. It is a one-decision
+	// panel: accept discards the collected answers and navigates, cancel
+	// returns to the screen with every answer intact. pendingNav is the feature
+	// the click asked for.
+	discardOpen bool
+	pendingNav  int
+
 	// pendingApproval and planText hold the generic confirmation state. Any
 	// approval-gated feature that implements core.Planner reuses this screen;
 	// no feature-specific branch is added here. pendingApprovals carries every
@@ -536,6 +543,11 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// every key, and closing it runs nothing.
 		if m.helpOpen {
 			return m, m.updateHelpKey(msg)
+		}
+		// The sidebar-click confirmation is a one-decision panel: it owns the
+		// keys so esc keeps the answers and enter is the only accept.
+		if m.discardOpen {
+			return m.updateDiscardKey(msg)
 		}
 		// The filter owns the keyboard while "/" is active: q and r are text,
 		// not commands, so a search can contain any letter.

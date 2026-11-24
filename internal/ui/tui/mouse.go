@@ -116,7 +116,11 @@ func (m *Model) mouseTargets() []hitTarget {
 			x: bodyX + hit.x, y: 1 + hit.row, w: w, h: h,
 		})
 	}
-	if m.sidebarVisible() && m.navMenuVisible() {
+	if m.sidebarVisible() {
+		// The sidebar is drawn in every phase, so a click on it resolves in
+		// every phase. Whether that click moves, asks first, or only reports a
+		// running operation is decided by the phase, not by whether a hit
+		// exists.
 		_, navHits := visual.SidebarWithHits(m.theme, visual.SidebarWidth(m.width), visual.BodyRows(m.height), m.nav())
 		for _, nav := range navHits {
 			index := m.featureIndex(nav.Name)
@@ -189,10 +193,7 @@ func (m *Model) activateHit(hit hitTarget, double bool) tea.Cmd {
 		if hit.index < 0 || hit.index >= len(m.features) {
 			return nil
 		}
-		m.selected = hit.index
-		if double {
-			return m.start(m.features[hit.index])
-		}
+		return m.activateNav(hit.index, double)
 	case hitEnvItem:
 		if hit.index < 0 || hit.index >= len(m.envs) {
 			return nil

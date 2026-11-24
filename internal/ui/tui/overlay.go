@@ -13,7 +13,7 @@ import (
 // two overlays and one approval surface: the confirmation panel (used by every
 // approval and by the wizard's apply) and the help panel.
 func (m *Model) overlayOpen() bool {
-	return m.helpOpen || m.confirmOpen()
+	return m.helpOpen || m.confirmOpen() || m.discardOpen
 }
 
 // confirmOpen reports whether the confirmation panel owns the keyboard.
@@ -31,6 +31,7 @@ func (m *Model) backgroundModel() *Model {
 	}
 	c := *m
 	c.helpOpen = false
+	c.discardOpen = false
 	if m.confirmOpen() {
 		// The confirmation phase has no screen of its own: the body under
 		// the panel is the last result plus the menu.
@@ -49,6 +50,9 @@ func (m *Model) overlaySpec() (visual.ModalSpec, bool) {
 	}
 	if m.confirmOpen() {
 		return m.confirmSpec(), true
+	}
+	if m.discardOpen {
+		return m.discardSpec(), true
 	}
 	return visual.ModalSpec{}, false
 }
@@ -150,6 +154,89 @@ func (m *Model) helpSpec() visual.ModalSpec {
 		spec.Items = append(spec.Items, item.Text())
 	}
 	return spec
+}
+
+// discardSpec is the sidebar-click confirmation: the feature the click asked
+// for, and the fact that leaving discards collected answers. It is the
+// single-decision surface the confirmation panel uses, with one accept and one
+// cancel.
+func (m *Model) discardSpec() visual.ModalSpec {
+	spec := visual.ModalSpec{
+		Title:     msgDiscardTitle,
+		Badge:     msgConfirmRiskLabel,
+		RiskLabel: msgConfirmRiskLabel,
+		Risk:      []string{msgDiscardRisk},
+		Buttons:   []string{msgModalApprove, msgModalCancel},
+	}
+	action := ""
+	if m.pendingNav >= 0 && m.pendingNav < len(m.features) {
+		d := m.features[m.pendingNav].Descriptor()
+		action = d.Title + " (" + d.Name + ")"
+	}
+	spec.Rows = []visual.ModalRow{
+		{Label: msgConfirmActionLabel + ":", Value: action},
+	}
+	spec.Extra = []string{"", msgDiscardDetail}
+	return spec
+}
+
+// updateDiscardKey drives the sidebar-click confirmation. enter discards the
+// collected answers and navigates; esc keeps them and stays.
+func (m *Model) updateDiscardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "n":
+		// Every answer stays: this is the whole point of asking.
+		m.discardOpen = false
+		m.pendingNav = -1
+		m.confirmScroll = 0
+		return m, nil
+	case "enter":
+		index := m.pendingNav
+		m.discardOpen = false
+		m.pendingNav = -1
+		m.confirmScroll = 0
+		if index < 0 || index >= len(m.features) {
+			return m, nil
+		}
+		m.discardInput()
+		return m, m.start(m.features[index])
+	case "up", "k":
+		m.scrollOverlay(-1)
+	case "down", "j":
+		m.scrollOverlay(1)
+	case "pgup":
+		m.scrollOverlay(-m.overlayPage())
+	case "pgdown":
+		m.scrollOverlay(m.overlayPage())
+	case "home", "g":
+		m.confirmScroll = 0
+	case "end", "G":
+		m.confirmScroll = m.overlayMaxTop()
+	}
+	return m, nil
+}
+
+// discardInput drops the current screen's collected answers. It runs only after
+// the confirmation was accepted, and it never touches the stack.
+func (m *Model) discardInput() {
+	switch m.phase {
+	case phaseForm:
+		m.form = nil
+		m.notice = ""
+	case phaseWizardStep, phaseWizardPreview:
+		m.wizardFeature = nil
+		m.wizardSpec = core.WizardSpec{}
+		m.wizardAnswers = nil
+		m.wizardChecked = map[string]bool{}
+		m.wizardItems = nil
+		m.wizardInput = ""
+		m.wizardEditing = false
+		m.wizardPreview = ""
+		m.wizardPreviewErr = nil
+		m.notice = ""
+	}
+	m.helpOpen = false
+	m.confirmScroll = 0
 }
 
 // openHelp shows the keymap of the current screen. It runs nothing.
