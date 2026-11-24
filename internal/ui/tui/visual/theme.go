@@ -236,15 +236,21 @@ func (t Theme) Resolved() bool { return t.Palette.Name != "" }
 // Ellipsis is the explicit truncation marker for this theme.
 func (t Theme) Ellipsis() string { return t.Glyphs.Ell }
 
-// DarkPalette targets a dark terminal background. The six state tokens clear
-// 4.5:1 contrast on both BG and Surface; the value-classification tokens are
-// decorative and are not held to that floor.
+// DarkPalette targets a dark terminal background.
+//
+// The state tokens clear 4.5:1 contrast on both BG and Surface. Muted keeps 3:1
+// against both, and sits far enough from FG in brightness to read as secondary
+// at a glance: the earlier value was 1.84:1 against FG, which is why a label
+// and a value looked alike. A border or rule is structure, not text, so 3:1 is
+// the right floor for it. The value-classification tokens are decorative, but
+// they keep enough chroma to separate path, URL, image, command, service and
+// project from each other without relying on color alone.
 func DarkPalette() Palette {
 	return Palette{
 		Name: "dark", Dark: true, BG: "#10131a", FG: "#d8dee9",
 		Accent: "#7aa2f7", Success: "#5fd08a", Warning: "#e5b567",
-		Danger: "#f07178", Muted: "#9aa5b8", Surface: "#1b2130",
-		Info: "#5fd7ff", URL: "#5f5fff", Code: "#ffff55", Command: "#ff5555", NameColor: "#55ff77", Project: "#ff55ff",
+		Danger: "#f07178", Muted: "#6f7c93", Surface: "#1b2130",
+		Info: "#4fd8ff", URL: "#8b8bff", Code: "#ffe000", Command: "#ff3b3b", NameColor: "#3dff6e", Project: "#ff3bff",
 	}
 }
 
@@ -255,8 +261,8 @@ func LightPalette() Palette {
 	return Palette{
 		Name: "light", Dark: false, BG: "#ffffff", FG: "#1f2430",
 		Accent: "#2f5bd1", Success: "#1b7a43", Warning: "#8a5a00",
-		Danger: "#b4232f", Muted: "#5b6472", Surface: "#f1f4f9",
-		Info: "#005f87", URL: "#003faf", Code: "#875f00", Command: "#af0000", NameColor: "#008700", Project: "#8700af",
+		Danger: "#b4232f", Muted: "#747d8f", Surface: "#f1f4f9",
+		Info: "#0057c2", URL: "#0036d6", Code: "#7a4b00", Command: "#c40000", NameColor: "#00702b", Project: "#8c0090",
 	}
 }
 
@@ -304,7 +310,7 @@ func (t Theme) Paint(tok Token, s string) string {
 	if !ok {
 		return s
 	}
-	return t.sgr(hex, "", false) + s + "\x1b[0m"
+	return t.sgrToken(tok, hex, "", false) + s + "\x1b[0m"
 }
 
 // Bold is Paint with the bold attribute.
@@ -316,7 +322,7 @@ func (t Theme) Bold(tok Token, s string) string {
 	if !ok {
 		return s
 	}
-	return t.sgr(hex, "", true) + s + "\x1b[0m"
+	return t.sgrToken(tok, hex, "", true) + s + "\x1b[0m"
 }
 
 // PaintOn wraps s in a foreground token over a background token.
@@ -344,10 +350,10 @@ func (t Theme) style(fg, bg Token, bold bool, s string) string {
 	} else if b, ok := t.Palette.Color(bg); ok {
 		bgHex = b
 	}
-	return t.sgr(fgHex, bgHex, bold) + s + "\x1b[0m"
+	return t.sgrToken(fg, fgHex, bgHex, bold) + s + "\x1b[0m"
 }
 
-func (t Theme) sgr(fg, bg string, bold bool) string {
+func (t Theme) sgrToken(tok Token, fg, bg string, bold bool) string {
 	if t.Profile != Profile16 {
 		return sgr(fg, bg, bold)
 	}
@@ -356,15 +362,58 @@ func (t Theme) sgr(fg, bg string, bold bool) string {
 		codes = append(codes, "1")
 	}
 	if fg != "" {
-		codes = append(codes, strconv.Itoa(ansi16(fg, false)))
+		// A 16-color terminal uses the reviewed slot table: nearest-RGB
+		// collapsed distinct tokens onto one color.
+		code, ok := t.Palette.ANSI16Slot(tok)
+		if !ok {
+			code = ansi16Nearest(fg)
+		}
+		codes = append(codes, strconv.Itoa(code))
 	}
 	if bg != "" {
-		codes = append(codes, strconv.Itoa(ansi16(bg, true)))
+		// A background plate is one surface, not a family of meanings, so the
+		// nearest slot is the right rule here.
+		codes = append(codes, strconv.Itoa(ansi16Nearest(bg)+10))
 	}
 	return "\x1b[" + strings.Join(codes, ";") + "m"
 }
 
-func ansi16(hex string, background bool) int {
+// ansi16Dark and ansi16Light assign each token its own slot on a 16-color
+// terminal. Nearest-RGB is the wrong rule here: it put dark success on gray and
+// light code on black, and it collapsed accent, warning and URL onto plain
+// white. A terminal with 16 colors gives each slot a meaning, so the assignment
+// is a reviewed table instead of a distance. Every token has its own code.
+var ansi16Dark = map[Token]int{
+	TokenAccent:  94, // bright blue: selection and focus
+	TokenSuccess: 92, // bright green
+	TokenWarning: 93, // bright yellow
+	TokenDanger:  91, // bright red
+	TokenMuted:   90, // gray: labels, borders and rules
+	TokenInfo:    96, // bright cyan: paths
+	TokenURL:     35, // magenta: links
+	TokenCode:    33, // yellow: images and literals
+	TokenCommand: 31, // red: commands
+	TokenName:    32, // green: service names
+	TokenProject: 95, // bright magenta: project names
+}
+
+var ansi16Light = map[Token]int{
+	TokenAccent:  34, // blue
+	TokenSuccess: 32, // green
+	TokenWarning: 33, // yellow
+	TokenDanger:  31, // red
+	TokenMuted:   90, // gray: labels, borders and rules
+	TokenInfo:    36, // cyan: paths
+	TokenURL:     94, // bright blue: links
+	TokenCode:    95, // bright magenta: images and literals
+	TokenCommand: 91, // bright red: commands
+	TokenName:    92, // bright green: service names
+	TokenProject: 35, // magenta: project names
+}
+
+// ansi16Nearest is the fallback for a color the table does not name, such as a
+// background plate: the closest of the 16 slots by RGB distance.
+func ansi16Nearest(hex string) int {
 	colors := [16][3]int{{0, 0, 0}, {128, 0, 0}, {0, 128, 0}, {128, 128, 0}, {0, 0, 128}, {128, 0, 128}, {0, 128, 128}, {192, 192, 192}, {128, 128, 128}, {255, 0, 0}, {0, 255, 0}, {255, 255, 0}, {0, 0, 255}, {255, 0, 255}, {0, 255, 255}, {255, 255, 255}}
 	r, g, b := HexRGB(hex)
 	best, distance := 0, math.MaxInt
@@ -374,15 +423,20 @@ func ansi16(hex string, background bool) int {
 			best, distance = i, d
 		}
 	}
-	base := 30
-	if background {
-		base = 40
-	}
 	if best >= 8 {
-		base += 60
-		best -= 8
+		return 90 + best - 8
 	}
-	return base + best
+	return 30 + best
+}
+
+// ANSI16Slot returns the SGR foreground code for a token on a 16-color terminal.
+func (p Palette) ANSI16Slot(tok Token) (int, bool) {
+	table := ansi16Dark
+	if !p.Dark {
+		table = ansi16Light
+	}
+	code, ok := table[tok]
+	return code, ok
 }
 
 // sgr builds a 24-bit SGR sequence.
@@ -415,6 +469,17 @@ func HexRGB(hex string) (int, int, int) {
 		return 0, 0, 0
 	}
 	return int(r), int(g), int(b)
+}
+
+// Chroma is the HSL chroma of a color: the distance between its strongest and
+// weakest channel. A nearly grey color has almost none, which is why a muted
+// gray reads as structure while a saturated value reads as data.
+func Chroma(hex string) float64 {
+	r, g, b := HexRGB(hex)
+	rf, gf, bf := float64(r)/255, float64(g)/255, float64(b)/255
+	high := math.Max(rf, math.Max(gf, bf))
+	low := math.Min(rf, math.Min(gf, bf))
+	return high - low
 }
 
 // Contrast returns the WCAG 2.x contrast ratio between two #rrggbb colors.
