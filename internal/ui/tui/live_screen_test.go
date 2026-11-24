@@ -773,8 +773,8 @@ func TestLiveLogColorDoesNotLeakIntoTheTUIChrome(t *testing.T) {
 }
 
 // A hostile log line must not reach the sidebar. Its carriage return, tab and
-// cursor escapes are removed before the line is measured, so the width check
-// sees the cells the terminal draws and the pane keeps its column.
+// cursor escapes become grid state, so the frame keeps its width and the pane
+// keeps its column.
 func TestLiveHostileLineDoesNotCrossTheSidebarColumn(t *testing.T) {
 	hostile := "proj-web-1  | \x1b[2A\x1b[K100%\r90%\tdone\x1b]0;title\x07"
 	live := streamingLogs(t, func(ctx context.Context, in core.Invocation) (any, error) {
@@ -790,8 +790,8 @@ func TestLiveHostileLineDoesNotCrossTheSidebarColumn(t *testing.T) {
 
 	// Every frame row is a fixed width, and a row that overflowed the body
 	// would have moved the sidebar or pushed the line past the terminal. The
-	// hostile line is drawn as its sanitized text, so the sidebar's right
-	// border is at the same column on every body row.
+	// hostile line is drawn as grid cells, so the sidebar's right border is at
+	// the same column on every body row.
 	border := visual.SidebarWidth(120) - 1
 	for i, line := range viewLines(t, m) {
 		if i == 0 || i == len(viewLines(t, m))-1 {

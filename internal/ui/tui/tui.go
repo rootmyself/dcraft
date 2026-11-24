@@ -1150,15 +1150,18 @@ func (m *Model) resetRunState() {
 	m.notice = ""
 	m.helpOpen = false
 	m.confirmScroll = 0
-	m.closeLive()
-	m.closeProgress()
-	m.form = nil
-	m.lastLive = nil
+	// Cancel first: the run's own goroutine may still be writing to the live or
+	// progress stream, and closing a stream before its writer stops would race
+	// the close.
 	if m.runCancel != nil {
 		m.runCancel()
 		m.runCancel = nil
 		m.runCtx = nil
 	}
+	m.closeLive()
+	m.closeProgress()
+	m.form = nil
+	m.lastLive = nil
 	m.events = make(chan core.Stage, 64)
 }
 

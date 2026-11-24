@@ -1744,10 +1744,18 @@ Published for later screens; do not create a second selection model.
   view.
 - The child's grid is the size of the band it is drawn in, not the whole
   terminal: a child sized to the window would draw under dcraft's header and
-  footer. A resize reaches the child through the same `WindowSizeMsg`.
+  footer. `WindowSizeMsg` reflows the grid. The child's own pseudo-terminal keeps
+  the size it was started with: `execx.RunStream` sizes it once and has no
+  `TIOCSWINSZ` path, so a full-screen child that redraws on `SIGWINCH` does not
+  follow a resize yet. That is a known bound, not a promise.
 - `NO_COLOR`, `TERM=dumb` and a non-TTY output keep their no-escape guarantee:
   the grid's cells are painted only when the theme may emit paint, so a child's
-  own colour can never smuggle an escape into a colorless frame.
+  own colour can never smuggle an escape into a colorless frame. The caret is
+  paint too, so a colorless attach shows no visible cursor position.
+- A full-screen child (an editor, a pager, `top`) owns the whole grid: the main
+  screen's scrollback is not drawn above it, and a row painted with a background
+  or reverse video is content, not blank space. Such a child has no scrollback of
+  its own, so the 10000-line history applies to a shell or a log, not to it.
 - A `core.InputProvider` feature opens a generic form (choice and text fields)
   that shows the resolved values before running; `esc` runs nothing, and the
   feature validates the values again through `WithInputs`.

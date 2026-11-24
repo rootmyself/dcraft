@@ -50,10 +50,17 @@ const liveTailRows = 40
 type liveWriter struct {
 	view   *termview.View
 	notify chan struct{}
+	mu     sync.Mutex
+	closed bool
 }
 
 func (w *liveWriter) Write(p []byte) (int, error) {
 	n, err := w.view.Write(p)
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.closed {
+		return n, err
+	}
 	select {
 	case w.notify <- struct{}{}:
 	default:
@@ -61,11 +68,14 @@ func (w *liveWriter) Write(p []byte) (int, error) {
 	return n, err
 }
 
-func (w *liveWriter) flush() {}
-
-// tailLines renders the child's screen for the management view's last-output
-// panel.
-func (w *liveWriter) tailLines() []string { return nil }
+// close stops the writer signalling the render loop. The caller closes the
+// channel after this returns, so no send can follow the close: a feature
+// goroutine may still be writing when its run is cancelled.
+func (w *liveWriter) close() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.closed = true
+}
 
 // setupLive wires a live feature's streams. Both modes get a grid: a log stream
 // and an attached command differ in whether the child reads input, not in how
@@ -76,6 +86,13 @@ func (m *Model) setupLive(f core.Feature) {
 		m.req.IO = core.IO{}
 		return
 	}
+	// The screen state exists before the size is measured: the header block is
+	// part of the row budget and liveHeaderLines reads the screen kind. Measuring
+	// first would size the child's terminal too tall, so a full-screen child would
+	// draw under the header and footer.
+	ch := make(chan struct{}, liveNotifyCapacity)
+	m.liveCh = ch
+	m.live = &liveState{mode: live.LiveMode()}
 	cols, rows := m.liveGridSize()
 	var view *termview.View
 	if live.LiveMode() == core.LiveAttach {
@@ -87,10 +104,9 @@ func (m *Model) setupLive(f core.Feature) {
 		// newlines, so the view applies the terminal driver's rule itself.
 		view = termview.NewPipe(cols, rows)
 	}
-	ch := make(chan struct{}, liveNotifyCapacity)
-	m.liveCh = ch
 	writer := &liveWriter{view: view, notify: ch}
-	m.live = &liveState{mode: live.LiveMode(), view: view, writer: writer}
+	m.live.view = view
+	m.live.writer = writer
 	// A live screen starts at the tail: the newest output is what the reader
 	// came to see. Scrolling up stops following until the bottom is reached.
 	m.liveTop = 0
@@ -127,13 +143,25 @@ func (m *Model) liveGridSize() (cols, rows int) {
 // resizeLive keeps the child's grid the size of the band it is drawn in, so a
 // full-screen child such as an editor fills the band and a resize reaches it.
 func (m *Model) resizeLive() {
-	if m.live == nil || m.live.view == nil {
-		return
+	if m.live != nil && m.live.view != nil {
+		cols, rows := m.liveGridSize()
+		m.live.view.Resize(cols, rows)
+		m.req.IO.Width = cols
+		m.req.IO.Height = rows
 	}
-	cols, rows := m.liveGridSize()
-	m.live.view.Resize(cols, rows)
-	m.req.IO.Width = cols
-	m.req.IO.Height = rows
+	// The running `up` log is a grid too: a resize must reach it or its lines
+	// wrap at the old column count.
+	if m.progress != nil && m.progress.view != nil {
+		cols := m.bodyWidth()
+		if cols < 1 {
+			cols = 80
+		}
+		rows := m.progressLogRows()
+		if rows < 1 {
+			rows = 8
+		}
+		m.progress.view.Resize(cols, rows)
+	}
 }
 
 // closeLive ends the screen: the child's input closes, the grid is released and
@@ -143,31 +171,20 @@ func (m *Model) closeLive() {
 		return
 	}
 	m.live.once.Do(func() {
+		// Stop the writer signalling before the channel closes: a feature
+		// goroutine may still be writing when its run is cancelled.
+		if m.live.writer != nil {
+			m.live.writer.close()
+		}
 		if m.live.view != nil {
 			_ = m.live.view.Close()
+		}
+		if m.liveCh != nil {
+			close(m.liveCh)
 		}
 	})
 	m.live = nil
 	m.liveCh = nil
-}
-
-// liveLines is the grid's rows as one snapshot. Every reader in a layout pass
-// shares one snapshot.
-func (m *Model) liveLines() []termview.Line {
-	if m.live == nil || m.live.view == nil {
-		return nil
-	}
-	return m.live.view.Lines()
-}
-
-func lastLines(lines []string, limit int) []string {
-	if len(lines) == 0 {
-		return nil
-	}
-	if len(lines) > limit {
-		lines = lines[len(lines)-limit:]
-	}
-	return append([]string{}, lines...)
 }
 
 func tailOrKeep(tail, previous []string) []string {
@@ -283,13 +300,17 @@ func (m *Model) captureLiveTail() []string {
 	if m.live == nil || m.live.view == nil {
 		return nil
 	}
-	lines := m.live.view.Lines()
-	if len(lines) > liveTailRows {
-		lines = lines[len(lines)-liveTailRows:]
+	total := m.live.view.Window(0, 0).Total
+	start := total - liveTailRows
+	if start < 0 {
+		start = 0
 	}
+	// Only the tail is needed, so only the tail is read: the scrollback can hold
+	// thousands of rows the panel will never show.
+	win := m.live.view.Window(start, total)
 	palette := m.livePalette()
-	out := make([]string, 0, len(lines))
-	for _, line := range lines {
+	out := make([]string, 0, len(win.Rows))
+	for _, line := range win.Rows {
 		if text := termview.Paint(line.Cells, palette); text != "" {
 			out = append(out, text)
 		}
@@ -386,29 +407,32 @@ func (m *Model) liveBandRows() int {
 	return available
 }
 
-// liveNeedsPositionRow reports whether the position row is shown. It appears
-// when the output overflows the band, which is the only fact about position the
-// reader cannot see in the band alone.
-func (m *Model) liveNeedsPositionRow() bool {
-	return m.liveViewport().Overflow()
-}
-
 // liveViewport is the output window: the band, minus the position row when it is
 // shown. Following is applied last so the window reaches the final line instead
 // of stopping one short.
 func (m *Model) liveViewport() visual.Viewport {
-	return m.liveViewportOf(m.liveLines())
-}
-
-// liveViewportOf is the one window computation over a given snapshot. The layout
-// pass takes the snapshot once, so the counter, the drawn rows and the keys can
-// never describe two different moments: a child writing between two calls would
-// otherwise make the total disagree with the rows.
-func (m *Model) liveViewportOf(all []termview.Line) visual.Viewport {
 	if m.live == nil || m.live.view == nil {
 		return visual.Viewport{}
 	}
-	total := len(all)
+	return m.liveViewportOf(m.liveRowCount())
+}
+
+// liveRowCount is how many rows the grid holds, read without materialising them
+// so a key handler that only needs the window never pays for the rows.
+func (m *Model) liveRowCount() int {
+	if m.live == nil || m.live.view == nil {
+		return 0
+	}
+	return m.live.view.Window(0, 0).Total
+}
+
+// liveViewportOf is the one window computation over a given total. The layout
+// pass reads the total once and draws a window of the same grid, so the counter,
+// the drawn rows and the keys cannot describe different moments.
+func (m *Model) liveViewportOf(total int) visual.Viewport {
+	if m.live == nil || m.live.view == nil {
+		return visual.Viewport{}
+	}
 	height := m.liveBandRows()
 	if height <= 0 {
 		// Unknown size: nothing is off screen yet, and the next WindowSizeMsg
@@ -469,8 +493,7 @@ func (m *Model) livePositionRow(v visual.Viewport) string {
 // output: it is the last thing before the keys, where a status line belongs, and
 // a short screen leaves it in the same place instead of floating mid-screen.
 func (m *Model) liveLayout() bodyLayout {
-	all := m.liveLines()
-	vp := m.liveViewportOf(all)
+	vp := m.liveViewportOf(m.liveRowCount())
 	header := m.liveHeaderLines()
 	notice := m.liveNoticeLines()
 	position := m.livePositionRow(vp)
@@ -487,7 +510,7 @@ func (m *Model) liveLayout() bodyLayout {
 	lines = append(lines, header...)
 	lines = append(lines, "")
 
-	lines = append(lines, m.liveOutputRows(all, vp)...)
+	lines = append(lines, m.liveOutputRows(vp)...)
 
 	if position != "" {
 		// Pad the gap so the position and the notice are the final body rows.
@@ -510,33 +533,27 @@ func (m *Model) liveLayout() bodyLayout {
 // painted into the cell it sits on when the child still shows it, so the reader
 // can see where typing will land; a full-screen child that hides it keeps its
 // own highlight.
-func (m *Model) liveOutputRows(all []termview.Line, vp visual.Viewport) []string {
+func (m *Model) liveOutputRows(vp visual.Viewport) []string {
 	if m.live == nil || m.live.view == nil {
 		return nil
 	}
 	start, end := vp.Window()
-	if start > len(all) {
-		start = len(all)
-	}
-	if end > len(all) {
-		end = len(all)
-	}
+	// One snapshot carries the rows and the caret, so a write cannot move the
+	// caret onto a row from a different moment than the cells drawn.
+	win := m.live.view.Window(start, end)
 	palette := m.livePalette()
-	// Only an attached command has a caret: a log stream takes no input.
+	// Only an attached command has a caret, and only a painted screen can show
+	// one: the inversion is an escape, and NO_COLOR promises none.
 	cursorLine, cursorX := -1, 0
 	if m.live.mode == core.LiveAttach && palette != nil {
-		cursorLine = m.live.view.CursorLine()
-		if cursorLine >= 0 {
-			pos, _ := m.live.view.Cursor()
-			cursorX = pos.X
-		}
+		cursorLine, cursorX = win.CursorRow, win.CursorX
 	}
 
 	width := m.bodyWidth()
-	out := make([]string, 0, end-start)
-	for i := start; i < end; i++ {
-		cells := all[i].Cells
-		if i == cursorLine {
+	out := make([]string, 0, len(win.Rows))
+	for i, line := range win.Rows {
+		cells := line.Cells
+		if start+i == cursorLine {
 			cells = withCursorAt(cells, cursorX)
 		}
 		row := termview.Paint(cells, palette)
@@ -565,16 +582,17 @@ func (m *Model) liveOutputRows(all []termview.Line, vp visual.Viewport) []string
 // lands. A colorless terminal never reaches here: the inversion is an escape
 // sequence, and NO_COLOR promises none.
 func withCursorAt(cells []termview.Cell, x int) []termview.Cell {
+	// A wide rune owns a cell plus a placeholder that draws nothing. Inverting
+	// the placeholder would have to materialise a space, making the row one cell
+	// wider than the grid, so the caret belongs on the rune.
+	if x > 0 && x < len(cells) && cells[x].Width == 0 {
+		x--
+	}
 	if x < 0 || x >= len(cells) {
 		return cells
 	}
 	out := append([]termview.Cell{}, cells...)
 	out[x].Color.Attrs ^= termview.AttrReverse
-	if out[x].Width == 0 {
-		// The placeholder after a wide rune draws nothing; the cursor still
-		// needs a cell to sit on.
-		out[x] = termview.Cell{Content: " ", Width: 1, Color: out[x].Color}
-	}
 	return out
 }
 

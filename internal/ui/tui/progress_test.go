@@ -184,9 +184,6 @@ func TestProgressLogKeepsLongOutputReachable(t *testing.T) {
 	m, _, _ := startProgressModel(t, lines, "line-449")
 
 	view := m.View()
-	if strings.Contains(view, fmt.Sprintf(msgLiveDropped, 450)) {
-		t.Fatalf("a dropped-line notice appeared although nothing is dropped:\n%s", view)
-	}
 	if !strings.Contains(view, "line-449") {
 		t.Fatalf("the tail is not visible:\n%s", view)
 	}

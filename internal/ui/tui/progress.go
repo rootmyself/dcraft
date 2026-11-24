@@ -42,6 +42,15 @@ func (m *Model) setupProgress() {
 	m.req.IO.Progress = writer
 }
 
+// progressFixedRows is the chrome the running log screen spends before the log:
+// the optional navigation row, the title block (which already counts its blank
+// separator) and the heading. It is stated once so the rows the grid is sized
+// to, the window the geometry computes and the rows the body draws cannot
+// disagree.
+func (m *Model) progressFixedRows() int {
+	return m.navRowCount() + m.titleRows() + 1 // heading
+}
+
 // progressLogRows is the row count the running screen gives the log viewport,
 // before a WindowSizeMsg has settled the geometry.
 func (m *Model) progressLogRows() int {
@@ -49,8 +58,7 @@ func (m *Model) progressLogRows() int {
 	if budget <= 0 {
 		return 0
 	}
-	fixed := m.navRowCount() + m.titleRows() + 1
-	return budget - fixed
+	return budget - m.progressFixedRows()
 }
 
 // closeProgress closes the delivery channel and drops the log. A completed run
@@ -63,6 +71,11 @@ func (m *Model) closeProgress() {
 	}
 	if m.progress.view != nil {
 		_ = m.progress.view.Close()
+	}
+	// Stop the writer signalling before the channel closes: a feature goroutine
+	// may still be writing when its run is cancelled.
+	if m.progress.writer != nil {
+		m.progress.writer.close()
 	}
 	close(m.progressCh)
 	m.progress = nil
@@ -86,7 +99,7 @@ func (m *Model) progressGeometry() progressLayout {
 	if m.progress == nil || m.progress.view == nil {
 		return progressLayout{}
 	}
-	total := len(m.progress.view.Lines())
+	total := m.progress.view.Window(0, 0).Total
 	if total == 0 {
 		return progressLayout{}
 	}
@@ -94,8 +107,7 @@ func (m *Model) progressGeometry() progressLayout {
 	if budget <= 0 {
 		return progressLayout{}
 	}
-	fixed := m.navRowCount() + m.titleRows() + 1 // heading
-	available := budget - fixed
+	available := budget - m.progressFixedRows()
 	if available < 1 {
 		available = 1
 	}
@@ -137,15 +149,11 @@ func (m *Model) progressBody() (bodyLayout, bool) {
 	lines = append(lines, m.progressHeading(msgWorking))
 	lines = append(lines, lay.timeline...)
 	start, end := lay.viewport.Window()
-	all := m.progress.view.Lines()
-	if start > len(all) {
-		start = len(all)
-	}
-	if end > len(all) {
-		end = len(all)
-	}
+	// Read only the rows this window draws, from one snapshot: the geometry's
+	// total and the drawn rows then describe the same moment.
+	win := m.progress.view.Window(start, end)
 	palette := m.livePalette()
-	for _, line := range all[start:end] {
+	for _, line := range win.Rows {
 		lines = append(lines, termview.Paint(line.Cells, palette))
 	}
 	m.progressTop = lay.viewport.Top

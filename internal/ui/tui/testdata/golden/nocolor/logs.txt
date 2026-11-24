@@ -20,7 +20,7 @@ api-1  | 2026-11-20T09:14:46.322Z INFO
 api-1  | 2026-11-20T09:14:47.329Z INFO
 api-1  | 2026-11-20T09:14:48.336Z INFO
 api-1  | 2026-11-20T09:14:49.343Z INFO █
-43-50/50                 PgUp/PgDn · g/G
+54-61/61                 PgUp/PgDn · g/G
 [q] 화면 닫기  [ctrl+c] 중단
 
 === 40x30 ===
@@ -32,27 +32,27 @@ api-1  | 2026-11-20T09:14:49.343Z INFO █
 인스턴스: 전체
 명령: logs
 
-api-1  | 2026-11-20T09:14:30.210Z INFO…
-api-1  | 2026-11-20T09:14:31.217Z INFO…
-api-1  | 2026-11-20T09:14:32.224Z INFO…
-api-1  | 2026-11-20T09:14:33.231Z INFO…
-api-1  | 2026-11-20T09:14:34.238Z INFO…
-api-1  | 2026-11-20T09:14:35.245Z INFO…
-api-1  | 2026-11-20T09:14:36.252Z INFO…
-api-1  | 2026-11-20T09:14:37.259Z INFO…
-api-1  | 2026-11-20T09:14:38.266Z INFO…
-api-1  | 2026-11-20T09:14:39.273Z INFO…
-api-1  | 2026-11-20T09:14:40.280Z INFO…
+api-1  | 2026-11-20T09:14:41.287Z INFO…
+api-1  | 2026-11-20T09:14:42.294Z INFO…
+api-1  | 2026-11-20T09:14:43.301Z INFO…
+api-1  | 2026-11-20T09:14:44.308Z INFO…
+api-1  | 2026-11-20T09:14:45.315Z INFO…
+api-1  | 2026-11-20T09:14:46.322Z INFO…
+api-1  | 2026-11-20T09:14:47.329Z INFO…
+api-1  | 2026-11-20T09:14:48.336Z INFO…
+api-1  | 2026-11-20T09:14:49.343Z INFO…
+api-1  | 2026-11-20T09:14:50.350Z INFO…
+api-1  | 2026-11-20T09:14:51.357Z INFO…
 api-1  | 2026-11-20T09:14:41.287Z INFO
-api-1  | 2026-11-20T09:14:42.294Z INFO █
-api-1  | 2026-11-20T09:14:43.301Z INFO █
+api-1  | 2026-11-20T09:14:42.294Z INFO
+api-1  | 2026-11-20T09:14:43.301Z INFO
 api-1  | 2026-11-20T09:14:44.308Z INFO █
 api-1  | 2026-11-20T09:14:45.315Z INFO █
 api-1  | 2026-11-20T09:14:46.322Z INFO █
 api-1  | 2026-11-20T09:14:47.329Z INFO █
 api-1  | 2026-11-20T09:14:48.336Z INFO █
 api-1  | 2026-11-20T09:14:49.343Z INFO █
-31-50/50                 PgUp/PgDn · g/G
+42-61/61                 PgUp/PgDn · g/G
 [q] 화면 닫기  [ctrl+c] 중단
 
 === 40x50 ===
@@ -64,37 +64,37 @@ api-1  | 2026-11-20T09:14:49.343Z INFO █
 인스턴스: 전체
 명령: logs
 
-api-1  | 2026-11-20T09:14:10.070Z INFO…
-api-1  | 2026-11-20T09:14:11.077Z INFO…
-api-1  | 2026-11-20T09:14:12.084Z INFO…
-api-1  | 2026-11-20T09:14:13.091Z INFO…
-api-1  | 2026-11-20T09:14:14.098Z INFO…
-api-1  | 2026-11-20T09:14:15.105Z INFO…
-api-1  | 2026-11-20T09:14:16.112Z INFO…
-api-1  | 2026-11-20T09:14:17.119Z INFO…
-api-1  | 2026-11-20T09:14:18.126Z INFO…█
-api-1  | 2026-11-20T09:14:19.133Z INFO…█
-api-1  | 2026-11-20T09:14:20.140Z INFO…█
-api-1  | 2026-11-20T09:14:21.147Z INFO…█
-api-1  | 2026-11-20T09:14:22.154Z INFO…█
-api-1  | 2026-11-20T09:14:23.161Z INFO…█
-api-1  | 2026-11-20T09:14:24.168Z INFO…█
-api-1  | 2026-11-20T09:14:25.175Z INFO…█
-api-1  | 2026-11-20T09:14:26.182Z INFO…█
-api-1  | 2026-11-20T09:14:27.189Z INFO…█
-api-1  | 2026-11-20T09:14:28.196Z INFO…█
-api-1  | 2026-11-20T09:14:29.203Z INFO…█
-api-1  | 2026-11-20T09:14:30.210Z INFO…█
-api-1  | 2026-11-20T09:14:31.217Z INFO…█
-api-1  | 2026-11-20T09:14:32.224Z INFO…█
-api-1  | 2026-11-20T09:14:33.231Z INFO…█
-api-1  | 2026-11-20T09:14:34.238Z INFO…█
+api-1  | 2026-11-20T09:14:21.147Z INFO…
+api-1  | 2026-11-20T09:14:22.154Z INFO…
+api-1  | 2026-11-20T09:14:23.161Z INFO…
+api-1  | 2026-11-20T09:14:24.168Z INFO…
+api-1  | 2026-11-20T09:14:25.175Z INFO…
+api-1  | 2026-11-20T09:14:26.182Z INFO…
+api-1  | 2026-11-20T09:14:27.189Z INFO…
+api-1  | 2026-11-20T09:14:28.196Z INFO…
+api-1  | 2026-11-20T09:14:29.203Z INFO…
+api-1  | 2026-11-20T09:14:30.210Z INFO…
+api-1  | 2026-11-20T09:14:31.217Z INFO…
+api-1  | 2026-11-20T09:14:32.224Z INFO…
+api-1  | 2026-11-20T09:14:33.231Z INFO…
+api-1  | 2026-11-20T09:14:34.238Z INFO…
 api-1  | 2026-11-20T09:14:35.245Z INFO…█
 api-1  | 2026-11-20T09:14:36.252Z INFO…█
 api-1  | 2026-11-20T09:14:37.259Z INFO…█
 api-1  | 2026-11-20T09:14:38.266Z INFO…█
 api-1  | 2026-11-20T09:14:39.273Z INFO…█
 api-1  | 2026-11-20T09:14:40.280Z INFO…█
+api-1  | 2026-11-20T09:14:41.287Z INFO…█
+api-1  | 2026-11-20T09:14:42.294Z INFO…█
+api-1  | 2026-11-20T09:14:43.301Z INFO…█
+api-1  | 2026-11-20T09:14:44.308Z INFO…█
+api-1  | 2026-11-20T09:14:45.315Z INFO…█
+api-1  | 2026-11-20T09:14:46.322Z INFO…█
+api-1  | 2026-11-20T09:14:47.329Z INFO…█
+api-1  | 2026-11-20T09:14:48.336Z INFO…█
+api-1  | 2026-11-20T09:14:49.343Z INFO…█
+api-1  | 2026-11-20T09:14:50.350Z INFO…█
+api-1  | 2026-11-20T09:14:51.357Z INFO…█
 api-1  | 2026-11-20T09:14:41.287Z INFO █
 api-1  | 2026-11-20T09:14:42.294Z INFO █
 api-1  | 2026-11-20T09:14:43.301Z INFO █
@@ -104,7 +104,7 @@ api-1  | 2026-11-20T09:14:46.322Z INFO █
 api-1  | 2026-11-20T09:14:47.329Z INFO █
 api-1  | 2026-11-20T09:14:48.336Z INFO █
 api-1  | 2026-11-20T09:14:49.343Z INFO █
-11-50/50                 PgUp/PgDn · g/G
+22-61/61                 PgUp/PgDn · g/G
 [q] 화면 닫기  [ctrl+c] 중단
 
 === 80x18 ===
@@ -124,10 +124,42 @@ api-1  | 2026-11-20T09:14:46.322Z INFO
 api-1  | 2026-11-20T09:14:47.329Z INFO
 api-1  | 2026-11-20T09:14:48.336Z INFO
 api-1  | 2026-11-20T09:14:49.343Z INFO                                         █
-43-50/50                                                         PgUp/PgDn · g/G
+63-70/70                                                         PgUp/PgDn · g/G
 [q] 화면 닫기  [ctrl+c] 중단  [PgUp/PgDn] 스크롤  [g/G] 처음/끝  [?] 도움말
 
 === 80x30 ===
+ dcraft · acme-platform · staging        Docker 29.10.0 · Compose 2.39.1 · 로컬
+로그 보기
+
+실시간 로그 (서비스는 계속 실행 중)
+서비스: 스택 전체
+인스턴스: 전체
+명령: logs
+
+api-1  | 2026-11-20T09:14:50.350Z INFO  request completed method=GET path=/v1/…
+api-1  | 2026-11-20T09:14:51.357Z INFO  request completed method=GET path=/v1/…
+api-1  | 2026-11-20T09:14:41.287Z INFO
+api-1  | 2026-11-20T09:14:42.294Z INFO
+api-1  | 2026-11-20T09:14:43.301Z INFO
+api-1  | 2026-11-20T09:14:44.308Z INFO
+api-1  | 2026-11-20T09:14:45.315Z INFO
+api-1  | 2026-11-20T09:14:46.322Z INFO
+api-1  | 2026-11-20T09:14:47.329Z INFO
+api-1  | 2026-11-20T09:14:48.336Z INFO
+api-1  | 2026-11-20T09:14:49.343Z INFO
+api-1  | 2026-11-20T09:14:41.287Z INFO
+api-1  | 2026-11-20T09:14:42.294Z INFO
+api-1  | 2026-11-20T09:14:43.301Z INFO
+api-1  | 2026-11-20T09:14:44.308Z INFO
+api-1  | 2026-11-20T09:14:45.315Z INFO                                         █
+api-1  | 2026-11-20T09:14:46.322Z INFO                                         █
+api-1  | 2026-11-20T09:14:47.329Z INFO                                         █
+api-1  | 2026-11-20T09:14:48.336Z INFO                                         █
+api-1  | 2026-11-20T09:14:49.343Z INFO                                         █
+51-70/70                                                         PgUp/PgDn · g/G
+[q] 화면 닫기  [ctrl+c] 중단  [PgUp/PgDn] 스크롤  [g/G] 처음/끝  [?] 도움말
+
+=== 80x50 ===
  dcraft · acme-platform · staging        Docker 29.10.0 · Compose 2.39.1 · 로컬
 로그 보기
 
@@ -147,58 +179,17 @@ api-1  | 2026-11-20T09:14:37.259Z INFO  request completed method=GET path=/v1/�
 api-1  | 2026-11-20T09:14:38.266Z INFO  request completed method=GET path=/v1/…
 api-1  | 2026-11-20T09:14:39.273Z INFO  request completed method=GET path=/v1/…
 api-1  | 2026-11-20T09:14:40.280Z INFO  request completed method=GET path=/v1/…
-api-1  | 2026-11-20T09:14:41.287Z INFO
-api-1  | 2026-11-20T09:14:42.294Z INFO                                         █
-api-1  | 2026-11-20T09:14:43.301Z INFO                                         █
-api-1  | 2026-11-20T09:14:44.308Z INFO                                         █
-api-1  | 2026-11-20T09:14:45.315Z INFO                                         █
-api-1  | 2026-11-20T09:14:46.322Z INFO                                         █
-api-1  | 2026-11-20T09:14:47.329Z INFO                                         █
-api-1  | 2026-11-20T09:14:48.336Z INFO                                         █
-api-1  | 2026-11-20T09:14:49.343Z INFO                                         █
-31-50/50                                                         PgUp/PgDn · g/G
-[q] 화면 닫기  [ctrl+c] 중단  [PgUp/PgDn] 스크롤  [g/G] 처음/끝  [?] 도움말
-
-=== 80x50 ===
- dcraft · acme-platform · staging        Docker 29.10.0 · Compose 2.39.1 · 로컬
-로그 보기
-
-실시간 로그 (서비스는 계속 실행 중)
-서비스: 스택 전체
-인스턴스: 전체
-명령: logs
-
-api-1  | 2026-11-20T09:14:10.070Z INFO  request completed method=GET path=/v1/…
-api-1  | 2026-11-20T09:14:11.077Z INFO  request completed method=GET path=/v1/…
-api-1  | 2026-11-20T09:14:12.084Z INFO  request completed method=GET path=/v1/…
-api-1  | 2026-11-20T09:14:13.091Z INFO  request completed method=GET path=/v1/…
-api-1  | 2026-11-20T09:14:14.098Z INFO  request completed method=GET path=/v1/…
-api-1  | 2026-11-20T09:14:15.105Z INFO  request completed method=GET path=/v1/…
-api-1  | 2026-11-20T09:14:16.112Z INFO  request completed method=GET path=/v1/…
-api-1  | 2026-11-20T09:14:17.119Z INFO  request completed method=GET path=/v1/…
-api-1  | 2026-11-20T09:14:18.126Z INFO  request completed method=GET path=/v1/…█
-api-1  | 2026-11-20T09:14:19.133Z INFO  request completed method=GET path=/v1/…█
-api-1  | 2026-11-20T09:14:20.140Z INFO  request completed method=GET path=/v1/…█
-api-1  | 2026-11-20T09:14:21.147Z INFO  request completed method=GET path=/v1/…█
-api-1  | 2026-11-20T09:14:22.154Z INFO  request completed method=GET path=/v1/…█
-api-1  | 2026-11-20T09:14:23.161Z INFO  request completed method=GET path=/v1/…█
-api-1  | 2026-11-20T09:14:24.168Z INFO  request completed method=GET path=/v1/…█
-api-1  | 2026-11-20T09:14:25.175Z INFO  request completed method=GET path=/v1/…█
-api-1  | 2026-11-20T09:14:26.182Z INFO  request completed method=GET path=/v1/…█
-api-1  | 2026-11-20T09:14:27.189Z INFO  request completed method=GET path=/v1/…█
-api-1  | 2026-11-20T09:14:28.196Z INFO  request completed method=GET path=/v1/…█
-api-1  | 2026-11-20T09:14:29.203Z INFO  request completed method=GET path=/v1/…█
-api-1  | 2026-11-20T09:14:30.210Z INFO  request completed method=GET path=/v1/…█
-api-1  | 2026-11-20T09:14:31.217Z INFO  request completed method=GET path=/v1/…█
-api-1  | 2026-11-20T09:14:32.224Z INFO  request completed method=GET path=/v1/…█
-api-1  | 2026-11-20T09:14:33.231Z INFO  request completed method=GET path=/v1/…█
-api-1  | 2026-11-20T09:14:34.238Z INFO  request completed method=GET path=/v1/…█
-api-1  | 2026-11-20T09:14:35.245Z INFO  request completed method=GET path=/v1/…█
-api-1  | 2026-11-20T09:14:36.252Z INFO  request completed method=GET path=/v1/…█
-api-1  | 2026-11-20T09:14:37.259Z INFO  request completed method=GET path=/v1/…█
-api-1  | 2026-11-20T09:14:38.266Z INFO  request completed method=GET path=/v1/…█
-api-1  | 2026-11-20T09:14:39.273Z INFO  request completed method=GET path=/v1/…█
-api-1  | 2026-11-20T09:14:40.280Z INFO  request completed method=GET path=/v1/…█
+api-1  | 2026-11-20T09:14:41.287Z INFO  request completed method=GET path=/v1/…
+api-1  | 2026-11-20T09:14:42.294Z INFO  request completed method=GET path=/v1/…
+api-1  | 2026-11-20T09:14:43.301Z INFO  request completed method=GET path=/v1/…
+api-1  | 2026-11-20T09:14:44.308Z INFO  request completed method=GET path=/v1/…
+api-1  | 2026-11-20T09:14:45.315Z INFO  request completed method=GET path=/v1/…
+api-1  | 2026-11-20T09:14:46.322Z INFO  request completed method=GET path=/v1/…
+api-1  | 2026-11-20T09:14:47.329Z INFO  request completed method=GET path=/v1/…
+api-1  | 2026-11-20T09:14:48.336Z INFO  request completed method=GET path=/v1/…█
+api-1  | 2026-11-20T09:14:49.343Z INFO  request completed method=GET path=/v1/…█
+api-1  | 2026-11-20T09:14:50.350Z INFO  request completed method=GET path=/v1/…█
+api-1  | 2026-11-20T09:14:51.357Z INFO  request completed method=GET path=/v1/…█
 api-1  | 2026-11-20T09:14:41.287Z INFO                                         █
 api-1  | 2026-11-20T09:14:42.294Z INFO                                         █
 api-1  | 2026-11-20T09:14:43.301Z INFO                                         █
@@ -208,7 +199,16 @@ api-1  | 2026-11-20T09:14:46.322Z INFO                                         �
 api-1  | 2026-11-20T09:14:47.329Z INFO                                         █
 api-1  | 2026-11-20T09:14:48.336Z INFO                                         █
 api-1  | 2026-11-20T09:14:49.343Z INFO                                         █
-11-50/50                                                         PgUp/PgDn · g/G
+api-1  | 2026-11-20T09:14:41.287Z INFO                                         █
+api-1  | 2026-11-20T09:14:42.294Z INFO                                         █
+api-1  | 2026-11-20T09:14:43.301Z INFO                                         █
+api-1  | 2026-11-20T09:14:44.308Z INFO                                         █
+api-1  | 2026-11-20T09:14:45.315Z INFO                                         █
+api-1  | 2026-11-20T09:14:46.322Z INFO                                         █
+api-1  | 2026-11-20T09:14:47.329Z INFO                                         █
+api-1  | 2026-11-20T09:14:48.336Z INFO                                         █
+api-1  | 2026-11-20T09:14:49.343Z INFO                                         █
+31-70/70                                                         PgUp/PgDn · g/G
 [q] 화면 닫기  [ctrl+c] 중단  [PgUp/PgDn] 스크롤  [g/G] 처음/끝  [?] 도움말
 
 === 120x18 ===
@@ -228,7 +228,7 @@ api-1  | 2026-11-20T09:14:49.343Z INFO                                         �
 │                        │ api-1  | 2026-11-20T09:14:47.329Z INFO
 │데이터                  │ api-1  | 2026-11-20T09:14:48.336Z INFO
 │  데이터 백업           │ api-1  | 2026-11-20T09:14:49.343Z INFO                                                      █
-╰────────────────────────╯ 43-50/50                                                                      PgUp/PgDn · g/G
+╰────────────────────────╯ 72-79/79                                                                      PgUp/PgDn · g/G
 [q] 화면 닫기  [ctrl+c] 중단  [PgUp/PgDn] 스크롤  [g/G] 처음/끝  [?] 도움말
 
 === 120x30 ===
@@ -240,27 +240,27 @@ api-1  | 2026-11-20T09:14:49.343Z INFO                                         �
 │▸ 스택 상태             │ 인스턴스: 전체
 │                        │ 명령: logs
 │운영                    │
-│  스택 제거 ▲ 위험      │ api-1  | 2026-11-20T09:14:30.210Z INFO  request completed method=GET path=/v1/health status…
-│  스택 재시작           │ api-1  | 2026-11-20T09:14:31.217Z INFO  request completed method=GET path=/v1/health status…
-│  스택 중지             │ api-1  | 2026-11-20T09:14:32.224Z INFO  request completed method=GET path=/v1/health status…
-│  스택 시작             │ api-1  | 2026-11-20T09:14:33.231Z INFO  request completed method=GET path=/v1/health status…
-│  갱신                  │ api-1  | 2026-11-20T09:14:34.238Z INFO  request completed method=GET path=/v1/health status…
-│                        │ api-1  | 2026-11-20T09:14:35.245Z INFO  request completed method=GET path=/v1/health status…
-│데이터                  │ api-1  | 2026-11-20T09:14:36.252Z INFO  request completed method=GET path=/v1/health status…
-│  데이터 백업           │ api-1  | 2026-11-20T09:14:37.259Z INFO  request completed method=GET path=/v1/health status…
-│  데이터 복원 ▲ 위험    │ api-1  | 2026-11-20T09:14:38.266Z INFO  request completed method=GET path=/v1/health status…
-│  이전 버전 복… ▲ 위험  │ api-1  | 2026-11-20T09:14:39.273Z INFO  request completed method=GET path=/v1/health status…
-│                        │ api-1  | 2026-11-20T09:14:40.280Z INFO  request completed method=GET path=/v1/health status…
+│  스택 제거 ▲ 위험      │ api-1  | 2026-11-20T09:14:48.336Z INFO
+│  스택 재시작           │ api-1  | 2026-11-20T09:14:49.343Z INFO
+│  스택 중지             │ api-1  | 2026-11-20T09:14:41.287Z INFO
+│  스택 시작             │ api-1  | 2026-11-20T09:14:42.294Z INFO
+│  갱신                  │ api-1  | 2026-11-20T09:14:43.301Z INFO
+│                        │ api-1  | 2026-11-20T09:14:44.308Z INFO
+│데이터                  │ api-1  | 2026-11-20T09:14:45.315Z INFO
+│  데이터 백업           │ api-1  | 2026-11-20T09:14:46.322Z INFO
+│  데이터 복원 ▲ 위험    │ api-1  | 2026-11-20T09:14:47.329Z INFO
+│  이전 버전 복… ▲ 위험  │ api-1  | 2026-11-20T09:14:48.336Z INFO
+│                        │ api-1  | 2026-11-20T09:14:49.343Z INFO
 │설정                    │ api-1  | 2026-11-20T09:14:41.287Z INFO
-│  실행환경 별칭         │ api-1  | 2026-11-20T09:14:42.294Z INFO                                                      █
-│  Git 호스트 스크립트…  │ api-1  | 2026-11-20T09:14:43.301Z INFO                                                      █
-│  호스트 스크립트       │ api-1  | 2026-11-20T09:14:44.308Z INFO                                                      █
+│  실행환경 별칭         │ api-1  | 2026-11-20T09:14:42.294Z INFO
+│  Git 호스트 스크립트…  │ api-1  | 2026-11-20T09:14:43.301Z INFO
+│  호스트 스크립트       │ api-1  | 2026-11-20T09:14:44.308Z INFO
 │  Compose 설치          │ api-1  | 2026-11-20T09:14:45.315Z INFO                                                      █
 │  S3 호스트 스크립트 …  │ api-1  | 2026-11-20T09:14:46.322Z INFO                                                      █
 │────────────────────────│ api-1  | 2026-11-20T09:14:47.329Z INFO                                                      █
 │ ▸ 스택 상태            │ api-1  | 2026-11-20T09:14:48.336Z INFO                                                      █
 │ 현재 스택과 서비스 상  │ api-1  | 2026-11-20T09:14:49.343Z INFO                                                      █
-╰────────────────────────╯ 31-50/50                                                                      PgUp/PgDn · g/G
+╰────────────────────────╯ 60-79/79                                                                      PgUp/PgDn · g/G
 [q] 화면 닫기  [ctrl+c] 중단  [PgUp/PgDn] 스크롤  [g/G] 처음/끝  [?] 도움말
 
 === 120x50 ===
@@ -272,37 +272,37 @@ api-1  | 2026-11-20T09:14:49.343Z INFO                                         �
 │▸ 스택 상태             │ 인스턴스: 전체
 │                        │ 명령: logs
 │운영                    │
-│  스택 제거 ▲ 위험      │ api-1  | 2026-11-20T09:14:10.070Z INFO  request completed method=GET path=/v1/health status…
-│  스택 재시작           │ api-1  | 2026-11-20T09:14:11.077Z INFO  request completed method=GET path=/v1/health status…
-│  스택 중지             │ api-1  | 2026-11-20T09:14:12.084Z INFO  request completed method=GET path=/v1/health status…
-│  스택 시작             │ api-1  | 2026-11-20T09:14:13.091Z INFO  request completed method=GET path=/v1/health status…
-│  갱신                  │ api-1  | 2026-11-20T09:14:14.098Z INFO  request completed method=GET path=/v1/health status…
-│                        │ api-1  | 2026-11-20T09:14:15.105Z INFO  request completed method=GET path=/v1/health status…
-│데이터                  │ api-1  | 2026-11-20T09:14:16.112Z INFO  request completed method=GET path=/v1/health status…
-│  데이터 백업           │ api-1  | 2026-11-20T09:14:17.119Z INFO  request completed method=GET path=/v1/health status…
-│  데이터 복원 ▲ 위험    │ api-1  | 2026-11-20T09:14:18.126Z INFO  request completed method=GET path=/v1/health status…█
-│  이전 버전 복… ▲ 위험  │ api-1  | 2026-11-20T09:14:19.133Z INFO  request completed method=GET path=/v1/health status…█
-│                        │ api-1  | 2026-11-20T09:14:20.140Z INFO  request completed method=GET path=/v1/health status…█
-│설정                    │ api-1  | 2026-11-20T09:14:21.147Z INFO  request completed method=GET path=/v1/health status…█
-│  실행환경 별칭         │ api-1  | 2026-11-20T09:14:22.154Z INFO  request completed method=GET path=/v1/health status…█
-│  Git 호스트 스크립트…  │ api-1  | 2026-11-20T09:14:23.161Z INFO  request completed method=GET path=/v1/health status…█
-│  호스트 스크립트       │ api-1  | 2026-11-20T09:14:24.168Z INFO  request completed method=GET path=/v1/health status…█
-│  Compose 설치          │ api-1  | 2026-11-20T09:14:25.175Z INFO  request completed method=GET path=/v1/health status…█
-│  S3 호스트 스크립트 …  │ api-1  | 2026-11-20T09:14:26.182Z INFO  request completed method=GET path=/v1/health status…█
-│  비밀값 연결           │ api-1  | 2026-11-20T09:14:27.189Z INFO  request completed method=GET path=/v1/health status…█
-│  최초 구성             │ api-1  | 2026-11-20T09:14:28.196Z INFO  request completed method=GET path=/v1/health status…█
-│                        │ api-1  | 2026-11-20T09:14:29.203Z INFO  request completed method=GET path=/v1/health status…█
-│                        │ api-1  | 2026-11-20T09:14:30.210Z INFO  request completed method=GET path=/v1/health status…█
-│                        │ api-1  | 2026-11-20T09:14:31.217Z INFO  request completed method=GET path=/v1/health status…█
-│                        │ api-1  | 2026-11-20T09:14:32.224Z INFO  request completed method=GET path=/v1/health status…█
-│                        │ api-1  | 2026-11-20T09:14:33.231Z INFO  request completed method=GET path=/v1/health status…█
-│                        │ api-1  | 2026-11-20T09:14:34.238Z INFO  request completed method=GET path=/v1/health status…█
-│                        │ api-1  | 2026-11-20T09:14:35.245Z INFO  request completed method=GET path=/v1/health status…█
-│                        │ api-1  | 2026-11-20T09:14:36.252Z INFO  request completed method=GET path=/v1/health status…█
-│                        │ api-1  | 2026-11-20T09:14:37.259Z INFO  request completed method=GET path=/v1/health status…█
-│                        │ api-1  | 2026-11-20T09:14:38.266Z INFO  request completed method=GET path=/v1/health status…█
-│                        │ api-1  | 2026-11-20T09:14:39.273Z INFO  request completed method=GET path=/v1/health status…█
-│                        │ api-1  | 2026-11-20T09:14:40.280Z INFO  request completed method=GET path=/v1/health status…█
+│  스택 제거 ▲ 위험      │ api-1  | 2026-11-20T09:14:39.273Z INFO  request completed method=GET path=/v1/health status…
+│  스택 재시작           │ api-1  | 2026-11-20T09:14:40.280Z INFO  request completed method=GET path=/v1/health status…
+│  스택 중지             │ api-1  | 2026-11-20T09:14:41.287Z INFO  request completed method=GET path=/v1/health status…
+│  스택 시작             │ api-1  | 2026-11-20T09:14:42.294Z INFO  request completed method=GET path=/v1/health status…
+│  갱신                  │ api-1  | 2026-11-20T09:14:43.301Z INFO  request completed method=GET path=/v1/health status…
+│                        │ api-1  | 2026-11-20T09:14:44.308Z INFO  request completed method=GET path=/v1/health status…
+│데이터                  │ api-1  | 2026-11-20T09:14:45.315Z INFO  request completed method=GET path=/v1/health status…
+│  데이터 백업           │ api-1  | 2026-11-20T09:14:46.322Z INFO  request completed method=GET path=/v1/health status…
+│  데이터 복원 ▲ 위험    │ api-1  | 2026-11-20T09:14:47.329Z INFO  request completed method=GET path=/v1/health status…
+│  이전 버전 복… ▲ 위험  │ api-1  | 2026-11-20T09:14:48.336Z INFO  request completed method=GET path=/v1/health status…
+│                        │ api-1  | 2026-11-20T09:14:49.343Z INFO  request completed method=GET path=/v1/health status…
+│설정                    │ api-1  | 2026-11-20T09:14:50.350Z INFO  request completed method=GET path=/v1/health status…
+│  실행환경 별칭         │ api-1  | 2026-11-20T09:14:51.357Z INFO  request completed method=GET path=/v1/health status…
+│  Git 호스트 스크립트…  │ api-1  | 2026-11-20T09:14:41.287Z INFO
+│  호스트 스크립트       │ api-1  | 2026-11-20T09:14:42.294Z INFO
+│  Compose 설치          │ api-1  | 2026-11-20T09:14:43.301Z INFO
+│  S3 호스트 스크립트 …  │ api-1  | 2026-11-20T09:14:44.308Z INFO
+│  비밀값 연결           │ api-1  | 2026-11-20T09:14:45.315Z INFO
+│  최초 구성             │ api-1  | 2026-11-20T09:14:46.322Z INFO
+│                        │ api-1  | 2026-11-20T09:14:47.329Z INFO
+│                        │ api-1  | 2026-11-20T09:14:48.336Z INFO                                                      █
+│                        │ api-1  | 2026-11-20T09:14:49.343Z INFO                                                      █
+│                        │ api-1  | 2026-11-20T09:14:41.287Z INFO                                                      █
+│                        │ api-1  | 2026-11-20T09:14:42.294Z INFO                                                      █
+│                        │ api-1  | 2026-11-20T09:14:43.301Z INFO                                                      █
+│                        │ api-1  | 2026-11-20T09:14:44.308Z INFO                                                      █
+│                        │ api-1  | 2026-11-20T09:14:45.315Z INFO                                                      █
+│                        │ api-1  | 2026-11-20T09:14:46.322Z INFO                                                      █
+│                        │ api-1  | 2026-11-20T09:14:47.329Z INFO                                                      █
+│                        │ api-1  | 2026-11-20T09:14:48.336Z INFO                                                      █
+│                        │ api-1  | 2026-11-20T09:14:49.343Z INFO                                                      █
 │                        │ api-1  | 2026-11-20T09:14:41.287Z INFO                                                      █
 │                        │ api-1  | 2026-11-20T09:14:42.294Z INFO                                                      █
 │                        │ api-1  | 2026-11-20T09:14:43.301Z INFO                                                      █
@@ -312,7 +312,7 @@ api-1  | 2026-11-20T09:14:49.343Z INFO                                         �
 │────────────────────────│ api-1  | 2026-11-20T09:14:47.329Z INFO                                                      █
 │ ▸ 스택 상태            │ api-1  | 2026-11-20T09:14:48.336Z INFO                                                      █
 │ 현재 스택과 서비스 상  │ api-1  | 2026-11-20T09:14:49.343Z INFO                                                      █
-╰────────────────────────╯ 11-50/50                                                                      PgUp/PgDn · g/G
+╰────────────────────────╯ 40-79/79                                                                      PgUp/PgDn · g/G
 [q] 화면 닫기  [ctrl+c] 중단  [PgUp/PgDn] 스크롤  [g/G] 처음/끝  [?] 도움말
 
 === 200x18 ===
@@ -332,7 +332,7 @@ api-1  | 2026-11-20T09:14:49.343Z INFO                                         �
 │                            │ api-1  | 2026-11-20T09:14:47.329Z INFO
 │데이터                      │ api-1  | 2026-11-20T09:14:48.336Z INFO
 │  데이터 백업               │ api-1  | 2026-11-20T09:14:49.343Z INFO                                                                                                                                  █
-╰────────────────────────────╯ 43-50/50                                                                                                                                                  PgUp/PgDn · g/G
+╰────────────────────────────╯ 81-88/88                                                                                                                                                  PgUp/PgDn · g/G
 [q] 화면 닫기  [ctrl+c] 중단  [PgUp/PgDn] 스크롤  [g/G] 처음/끝  [?] 도움말
 
 === 200x30 ===
@@ -344,27 +344,27 @@ api-1  | 2026-11-20T09:14:49.343Z INFO                                         �
 │▸ 스택 상태                 │ 인스턴스: 전체
 │                            │ 명령: logs
 │운영                        │
-│  스택 제거 ▲ 위험          │ api-1  | 2026-11-20T09:14:30.210Z INFO  request completed method=GET path=/v1/health status=200 duration=11ms
-│  스택 재시작               │ api-1  | 2026-11-20T09:14:31.217Z INFO  request completed method=GET path=/v1/health status=200 duration=12ms
-│  스택 중지                 │ api-1  | 2026-11-20T09:14:32.224Z INFO  request completed method=GET path=/v1/health status=200 duration=13ms
-│  스택 시작                 │ api-1  | 2026-11-20T09:14:33.231Z INFO  request completed method=GET path=/v1/health status=200 duration=3ms
-│  갱신                      │ api-1  | 2026-11-20T09:14:34.238Z INFO  request completed method=GET path=/v1/health status=200 duration=4ms
-│                            │ api-1  | 2026-11-20T09:14:35.245Z INFO  request completed method=GET path=/v1/health status=200 duration=5ms
-│데이터                      │ api-1  | 2026-11-20T09:14:36.252Z INFO  request completed method=GET path=/v1/health status=200 duration=6ms
-│  데이터 백업               │ api-1  | 2026-11-20T09:14:37.259Z INFO  request completed method=GET path=/v1/health status=200 duration=7ms
-│  데이터 복원 ▲ 위험        │ api-1  | 2026-11-20T09:14:38.266Z INFO  request completed method=GET path=/v1/health status=200 duration=8ms
-│  이전 버전 복원 ▲ 위험     │ api-1  | 2026-11-20T09:14:39.273Z INFO  request completed method=GET path=/v1/health status=200 duration=9ms
-│                            │ api-1  | 2026-11-20T09:14:40.280Z INFO  request completed method=GET path=/v1/health status=200 duration=10ms
+│  스택 제거 ▲ 위험          │ api-1  | 2026-11-20T09:14:48.336Z INFO
+│  스택 재시작               │ api-1  | 2026-11-20T09:14:49.343Z INFO
+│  스택 중지                 │ api-1  | 2026-11-20T09:14:41.287Z INFO
+│  스택 시작                 │ api-1  | 2026-11-20T09:14:42.294Z INFO
+│  갱신                      │ api-1  | 2026-11-20T09:14:43.301Z INFO
+│                            │ api-1  | 2026-11-20T09:14:44.308Z INFO
+│데이터                      │ api-1  | 2026-11-20T09:14:45.315Z INFO
+│  데이터 백업               │ api-1  | 2026-11-20T09:14:46.322Z INFO
+│  데이터 복원 ▲ 위험        │ api-1  | 2026-11-20T09:14:47.329Z INFO
+│  이전 버전 복원 ▲ 위험     │ api-1  | 2026-11-20T09:14:48.336Z INFO
+│                            │ api-1  | 2026-11-20T09:14:49.343Z INFO
 │설정                        │ api-1  | 2026-11-20T09:14:41.287Z INFO
-│  실행환경 별칭             │ api-1  | 2026-11-20T09:14:42.294Z INFO                                                                                                                                  █
-│  Git 호스트 스크립트 생성  │ api-1  | 2026-11-20T09:14:43.301Z INFO                                                                                                                                  █
-│  호스트 스크립트           │ api-1  | 2026-11-20T09:14:44.308Z INFO                                                                                                                                  █
-│  Compose 설치              │ api-1  | 2026-11-20T09:14:45.315Z INFO                                                                                                                                  █
+│  실행환경 별칭             │ api-1  | 2026-11-20T09:14:42.294Z INFO
+│  Git 호스트 스크립트 생성  │ api-1  | 2026-11-20T09:14:43.301Z INFO
+│  호스트 스크립트           │ api-1  | 2026-11-20T09:14:44.308Z INFO
+│  Compose 설치              │ api-1  | 2026-11-20T09:14:45.315Z INFO
 │  S3 호스트 스크립트 생성   │ api-1  | 2026-11-20T09:14:46.322Z INFO                                                                                                                                  █
 │────────────────────────────│ api-1  | 2026-11-20T09:14:47.329Z INFO                                                                                                                                  █
 │ ▸ 스택 상태                │ api-1  | 2026-11-20T09:14:48.336Z INFO                                                                                                                                  █
 │ 현재 스택과 서비스 상태를  │ api-1  | 2026-11-20T09:14:49.343Z INFO                                                                                                                                  █
-╰────────────────────────────╯ 31-50/50                                                                                                                                                  PgUp/PgDn · g/G
+╰────────────────────────────╯ 69-88/88                                                                                                                                                  PgUp/PgDn · g/G
 [q] 화면 닫기  [ctrl+c] 중단  [PgUp/PgDn] 스크롤  [g/G] 처음/끝  [?] 도움말
 
 === 200x50 ===
@@ -376,37 +376,37 @@ api-1  | 2026-11-20T09:14:49.343Z INFO                                         �
 │▸ 스택 상태                 │ 인스턴스: 전체
 │                            │ 명령: logs
 │운영                        │
-│  스택 제거 ▲ 위험          │ api-1  | 2026-11-20T09:14:10.070Z INFO  request completed method=GET path=/v1/health status=200 duration=13ms
-│  스택 재시작               │ api-1  | 2026-11-20T09:14:11.077Z INFO  request completed method=GET path=/v1/health status=200 duration=3ms
-│  스택 중지                 │ api-1  | 2026-11-20T09:14:12.084Z INFO  request completed method=GET path=/v1/health status=200 duration=4ms
-│  스택 시작                 │ api-1  | 2026-11-20T09:14:13.091Z INFO  request completed method=GET path=/v1/health status=200 duration=5ms
-│  갱신                      │ api-1  | 2026-11-20T09:14:14.098Z INFO  request completed method=GET path=/v1/health status=200 duration=6ms
-│                            │ api-1  | 2026-11-20T09:14:15.105Z INFO  request completed method=GET path=/v1/health status=200 duration=7ms
-│데이터                      │ api-1  | 2026-11-20T09:14:16.112Z INFO  request completed method=GET path=/v1/health status=200 duration=8ms
-│  데이터 백업               │ api-1  | 2026-11-20T09:14:17.119Z INFO  request completed method=GET path=/v1/health status=200 duration=9ms
-│  데이터 복원 ▲ 위험        │ api-1  | 2026-11-20T09:14:18.126Z INFO  request completed method=GET path=/v1/health status=200 duration=10ms                                                           █
-│  이전 버전 복원 ▲ 위험     │ api-1  | 2026-11-20T09:14:19.133Z INFO  request completed method=GET path=/v1/health status=200 duration=11ms                                                           █
-│                            │ api-1  | 2026-11-20T09:14:20.140Z INFO  request completed method=GET path=/v1/health status=200 duration=12ms                                                           █
-│설정                        │ api-1  | 2026-11-20T09:14:21.147Z INFO  request completed method=GET path=/v1/health status=200 duration=13ms                                                           █
-│  실행환경 별칭             │ api-1  | 2026-11-20T09:14:22.154Z INFO  request completed method=GET path=/v1/health status=200 duration=3ms                                                            █
-│  Git 호스트 스크립트 생성  │ api-1  | 2026-11-20T09:14:23.161Z INFO  request completed method=GET path=/v1/health status=200 duration=4ms                                                            █
-│  호스트 스크립트           │ api-1  | 2026-11-20T09:14:24.168Z INFO  request completed method=GET path=/v1/health status=200 duration=5ms                                                            █
-│  Compose 설치              │ api-1  | 2026-11-20T09:14:25.175Z INFO  request completed method=GET path=/v1/health status=200 duration=6ms                                                            █
-│  S3 호스트 스크립트 생성   │ api-1  | 2026-11-20T09:14:26.182Z INFO  request completed method=GET path=/v1/health status=200 duration=7ms                                                            █
-│  비밀값 연결               │ api-1  | 2026-11-20T09:14:27.189Z INFO  request completed method=GET path=/v1/health status=200 duration=8ms                                                            █
-│  최초 구성                 │ api-1  | 2026-11-20T09:14:28.196Z INFO  request completed method=GET path=/v1/health status=200 duration=9ms                                                            █
-│                            │ api-1  | 2026-11-20T09:14:29.203Z INFO  request completed method=GET path=/v1/health status=200 duration=10ms                                                           █
-│                            │ api-1  | 2026-11-20T09:14:30.210Z INFO  request completed method=GET path=/v1/health status=200 duration=11ms                                                           █
-│                            │ api-1  | 2026-11-20T09:14:31.217Z INFO  request completed method=GET path=/v1/health status=200 duration=12ms                                                           █
-│                            │ api-1  | 2026-11-20T09:14:32.224Z INFO  request completed method=GET path=/v1/health status=200 duration=13ms                                                           █
-│                            │ api-1  | 2026-11-20T09:14:33.231Z INFO  request completed method=GET path=/v1/health status=200 duration=3ms                                                            █
-│                            │ api-1  | 2026-11-20T09:14:34.238Z INFO  request completed method=GET path=/v1/health status=200 duration=4ms                                                            █
-│                            │ api-1  | 2026-11-20T09:14:35.245Z INFO  request completed method=GET path=/v1/health status=200 duration=5ms                                                            █
-│                            │ api-1  | 2026-11-20T09:14:36.252Z INFO  request completed method=GET path=/v1/health status=200 duration=6ms                                                            █
-│                            │ api-1  | 2026-11-20T09:14:37.259Z INFO  request completed method=GET path=/v1/health status=200 duration=7ms                                                            █
-│                            │ api-1  | 2026-11-20T09:14:38.266Z INFO  request completed method=GET path=/v1/health status=200 duration=8ms                                                            █
-│                            │ api-1  | 2026-11-20T09:14:39.273Z INFO  request completed method=GET path=/v1/health status=200 duration=9ms                                                            █
-│                            │ api-1  | 2026-11-20T09:14:40.280Z INFO  request completed method=GET path=/v1/health status=200 duration=10ms                                                           █
+│  스택 제거 ▲ 위험          │ api-1  | 2026-11-20T09:14:48.336Z INFO  request completed method=GET path=/v1/health status=200 duration=7ms
+│  스택 재시작               │ api-1  | 2026-11-20T09:14:49.343Z INFO  request completed method=GET path=/v1/health status=200 duration=8ms
+│  스택 중지                 │ api-1  | 2026-11-20T09:14:50.350Z INFO  request completed method=GET path=/v1/health status=200 duration=9ms
+│  스택 시작                 │ api-1  | 2026-11-20T09:14:51.357Z INFO  request completed method=GET path=/v1/health status=200 duration=10ms
+│  갱신                      │ api-1  | 2026-11-20T09:14:41.287Z INFO
+│                            │ api-1  | 2026-11-20T09:14:42.294Z INFO
+│데이터                      │ api-1  | 2026-11-20T09:14:43.301Z INFO
+│  데이터 백업               │ api-1  | 2026-11-20T09:14:44.308Z INFO
+│  데이터 복원 ▲ 위험        │ api-1  | 2026-11-20T09:14:45.315Z INFO
+│  이전 버전 복원 ▲ 위험     │ api-1  | 2026-11-20T09:14:46.322Z INFO
+│                            │ api-1  | 2026-11-20T09:14:47.329Z INFO
+│설정                        │ api-1  | 2026-11-20T09:14:48.336Z INFO
+│  실행환경 별칭             │ api-1  | 2026-11-20T09:14:49.343Z INFO
+│  Git 호스트 스크립트 생성  │ api-1  | 2026-11-20T09:14:41.287Z INFO
+│  호스트 스크립트           │ api-1  | 2026-11-20T09:14:42.294Z INFO
+│  Compose 설치              │ api-1  | 2026-11-20T09:14:43.301Z INFO
+│  S3 호스트 스크립트 생성   │ api-1  | 2026-11-20T09:14:44.308Z INFO
+│  비밀값 연결               │ api-1  | 2026-11-20T09:14:45.315Z INFO
+│  최초 구성                 │ api-1  | 2026-11-20T09:14:46.322Z INFO
+│                            │ api-1  | 2026-11-20T09:14:47.329Z INFO
+│                            │ api-1  | 2026-11-20T09:14:48.336Z INFO
+│                            │ api-1  | 2026-11-20T09:14:49.343Z INFO
+│                            │ api-1  | 2026-11-20T09:14:41.287Z INFO                                                                                                                                  █
+│                            │ api-1  | 2026-11-20T09:14:42.294Z INFO                                                                                                                                  █
+│                            │ api-1  | 2026-11-20T09:14:43.301Z INFO                                                                                                                                  █
+│                            │ api-1  | 2026-11-20T09:14:44.308Z INFO                                                                                                                                  █
+│                            │ api-1  | 2026-11-20T09:14:45.315Z INFO                                                                                                                                  █
+│                            │ api-1  | 2026-11-20T09:14:46.322Z INFO                                                                                                                                  █
+│                            │ api-1  | 2026-11-20T09:14:47.329Z INFO                                                                                                                                  █
+│                            │ api-1  | 2026-11-20T09:14:48.336Z INFO                                                                                                                                  █
+│                            │ api-1  | 2026-11-20T09:14:49.343Z INFO                                                                                                                                  █
 │                            │ api-1  | 2026-11-20T09:14:41.287Z INFO                                                                                                                                  █
 │                            │ api-1  | 2026-11-20T09:14:42.294Z INFO                                                                                                                                  █
 │                            │ api-1  | 2026-11-20T09:14:43.301Z INFO                                                                                                                                  █
@@ -416,5 +416,5 @@ api-1  | 2026-11-20T09:14:49.343Z INFO                                         �
 │────────────────────────────│ api-1  | 2026-11-20T09:14:47.329Z INFO                                                                                                                                  █
 │ ▸ 스택 상태                │ api-1  | 2026-11-20T09:14:48.336Z INFO                                                                                                                                  █
 │ 현재 스택과 서비스 상태를  │ api-1  | 2026-11-20T09:14:49.343Z INFO                                                                                                                                  █
-╰────────────────────────────╯ 11-50/50                                                                                                                                                  PgUp/PgDn · g/G
+╰────────────────────────────╯ 49-88/88                                                                                                                                                  PgUp/PgDn · g/G
 [q] 화면 닫기  [ctrl+c] 중단  [PgUp/PgDn] 스크롤  [g/G] 처음/끝  [?] 도움말

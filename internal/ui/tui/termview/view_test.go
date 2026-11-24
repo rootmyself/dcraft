@@ -1,9 +1,12 @@
 package termview
 
 import (
+	"fmt"
 	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/charmbracelet/x/ansi"
 )
 
 // newTestView starts a view and feeds bytes, the way the child's output arrives.
@@ -140,28 +143,21 @@ func TestNoPaletteEmitsNoEscape(t *testing.T) {
 	}
 }
 
-// A palette is asked per cell run, not per cell.
-func TestPaletteIsAskedOncePerRun(t *testing.T) {
+// A coloured run is painted once and closed, and the plain run after it carries
+// no colour: the reader sees a red word and then uncoloured text.
+func TestPaintedRowColoursOnlyItsOwnRun(t *testing.T) {
 	v := newTestView(t, 20, 2, "\x1b[31mred\x1b[0m plain")
-	p := &countingPalette{}
-	got := Paint(v.Lines()[0].Cells, p)
-	if got == "" {
-		t.Fatal("painted row is empty")
+	got := Paint(v.Lines()[0].Cells, NewPalette())
+	if want := ansi.Strip(got); want != "red plain" {
+		t.Fatalf("text = %q, want %q", want, "red plain")
 	}
-	// One run for "red", one reset run for " plain".
-	if p.calls < 2 || p.calls > 3 {
-		t.Fatalf("palette was asked %d times, want a run per paint", p.calls)
+	redEnd := strings.Index(got, "red") + len("red")
+	if !strings.Contains(got[:redEnd], "31") {
+		t.Fatalf("the red run carries no red: %q", got)
 	}
-}
-
-type countingPalette struct{ calls int }
-
-func (c *countingPalette) SGR(color Color) string {
-	c.calls++
-	if color.Fg == nil {
-		return ""
+	if tail := got[redEnd:]; strings.Contains(tail, "31") {
+		t.Fatalf("the colour leaked past its run: %q", tail)
 	}
-	return "\x1b[31m"
 }
 
 // Scrolling output keeps older rows reachable above the screen.
@@ -337,5 +333,121 @@ func TestStreamingWriterKeepsEveryLine(t *testing.T) {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("row %q is missing; rows=%q", want, joined)
 		}
+	}
+}
+
+// The caret must sit on the row the child is drawing, including the ordinary
+// case of a prompt near the bottom of a screen that is not full yet.
+func TestCaretRowMatchesThePromptRow(t *testing.T) {
+	for _, c := range []struct {
+		rows    int
+		content int
+	}{
+		{10, 8},
+		{10, 9},
+		{6, 3},
+		{24, 2},
+	} {
+		// New keeps the caret's own row, which is the interactive-shell view.
+		v := New(40, c.rows)
+		for i := 0; i < c.content; i++ {
+			if _, err := v.Write([]byte(fmt.Sprintf("L%d\r\n", i))); err != nil {
+				t.Fatal(err)
+			}
+		}
+		win := v.Window(0, v.Window(0, 0).Total)
+		if win.CursorRow < 0 {
+			t.Fatalf("%d rows / %d lines: no caret row", c.rows, c.content)
+		}
+		if win.CursorRow >= len(win.Rows) {
+			t.Fatalf("%d rows / %d lines: caret row %d past %d rows", c.rows, c.content, win.CursorRow, len(win.Rows))
+		}
+		// The caret sits on the empty prompt row just below the last written
+		// line, which is where the shell waits for input.
+		if got := Text(win.Rows[win.CursorRow].Cells); got != "" {
+			t.Fatalf("%d rows / %d lines: caret is on %q, want the empty prompt row", c.rows, c.content, got)
+		}
+	}
+}
+
+// A caret that lands on a wide rune's placeholder goes on the rune itself, so
+// the row never becomes one cell wider than the grid.
+func TestCaretOnAWideRuneKeepsTheRowWidth(t *testing.T) {
+	v := newTestView(t, 20, 2, "한a")
+	row := v.Window(0, 1).Rows[0]
+	if got := Text(row.Cells); got != "한a" {
+		t.Fatalf("row = %q, want %q", got, "한a")
+	}
+	if row.Cells[1].Width != 0 {
+		t.Fatalf("cell 1 is not the placeholder of 한")
+	}
+}
+
+// A full-screen child owns the whole screen: the main screen's scrollback must
+// not be drawn above it, and a painted status bar must survive the blank trim.
+func TestAltScreenHidesScrollbackAndKeepsPaintedRows(t *testing.T) {
+	v := New(20, 5)
+	for i := 0; i < 4; i++ {
+		if _, err := v.Write([]byte(fmt.Sprintf("shell-%d\r\n", i))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Enter the alternate screen and draw a screen whose last row is a
+	// reverse-video status bar made of spaces.
+	if _, err := v.Write([]byte("\x1b[?1049hAPP-TOP\r\nmid\r\n\r\n\x1b[7m          \x1b[0m")); err != nil {
+		t.Fatal(err)
+	}
+	lines := v.Lines()
+	joined := ""
+	for _, line := range lines {
+		joined += Text(line.Cells) + "|"
+	}
+	if strings.Contains(joined, "shell-") {
+		t.Fatalf("the main screen's scrollback is drawn over the app: %q", joined)
+	}
+	if !strings.Contains(joined, "APP-TOP") {
+		t.Fatalf("the app's own screen is missing: %q", joined)
+	}
+	if !strings.Contains(joined, "mid") {
+		t.Fatalf("a painted row was trimmed as blank: %q", joined)
+	}
+}
+
+// A shrink must not discard rows that were on screen: the emulator drops them
+// and does not push them into the scrollback itself.
+func TestShrinkKeepsTheRowsItDrops(t *testing.T) {
+	v := NewPipe(40, 30)
+	for i := 0; i < 29; i++ {
+		if _, err := v.Write([]byte(fmt.Sprintf("L%d\r\n", i))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before := v.Window(0, 0).Total
+	v.Resize(40, 12)
+	after := v.Window(0, 0).Total
+	if after < before {
+		t.Fatalf("total fell from %d to %d; dropped rows were lost", before, after)
+	}
+}
+
+// A readable window is a slice of the same row list, not a copy of the whole
+// scrollback: a full screen costs the rows drawn, not the history behind them.
+func TestWindowReadsOnlyTheRequestedRows(t *testing.T) {
+	v := NewPipe(40, 10)
+	for i := 0; i < 200; i++ {
+		if _, err := v.Write([]byte(fmt.Sprintf("line-%03d\r\n", i))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	allocs := testing.AllocsPerRun(5, func() { _ = v.Window(190, 200) })
+	if allocs > 200 {
+		t.Fatalf("Window(10 rows) allocated %.0f times over a 200-row history; it copies the history", allocs)
+	}
+	win := v.Window(190, 200)
+	if len(win.Rows) != 10 {
+		t.Fatalf("Window returned %d rows, want 10", len(win.Rows))
+	}
+	if got := Text(win.Rows[0].Cells); got != "line-190" {
+		t.Fatalf("first row = %q, want line-190", got)
 	}
 }

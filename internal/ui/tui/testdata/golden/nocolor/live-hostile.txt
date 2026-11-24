@@ -122,9 +122,9 @@ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx�
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 api-1  | error connection refused
-
-
-
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+api-1  | error connection refused
 [q] 화면 닫기  [ctrl+c] 중단  [ctrl+] 접속 종료  [?] 도움말
 
 === 80x30 ===
@@ -142,9 +142,9 @@ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx�
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 api-1  | error connection refused
-
-
-
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+api-1  | error connection refused
 
 
 
@@ -174,9 +174,9 @@ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx�
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 api-1  | error connection refused
-
-
-
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+api-1  | error connection refused
 
 
 
@@ -220,16 +220,16 @@ api-1  | error connection refused
 │▸ 스택 상태             │ 인스턴스: 전체
 │                        │ 명령: logs
 │운영                    │
-│  스택 제거 ▲ 위험      │ 90%-1  |done%
-│  스택 재시작           │ api-1  | xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
-│  스택 중지             │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
-│  스택 시작             │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-│  갱신                  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-│                        │ api-1  | error connection refused
-│데이터                  │
-│  데이터 백업           │
-╰────────────────────────╯
-[q] 화면 닫기  [ctrl+c] 중단  [ctrl+] 접속 종료  [?] 도움말
+│  스택 제거 ▲ 위험      │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│  스택 재시작           │ api-1  | error connection refused
+│  스택 중지             │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│  스택 시작             │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx                                                    █
+│  갱신                  │ api-1  | error connection refused                                                           █
+│                        │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx                                                    █
+│데이터                  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx                                                    █
+│  데이터 백업           │ api-1  | error connection refused                                                           █
+╰────────────────────────╯ 5-12/12                                                                       PgUp/PgDn · g/G
+[q] 화면 닫기  [ctrl+c] 중단  [PgUp/PgDn] 스크롤  [g/G] 처음/끝  [?] 도움말
 
 === 120x30 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
@@ -246,12 +246,12 @@ api-1  | error connection refused
 │  스택 시작             │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 │  갱신                  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 │                        │ api-1  | error connection refused
-│데이터                  │
-│  데이터 백업           │
-│  데이터 복원 ▲ 위험    │
-│  이전 버전 복… ▲ 위험  │
-│                        │
-│설정                    │
+│데이터                  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│  데이터 백업           │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│  데이터 복원 ▲ 위험    │ api-1  | error connection refused
+│  이전 버전 복… ▲ 위험  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│                        │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│설정                    │ api-1  | error connection refused
 │  실행환경 별칭         │
 │  Git 호스트 스크립트…  │
 │  호스트 스크립트       │
@@ -278,12 +278,12 @@ api-1  | error connection refused
 │  스택 시작             │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 │  갱신                  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 │                        │ api-1  | error connection refused
-│데이터                  │
-│  데이터 백업           │
-│  데이터 복원 ▲ 위험    │
-│  이전 버전 복… ▲ 위험  │
-│                        │
-│설정                    │
+│데이터                  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│  데이터 백업           │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│  데이터 복원 ▲ 위험    │ api-1  | error connection refused
+│  이전 버전 복… ▲ 위험  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│                        │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│설정                    │ api-1  | error connection refused
 │  실행환경 별칭         │
 │  Git 호스트 스크립트…  │
 │  호스트 스크립트       │
@@ -324,16 +324,16 @@ api-1  | error connection refused
 │▸ 스택 상태                 │ 인스턴스: 전체
 │                            │ 명령: logs
 │운영                        │
-│  스택 제거 ▲ 위험          │ 90%-1  |done%
-│  스택 재시작               │ api-1  | xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-│  스택 중지                 │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│  스택 제거 ▲ 위험          │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│  스택 재시작               │ api-1  | error connection refused
+│  스택 중지                 │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 │  스택 시작                 │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-│  갱신                      │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-│                            │ api-1  | error connection refused
-│데이터                      │
-│  데이터 백업               │
-╰────────────────────────────╯
-[q] 화면 닫기  [ctrl+c] 중단  [ctrl+] 접속 종료  [?] 도움말
+│  갱신                      │ api-1  | error connection refused                                                                                                                                       █
+│                            │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx                                                                                                                                █
+│데이터                      │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx                                                                                                                                █
+│  데이터 백업               │ api-1  | error connection refused                                                                                                                                       █
+╰────────────────────────────╯ 8-15/15                                                                                                                                                   PgUp/PgDn · g/G
+[q] 화면 닫기  [ctrl+c] 중단  [PgUp/PgDn] 스크롤  [g/G] 처음/끝  [?] 도움말
 
 === 200x30 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
@@ -350,15 +350,15 @@ api-1  | error connection refused
 │  스택 시작                 │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 │  갱신                      │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 │                            │ api-1  | error connection refused
-│데이터                      │
-│  데이터 백업               │
-│  데이터 복원 ▲ 위험        │
-│  이전 버전 복원 ▲ 위험     │
-│                            │
-│설정                        │
-│  실행환경 별칭             │
-│  Git 호스트 스크립트 생성  │
-│  호스트 스크립트           │
+│데이터                      │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│  데이터 백업               │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│  데이터 복원 ▲ 위험        │ api-1  | error connection refused
+│  이전 버전 복원 ▲ 위험     │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│                            │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│설정                        │ api-1  | error connection refused
+│  실행환경 별칭             │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│  Git 호스트 스크립트 생성  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│  호스트 스크립트           │ api-1  | error connection refused
 │  Compose 설치              │
 │  S3 호스트 스크립트 생성   │
 │────────────────────────────│
@@ -382,15 +382,15 @@ api-1  | error connection refused
 │  스택 시작                 │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 │  갱신                      │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 │                            │ api-1  | error connection refused
-│데이터                      │
-│  데이터 백업               │
-│  데이터 복원 ▲ 위험        │
-│  이전 버전 복원 ▲ 위험     │
-│                            │
-│설정                        │
-│  실행환경 별칭             │
-│  Git 호스트 스크립트 생성  │
-│  호스트 스크립트           │
+│데이터                      │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│  데이터 백업               │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│  데이터 복원 ▲ 위험        │ api-1  | error connection refused
+│  이전 버전 복원 ▲ 위험     │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│                            │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│설정                        │ api-1  | error connection refused
+│  실행환경 별칭             │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│  Git 호스트 스크립트 생성  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│  호스트 스크립트           │ api-1  | error connection refused
 │  Compose 설치              │
 │  S3 호스트 스크립트 생성   │
 │  비밀값 연결               │

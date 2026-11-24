@@ -99,11 +99,21 @@ exit 0
 	// 1) The prompt arrives with no Enter. A shell writes it without a newline.
 	s.waitFor("probe:/ # ", 30*time.Second)
 
-	// 2) Typing appears as it is typed, again with no Enter.
-	for _, key := range strings.Split("echo hi", "") {
+	// 2) Typing appears as it is typed, again with no Enter. The half-typed
+	// prefix must be on screen before the rest is sent: that is what proves the
+	// screen follows the child's echo instead of drawing a completed command.
+	for _, key := range strings.Split("echo", "") {
+		s.press(key)
+	}
+	s.waitFor("probe:/ # echo", 30*time.Second)
+	for _, key := range strings.Split(" hi", "") {
 		s.press(key)
 	}
 	s.waitFor("probe:/ # echo hi", 30*time.Second)
+	// Nothing has run yet, so the command's output cannot be on screen.
+	if screenContains(s.out.String(), "ran:echo hi") {
+		t.Fatalf("the command ran before Enter:\n%s", s.out.String())
+	}
 
 	// 3) The command runs and its output arrives.
 	s.press("\r")

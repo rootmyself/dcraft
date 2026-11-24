@@ -61,8 +61,22 @@ type Position struct{ X, Y int }
 // staying bounded.
 const DefaultScrollback = 10000
 
-// View is a child's terminal screen. Write feeds the child's output; Lines
-// returns the scrollback and the visible screen as rows the TUI can draw.
+// Options configure a view. The zero value is a terminal stream with no caret.
+type Options struct {
+	// Onlcr translates a bare newline into a carriage return plus newline. A
+	// pseudo-terminal's driver already does this; a plain pipe's does not, and
+	// without it every line after the first would start where the previous one
+	// ended.
+	Onlcr bool
+	// KeepCaretRow keeps the blank row the caret sits on at the end of the row
+	// list. Only a screen that draws a caret wants it: an interactive shell
+	// waits on the row after its prompt, while a log has no caret and its
+	// trailing blank is not output.
+	KeepCaretRow bool
+}
+
+// View is a child's terminal screen. Write feeds the child's output; Window
+// returns the rows a viewport should draw.
 //
 // A View is safe for concurrent use: the child's output arrives on its own
 // goroutine while the render loop reads the grid.
@@ -71,11 +85,9 @@ type View struct {
 	emu  *vt.SafeEmulator
 	rows int
 	cols int
-	// onlcr translates a bare newline to a carriage return plus newline. A real
-	// terminal driver does this on output, so a pseudo-terminal's bytes already
-	// carry it; a plain pipe's do not, and without the translation every line
-	// after the first would start where the previous one ended.
-	onlcr bool
+	// opts is fixed at construction; the write path reads Onlcr and the row
+	// list reads KeepCaretRow.
+	opts Options
 	// lastByte is the final byte of the previous write, so a carriage return and
 	// its newline split across two writes are still one line terminator.
 	lastByte byte
@@ -83,12 +95,18 @@ type View struct {
 	// own pipe, so a keystroke never blocks on a child that is busy drawing and
 	// the emulator's replies stay ahead of the keys typed after them.
 	in *inputQueue
+	// pumpDone closes when the input pump has stopped reading the emulator, so
+	// Close never races it.
+	pumpDone chan struct{}
+	// closeOnce makes Close idempotent: the emulator's own Close is not
+	// concurrency-safe, so it must run exactly once and after the pump.
+	closeOnce sync.Once
 }
 
 // New creates a view for a child that owns a pseudo-terminal. Its output already
 // carries the terminal driver's newline translation.
 func New(cols, rows int) *View {
-	return newView(cols, rows, false)
+	return NewWith(cols, rows, Options{KeepCaretRow: true})
 }
 
 // NewPipe creates a view for a stream that is not a terminal, such as
@@ -96,10 +114,11 @@ func New(cols, rows int) *View {
 // terminal driver translates it, so each line starts at the left edge instead of
 // continuing under the previous one.
 func NewPipe(cols, rows int) *View {
-	return newView(cols, rows, true)
+	return NewWith(cols, rows, Options{Onlcr: true})
 }
 
-func newView(cols, rows int, onlcr bool) *View {
+// NewWith creates a view with explicit options.
+func NewWith(cols, rows int, opts Options) *View {
 	if cols < 1 {
 		cols = 80
 	}
@@ -113,7 +132,10 @@ func newView(cols, rows int, onlcr bool) *View {
 	emu.SetDefaultForegroundColor(nil)
 	emu.SetDefaultBackgroundColor(nil)
 	emu.SetScrollbackSize(DefaultScrollback)
-	v := &View{emu: emu, rows: rows, cols: cols, onlcr: onlcr, in: newInputQueue()}
+	v := &View{
+		emu: emu, rows: rows, cols: cols, opts: opts,
+		in: newInputQueue(), pumpDone: make(chan struct{}),
+	}
 	go v.pumpInput()
 	return v
 }
@@ -121,7 +143,12 @@ func newView(cols, rows int, onlcr bool) *View {
 // pumpInput moves the emulator's own input into the queue. The emulator writes
 // its replies (a cursor position report) to a synchronous pipe, so reading it
 // here is what keeps the child from waiting on a reply nobody drains.
+//
+// The pump owns the emulator's Read for the view's lifetime: Close closes that
+// pipe, Read returns EOF, and the goroutine exits. It signals pumpDone last so
+// Close knows the emulator is no longer being read.
 func (v *View) pumpInput() {
+	defer close(v.pumpDone)
 	buf := make([]byte, 256)
 	for {
 		n, err := v.emu.Read(buf)
@@ -140,7 +167,7 @@ func (v *View) Write(p []byte) (int, error) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	out := p
-	if v.onlcr {
+	if v.opts.Onlcr {
 		out = v.lfToCRLF(p)
 	}
 	if _, err := v.emu.Write(out); err != nil {
@@ -156,6 +183,10 @@ func (v *View) Write(p []byte) (int, error) {
 // and a line feed. A feed that already follows a carriage return is left alone,
 // including one whose carriage return arrived on the previous write, so a
 // stream that mixes both forms is never double-translated.
+//
+// This is a byte-level rewrite, so a newline inside an escape payload (a DCS or
+// OSC string) is translated too. The emulator still consumes such a payload
+// correctly; the bound is that the payload is not kept opaque.
 func (v *View) lfToCRLF(p []byte) []byte {
 	carriageBefore := func(i int) bool {
 		if i > 0 {
@@ -189,8 +220,7 @@ func (v *View) lfToCRLF(p []byte) []byte {
 	return out
 }
 
-// Resize changes the grid. The emulator keeps what scrolled off the top, so a
-// shorter screen does not lose output the reader can still scroll to.
+// Resize changes the grid.
 func (v *View) Resize(cols, rows int) {
 	if cols < 1 {
 		cols = 1
@@ -203,8 +233,43 @@ func (v *View) Resize(cols, rows int) {
 	if v.cols == cols && v.rows == rows {
 		return
 	}
+	// The emulator drops screen rows when the grid shrinks and does not push them
+	// into the scrollback, so a shorter window would lose output that was on
+	// screen. Salvage them first: the reader can still reach them with PgUp.
+	if rows < v.rows {
+		v.salvageDroppedRowsLocked(rows)
+	}
 	v.cols, v.rows = cols, rows
 	v.emu.Resize(cols, rows)
+}
+
+// salvageDroppedRowsLocked moves the rows a shrink would discard into the
+// scrollback. Only the main screen keeps history; a full-screen child redraws
+// itself on resize and its old rows are not output the reader wants.
+func (v *View) salvageDroppedRowsLocked(newRows int) {
+	if v.emu.IsAltScreen() {
+		return
+	}
+	sb := v.emu.Scrollback()
+	if sb == nil {
+		return
+	}
+	for y := 0; y < v.rows-newRows; y++ {
+		// A blank row is not output: the screen is always its full height, so
+		// salvaging its trailing blanks would inflate the scrollback and make the
+		// position counter state rows the reader never saw.
+		if v.screenRowBlankLocked(y) {
+			continue
+		}
+		line := make(uv.Line, v.cols)
+		for x := 0; x < v.cols; x++ {
+			c := v.cellAt(x, y)
+			line[x] = uv.Cell{Content: c.Content, Width: c.Width, Style: uv.Style{
+				Fg: c.Color.Fg, Bg: c.Color.Bg, Attrs: c.Color.Attrs,
+			}}
+		}
+		sb.Push(line)
+	}
 }
 
 // Size is the grid's current size.
@@ -230,12 +295,24 @@ func (v *View) SendText(text string) {
 
 // Close releases the input pipe. A command waiting on stdin then reads EOF and
 // exits, which is how a detached attach ends cleanly.
+//
+// The emulator's own Close is deliberately not called: it writes the field its
+// Read and Write read without taking the lock the safe wrapper uses, so calling
+// it races the pump goroutine. Closing the emulator's input pipe is what makes
+// the pump's Read return EOF, which is the whole effect Close needed.
 func (v *View) Close() error {
-	v.in.close()
-	return v.emu.Close()
+	v.closeOnce.Do(func() {
+		v.in.close()
+		if pipe, ok := v.emu.InputPipe().(io.Closer); ok {
+			_ = pipe.Close()
+		}
+		<-v.pumpDone
+	})
+	return nil
 }
 
-// ScrollbackLen is how many lines are reachable above the screen.
+// ScrollbackLen is how many lines are reachable above the screen. A full-screen
+// child has none: the emulator keeps no history for its alternate screen.
 func (v *View) ScrollbackLen() int {
 	v.mu.Lock()
 	defer v.mu.Unlock()
@@ -250,95 +327,154 @@ func (v *View) Cursor() (pos Position, shown bool) {
 	return v.cursorLocked()
 }
 
-// Line is one row of cells, oldest first as returned by Lines. Cells is empty
-// for a row the grid never wrote.
+func (v *View) cursorLocked() (Position, bool) {
+	p := v.emu.CursorPosition()
+	return Position{X: p.X, Y: p.Y}, !v.emu.CursorHidden()
+}
+
+// Line is one row of cells, as returned by Window. Cells is empty for a row the
+// grid never wrote.
 type Line struct{ Cells []Cell }
 
-// Lines returns the scrollback and the visible screen as one row list, oldest
-// first. The current screen is the tail, so a viewport that follows the tail
-// shows what the child is drawing now, and PgUp reaches everything the grid
-// still holds.
+// Window is one snapshot of what a viewport asks for: how many rows exist, the
+// requested slice of them, and the caret's absolute row. It is one lock, so the
+// counter, the drawn rows and the caret cannot describe different moments.
+//
+// Only the requested rows are materialised. A 10000-line scrollback costs the
+// rows on screen, not all of them, which is what makes a repaint cheap enough to
+// run on every keystroke.
+type Window struct {
+	// Total is how many rows are reachable.
+	Total int
+	// Start is the absolute index of the first returned row.
+	Start int
+	// Rows are the rows from Start up to the requested end.
+	Rows []Line
+	// CursorRow is the caret's absolute row, or -1 when it is not drawn.
+	CursorRow int
+	// CursorX is the caret's column within its row.
+	CursorX int
+}
+
+// Window returns the rows in [start, end) of the row list, together with the
+// total and the caret. A range past the end is clamped.
 //
 // A terminal's screen is always its full height, so the rows below the last
 // thing the child drew are blank. They are not output, and counting them would
-// make a twenty-line screen report twenty-four rows. The trailing blanks are
-// trimmed, keeping the row the cursor sits on so a prompt at the bottom still
-// has a cell to land in.
-func (v *View) Lines() []Line {
+// make a twenty-line screen report twenty-four rows. Trailing blanks are dropped;
+// a row the caret sits on is kept only when the view was built to draw one.
+func (v *View) Window(start, end int) Window {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	return v.linesLocked()
-}
-
-func (v *View) linesLocked() []Line {
+	total := v.drawnRowsLocked()
+	if start < 0 {
+		start = 0
+	}
+	if end > total {
+		end = total
+	}
+	if end < start {
+		end = start
+	}
+	out := Window{Total: total, Start: start, CursorRow: -1}
+	held := v.scrollbackHeldLocked()
 	sb := v.emu.Scrollback()
-	held := sb.Len()
-	out := make([]Line, 0, held+v.rows)
-	for i := 0; i < held; i++ {
-		out = append(out, lineFrom(sb.Line(i)))
-	}
-	for y := 0; y < v.rows; y++ {
-		cells := make([]Cell, 0, v.cols)
-		for x := 0; x < v.cols; x++ {
-			cells = append(cells, v.cellAt(x, y))
+	out.Rows = make([]Line, 0, end-start)
+	for i := start; i < end; i++ {
+		switch {
+		case i < held:
+			out.Rows = append(out.Rows, lineFrom(sb.Line(i)))
+		case i-held < v.rows:
+			out.Rows = append(out.Rows, v.screenLineLocked(i-held))
+		default:
+			// An index the screen no longer holds: a blank row keeps the
+			// caller's indexing correct.
+			out.Rows = append(out.Rows, Line{Cells: make([]Cell, v.cols)})
 		}
-		out = append(out, Line{Cells: cells})
 	}
-	// Drop the blank rows after the last thing the child drew. A shell that has
-	// printed a prompt has already drawn it, so the row a caret sits on is only
-	// kept when it carries content or when the screen is otherwise empty; a bare
-	// newline at the bottom is not a row of output.
-	for len(out) > 0 && isBlankLine(out[len(out)-1]) {
-		out = out[:len(out)-1]
-	}
-	if len(out) == 0 {
-		// An empty screen still needs one row for the caret to sit on.
-		out = append(out, Line{Cells: make([]Cell, v.cols)})
+	if pos, shown := v.cursorLocked(); shown && pos.Y >= 0 && pos.Y < v.rows && v.opts.KeepCaretRow {
+		if row := held + pos.Y; row >= 0 && row < total {
+			out.CursorRow = row
+			out.CursorX = pos.X
+		}
 	}
 	return out
 }
 
-// isBlankLine reports whether a row has nothing to draw.
-func isBlankLine(line Line) bool {
-	for _, c := range line.Cells {
-		if c.Width == 0 {
-			continue
+// screenLineLocked is one visible screen row as a Line.
+func (v *View) screenLineLocked(y int) Line {
+	cells := make([]Cell, 0, v.cols)
+	for x := 0; x < v.cols; x++ {
+		cells = append(cells, v.cellAt(x, y))
+	}
+	return Line{Cells: cells}
+}
+
+// Lines returns the whole row list. It exists for tests and for callers that
+// need everything; a render loop uses Window so it reads only what it draws.
+func (v *View) Lines() []Line {
+	return v.Window(0, v.Window(0, 0).Total).Rows
+}
+
+// scrollbackHeldLocked is how many scrollback rows the row list includes: none
+// while a full-screen child owns the screen.
+func (v *View) scrollbackHeldLocked() int {
+	if v.emu.IsAltScreen() {
+		return 0
+	}
+	return v.emu.ScrollbackLen()
+}
+
+// drawnRowsLocked is how many rows the list holds, computed without
+// materialising them: every scrollback row, then the screen rows up to the last
+// one that is not blank.
+func (v *View) drawnRowsLocked() int {
+	held := v.scrollbackHeldLocked()
+	last := -1
+	for y := v.rows - 1; y >= 0; y-- {
+		if !v.screenRowBlankLocked(y) {
+			last = y
+			break
 		}
-		if c.Content != "" && c.Content != " " {
+	}
+	// The caret's row is drawn even when it is blank, so it is the floor of the
+	// list: a shell waiting at a prompt sits one row below its last output.
+	if v.opts.KeepCaretRow {
+		if pos, shown := v.cursorLocked(); shown && pos.Y >= 0 && pos.Y < v.rows && pos.Y > last {
+			last = pos.Y
+		}
+	}
+	if last < 0 {
+		// An empty screen still needs one row for the caret to sit on.
+		return held + 1
+	}
+	return held + last + 1
+}
+
+// screenRowBlankLocked reports whether one screen row has nothing drawn on it.
+func (v *View) screenRowBlankLocked(y int) bool {
+	for x := 0; x < v.cols; x++ {
+		if !isBlankCell(v.cellAt(x, y)) {
 			return false
 		}
 	}
 	return true
 }
 
-// CursorLine is the absolute index of the cursor's row in the list Lines
-// returns, or -1 when the cursor is hidden or sits below everything drawn.
-func (v *View) CursorLine() int {
-	v.mu.Lock()
-	defer v.mu.Unlock()
-	pos, shown := v.cursorLocked()
-	if !shown || pos.Y < 0 || pos.Y >= v.rows {
-		return -1
+// isBlankCell reports whether one cell has nothing to draw.
+//
+// A cell is not blank when it carries paint. A status bar or a selected row is
+// drawn as spaces with a background colour or reverse video, and trimming it
+// would delete part of a full-screen child's interface.
+func isBlankCell(c Cell) bool {
+	if c.Width == 0 {
+		// The placeholder after a wide rune is part of that rune.
+		return true
 	}
-	// The list trims trailing blank screen rows, so the caret's row is measured
-	// from the end of the screen: the last drawn row is the one the caret sits on
-	// when the child is waiting at a prompt.
-	lines := v.linesLocked()
-	held := v.emu.ScrollbackLen()
-	total := held + v.rows
-	index := held + pos.Y
-	// Shift by however many trailing rows were trimmed.
-	trimmed := total - len(lines)
-	index -= trimmed
-	if index < 0 || index >= len(lines) {
-		return -1
+	if c.Content != "" && c.Content != " " {
+		return false
 	}
-	return index
-}
-
-func (v *View) cursorLocked() (Position, bool) {
-	p := v.emu.CursorPosition()
-	return Position{X: p.X, Y: p.Y}, !v.emu.CursorHidden()
+	return c.Color.Bg == nil && c.Color.Attrs == 0
 }
 
 func lineFrom(line uv.Line) Line {
@@ -395,10 +531,10 @@ func Paint(cells []Cell, palette Palette) string {
 		return Text(cells)
 	}
 	var b strings.Builder
-	// Each row opens with a reset. The child may leave a colour open across a
-	// newline (`\x1b[31mred` with no reset), and a grid that redraws one row at
-	// a time would otherwise start the next row in that colour. A row with no
-	// paint writes nothing, so a colorless frame stays free of escapes.
+	// Each coloured run opens with a reset. The child may leave a colour open
+	// across a newline (`\x1b[31mred` with no reset), and a grid that redraws one
+	// row at a time would otherwise start the next row in that colour. A row
+	// with no paint writes nothing, so a colorless frame stays free of escapes.
 	var current Color
 	first := true
 	painted := false
@@ -416,11 +552,9 @@ func Paint(cells []Cell, palette Palette) string {
 				painted = false
 			}
 			if sgr := palette.SGR(c.Color); sgr != "" {
-				if !painted {
-					// A reset is cheaper than trusting the previous row's
-					// final state, and it is what makes a row independent.
-					b.WriteString(ansi.ResetStyle)
-				}
+				// A reset before each run makes the row independent of whatever
+				// the previous row left open.
+				b.WriteString(ansi.ResetStyle)
 				b.WriteString(sgr)
 				painted = true
 			}
@@ -432,6 +566,8 @@ func Paint(cells []Cell, palette Palette) string {
 	if painted {
 		b.WriteString(ansi.ResetStyle)
 	}
+	// The trim happens after the closing reset, so only trailing blanks are
+	// removed and the reset itself always survives.
 	return strings.TrimRight(b.String(), " ")
 }
 

@@ -812,7 +812,7 @@ func goldenEmptyStack(t *testing.T) *Model {
 //
 // It carries no colour SGR on purpose: a colourless snapshot must not contain an
 // escape sequence, and the child's own paint is not the theme's. Survival of a
-// colour SGR is asserted where the line is sanitized and on the live screen.
+// colour SGR is asserted on the live screen.
 func goldenLiveHostileModel(t *testing.T) *Model {
 	t.Helper()
 	features := goldenBaseFeatures()
