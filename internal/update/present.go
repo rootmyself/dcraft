@@ -103,7 +103,7 @@ func renderSuccess(payload Payload, width int) string {
 		fmt.Fprintf(&b, "  %s\n", msgSuccessNone)
 	}
 	if len(report.Notices) > 0 {
-		b.WriteString("\n주의\n")
+		core.WriteSection(&b, "주의")
 		for _, notice := range report.Notices {
 			fmt.Fprintf(&b, "  - %s\n", notice)
 		}

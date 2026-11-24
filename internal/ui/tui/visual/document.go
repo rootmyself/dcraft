@@ -670,3 +670,18 @@ func trimTrailingBlank(lines []string) []string {
 	}
 	return lines
 }
+
+// collapseBlankRuns keeps at most one blank line in a row. A paragraph may
+// already carry a leading blank line, and the block gap adds another one; the
+// combined result would be a two-line hole instead of a section boundary. An
+// empty line never carries content, so the run length is the only decision.
+func collapseBlankRuns(lines []string) []string {
+	out := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" && len(out) > 0 && strings.TrimSpace(out[len(out)-1]) == "" {
+			continue
+		}
+		out = append(out, line)
+	}
+	return out
+}

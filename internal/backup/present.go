@@ -31,7 +31,7 @@ func Present(res core.Result, width int) string {
 		b.WriteString("중지한 서비스: 없음 (이미 중지된 서비스는 시작하지 않았음)\n")
 	}
 	fmt.Fprintf(&b, "상태 복구: %s\n", joinOrNone(report.Restarted))
-	b.WriteString("\n산출물:\n")
+	core.WriteSection(&b, "산출물:")
 	for _, art := range report.Artifacts {
 		fmt.Fprintf(&b, "  - %s\n", art.Path)
 		fmt.Fprintf(&b, "    완료: %t · 형식: dcraft 백업 v1 · %s: %s · %s: %d\n",
@@ -39,7 +39,7 @@ func Present(res core.Result, width int) string {
 		fmt.Fprintf(&b, "    데이터 %.1f%% · SHA-256: %s\n",
 			percent(art.SizeBytes, art.ArtifactSizeBytes), art.SHA256)
 	}
-	b.WriteString("\n안내:\n")
+	core.WriteSection(&b, "안내:")
 	for _, notice := range report.Notices {
 		fmt.Fprintf(&b, "  - %s\n", notice)
 	}
