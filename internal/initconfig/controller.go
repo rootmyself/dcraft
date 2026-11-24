@@ -459,7 +459,7 @@ func (c *Controller) WizardSteps(ctx context.Context, in core.Invocation) (core.
 			},
 			{
 				Name: "command", Title: msgWizardCommandTitle, Prompt: msgWizardCommandPrompt,
-				AllowCustom: true, Optional: true, CustomHint: msgWizardCommandHint,
+				AllowCustom: true, List: true, Optional: true, CustomHint: msgWizardCommandHint,
 			},
 			{
 				Name: "restart", Title: msgWizardRestartTitle, Prompt: msgWizardRestartPrompt,

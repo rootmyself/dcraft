@@ -69,8 +69,8 @@ func (f *Feature) Descriptor() core.Descriptor {
 				Usage: "환경변수 KEY=VALUE (반복 지정 가능). 값은 compose.yaml에 평문으로 저장되므로 비밀값은 dcraft secrets 참조 사용.",
 			},
 			{
-				Name: "command", Kind: core.FlagString,
-				Usage: "이미지 기본 CMD를 덮어쓸 명령 (선택). 지정하지 않으면 이미지/Dockerfile 기본값 사용.",
+				Name: "command", Kind: core.FlagList,
+				Usage: "이미지 기본 CMD를 덮어쓸 명령 인자 (선택, 반복 지정 가능, 예: --command /bin/sh --command -c --command 'echo hi'). 지정하지 않으면 이미지/Dockerfile 기본값 사용.",
 			},
 			{
 				Name: "restart", Kind: core.FlagString,

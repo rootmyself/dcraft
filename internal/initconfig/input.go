@@ -32,7 +32,7 @@ type Input struct {
 	Ports      []string
 	Volumes    []string
 	Env        []string
-	Command    string
+	Command    []string
 	Restart    string
 	wizard     bool
 }
@@ -73,10 +73,10 @@ func collectInput(in core.Invocation, wizard bool) (Input, error) {
 		Context:    strings.TrimSpace(in.Option("context")),
 		Dockerfile: strings.TrimSpace(in.Option("dockerfile")),
 		Image:      strings.TrimSpace(in.Option("image")),
-		Ports:      optionValues(in, "port", wizard),
-		Volumes:    optionValues(in, "volume", wizard),
-		Env:        optionValues(in, "env-var", wizard),
-		Command:    strings.TrimSpace(in.Option("command")),
+		Ports:      optionValues(in, "port"),
+		Volumes:    optionValues(in, "volume"),
+		Env:        optionValues(in, "env-var"),
+		Command:    optionValues(in, "command"),
 		Restart:    strings.TrimSpace(in.Option("restart")),
 		wizard:     wizard,
 	}
@@ -142,8 +142,11 @@ func collectInput(in core.Invocation, wizard bool) (Input, error) {
 	return raw, nil
 }
 
-// optionValues preserves repeatable flags and decodes wizard answers by line.
-func optionValues(in core.Invocation, name string, wizard bool) []string {
+// optionValues decodes one repeatable value. A repeatable flag arrives as a
+// list; a collected answer arrives as newline-separated text. Those are the only
+// two encodings, so a comma inside a value stays data instead of becoming a
+// separator the reader has to remember.
+func optionValues(in core.Invocation, name string) []string {
 	if list := in.OptionList(name); len(list) > 0 {
 		out := make([]string, 0, len(list))
 		for _, value := range list {
@@ -153,30 +156,13 @@ func optionValues(in core.Invocation, name string, wizard bool) []string {
 		}
 		return out
 	}
-	if wizard {
-		var values []string
-		for _, value := range strings.Split(in.Option(name), "\n") {
-			if value = strings.TrimSpace(value); value != "" {
-				values = append(values, value)
-			}
-		}
-		return values
-	}
-	return splitComma(in.Option(name))
-}
-
-func splitComma(raw string) []string {
-	if strings.TrimSpace(raw) == "" {
-		return nil
-	}
-	parts := strings.Split(raw, ",")
-	out := make([]string, 0, len(parts))
-	for _, part := range parts {
-		if trimmed := strings.TrimSpace(part); trimmed != "" {
-			out = append(out, trimmed)
+	var values []string
+	for _, value := range strings.Split(in.Option(name), "\n") {
+		if value = strings.TrimSpace(value); value != "" {
+			values = append(values, value)
 		}
 	}
-	return out
+	return values
 }
 
 var serviceNameRe = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)

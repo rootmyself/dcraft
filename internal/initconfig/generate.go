@@ -51,7 +51,7 @@ type composeService struct {
 	Ports       []string      `yaml:"ports,omitempty"`
 	Volumes     []string      `yaml:"volumes,omitempty"`
 	Environment any           `yaml:"environment,omitempty"`
-	Command     string        `yaml:"command,omitempty"`
+	Command     []string      `yaml:"command,omitempty"`
 	Restart     string        `yaml:"restart,omitempty"`
 }
 
@@ -66,7 +66,7 @@ func buildSpec(projectDir string, input Input, dest Destination) (*Spec, error) 
 	spec := &Spec{Input: input, Destination: dest}
 	service := composeService{
 		Ports:   append([]string{}, input.Ports...),
-		Command: input.Command,
+		Command: append([]string{}, input.Command...),
 		Restart: input.Restart,
 	}
 	env, err := parseEnvironment(input.Env)

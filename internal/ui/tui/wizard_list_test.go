@@ -183,3 +183,40 @@ func TestWizardListOptionalEmpty(t *testing.T) {
 		t.Fatalf("empty optional list did not advance to review:\n%s", view)
 	}
 }
+
+// `d` deletes on every list screen, the same key the backup source checkboxes
+// use. While a value is being typed it is a character instead.
+func TestWizardListDeletesWithD(t *testing.T) {
+	f := &wizardStub{desc: descriptor("wizard", false), steps: core.WizardSpec{Steps: []core.WizardStep{
+		{Name: "items", Title: "Items", List: true, AllowCustom: true},
+	}}}
+	f.desc.Wizard = true
+	m := newWizardModel(t, f)
+	openWizard(t, m)
+	feed(t, m, []tea.Msg{
+		tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("first")},
+		tea.KeyMsg{Type: tea.KeyEnter},
+		tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("second")},
+		tea.KeyMsg{Type: tea.KeyEnter},
+		tea.KeyMsg{Type: tea.KeyUp},
+		tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}},
+	})
+	if view := m.View(); strings.Contains(view, "second") || !strings.Contains(view, "first") {
+		t.Fatalf("d did not delete the selected item:\n%s", view)
+	}
+	// The cursor sits on the add row, so `d` is a character there. Up wraps
+	// from the add row to the last item and down wraps back, so one Up lands
+	// on the item and Enter edits it.
+	feed(t, m, []tea.Msg{
+		tea.KeyMsg{Type: tea.KeyUp},
+		tea.KeyMsg{Type: tea.KeyEnter},
+	})
+	if view := m.View(); !strings.Contains(view, msgListEditing) {
+		t.Fatalf("enter did not start editing:\n%s", view)
+	}
+	// While editing, `d` is typed and does not delete.
+	feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}}})
+	if view := m.View(); !strings.Contains(view, "firstd") {
+		t.Fatalf("d did not type while editing:\n%s", view)
+	}
+}

@@ -312,3 +312,38 @@ func TestPortInvalidDetailsAreComplete(t *testing.T) {
 		}
 	}
 }
+
+// A comma inside a value is part of that value. The CLI no longer splits a
+// repeatable answer on commas, so a command or environment value that contains
+// one survives instead of silently becoming two values.
+func TestRepeatableValuesKeepCommasAsData(t *testing.T) {
+	input, err := collectInput(invocation(map[string]string{
+		"from": "image", "service-name": "web", "image": "busybox:1.36",
+		"command": "sh -c 'echo a,b'",
+		"env-var": "PAIRS=a=1,b=2",
+	}, nil), false)
+	if err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+	if len(input.Command) != 1 || input.Command[0] != "sh -c 'echo a,b'" {
+		t.Fatalf("command = %v", input.Command)
+	}
+	if len(input.Env) != 1 || input.Env[0] != "PAIRS=a=1,b=2" {
+		t.Fatalf("env = %v", input.Env)
+	}
+}
+
+// A repeatable flag still supplies one value per occurrence.
+func TestRepeatableFlagsKeepOccurrencesSeparate(t *testing.T) {
+	input, err := collectInput(invocation(map[string]string{
+		"from": "image", "service-name": "web", "image": "busybox:1.36",
+	}, map[string][]string{
+		"command": {"sh", "-c", "echo a,b"},
+	}), false)
+	if err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+	if len(input.Command) != 3 || input.Command[2] != "echo a,b" {
+		t.Fatalf("command = %v", input.Command)
+	}
+}

@@ -329,7 +329,15 @@ func (m *Model) updateWizardList(msg tea.KeyMsg, step core.WizardStep) {
 		}
 		m.wizardNotice = ""
 		m.followWizardCursor()
-	case "backspace", "delete":
+	case "backspace", "delete", "d":
+		// `d` is the delete key on every list screen: the backup source
+		// checkboxes use it, so the free-form list uses it too. While a value
+		// is being typed, `d` is a character and reaches the input below.
+		if msg.String() == "d" && m.isTypingWizardList() {
+			m.wizardInput += "d"
+			m.wizardNotice = ""
+			return
+		}
 		m.wizardNotice = ""
 		if m.wizardEditing || (m.wizardChoice == len(m.wizardItems) && m.wizardInput != "") {
 			runes := []rune(m.wizardInput)
@@ -353,6 +361,15 @@ func (m *Model) updateWizardList(msg tea.KeyMsg, step core.WizardStep) {
 			m.wizardNotice = ""
 		}
 	}
+}
+
+// isTypingWizardList reports whether a list answer is receiving characters. The
+// edit buffer and the add row both type; a selected item does not.
+func (m *Model) isTypingWizardList() bool {
+	if m.wizardEditing {
+		return true
+	}
+	return len(m.wizardItems) > 0 && m.wizardChoice == len(m.wizardItems) && m.wizardInput != ""
 }
 
 // wizardStepVisible evaluates a step's single dependency against the answers

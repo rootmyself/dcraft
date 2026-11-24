@@ -78,7 +78,7 @@ func TestBuildImageModeWritesUserRuntimeFieldsAndDeclaresNamedVolumes(t *testing
 		Ports:   []string{"8080:80"},
 		Volumes: []string{"./data:/data", "cache:/cache:ro"},
 		Env:     []string{"FOO=bar"},
-		Command: "httpd -f -p 8080",
+		Command: []string{"httpd", "-f", "-p", "8080"},
 		Restart: "unless-stopped",
 	}, dest)
 	if err != nil {
@@ -94,7 +94,11 @@ func TestBuildImageModeWritesUserRuntimeFieldsAndDeclaresNamedVolumes(t *testing
       - cache:/cache:ro
     environment:
       FOO: bar
-    command: httpd -f -p 8080
+    command:
+      - httpd
+      - -f
+      - -p
+      - "8080"
     restart: unless-stopped
 volumes:
   cache: {}

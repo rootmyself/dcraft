@@ -73,7 +73,7 @@ func testInvocation(project string, options map[string]string, lists map[string]
 func imageOptions(service string) map[string]string {
 	return map[string]string{
 		"from": "image", "service-name": service, "image": "busybox:1.36",
-		"port": "8080:80", "volume": "./data:/data,cache:/cache", "env-var": "FOO=bar",
+		"port": "8080:80", "volume": "./data:/data\ncache:/cache", "env-var": "FOO=bar",
 		"restart": "unless-stopped",
 	}
 }

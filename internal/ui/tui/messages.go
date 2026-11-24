@@ -12,7 +12,7 @@ const (
 // Korean user-facing TUI text.
 const (
 	msgListEditing          = " (수정 중)"
-	msgListHint             = "%d개 · ↑↓ 선택 · enter 추가/수정/완료 · 삭제 · esc 수정 취소/마법사 취소"
+	msgListHint             = "%d개 · ↑↓ 선택 · enter 추가/수정/완료 · d 삭제 · esc 수정 취소/마법사 취소"
 	msgListCancel           = "마법사 취소"
 	msgListCancelEdit       = "수정 취소"
 	msgListSelect           = "선택"

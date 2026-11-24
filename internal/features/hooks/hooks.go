@@ -238,7 +238,7 @@ func (f *Feature) wizardSteps(ctx context.Context, in core.Invocation) (any, err
 			},
 			{
 				Name: "script", Title: msgWizardScriptTitle, Prompt: msgWizardScriptPrompt,
-				AllowCustom: true, CustomHint: msgWizardScriptHint,
+				AllowCustom: true, List: true, CustomHint: msgWizardScriptHint,
 			},
 		},
 	}
@@ -261,8 +261,8 @@ func (f *Feature) WizardPreview(answers map[string]string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	script := strings.TrimSpace(answers["script"])
-	if script == "" {
+	scripts := answerScripts(answers["script"])
+	if len(scripts) == 0 {
 		return "", inputError(msgMissingInput, "script")
 	}
 	var b strings.Builder
@@ -270,44 +270,49 @@ func (f *Feature) WizardPreview(answers map[string]string) (string, error) {
 	b.WriteString("\n")
 	fmt.Fprintf(&b, "동작: %s\n", actionLabel(action))
 	fmt.Fprintf(&b, "시점: %s\n", stageLabel(stage))
-	fmt.Fprintf(&b, "스크립트: %s\n", script)
 	b.WriteString(msgWizardWorkdirPrefix + msgWizardWorkdir)
 	b.WriteString("\n")
 	if action == "add" {
-		resolved, err := hooklib.ResolvePath(f.lastProjectDir(answers), script)
-		if err != nil {
-			return "", err
-		}
-		info, statErr := os.Stat(resolved)
-		if statErr != nil {
-			return "", inputError(fmt.Sprintf(msgWizardMissing, script), resolved)
-		}
-		if info.IsDir() {
-			return "", inputError(fmt.Sprintf(msgWizardDirectory, script), resolved)
-		}
-		fmt.Fprintf(&b, "실제 경로: %s\n", resolved)
-		if sha, hashErr := hooklib.ContentSHA256(resolved); hashErr == nil {
-			fmt.Fprintf(&b, "내용 식별자: sha256:%s\n", sha)
-		}
-		if info.Mode().Perm()&0o111 == 0 {
-			b.WriteString(msgWizardNotExecutable)
-			b.WriteString("\n")
+		for _, script := range scripts {
+			resolved, err := hooklib.ResolvePath(f.lastProjectDir(answers), script)
+			if err != nil {
+				return "", err
+			}
+			info, statErr := os.Stat(resolved)
+			if statErr != nil {
+				return "", inputError(fmt.Sprintf(msgWizardMissing, script), resolved)
+			}
+			if info.IsDir() {
+				return "", inputError(fmt.Sprintf(msgWizardDirectory, script), resolved)
+			}
+			fmt.Fprintf(&b, "스크립트: %s\n", script)
+			fmt.Fprintf(&b, "실제 경로: %s\n", resolved)
+			if sha, hashErr := hooklib.ContentSHA256(resolved); hashErr == nil {
+				fmt.Fprintf(&b, "내용 식별자: sha256:%s\n", sha)
+			}
+			if info.Mode().Perm()&0o111 == 0 {
+				b.WriteString(msgWizardNotExecutable)
+				b.WriteString("\n")
+			}
 		}
 	} else {
 		cat, err := hooklib.Load(f.lastProjectDir(answers))
 		if err != nil {
 			return "", err
 		}
-		found := false
-		for _, reg := range cat.Registrations {
-			regPath, _ := hooklib.ResolvePath(cat.ProjectDir, reg.Path)
-			wantPath, _ := hooklib.ResolvePath(f.lastProjectDir(answers), script)
-			if regPath == wantPath && reg.Stage == stage {
-				found = true
+		for _, script := range scripts {
+			found := false
+			for _, reg := range cat.Registrations {
+				regPath, _ := hooklib.ResolvePath(cat.ProjectDir, reg.Path)
+				wantPath, _ := hooklib.ResolvePath(f.lastProjectDir(answers), script)
+				if regPath == wantPath && reg.Stage == stage {
+					found = true
+				}
 			}
-		}
-		if !found {
-			return "", inputError(fmt.Sprintf(msgWizardNotRegistered, script, stage), "")
+			if !found {
+				return "", inputError(fmt.Sprintf(msgWizardNotRegistered, script, stage), "")
+			}
+			fmt.Fprintf(&b, "스크립트: %s\n", script)
 		}
 	}
 	b.WriteString(msgDisclosure)
@@ -323,12 +328,36 @@ func (f *Feature) lastProjectDir(answers map[string]string) string {
 
 func (f *Feature) applyWizard(ctx context.Context, in core.Invocation) (any, error) {
 	action := strings.TrimSpace(in.Option("action"))
-	switch action {
-	case "add", "remove":
-		return f.change(ctx, in, action, in.Option("script"), in.Option("stage"))
-	default:
+	scripts := answerScripts(in.Option("script"))
+	if action != "add" && action != "remove" {
 		return nil, inputError(msgActionConflict, action)
 	}
+	if len(scripts) == 0 {
+		return nil, inputError(msgMissingInput, "script")
+	}
+	// One registered script per answer, in the order the reader entered them.
+	// A failure stops the wave: the report states what ran and what did not.
+	var last any
+	for _, script := range scripts {
+		payload, err := f.change(ctx, in, action, script, in.Option("stage"))
+		if err != nil {
+			return nil, err
+		}
+		last = payload
+	}
+	return last, nil
+}
+
+// answerScripts decodes the script answer. The step is a list, so each item is
+// one script path; a single answer decodes to one item.
+func answerScripts(raw string) []string {
+	var out []string
+	for _, line := range strings.Split(raw, "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			out = append(out, line)
+		}
+	}
+	return out
 }
 
 func parseStage(value string) (hooklib.Stage, error) {
