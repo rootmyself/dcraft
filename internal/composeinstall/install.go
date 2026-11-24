@@ -357,12 +357,20 @@ func (f *Feature) Present(res core.Result, width int) string {
 }
 
 // Document implements core.ViewPresenter: the install target is a path, the
-// source is a URL, and the CLI text stays unchanged.
+// source is a URL, and the CLI text stays unchanged. Only the guidance line
+// differs, because the interactive reader acts from the menu.
 func (f *Feature) Document(res core.Result) core.Document {
-	return core.Document{Blocks: []core.Block{{Kind: core.BlockValueLines, Lines: presentLines(res)}}}
+	return core.Document{Blocks: []core.Block{{Kind: core.BlockValueLines, Lines: presentLinesWith(res, msgDocGuidanceOne)}}}
 }
 
 func presentLines(res core.Result) []core.ValueLine {
+	return presentLinesWith(res, msgGuidanceOne)
+}
+
+// presentLinesWith renders the install report with the given guidance line.
+// The CLI and the TUI share every fact and differ only in how the reader is
+// told to check the result.
+func presentLinesWith(res core.Result, guidance string) []core.ValueLine {
 	payload, ok := payloadFrom(res.Data)
 	if !ok {
 		return []core.ValueLine{{{Text: msgPlanTitle}}}
@@ -392,7 +400,7 @@ func presentLines(res core.Result) []core.ValueLine {
 		}
 	}
 	lines = append(lines, nil,
-		core.ValueLine{{Text: msgGuidanceOne}},
+		core.ValueLine{{Text: guidance}},
 		core.ValueLine{{Text: msgGuidanceTwo}},
 	)
 	return lines

@@ -152,8 +152,11 @@ Dockerfile의 EXPOSE/CMD는 자동으로 읽지 않음. 포트와 명령은 직�
 	msgNoticeOtherExisting = "기존 Compose 파일이 여러 개 있음. 이번에는 선택한 파일만 바꾸며 나머지는 그대로 둠."
 	msgNoticeOverride      = "기존 override 파일이 있음: %s. dcraft는 수정하지 않으며, 생성 후 Compose가 이 파일을 자동으로 병합."
 
-	msgSaved        = "Compose 파일 저장."
-	msgSavedPath    = "저장 경로"
+	msgSaved     = "Compose 파일 저장."
+	msgSavedPath = "저장 경로"
+	// The interactive saved screen. The standard case is reachable from the
+	// menu; a file written elsewhere keeps the explicit command below.
+	msgDocNext      = "다음 행동: 메뉴에서 스택 시작 선택."
 	msgSavedService = "서비스"
 	msgSavedCheck   = "검증"
 	msgSavedChanged = "변경"

@@ -89,6 +89,16 @@ const (
 	msgNextRestartToApply = "설정을 적용하려면 dcraft up을 실행. restart는 설정·이미지를 갱신하지 않음."
 	msgNextVolumesKept    = "데이터 볼륨은 자동으로 삭제되지 않았음."
 	msgNextObserveFailed  = "현재 상태를 보려면 dcraft status를 실행."
+
+	// The same four actions in the interactive screen's own terms. A reader who
+	// works only in the TUI has no reason to type the command, so the document
+	// names the menu entry instead. "메뉴" is the footer key that returns here.
+	msgDocNextStatus         = "상태 확인: 메뉴에서 스택 상태 선택."
+	msgDocNextStop           = "중지: 메뉴에서 스택 중지 선택 (컨테이너·데이터 유지)."
+	msgDocNextDown           = "제거: 메뉴에서 스택 제거 선택 (데이터 볼륨 유지)."
+	msgDocNextUp             = "다시 시작: 메뉴에서 스택 시작 선택."
+	msgDocNextRestartToApply = "설정을 적용하려면 메뉴에서 갱신을 실행. 재시작은 설정·이미지를 갱신하지 않음."
+	msgDocNextObserveFailed  = "현재 상태를 보려면 메뉴에서 스택 상태 선택."
 )
 
 // TUI document wording. The CLI Present output keeps its own sentences; these

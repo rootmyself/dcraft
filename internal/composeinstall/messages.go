@@ -48,6 +48,9 @@ const (
 	msgStatusUnchanged = "변경 없음"
 	msgGuidanceOne     = "다음 행동: dcraft status 로 Compose 사용 가능 여부를 다시 확인."
 	msgGuidanceTwo     = "dcraft는 Docker 자체를 설치·교체하거나 관리자 권한을 올리지 않음."
+	// The interactive screen's version. The reader there opens the status
+	// screen from the menu instead of typing the command.
+	msgDocGuidanceOne = "다음 행동: 메뉴에서 스택 상태를 열어 Compose 사용 가능 여부를 다시 확인."
 )
 
 func manualInstallActions(dir string) []string {

@@ -44,9 +44,30 @@ func Document(res core.Result) core.Document {
 	blocks = append(blocks, core.Block{
 		Kind:    core.BlockCallout,
 		Callout: core.CalloutInfo,
-		Text:    strings.Join(numbered(nextActions(action, report.State == nil)), "\n"),
+		Text:    strings.Join(numbered(documentNextActions(action, report.State == nil)), "\n"),
 	})
 	return core.Document{Title: msgTitle, Blocks: blocks}
+}
+
+// documentNextActions is the interactive screen's version of nextActions. The
+// CLI keeps the command lines; the TUI names the menu entry, because a reader
+// who works only in the screen has no reason to type the command.
+func documentNextActions(action Action, stateUnknown bool) []string {
+	var out []string
+	switch action {
+	case ActionUp:
+		out = []string{msgDocNextStatus, msgDocNextStop, msgDocNextDown}
+	case ActionStop:
+		out = []string{msgDocNextUp, msgDocNextStatus}
+	case ActionDown:
+		out = []string{msgDocNextUp, msgDocNextStatus, msgNextVolumesKept}
+	case ActionRestart:
+		out = []string{msgDocNextStatus, msgDocNextRestartToApply}
+	}
+	if stateUnknown {
+		out = append(out, msgDocNextObserveFailed)
+	}
+	return out
 }
 
 func documentBadges(action Action, report Report) []core.Badge {

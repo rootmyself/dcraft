@@ -183,3 +183,24 @@ func TestUpdateCLIPresenterUnchanged(t *testing.T) {
 		t.Fatalf("CLI output adopted the TUI numbered callout:\n%s", out)
 	}
 }
+
+// The interactive screen names the menu entry in its next actions. The CLI keeps
+// the command lines for its own presenter.
+func TestUpdateDocumentNextActionsUseTheMenu(t *testing.T) {
+	doc := update.Document(updateResult(baseReport()))
+	var callout string
+	for _, b := range doc.Blocks {
+		if b.Kind == core.BlockCallout && b.Callout == core.CalloutInfo {
+			callout = b.Text
+		}
+	}
+	if callout == "" {
+		t.Fatal("no next-action callout")
+	}
+	if strings.Contains(callout, "dcraft ") {
+		t.Fatalf("the document tells an interactive reader to type a command:\n%s", callout)
+	}
+	if !strings.Contains(callout, "메뉴") {
+		t.Fatalf("the callout does not say where to act:\n%s", callout)
+	}
+}

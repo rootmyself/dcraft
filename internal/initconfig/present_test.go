@@ -8,7 +8,8 @@ import (
 )
 
 // The saved-file document declares the path, the service, the project name and
-// both commands; the CLI presenter keeps the same byte text.
+// the validation command. A standard file in the project folder is started from
+// the menu, so that screen carries no command line; the CLI keeps it.
 func TestPresentDocumentTagsPathAndCommands(t *testing.T) {
 	res := core.Result{Outcome: core.OutcomeSuccess, Data: Payload{Init: Report{
 		Mode: "image", Service: "app", Path: "/work/compose.yaml", ProjectName: "work",
@@ -26,10 +27,36 @@ func TestPresentDocumentTagsPathAndCommands(t *testing.T) {
 		}
 	}
 	if kinds[core.ValuePath] != 1 || kinds[core.ValueService] != 1 ||
-		kinds[core.ValueProject] != 1 || kinds[core.ValueCommand] != 2 {
-		t.Fatalf("kinds = %v, want path=1 service=1 project=1 command=2", kinds)
+		kinds[core.ValueProject] != 1 || kinds[core.ValueCommand] != 1 {
+		t.Fatalf("kinds = %v, want path=1 service=1 project=1 command=1", kinds)
 	}
-	if got, want := Present(res, 0), strings.Join([]string{core.ValueLinesText(doc.Blocks[0].Lines), ""}, "\n"); got != want {
-		t.Fatalf("presenter text = %q, want %q", got, want)
+	docText := core.ValueLinesText(doc.Blocks[0].Lines)
+	if !strings.Contains(docText, msgDocNext) {
+		t.Fatalf("saved screen lost the menu guidance: %q", docText)
+	}
+	if strings.Contains(docText, msgNextCommand) {
+		t.Fatalf("saved screen still tells an interactive reader to type the command: %q", docText)
+	}
+	// The CLI text is unchanged: it still names the command and the folder.
+	cliText := Present(res, 0)
+	if !strings.Contains(cliText, msgPreviewNext+": "+msgNextCommand) {
+		t.Fatalf("CLI text lost its command line: %q", cliText)
+	}
+}
+
+// A file written outside the project folder, or under a non-standard name, is
+// not reachable from the menu, so the document keeps the explicit command.
+func TestPresentDocumentKeepsTheCommandWhenTheMenuWouldNotFindIt(t *testing.T) {
+	next := "cd '/work/gen' && dcraft up -f 'stack.yaml'"
+	res := core.Result{Outcome: core.OutcomeSuccess, Data: Payload{Init: Report{
+		Mode: "image", Service: "app", Path: "/work/gen/stack.yaml", ProjectName: "work",
+		NextCommand: next,
+	}}}
+	docText := core.ValueLinesText(Document(res).Blocks[0].Lines)
+	if !strings.Contains(docText, next) {
+		t.Fatalf("document dropped a command the menu cannot replace: %q", docText)
+	}
+	if strings.Contains(docText, msgDocNext) {
+		t.Fatalf("document claimed a menu action that would not find the file: %q", docText)
 	}
 }

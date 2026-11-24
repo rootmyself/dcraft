@@ -70,3 +70,9 @@ func (f *Feature) Plan(ctx context.Context, in core.Invocation) (core.Plan, erro
 func (f *Feature) Present(res core.Result, width int) string {
 	return behavior.Present(res, width)
 }
+
+// Document implements core.ViewPresenter so the TUI renders the structured
+// rollback report instead of the CLI string. The CLI keeps its own text.
+func (f *Feature) Document(res core.Result) core.Document {
+	return behavior.Document(res)
+}

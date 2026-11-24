@@ -374,7 +374,23 @@ func (f *Feature) Present(res core.Result, width int) string {
 // and destination are paths, and the next commands are commands; the CLI text
 // is unchanged.
 func (f *Feature) Document(res core.Result) core.Document {
-	return core.Document{Blocks: []core.Block{{Kind: core.BlockValueLines, Lines: presentLines(res)}}}
+	return core.Document{Blocks: []core.Block{{Kind: core.BlockValueLines, Lines: documentLines(res)}}}
+}
+
+// documentLines is the saved-script screen in the interactive surface's terms.
+// Registering the script is the same decision the host-script screen makes, so
+// that screen points at the menu instead of the command line; the CLI keeps the
+// exact commands.
+func documentLines(res core.Result) []core.ValueLine {
+	lines := presentLines(res)
+	for i, line := range lines {
+		if len(line) != 1 || line[0].Text != "다음 명령:" {
+			continue
+		}
+		lines[i] = core.ValueLine{{Text: msgDocNext}}
+		return lines[:i+1]
+	}
+	return lines
 }
 
 func presentLines(res core.Result) []core.ValueLine {

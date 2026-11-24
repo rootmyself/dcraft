@@ -415,8 +415,24 @@ func TestComposeInstallDocumentTagsURLAndPath(t *testing.T) {
 	if kinds[core.ValueURL] != 1 || kinds[core.ValuePath] != 1 {
 		t.Fatalf("kinds = %v, want one url and one path", kinds)
 	}
-	if got, want := strings.Join(text, "\n"), feature.Present(res, 0); got != want {
-		t.Fatalf("document text = %q, want presenter text %q", got, want)
+	// The facts are shared with the CLI; the guidance line differs on purpose,
+	// because the interactive reader acts from the menu. Everything before the
+	// guidance must stay byte-identical.
+	docText := strings.Join(text, "\n")
+	cliText := feature.Present(res, 0)
+	docFacts, docGuide, docOK := strings.Cut(docText, "\n다음 행동: ")
+	cliFacts, cliGuide, cliOK := strings.Cut(cliText, "\n다음 행동: ")
+	if !docOK || !cliOK {
+		t.Fatalf("guidance line missing:\ndocument %q\ncli %q", docText, cliText)
+	}
+	if docFacts != cliFacts {
+		t.Fatalf("document facts = %q, want %q", docFacts, cliFacts)
+	}
+	if docGuide == cliGuide {
+		t.Fatalf("the document kept the CLI command line: %q", docGuide)
+	}
+	if strings.Contains(docGuide, "dcraft status") {
+		t.Fatalf("the document still tells an interactive reader to type the command: %q", docGuide)
 	}
 }
 
