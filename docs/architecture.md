@@ -29,6 +29,7 @@ cmd/dcraft                 process entry, signal context, TTY check, exit codes
   internal/app             wiring: deps, registry, engine
   internal/ui/cli          Cobra commands derived from the registry
   internal/ui/tui          Bubble Tea model derived from the registry
+  internal/ui/tui/termview a child process's terminal grid (attach, logs, up)
   internal/ui/view         shared Korean render helpers (no feature branches)
         |
         v
@@ -1012,7 +1013,17 @@ reliability: color is the third channel, never the only one.
   close a log stream; an attached command forwards keys and detaches with
   `ctrl+]`. Closing a live screen cancels the run context and never stops a
   service. The last output stays visible as a titled panel on the management
-  screen, and the lines it had to omit are stated.
+  screen.
+- The output band is a terminal grid, not a list of lines. A shell writes its
+  prompt with no newline, echoes each key and redraws the line when the user
+  edits it; a line-buffered reader would show none of that until Enter. The grid
+  in `internal/ui/tui/termview` applies cursor moves, line erasure, colour and
+  alternate screens as cell state, so the child's escape bytes never reach
+  dcraft's own terminal. Both a log stream and an attached command use it; a log
+  stream adds the newline translation a terminal driver would apply to a pipe.
+- The grid keeps what scrolled off the top (10000 lines), so a long run stays
+  reachable with PgUp instead of being dropped. Its rows scroll under the fixed
+  header with the approved scrollbar gutter.
 - The wizard is the generic guided flow: `단계 1/4` (counted over the visible
   steps, so a conditional step changes the denominator), the step title, the
   prompt, choice cards or `[ ]`/`[x]` checkboxes, and a visible end caret for a
@@ -1727,8 +1738,16 @@ Published for later screens; do not create a second selection model.
 ### TUI
 
 - A `core.LiveFeature` opens a live screen. Logs stop with `q`/`esc`/`ctrl+c`;
-  an attached command forwards keys and detaches with `ctrl+]` (or exits by
-  itself). The last output lines remain visible in the management view.
+  an attached command forwards every key except `ctrl+]`, which detaches (or the
+  command exits by itself). `?` is a character a shell needs, so the attach
+  screen has no help chip. The last screen remains visible in the management
+  view.
+- The child's grid is the size of the band it is drawn in, not the whole
+  terminal: a child sized to the window would draw under dcraft's header and
+  footer. A resize reaches the child through the same `WindowSizeMsg`.
+- `NO_COLOR`, `TERM=dumb` and a non-TTY output keep their no-escape guarantee:
+  the grid's cells are painted only when the theme may emit paint, so a child's
+  own colour can never smuggle an escape into a colorless frame.
 - A `core.InputProvider` feature opens a generic form (choice and text fields)
   that shows the resolved values before running; `esc` runs nothing, and the
   feature validates the values again through `WithInputs`.
@@ -2631,7 +2650,12 @@ Tested seams:
   a resize loop, `NO_COLOR` producing no SGR sequence, and rendering under the
   truecolor, 256-color, 16-color and `dumb` profiles.
 - TUI live screens: logs streaming, quit to the management view, attach key
-  forwarding and `ctrl+]` detach, generic input form, no run before confirm;
+  forwarding and `ctrl+]` detach, generic input form, no run before confirm.
+  The attach screen is driven with no Enter pressed: the child's prompt and each
+  typed character must be on screen before any newline arrives, which is the
+  defect a line-buffered band could not represent. The child's grid is also
+  sized to its band, so a narrowed window reaches the child instead of drawing
+  under the header;
 - real Docker logs/exec: a scaled `web=2` stack with distinct instances, logs
   follow streaming a new line and ctrl+c leaving both containers running,
   exec reaching the right instance in both indexes, literal argv (no shell),
