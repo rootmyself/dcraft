@@ -10,16 +10,17 @@ import (
 
 // The sidebar summary animation. The timings are named here so the screen and
 // its tests agree on the cadence: the summary rests before its first movement,
-// moves one cell per tick, and rests again at the end before it repeats.
+// moves one cell per tick, rests at the end, and then rests again before each
+// repeat.
 const (
 	// defaultMarqueeInterval is one movement step.
 	defaultMarqueeInterval = 100 * time.Millisecond
-	// marqueeInitialDelay is the rest before the first movement when the
-	// summary appears or the selection changes. Reading the first cell is the
-	// point of the rest.
+	// marqueeInitialDelay is the rest before the first movement, on every
+	// appearance, selection change and repeat. Reading the first cell is the
+	// point of the rest, so a cycle never starts already moving.
 	marqueeInitialDelay = time.Second
-	// marqueeHold is the rest at the end. A repeat starts moving immediately:
-	// the hold already gave the reader the whole summary.
+	// marqueeHold is the rest at the end. It gives the reader the whole
+	// summary, then the repeat starts over with the initial delay.
 	marqueeHold = 2 * time.Second
 )
 
@@ -114,6 +115,9 @@ func (m *Model) advanceMarquee(tick marqueeTickMsg) {
 	}
 	s.hold++
 	if time.Duration(s.hold)*m.marqueeInterval >= marqueeHold {
+		// Back to the start with the same rest the first appearance paid, so a
+		// repeat never begins mid-movement.
 		s.offset, s.hold = 0, 0
+		s.delay = m.marqueeRestTicks(marqueeInitialDelay)
 	}
 }

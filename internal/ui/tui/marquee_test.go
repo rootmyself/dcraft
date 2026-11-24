@@ -99,9 +99,10 @@ func TestSidebarMarqueeWaitsBeforeFirstMovement(t *testing.T) {
 	}
 }
 
-// A repeat starts moving immediately: the hold already gave the reader the whole
-// summary, so paying the initial delay again would only lengthen the cycle.
-func TestSidebarMarqueeRepeatSkipsInitialDelay(t *testing.T) {
+// A repeat pays the initial delay again. The hold gives the reader the whole
+// summary, then the rest lets the first cell be read before the text moves
+// again, so no cycle begins already scrolling.
+func TestSidebarMarqueeRepeatWaitsBeforeMoving(t *testing.T) {
 	h := newMarqueeHarness(t, "abcdefghijklmnopqrstuvwxyz")
 	// Advance to the end of the summary. Reaching it is the precondition of the
 	// hold, so the count that follows is exact.
@@ -127,9 +128,15 @@ func TestSidebarMarqueeRepeatSkipsInitialDelay(t *testing.T) {
 	if !h.shows(t, 0) {
 		t.Fatalf("summary did not restart after the hold:\n%s", h.view())
 	}
+	// The repeat rests exactly as long as the first appearance did.
+	delay := h.model.marqueeRestTicks(marqueeInitialDelay)
+	h.ticks(t, delay)
+	if !h.shows(t, 0) {
+		t.Fatalf("repeat moved during the initial delay:\n%s", h.view())
+	}
 	h.step(t)
 	if !h.shows(t, 1) {
-		t.Fatalf("repeat waited for the initial delay again:\n%s", h.view())
+		t.Fatalf("repeat did not move after the initial delay:\n%s", h.view())
 	}
 }
 
