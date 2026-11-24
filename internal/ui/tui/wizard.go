@@ -364,12 +364,13 @@ func (m *Model) updateWizardList(msg tea.KeyMsg, step core.WizardStep) {
 }
 
 // isTypingWizardList reports whether a list answer is receiving characters. The
-// edit buffer and the add row both type; a selected item does not.
+// edit buffer and the add row both type, empty buffer included: pressing a
+// letter there starts a value. A selected item does not.
 func (m *Model) isTypingWizardList() bool {
 	if m.wizardEditing {
 		return true
 	}
-	return len(m.wizardItems) > 0 && m.wizardChoice == len(m.wizardItems) && m.wizardInput != ""
+	return m.wizardChoice == len(m.wizardItems)
 }
 
 // wizardStepVisible evaluates a step's single dependency against the answers

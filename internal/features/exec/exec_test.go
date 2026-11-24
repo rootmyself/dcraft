@@ -700,3 +700,60 @@ func TestExecScreenCreatesNothingAndTheFirstRunStatesTheIgnoreRule(t *testing.T)
 		t.Fatalf("notices = %v, want the ignore rule once", notices)
 	}
 }
+
+// `dcraft exec --forget <명령>` removes one remembered command and attaches
+// nothing. Its help text points here, so the promise is real.
+func TestExecForgetsOneRememberedCommand(t *testing.T) {
+	project := t.TempDir()
+	history, err := LoadHistory(project, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range []string{"date", "psql -U postgres"} {
+		if err := history.Remember(strings.Fields(line)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f := New(&fakeBackend{snap: scaledSnapshot()}, &fakeStreamer{})
+	in := invocation(nil, nil, map[string]string{"forget": "date"}, core.IO{}, &fakeReporter{})
+	in.Target.ProjectDir = project
+	data, err := f.Run(context.Background(), in)
+	if err != nil {
+		t.Fatalf("forget: %v", err)
+	}
+	if notices := data.(Payload).Exec.Notices; len(notices) != 1 || !strings.Contains(notices[0], "date") {
+		t.Fatalf("notices = %v", notices)
+	}
+	after, err := LoadHistory(project, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(after.Commands) != 1 || after.Commands[0] != "psql -U postgres" {
+		t.Fatalf("history = %v", after.Commands)
+	}
+}
+
+// The credential warning is conditional: it names the command the reader typed,
+// not every command.
+func TestExecWarnsOnlyForCommandsThatLookLikeCredentials(t *testing.T) {
+	project := t.TempDir()
+	f := New(&fakeBackend{snap: scaledSnapshot()}, &fakeStreamer{})
+	run := func(args []string) []string {
+		in := invocation([]string{"web"}, args, map[string]string{"index": "1"}, core.IO{Stdout: &strings.Builder{}}, &fakeReporter{})
+		in.Target.ProjectDir = project
+		data, err := f.Run(context.Background(), in)
+		if err != nil {
+			t.Fatalf("run %v: %v", args, err)
+		}
+		return data.(Payload).Exec.Notices
+	}
+	for _, notice := range run([]string{"date"}) {
+		if strings.Contains(notice, "비밀값") {
+			t.Fatalf("a plain command warned about credentials: %v", notice)
+		}
+	}
+	notices := run([]string{"psql", "postgres://u:password=secret@db/app"})
+	if len(notices) != 1 || !strings.Contains(notices[0], "비밀값") {
+		t.Fatalf("notices = %v, want the credential warning", notices)
+	}
+}

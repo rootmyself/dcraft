@@ -372,7 +372,9 @@ func (m *Model) updateWheel(msg tea.MouseMsg) tea.Cmd {
 		m.scrollOverlay(delta * mouseWheelRows)
 		return nil
 	}
-	if m.sidebarVisible() && m.navMenuVisible() && msg.X < visual.SidebarWidth(m.width) {
+	if m.sidebarVisible() && msg.X < visual.SidebarWidth(m.width) {
+		// The wheel over the pane always means the same thing: move the menu
+		// cursor. It never scrolls the body underneath, on any screen.
 		m.moveSelection(delta)
 		return nil
 	}

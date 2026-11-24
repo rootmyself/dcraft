@@ -61,7 +61,7 @@ func Present(res core.Result, width int) string {
 	fmt.Fprintf(&b, "  - %s\n", msgSuccessNextStatus)
 	fmt.Fprintf(&b, "  - %s\n", msgSuccessNextUpdate)
 	fmt.Fprintf(&b, "  - %s\n", msgSuccessNextData)
-	return strings.TrimRight(b.String(), "\n")
+	return core.NormalizeSections(b.String())
 }
 
 func payloadFrom(data any) (Payload, bool) {

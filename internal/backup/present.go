@@ -43,7 +43,7 @@ func Present(res core.Result, width int) string {
 	for _, notice := range report.Notices {
 		fmt.Fprintf(&b, "  - %s\n", notice)
 	}
-	return strings.TrimRight(b.String(), "\n")
+	return core.NormalizeSections(b.String())
 }
 
 func payloadFrom(data any) (Payload, bool) {

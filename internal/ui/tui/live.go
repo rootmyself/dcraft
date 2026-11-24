@@ -569,6 +569,13 @@ func (w *liveWriter) Write(p []byte) (int, error) {
 			w.partial = w.partial[newline+1:]
 			w.pending = ""
 			w.emit(segment)
+		case newline == rewrite+1:
+			// CRLF is one line terminator, not a rewrite followed by an empty
+			// row: the text before it is the row, and the newline closes it.
+			segment := w.partial[:rewrite]
+			w.partial = w.partial[newline+1:]
+			w.pending = ""
+			w.emit(segment)
 		default:
 			w.pending = w.partial[:rewrite]
 			w.partial = w.partial[rewrite+1:]

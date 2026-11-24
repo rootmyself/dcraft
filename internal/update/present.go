@@ -23,7 +23,7 @@ func Present(res core.Result, width int) string {
 	// The plan is shown once, before the run (CLI preview / TUI plan screen).
 	// Repeating it in the success output would print it twice per operation.
 	b.WriteString(renderSuccess(payload, width))
-	return strings.TrimRight(b.String(), "\n")
+	return core.NormalizeSections(b.String())
 }
 
 func payloadFrom(data any) (Payload, bool) {
@@ -112,7 +112,7 @@ func renderSuccess(payload Payload, width int) string {
 	fmt.Fprintf(&b, "  - %s\n", msgSuccessNextStatus)
 	fmt.Fprintf(&b, "  - %s\n", msgSuccessNextUpdate)
 	fmt.Fprintf(&b, "  - %s\n", msgSuccessNextRoll)
-	return strings.TrimRight(b.String(), "\n")
+	return core.NormalizeSections(b.String())
 }
 
 func readinessLabel(svc stack.ServiceReadiness) string {

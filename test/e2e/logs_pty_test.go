@@ -372,3 +372,40 @@ func TestPTYTUIExecAttachDetachesWithCtrlBracketAndRestoresTerminal(t *testing.T
 	fake.assertNoSubcommand(t, "stop")
 	fake.assertNoSubcommand(t, "down")
 }
+
+// A log line that carries a tab and a carriage return must not push a row past
+// the sidebar column. The fake prints the hostile line on one row; the frame's
+// width is fixed, so an unsanitized line would move the cursor or widen the row.
+func TestPTYTUILiveLogSanitizesTabAndCarriageReturn(t *testing.T) {
+	fake := newFakeLiveDocker(t)
+	project := liveProject(t)
+	env := fake.env(t, t.TempDir(), map[string]string{"DOCKER_FAKE_LOG_HOSTILE": "1"})
+	s := startPTY(t, project, env)
+	s.waitFor("[↑↓] 이동", 15*time.Second)
+	s.pressMenuDown(menuDownPresses(t, "logs"))
+	s.waitFor("서비스 선택", 15*time.Second)
+	s.press("\r")
+	s.waitFor("실시간 로그", 15*time.Second)
+	// The rewritten row is what survives: the progress tail before the carriage
+	// return is replaced, and the tab became spaces.
+	s.waitFor("done", 20*time.Second)
+	tail := s.out.String()
+	if strings.Contains(tail, "100%") {
+		t.Fatalf("the rewritten progress tail reached the terminal:\n%q", tail)
+	}
+	if strings.Contains(tail, "\x1b]0;") {
+		t.Fatalf("an OSC title reached the terminal:\n%q", tail)
+	}
+	if bad := overWideRows(tail, 120); len(bad) > 0 {
+		t.Fatalf("a log row is wider than the terminal: %q", bad[0])
+	}
+	s.send("q")
+	s.waitFor("마지막 실시간 출력", 15*time.Second)
+	s.send("q")
+	if code := s.wait(); code != 0 {
+		t.Fatalf("TUI exit = %d\n%s", code, tail)
+	}
+	s.assertRestored()
+	fake.assertNoSubcommand(t, "stop")
+	fake.assertNoSubcommand(t, "down")
+}

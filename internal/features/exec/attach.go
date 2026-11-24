@@ -95,9 +95,6 @@ func (f *Feature) Inputs(ctx context.Context, in core.Invocation) ([]core.InputF
 	if historyErr != "" {
 		commandHelp += "\n" + msgHistoryUnreadable
 	}
-	// The screen warns before the reader types: a command can be stored, and a
-	// command that looks like it carries a credential is not stored at all.
-	commandHelp += "\n" + msgCredentialRisk
 	fields := []core.InputField{
 		{
 			Key:      fieldInstance,
@@ -210,6 +207,37 @@ func rememberCommand(projectDir string, command []string) RememberOutcome {
 	out := RememberOutcome{Created: history.created}
 	out.Err = history.Remember(command)
 	return out
+}
+
+// forgetCommand removes one remembered command. The answer names the command so
+// the reader sees what left the store.
+func forgetCommand(projectDir, command string) (any, error) {
+	if strings.TrimSpace(projectDir) == "" {
+		return nil, core.Fail(core.Diagnostic{
+			Category:    core.CategoryTargetInvalid,
+			Severity:    core.SeverityError,
+			Message:     msgForgetNoProject,
+			NextActions: []string{msgForgetNoProjectAction},
+		})
+	}
+	history, err := LoadHistory(projectDir, false)
+	if err != nil {
+		return nil, core.Fail(core.Diagnostic{
+			Category:    core.CategoryInternal,
+			Severity:    core.SeverityError,
+			Message:     msgHistoryUnreadable,
+			NextActions: []string{msgForgetAction},
+		})
+	}
+	if saveErr := history.Delete(command); saveErr != nil {
+		return nil, core.Fail(core.Diagnostic{
+			Category:    core.CategoryInternal,
+			Severity:    core.SeverityError,
+			Message:     msgHistoryUnreadable,
+			NextActions: []string{msgForgetAction},
+		})
+	}
+	return Payload{Exec: Report{Command: []string{command}, Notices: []string{fmt.Sprintf(msgForgotCommand, command)}}}, nil
 }
 
 // substitutionRetry is the one retry the attach makes on its own: an image

@@ -188,3 +188,29 @@ func TestSidebarClickOnAResultNavigatesImmediately(t *testing.T) {
 		t.Fatal("a read-only result asked before navigating")
 	}
 }
+
+// The sidebar summary pauses under every overlay, including the discard panel.
+// A moving background behind a panel is the distraction the pause exists for.
+func TestSidebarMarqueePausesUnderTheDiscardPanel(t *testing.T) {
+	m := sidebarClickModel(t, true)
+	openWizard(t, m)
+	m.marqueeTick = func(_ time.Duration, tick func(time.Time) tea.Msg) tea.Cmd {
+		return func() tea.Msg { return tick(time.Time{}) }
+	}
+	m.wizardAnswers["service"] = "web"
+	statusIndex := m.featureIndex("status")
+	doubleClickSidebar(t, m, statusIndex)
+	if !m.discardOpen {
+		t.Fatal("the discard panel did not open")
+	}
+	if _, cmd := m.Update(struct{}{}); cmd != nil {
+		// A cleared generation must stop the scheduled tick; an unrelated
+		// message must not restart it either.
+		pending := cmd
+		if msg := pending(); msg != nil {
+			if _, ok := msg.(marqueeTickMsg); ok {
+				t.Fatal("the summary scheduled a tick under the discard panel")
+			}
+		}
+	}
+}

@@ -220,3 +220,18 @@ func TestWizardListDeletesWithD(t *testing.T) {
 		t.Fatalf("d did not type while editing:\n%s", view)
 	}
 }
+
+// `d` starts a value on the add row instead of deleting the selected item, even
+// when the buffer is empty. A list with nothing in it has the same rule.
+func TestWizardListDTypesOnAnEmptyAddRow(t *testing.T) {
+	f := &wizardStub{desc: descriptor("wizard", false), steps: core.WizardSpec{Steps: []core.WizardStep{
+		{Name: "items", Title: "Items", List: true, AllowCustom: true, Optional: true},
+	}}}
+	f.desc.Wizard = true
+	m := newWizardModel(t, f)
+	openWizard(t, m)
+	feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}}})
+	if view := m.View(); !strings.Contains(view, "> d") {
+		t.Fatalf("d did not start a value on an empty add row:\n%s", view)
+	}
+}

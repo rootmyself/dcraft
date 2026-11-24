@@ -12,16 +12,24 @@ const (
 	msgTitle   = "서비스 접속"
 	msgSummary = "실행 중인 서비스 인스턴스에서 지정한 명령을 정확히 실행."
 	msgUsage   = "dcraft exec -s <서비스> [-i <인스턴스>] [-T] -- <명령> [인자...]\n" +
+		"  dcraft exec --forget <명령>\n" +
 		"  -s/--service와 명령은 필수. dcraft는 셸을 대신 실행하지 않으므로\n" +
-		"  이미지 안에 해당 명령 필요.\n" +
+		"  이미지 안에 해당 명령 필요. 대화형 화면은 /bin/bash를 기본으로 제안하고\n" +
+		"  이 프로젝트의 최근 명령 5개를 함께 보여 줌.\n" +
 		"  대화형 터미널은 입력·출력을 연결. -T 또는 비대화형은 연결하지 않음.\n" +
 		"  --json은 명령 출력을 data.exec에 담아 한 번에 출력. 대화형 터미널은 열지 않음."
 
 	msgStageSelect = "인스턴스 선택"
 	msgStageAttach = "명령 실행"
 
-	msgFlagIndex = "다중 인스턴스 서비스에서 실행할 컨테이너 인덱스 (0부터)."
-	msgFlagNoTTY = "대화형 터미널을 연결하지 않음 (docker compose exec -T)."
+	msgFlagIndex  = "다중 인스턴스 서비스에서 실행할 컨테이너 인덱스 (0부터)."
+	msgFlagNoTTY  = "대화형 터미널을 연결하지 않음 (docker compose exec -T)."
+	msgFlagForget = "이 프로젝트에 기억한 명령 하나를 삭제 (정확히 같은 문자열). 접속하지 않음."
+
+	msgForgotCommand         = "최근 명령에서 삭제: %s"
+	msgForgetNoProject       = "프로젝트 폴더를 확인하지 못해 최근 명령을 삭제할 수 없음."
+	msgForgetNoProjectAction = "프로젝트 폴더에서 다시 실행."
+	msgForgetAction          = "저장된 명령은 dcraft exec 화면의 선택지에서 확인."
 
 	msgNoBackend       = "스택 조회 또는 명령 실행 연결이 준비되지 않았음."
 	msgNoBackendAction = "dcraft를 다시 설치하거나 빌드한 뒤 실행."
@@ -68,7 +76,7 @@ const (
 	msgHistoryIgnore     = "최근 명령은 %s에 저장됨. git에 올리지 않으려면 .gitignore에 그 경로를 추가."
 
 	msgFieldCommandChoice     = "명령 선택"
-	msgFieldCommandChoiceHelp = "기본 셸 또는 이 프로젝트에서 최근 실행한 명령 선택 · 삭제는 선택 화면에서"
+	msgFieldCommandChoiceHelp = "기본 셸 또는 이 프로젝트에서 최근 실행한 명령 선택. 저장된 명령 삭제는 dcraft exec --forget."
 	msgFieldInstance          = "서비스 인스턴스"
 	msgFieldInstanceHelp      = "실행 중인 인스턴스 선택 · 예: nginx-1 · node-api-1 · postgres-1"
 	msgFieldCommand           = "명령"

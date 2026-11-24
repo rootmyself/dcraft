@@ -149,7 +149,9 @@ func TestMouseEnvironmentAdministrationSelectsAndSwitchesWithoutRunning(t *testi
 	baseline := status.runs
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
-	wheel(t, m, 10, 8, true)
+	// The wheel targets the body; x=10 sits inside the sidebar pane, and the
+	// pane's wheel has one meaning of its own.
+	wheel(t, m, 60, 8, true)
 	if m.envAction != 1 {
 		t.Fatalf("wheel left the action at %d, want 1", m.envAction)
 	}
@@ -477,12 +479,13 @@ func TestMouseWheelMovesTheListEditorCursor(t *testing.T) {
 		t.Fatalf("cursor starts at %d, want the new-item row %d", m.wizardChoice, len(m.wizardItems))
 	}
 
-	// Up moves one item at a time, the same direction the keyboard takes.
-	wheel(t, m, 10, 8, false)
+	// Up moves one item at a time, the same direction the keyboard takes. The
+	// pointer is over the body; the sidebar owns its own wheel meaning.
+	wheel(t, m, 60, 8, false)
 	if m.wizardChoice != 2 {
 		t.Fatalf("wheel up left the cursor at %d, want 2", m.wizardChoice)
 	}
-	wheel(t, m, 10, 8, true)
+	wheel(t, m, 60, 8, true)
 	if m.wizardChoice != 3 {
 		t.Fatalf("wheel down left the cursor at %d, want the new-item row 3", m.wizardChoice)
 	}
@@ -490,13 +493,13 @@ func TestMouseWheelMovesTheListEditorCursor(t *testing.T) {
 	// Both ends clamp: the wheel never wraps past the first item or the
 	// new-item row, exactly like Up/Down on the same list.
 	for i := 0; i < 5; i++ {
-		wheel(t, m, 10, 8, false)
+		wheel(t, m, 60, 8, false)
 	}
 	if m.wizardChoice != 0 {
 		t.Fatalf("wheel up wrapped past the first item to %d, want 0", m.wizardChoice)
 	}
 	for i := 0; i < 6; i++ {
-		wheel(t, m, 10, 8, true)
+		wheel(t, m, 60, 8, true)
 	}
 	if m.wizardChoice != len(m.wizardItems) {
 		t.Fatalf("wheel down wrapped past the new-item row to %d, want %d", m.wizardChoice, len(m.wizardItems))

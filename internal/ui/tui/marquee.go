@@ -70,7 +70,7 @@ func (m *Model) scheduleMarquee() tea.Cmd {
 		s.generation++
 		s.scheduled = false
 	}
-	if name == "" || visual.Width(summary) <= width || m.helpOpen || m.confirmOpen() {
+	if name == "" || visual.Width(summary) <= width || m.overlayOpen() {
 		if s.scheduled {
 			s.generation++
 			s.scheduled = false
@@ -100,7 +100,7 @@ func (m *Model) advanceMarquee(tick marqueeTickMsg) {
 	}
 	s.scheduled = false
 	name, summary, width := m.marqueeTarget()
-	if m.helpOpen || m.confirmOpen() || name != s.name || summary != s.summary || width <= 0 {
+	if m.overlayOpen() || name != s.name || summary != s.summary || width <= 0 {
 		return
 	}
 	if s.delay > 0 {

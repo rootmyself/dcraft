@@ -848,3 +848,21 @@ func TestLiveStreamEndKeepsTheLastRewrite(t *testing.T) {
 		t.Fatalf("rows = %v, want the last rewrite only", rows)
 	}
 }
+
+// CRLF is one line terminator on Windows and in most HTTP output. Treating the
+// carriage return as a rewrite dropped the row and drew a blank line instead.
+func TestLiveWriterTreatsCRLFAsOneTerminator(t *testing.T) {
+	ch := make(chan string, 8)
+	w := &liveWriter{ch: ch}
+	_, _ = w.Write([]byte("first\r\nsecond\r\nthird"))
+	w.flush()
+	w.close()
+	close(ch)
+	var rows []string
+	for row := range ch {
+		rows = append(rows, row)
+	}
+	if got := strings.Join(rows, "|"); got != "first|second|third" {
+		t.Fatalf("rows = %q, want first|second|third", got)
+	}
+}

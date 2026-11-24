@@ -70,6 +70,7 @@ func (f *Feature) Descriptor() core.Descriptor {
 		Flags: []core.Flag{
 			{Name: "index", Shorthand: "i", Kind: core.FlagString, Usage: msgFlagIndex},
 			{Name: "no-tty", Shorthand: "T", Kind: core.FlagBool, Usage: msgFlagNoTTY},
+			{Name: "forget", Kind: core.FlagString, Usage: msgFlagForget},
 		},
 	}
 }
@@ -91,6 +92,11 @@ func (f *Feature) CanceledDiagnostic() core.Diagnostic {
 
 // Run implements core.Feature.
 func (f *Feature) Run(ctx context.Context, in core.Invocation) (any, error) {
+	// Forgetting a remembered command is a local store edit: it never inspects
+	// the stack and never attaches, so it works with the engine stopped.
+	if forget := strings.TrimSpace(in.Option("forget")); forget != "" {
+		return forgetCommand(in.Target.ProjectDir, forget)
+	}
 	if f.backend == nil || f.streamer == nil {
 		return nil, core.Fail(core.Diagnostic{
 			Category:    core.CategoryInternal,
@@ -175,7 +181,11 @@ func (f *Feature) Run(ctx context.Context, in core.Invocation) (any, error) {
 	// The store keeps exactly what ran, and only after it ran: a command that
 	// failed to start is not offered again. A command that looks like it
 	// carries a credential is never stored, even though it still ran.
-	if !looksLikeCredential(strings.Join(report.Command, " ")) {
+	if looksLikeCredential(strings.Join(report.Command, " ")) {
+		// Conditional, so it names the actual command's risk rather than
+		// warning every reader about a value they did not type.
+		report.Notices = append(report.Notices, msgCredentialRisk)
+	} else {
 		remember := rememberCommand(in.Target.ProjectDir, report.Command)
 		if remember.Created {
 			// The file exists for the first time, so this is the one place the
