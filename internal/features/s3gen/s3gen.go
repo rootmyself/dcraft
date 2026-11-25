@@ -69,6 +69,11 @@ func (f *Feature) Descriptor() core.Descriptor {
 		TargetOptional: true,
 		Approval:       core.ApprovalFileOverwrite,
 		Wizard:         true,
+		// Generated host scripts live under the host-script heading with the
+		// script this project already has.
+		Menu: []core.MenuEntry{
+			{Kind: core.MenuRun, Feature: "generate-s3-hook", Label: msgMenuLabel, Summary: msgMenuSummary, Parent: "hooks", Order: 2},
+		},
 		Flags: []core.Flag{
 			{Name: "source", Kind: core.FlagString, Required: true, Usage: msgFlagSource},
 			{Name: "mode", Kind: core.FlagString, Required: true, Usage: msgFlagMode},

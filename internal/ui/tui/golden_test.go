@@ -82,7 +82,6 @@ func goldenScreens() []goldenScreen {
 		{name: "wizard", build: goldenWizard},
 		{name: "wizard-list", build: goldenWizardList},
 		{name: "wizard-examples", build: goldenWizardExamples},
-		{name: "environment-actions", build: goldenEnvironmentActions},
 		{name: "environment-switch", build: goldenEnvironmentSwitch},
 		{name: "failure", build: goldenFailure},
 		{name: "empty-stack", build: goldenEmptyStack},
@@ -472,16 +471,10 @@ func goldenMenuStatus(t *testing.T) *Model {
 	return newGoldenModel(t, features...)
 }
 
-func goldenEnvironmentActions(t *testing.T) *Model {
-	m := goldenMenuStatus(t)
-	m.phase = phaseEnvironmentActions
-	return m
-}
-
 func goldenEnvironmentSwitch(t *testing.T) *Model {
 	m := goldenMenuStatus(t)
 	m.phase = phaseSelectingEnvironment
-	m.envSwitch = true
+	m.envScreen = envScreenSwitch
 	m.envs = []core.Environment{{Name: "staging"}, {Name: "production"}}
 	m.envSelected = 1
 	return m
@@ -515,16 +508,15 @@ func goldenServiceSelection(t *testing.T) *Model {
 // fixtures call it before they know the target size.
 func chooseFeatureNamed(t *testing.T, m *Model, name string) error {
 	t.Helper()
-	for i, f := range m.features {
-		if f.Descriptor().Name == name {
-			m.selected = i
-			nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-			*m = *(nm.(*Model))
-			feed(t, m, execute(t, cmd))
-			return nil
-		}
+	index := m.menuIndexForFeature(name)
+	if index < 0 {
+		return fmt.Errorf("feature %q is not in the menu", name)
 	}
-	return fmt.Errorf("feature %q is not in the menu", name)
+	m.selected = index
+	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	*m = *(nm.(*Model))
+	feed(t, m, execute(t, cmd))
+	return nil
 }
 
 func goldenServiceCatalog(n int) []core.ServiceStatus {

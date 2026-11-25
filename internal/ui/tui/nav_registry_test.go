@@ -13,42 +13,55 @@ import (
 // in the TUI. This test changes the registry grouping and proves the menu
 // follows it: if nav.go re-derived sections from core.Sections() it would still
 // look right, so the observable check is the order and the membership the
-// contract's grouping produces.
+// contract's tree produces.
 func TestNavigationConsumesTheRegistryGrouping(t *testing.T) {
 	features := goldenBaseFeatures()
 	m := newGoldenModel(t, features...)
 	resize(t, m, 120, 40)
 
-	groups := m.registry.BySection()
-	if len(groups) != 4 {
-		t.Fatalf("registry groups = %d, want the four declared sections", len(groups))
+	tree := m.registry.MenuBySection(nil)
+	if len(tree.Sections) != 4 {
+		t.Fatalf("registry sections = %d, want the four declared sections", len(tree.Sections))
 	}
-	// The menu's own order must match the registry grouping exactly, including
-	// each group's membership.
+	// The menu's own order must match the registry tree exactly, including
+	// each section's membership and every group heading.
 	var want []string
-	for _, group := range groups {
-		for _, f := range group.Features {
-			want = append(want, f.Descriptor().Title)
+	for _, section := range tree.Sections {
+		for _, entry := range section.Entries {
+			want = append(want, entry.Entry.Label)
+			for _, child := range entry.Children {
+				want = append(want, child.Entry.Label)
+			}
 		}
 	}
-	got := m.nav()
+	nav := m.nav()
 	var rendered []string
-	for _, section := range got.Sections {
-		for _, item := range section.Items {
-			rendered = append(rendered, item.Title)
+	for _, section := range nav.sections {
+		for _, row := range section.rows {
+			if row.group != nil {
+				rendered = append(rendered, row.group.label)
+				continue
+			}
+			rendered = append(rendered, nav.entries[row.entryIndex].menu.Entry.Label)
 		}
 	}
 	if strings.Join(rendered, "|") != strings.Join(want, "|") {
-		t.Fatalf("menu order differs from the registry grouping:\nmenu:     %v\nregistry: %v", rendered, want)
+		t.Fatalf("menu order differs from the registry tree:\nmenu:     %v\nregistry: %v", rendered, want)
 	}
-	// Arrow-key order must be the same sequence, so the cursor never jumps
-	// across a section.
-	if ids := m.navIndexes(); len(ids) != len(want) {
-		t.Fatalf("navIndexes = %d entries, registry grouping has %d", len(ids), len(want))
+	// Arrow-key order is the selectable rows in the same sequence, so the
+	// cursor never lands on a heading or jumps across a section.
+	if ids := m.navIndexes(); len(ids) != len(nav.entries) {
+		t.Fatalf("navIndexes = %d entries, the drawn list has %d", len(ids), len(nav.entries))
 	}
 	for i, idx := range m.navIndexes() {
-		if got := m.features[idx].Descriptor().Title; got != want[i] {
-			t.Fatalf("navIndexes[%d] = %q, want %q", i, got, want[i])
+		if idx != i {
+			t.Fatalf("navIndexes[%d] = %d, want the drawn order", i, idx)
+		}
+	}
+	// A heading is never addressable: every index names a non-group entry.
+	for _, entry := range nav.entries {
+		if entry.menu.Group {
+			t.Fatalf("menu index %d addresses the heading %q", entry.index, entry.menu.Entry.Label)
 		}
 	}
 }
@@ -117,27 +130,31 @@ func TestStatusTableStateColumnUsesTheSharedLabels(t *testing.T) {
 	}
 }
 
-// The filter narrows the registry grouping without re-grouping it: a filtered
-// menu keeps section headings for the sections that still have a match.
+// The filter narrows the registry tree without re-grouping it: a filtered menu
+// keeps section headings for the sections that still have a match.
 func TestFilteredNavigationKeepsRegistrySectionOrder(t *testing.T) {
 	m := newGoldenModel(t, goldenBaseFeatures()...)
 	resize(t, m, 120, 40)
 	pressKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
 	pressKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("스택")})
 	nav := m.nav()
-	if len(nav.Sections) == 0 {
+	if len(nav.sections) == 0 {
 		t.Fatal("filter dropped every section")
 	}
 	last := -1
-	for _, section := range nav.Sections {
-		for _, item := range section.Items {
-			if !strings.Contains(item.Title, "스택") {
-				t.Fatalf("filtered menu kept %q", item.Title)
+	for _, section := range nav.sections {
+		for _, row := range section.rows {
+			if row.group != nil {
+				continue
+			}
+			label := nav.entries[row.entryIndex].menu.Entry.Label
+			if !strings.Contains(label, "스택") {
+				t.Fatalf("filtered menu kept %q", label)
 			}
 		}
-		idx := sectionIndex(section.Title)
+		idx := sectionIndex(section.section.KoreanLabel())
 		if idx <= last {
-			t.Fatalf("section %q is out of order", section.Title)
+			t.Fatalf("section %q is out of order", section.section.KoreanLabel())
 		}
 		last = idx
 	}

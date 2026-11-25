@@ -130,6 +130,52 @@ func Remove(projectDir, name string) (Catalog, error) {
 	return Load(projectDir)
 }
 
+// SetActive records which alias the TUI should open on next time. An empty name
+// removes the record. The key is optional, so a clear removes it instead of
+// leaving an empty value, and every other key and comment in the file survives.
+//
+// The value is not validated against the alias list here: the reader may record
+// an alias this same session is about to create, and a stale value is reported at
+// read time as invalid instead of blocking the write.
+func SetActive(projectDir, name string) error {
+	name = strings.TrimSpace(name)
+	err := projectconfig.Update(projectDir, func(root *yaml.Node) error {
+		if name == "" {
+			return removeMappingKey(root, ActiveEnvironmentKey)
+		}
+		return setMappingKey(root, ActiveEnvironmentKey, scalarNode(name))
+	})
+	if err != nil {
+		return configWriteError(err)
+	}
+	return nil
+}
+
+// setMappingKey replaces a top-level scalar key in place, or appends it. Editing
+// the node keeps the file's existing keys, order and comments.
+func setMappingKey(root *yaml.Node, key string, value *yaml.Node) error {
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		if root.Content[i].Value == key {
+			root.Content[i+1] = value
+			return nil
+		}
+	}
+	root.Content = append(root.Content, scalarNode(key), value)
+	return nil
+}
+
+// removeMappingKey deletes a top-level key. A missing key is no change, so a
+// clear of an already-clear record is idempotent.
+func removeMappingKey(root *yaml.Node, key string) error {
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		if root.Content[i].Value == key {
+			root.Content = append(root.Content[:i], root.Content[i+2:]...)
+			return nil
+		}
+	}
+	return projectconfig.ErrNoChange
+}
+
 // RenderAdd validates one alias and returns the exact YAML section Add would
 // write, without touching the filesystem. It never reads env-file values.
 func RenderAdd(projectDir string, env core.Environment) (string, error) {

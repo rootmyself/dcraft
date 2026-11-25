@@ -17,9 +17,13 @@ func register(f registerFunc) {
 }
 
 // Register adds every feature to the registry. It is safe to call with a fresh
-// registry and a fresh Deps.
+// registry and a fresh Deps. The cross-feature contract is checked once here,
+// after the last descriptor is known.
 func Register(reg *core.Registry, d *deps.Deps) {
 	for _, f := range registrations {
 		f(reg, d)
+	}
+	if err := reg.Validate(); err != nil {
+		panic(err)
 	}
 }

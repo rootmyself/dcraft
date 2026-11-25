@@ -139,7 +139,7 @@ func TestNavRowCollapsedAndExpandedAreOneRow(t *testing.T) {
 		absent   []string
 	}{
 		{name: "collapsed", expanded: false,
-			want:   []string{"메뉴", "스택 상태", "4개 기능", "tab 펼치기"},
+			want:   []string{"메뉴", "스택 상태", "4개 항목", "tab 펼치기"},
 			absent: []string{"조회 2", "운영 2", "tab 접기"}},
 		{name: "expanded", expanded: true,
 			want:   []string{"메뉴", "스택 상태", "조회 2", "운영 2", "tab 접기"},

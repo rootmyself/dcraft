@@ -109,7 +109,7 @@ Compose 파일
 
 === 80x18 ===
  dcraft · acme-platform · staging        Docker 29.10.0 · Compose 2.39.1 · 로컬
-메뉴 · ▸ 스택 상태 · 18개 기능                                        tab 펼치기
+메뉴 · ▸ 스택 상태 · 18개 항목                                        tab 펼치기
 전체 값
 
 Compose 파일
@@ -129,7 +129,7 @@ legacy · 이미지
 
 === 80x30 ===
  dcraft · acme-platform · staging        Docker 29.10.0 · Compose 2.39.1 · 로컬
-메뉴 · ▸ 스택 상태 · 18개 기능                                        tab 펼치기
+메뉴 · ▸ 스택 상태 · 18개 항목                                        tab 펼치기
 전체 값
 
 Compose 파일
@@ -161,7 +161,7 @@ legacy · 이미지
 
 === 80x50 ===
  dcraft · acme-platform · staging        Docker 29.10.0 · Compose 2.39.1 · 로컬
-메뉴 · ▸ 스택 상태 · 18개 기능                                        tab 펼치기
+메뉴 · ▸ 스택 상태 · 18개 항목                                        tab 펼치기
 전체 값
 
 Compose 파일
@@ -213,7 +213,7 @@ legacy · 이미지
 
 === 120x18 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─── esc 닫기 ╮ 전체 값
+╭ 메뉴 · 18 ─── esc 닫기 ╮ 전체 값
 │조회                    │
 │  서비스 접속           │ api · 이미지
 │  로그 보기             │   ghcr.io/acme/platform-api:2026.11.20
@@ -233,7 +233,7 @@ legacy · 이미지
 
 === 120x30 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─── esc 닫기 ╮ 전체 값
+╭ 메뉴 · 18 ─── esc 닫기 ╮ 전체 값
 │조회                    │
 │  서비스 접속           │ api · 이미지
 │  로그 보기             │   ghcr.io/acme/platform-api:2026.11.20
@@ -265,7 +265,7 @@ legacy · 이미지
 
 === 120x50 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─── esc 닫기 ╮ 전체 값
+╭ 메뉴 · 18 ─── esc 닫기 ╮ 전체 값
 │조회                    │
 │  서비스 접속           │ api · 이미지
 │  로그 보기             │   ghcr.io/acme/platform-api:2026.11.20
@@ -317,7 +317,7 @@ legacy · 이미지
 
 === 200x18 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─────── esc 닫기 ╮ 전체 값
+╭ 메뉴 · 18 ─────── esc 닫기 ╮ 전체 값
 │조회                        │
 │  서비스 접속               │ api · 이미지
 │  로그 보기                 │   ghcr.io/acme/platform-api:2026.11.20
@@ -337,7 +337,7 @@ legacy · 이미지
 
 === 200x30 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─────── esc 닫기 ╮ 전체 값
+╭ 메뉴 · 18 ─────── esc 닫기 ╮ 전체 값
 │조회                        │
 │  서비스 접속               │ api · 이미지
 │  로그 보기                 │   ghcr.io/acme/platform-api:2026.11.20
@@ -369,7 +369,7 @@ legacy · 이미지
 
 === 200x50 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─────── esc 닫기 ╮ 전체 값
+╭ 메뉴 · 18 ─────── esc 닫기 ╮ 전체 값
 │조회                        │
 │  서비스 접속               │ api · 이미지
 │  로그 보기                 │   ghcr.io/acme/platform-api:2026.11.20

@@ -213,7 +213,7 @@
 
 === 120x18 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─── esc 닫기 ╮ 제목 stop                                                                              1-2/25
+╭ 메뉴 · 18 ─── esc 닫기 ╮ 제목 stop                                                                              1-2/25
 │조회                    │
 │  서비스 접속           │ 서비스 선택
 │  로그 보기             │ 대상: /work/acme-platform
@@ -233,7 +233,7 @@
 
 === 120x30 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─── esc 닫기 ╮ 제목 stop                                                                             1-14/25
+╭ 메뉴 · 18 ─── esc 닫기 ╮ 제목 stop                                                                             1-14/25
 │조회                    │
 │  서비스 접속           │ 서비스 선택
 │  로그 보기             │ 대상: /work/acme-platform
@@ -265,7 +265,7 @@
 
 === 120x50 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─── esc 닫기 ╮ 제목 stop
+╭ 메뉴 · 18 ─── esc 닫기 ╮ 제목 stop
 │조회                    │
 │  서비스 접속           │ 서비스 선택
 │  로그 보기             │ 대상: /work/acme-platform
@@ -317,7 +317,7 @@
 
 === 200x18 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─────── esc 닫기 ╮ 제목 stop                                                                                                                                                          1-2/25
+╭ 메뉴 · 18 ─────── esc 닫기 ╮ 제목 stop                                                                                                                                                          1-2/25
 │조회                        │
 │  서비스 접속               │ 서비스 선택
 │  로그 보기                 │ 대상: /work/acme-platform
@@ -337,7 +337,7 @@
 
 === 200x30 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─────── esc 닫기 ╮ 제목 stop                                                                                                                                                         1-14/25
+╭ 메뉴 · 18 ─────── esc 닫기 ╮ 제목 stop                                                                                                                                                         1-14/25
 │조회                        │
 │  서비스 접속               │ 서비스 선택
 │  로그 보기                 │ 대상: /work/acme-platform
@@ -369,7 +369,7 @@
 
 === 200x50 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─────── esc 닫기 ╮ 제목 stop
+╭ 메뉴 · 18 ─────── esc 닫기 ╮ 제목 stop
 │조회                        │
 │  서비스 접속               │ 서비스 선택
 │  로그 보기                 │ 대상: /work/acme-platform

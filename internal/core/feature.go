@@ -69,8 +69,10 @@ type Descriptor struct {
 	// the generic confirmation screen. The feature must implement Wizard and
 	// handle Options["wizard"]="steps"/"apply" in Run.
 	Wizard bool
-	// EnvironmentAdmin offers alias issuance and target switching in the TUI.
-	EnvironmentAdmin bool
+	// Menu declares this feature's TUI menu entries. Empty means the implicit
+	// single entry that runs the feature under its Title and Summary, so a
+	// feature that needs no extra entry point declares nothing.
+	Menu []MenuEntry
 	// StreamsProgress marks a feature that can report its own tool output
 	// (currently `up`) through Invocation.IO.Progress while it runs. The CLI
 	// never supplies that writer, so its captured output is unchanged.
@@ -184,6 +186,9 @@ func validateDescriptor(d Descriptor) error {
 		default:
 			return fmt.Errorf("feature %q: unknown preflight requirement %q", d.Name, r)
 		}
+	}
+	if err := validateMenuEntries(d); err != nil {
+		return err
 	}
 	seenNames := map[string]bool{}
 	seenShorthands := map[string]bool{}

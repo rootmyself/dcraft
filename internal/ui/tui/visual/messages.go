@@ -10,7 +10,7 @@ const (
 	msgNavExpand     = "tab 펼치기"
 	msgNavCollapse   = "tab 접기"
 	msgNavMenuLabel  = "메뉴"
-	msgNavFeatureCnt = "%d개 기능"
+	msgNavFeatureCnt = "%d개 항목"
 	msgNavSectionCnt = "%s %d"
 
 	// The danger badge on a navigation entry. The word is a text channel, so

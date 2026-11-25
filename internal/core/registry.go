@@ -59,6 +59,15 @@ func (r *Registry) All() []Feature {
 	return out
 }
 
+// Validate checks the parts of the registration contract that span features,
+// such as a menu entry naming a group declared by another descriptor. Register
+// validates one descriptor at a time, so the assembly calls this once after the
+// last registration and a broken menu fails at startup instead of drawing a row
+// in the wrong place.
+func (r *Registry) Validate() error {
+	return r.validateMenuLinks()
+}
+
 // Primary returns the feature a TUI opens on, if one is registered.
 func (r *Registry) Primary() (Feature, bool) {
 	return r.primary, r.primary != nil

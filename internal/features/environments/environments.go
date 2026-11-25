@@ -60,10 +60,16 @@ func (f *Feature) Descriptor() core.Descriptor {
 		Section: core.SectionConfig,
 		// Alias editing is local project-config work. It needs no engine or
 		// Compose, so it declares the smallest published preflight set.
-		Requires:         core.Requirements{core.RequirementDockerCLI},
-		TargetOptional:   true,
-		Wizard:           true,
-		EnvironmentAdmin: true,
+		Requires:       core.Requirements{core.RequirementDockerCLI},
+		TargetOptional: true,
+		Wizard:         true,
+		// One feature offers two entry points: creating (and removing) an
+		// alias, and switching the active target to one. They are separate
+		// menu entries instead of one administration screen with two rows.
+		Menu: []core.MenuEntry{
+			{Kind: core.MenuRun, Feature: "environments", Label: msgMenuCreate, Summary: msgMenuCreateSummary},
+			{Kind: core.MenuSwitchEnvironment, Feature: "environments", Label: msgMenuSwitch, Summary: msgMenuSwitchSummary, Order: 1},
+		},
 		Flags: []core.Flag{
 			{Name: "add", Kind: core.FlagBool, Usage: msgFlagAdd},
 			{Name: "list", Kind: core.FlagBool, Usage: msgFlagList},

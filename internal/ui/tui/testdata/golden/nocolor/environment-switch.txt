@@ -7,8 +7,8 @@
  dcraft · acme-platform · staging
 스택 상태
 
-실행환경 선택
-이 폴더에 이름 붙인 실행환경 있음. 작업…
+실행환경 전환
+작업할 실행환경으로 대상 전환. 스택은 …
   staging (현재) — 기본 Compose 파일
 > production — 기본 Compose 파일
 실행환경은 Compose 입력과 dcraft 상태·…
@@ -27,8 +27,8 @@
  dcraft · acme-platform · staging
 스택 상태
 
-실행환경 선택
-이 폴더에 이름 붙인 실행환경 있음. 작업…
+실행환경 전환
+작업할 실행환경으로 대상 전환. 스택은 …
   staging (현재) — 기본 Compose 파일
 > production — 기본 Compose 파일
 실행환경은 Compose 입력과 dcraft 상태·…
@@ -59,8 +59,8 @@
  dcraft · acme-platform · staging
 스택 상태
 
-실행환경 선택
-이 폴더에 이름 붙인 실행환경 있음. 작업…
+실행환경 전환
+작업할 실행환경으로 대상 전환. 스택은 …
   staging (현재) — 기본 Compose 파일
 > production — 기본 Compose 파일
 실행환경은 Compose 입력과 dcraft 상태·…
@@ -111,8 +111,8 @@
  dcraft · acme-platform · staging        Docker 29.10.0 · Compose 2.39.1 · 로컬
 스택 상태
 
-실행환경 선택
-이 폴더에 이름 붙인 실행환경 있음. 작업할 실행환경 선택.
+실행환경 전환
+작업할 실행환경으로 대상 전환. 스택은 중지하지 않음.
   staging (현재) — 기본 Compose 파일
 > production — 기본 Compose 파일
 실행환경은 Compose 입력과 dcraft 상태·이력만 구분. 외부 볼륨·bind mount·네트워…
@@ -131,8 +131,8 @@
  dcraft · acme-platform · staging        Docker 29.10.0 · Compose 2.39.1 · 로컬
 스택 상태
 
-실행환경 선택
-이 폴더에 이름 붙인 실행환경 있음. 작업할 실행환경 선택.
+실행환경 전환
+작업할 실행환경으로 대상 전환. 스택은 중지하지 않음.
   staging (현재) — 기본 Compose 파일
 > production — 기본 Compose 파일
 실행환경은 Compose 입력과 dcraft 상태·이력만 구분. 외부 볼륨·bind mount·네트워…
@@ -163,8 +163,8 @@
  dcraft · acme-platform · staging        Docker 29.10.0 · Compose 2.39.1 · 로컬
 스택 상태
 
-실행환경 선택
-이 폴더에 이름 붙인 실행환경 있음. 작업할 실행환경 선택.
+실행환경 전환
+작업할 실행환경으로 대상 전환. 스택은 중지하지 않음.
   staging (현재) — 기본 Compose 파일
 > production — 기본 Compose 파일
 실행환경은 Compose 입력과 dcraft 상태·이력만 구분. 외부 볼륨·bind mount·네트워…
@@ -213,10 +213,10 @@
 
 === 120x18 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─── esc 닫기 ╮ 스택 상태
+╭ 메뉴 · 18 ─── esc 닫기 ╮ 스택 상태
 │조회                    │
-│  서비스 접속           │ 실행환경 선택
-│  로그 보기             │ 이 폴더에 이름 붙인 실행환경 있음. 작업할 실행환경 선택.
+│  서비스 접속           │ 실행환경 전환
+│  로그 보기             │ 작업할 실행환경으로 대상 전환. 스택은 중지하지 않음.
 │▸ 스택 상태             │   staging (현재) — 기본 Compose 파일
 │                        │ > production — 기본 Compose 파일
 │운영                    │ 실행환경은 Compose 입력과 dcraft 상태·이력만 구분. 외부 볼륨·bind mount·네트워크·고정 호스트…
@@ -233,10 +233,10 @@
 
 === 120x30 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─── esc 닫기 ╮ 스택 상태
+╭ 메뉴 · 18 ─── esc 닫기 ╮ 스택 상태
 │조회                    │
-│  서비스 접속           │ 실행환경 선택
-│  로그 보기             │ 이 폴더에 이름 붙인 실행환경 있음. 작업할 실행환경 선택.
+│  서비스 접속           │ 실행환경 전환
+│  로그 보기             │ 작업할 실행환경으로 대상 전환. 스택은 중지하지 않음.
 │▸ 스택 상태             │   staging (현재) — 기본 Compose 파일
 │                        │ > production — 기본 Compose 파일
 │운영                    │ 실행환경은 Compose 입력과 dcraft 상태·이력만 구분. 외부 볼륨·bind mount·네트워크·고정 호스트…
@@ -265,10 +265,10 @@
 
 === 120x50 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─── esc 닫기 ╮ 스택 상태
+╭ 메뉴 · 18 ─── esc 닫기 ╮ 스택 상태
 │조회                    │
-│  서비스 접속           │ 실행환경 선택
-│  로그 보기             │ 이 폴더에 이름 붙인 실행환경 있음. 작업할 실행환경 선택.
+│  서비스 접속           │ 실행환경 전환
+│  로그 보기             │ 작업할 실행환경으로 대상 전환. 스택은 중지하지 않음.
 │▸ 스택 상태             │   staging (현재) — 기본 Compose 파일
 │                        │ > production — 기본 Compose 파일
 │운영                    │ 실행환경은 Compose 입력과 dcraft 상태·이력만 구분. 외부 볼륨·bind mount·네트워크·고정 호스트…
@@ -317,10 +317,10 @@
 
 === 200x18 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─────── esc 닫기 ╮ 스택 상태
+╭ 메뉴 · 18 ─────── esc 닫기 ╮ 스택 상태
 │조회                        │
-│  서비스 접속               │ 실행환경 선택
-│  로그 보기                 │ 이 폴더에 이름 붙인 실행환경 있음. 작업할 실행환경 선택.
+│  서비스 접속               │ 실행환경 전환
+│  로그 보기                 │ 작업할 실행환경으로 대상 전환. 스택은 중지하지 않음.
 │▸ 스택 상태                 │   staging (현재) — 기본 Compose 파일
 │                            │ > production — 기본 Compose 파일
 │운영                        │ 실행환경은 Compose 입력과 dcraft 상태·이력만 구분. 외부 볼륨·bind mount·네트워크·고정 호스트 포트는 공유 가능.
@@ -337,10 +337,10 @@
 
 === 200x30 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─────── esc 닫기 ╮ 스택 상태
+╭ 메뉴 · 18 ─────── esc 닫기 ╮ 스택 상태
 │조회                        │
-│  서비스 접속               │ 실행환경 선택
-│  로그 보기                 │ 이 폴더에 이름 붙인 실행환경 있음. 작업할 실행환경 선택.
+│  서비스 접속               │ 실행환경 전환
+│  로그 보기                 │ 작업할 실행환경으로 대상 전환. 스택은 중지하지 않음.
 │▸ 스택 상태                 │   staging (현재) — 기본 Compose 파일
 │                            │ > production — 기본 Compose 파일
 │운영                        │ 실행환경은 Compose 입력과 dcraft 상태·이력만 구분. 외부 볼륨·bind mount·네트워크·고정 호스트 포트는 공유 가능.
@@ -369,10 +369,10 @@
 
 === 200x50 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─────── esc 닫기 ╮ 스택 상태
+╭ 메뉴 · 18 ─────── esc 닫기 ╮ 스택 상태
 │조회                        │
-│  서비스 접속               │ 실행환경 선택
-│  로그 보기                 │ 이 폴더에 이름 붙인 실행환경 있음. 작업할 실행환경 선택.
+│  서비스 접속               │ 실행환경 전환
+│  로그 보기                 │ 작업할 실행환경으로 대상 전환. 스택은 중지하지 않음.
 │▸ 스택 상태                 │   staging (현재) — 기본 Compose 파일
 │                            │ > production — 기본 Compose 파일
 │운영                        │ 실행환경은 Compose 입력과 dcraft 상태·이력만 구분. 외부 볼륨·bind mount·네트워크·고정 호스트 포트는 공유 가능.

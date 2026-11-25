@@ -122,11 +122,9 @@ func TestCompactByHeightNavigationMovesAVisibleCursor(t *testing.T) {
 func selectedTitle(t *testing.T, m *Model) string {
 	t.Helper()
 	nav := m.nav()
-	for _, section := range nav.Sections {
-		for _, item := range section.Items {
-			if item.Selected {
-				return item.Title
-			}
+	for _, entry := range nav.entries {
+		if entry.index == m.selected {
+			return entry.menu.Entry.Label
 		}
 	}
 	t.Fatalf("no selected item in the navigation:\n%s", m.View())

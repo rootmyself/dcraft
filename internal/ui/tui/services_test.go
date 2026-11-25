@@ -93,17 +93,11 @@ func newCatalogStatus(services []core.ServiceStatus) *catalogStatus {
 
 func chooseFeature(t *testing.T, m *Model, name string) {
 	t.Helper()
-	found := false
-	for i, f := range m.features {
-		if f.Descriptor().Name == name {
-			m.selected = i
-			found = true
-			break
-		}
-	}
-	if !found {
+	index := m.menuIndexForFeature(name)
+	if index < 0 {
 		t.Fatalf("feature %q is not in the menu", name)
 	}
+	m.selected = index
 	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	*m = *(nm.(*Model))
 	feed(t, m, execute(t, cmd))

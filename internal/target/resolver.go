@@ -60,6 +60,57 @@ func (r *Resolver) Environments(ctx context.Context, req core.TargetRequest, cwd
 	return catalog.Environments, nil, nil
 }
 
+// ActiveEnvironment implements core.EnvironmentSetter. It reads the alias the
+// project recorded as active. A stored value that no registered alias matches is
+// reported as Invalid instead of an error: the caller shows it and lets the
+// reader choose again, and the file is left untouched.
+func (r *Resolver) ActiveEnvironment(ctx context.Context, req core.TargetRequest, cwd string) (core.EnvironmentActive, error) {
+	if err := ctx.Err(); err != nil {
+		return core.EnvironmentActive{}, err
+	}
+	projectDir, err := r.projectDir(req, cwd)
+	if err != nil {
+		return core.EnvironmentActive{}, err
+	}
+	catalog, err := environments.Load(projectDir)
+	if err != nil {
+		return core.EnvironmentActive{}, err
+	}
+	return catalog.Active, nil
+}
+
+// SetActiveEnvironment implements core.EnvironmentSetter. An empty name clears
+// the record. The write goes through the same project-config lock and atomic
+// replacement as every other dcraft edit of .dcraft.yaml.
+func (r *Resolver) SetActiveEnvironment(ctx context.Context, req core.TargetRequest, cwd, name string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	projectDir, err := r.projectDir(req, cwd)
+	if err != nil {
+		return err
+	}
+	return environments.SetActive(projectDir, name)
+}
+
+// projectDir resolves the project folder the way every target does, so the
+// environment read and write use the same folder the run will.
+func (r *Resolver) projectDir(req core.TargetRequest, cwd string) (string, error) {
+	if cwd == "" {
+		var err error
+		cwd, err = os.Getwd()
+		if err != nil {
+			return "", core.FailCause(err, core.Diagnostic{
+				Category:    core.CategoryTargetInvalid,
+				Severity:    core.SeverityError,
+				Message:     msgWorkingDirUnknown,
+				NextActions: []string{msgWorkingDirAction},
+			})
+		}
+	}
+	return resolveProjectDir(req.Path, cwd)
+}
+
 // Resolve implements core.Resolver.
 func (r *Resolver) Resolve(ctx context.Context, req core.TargetRequest, cwd string) (core.Target, []core.Diagnostic, error) {
 	if err := ctx.Err(); err != nil {

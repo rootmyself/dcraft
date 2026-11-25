@@ -39,12 +39,11 @@ func (m *Model) marqueeTarget() (string, string, int) {
 	if !m.sidebarVisible() || visual.BodyRows(m.height)-2 < 22 {
 		return "", "", 0
 	}
-	f := m.selectedFeature()
-	if f == nil || !m.navFilterMatches(f.Descriptor()) {
+	entry, ok := m.selectedMenu()
+	if !ok {
 		return "", "", 0
 	}
-	d := f.Descriptor()
-	return d.Name, d.Summary, visual.SidebarWidth(m.width) - 4
+	return entry.menu.Entry.Label, entry.menu.Entry.Summary, visual.SidebarWidth(m.width) - 4
 }
 
 // marqueeRestTicks converts a rest into the number of ticks that pass without

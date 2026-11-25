@@ -109,7 +109,7 @@ legacy                   ✓ 실행 중
 
 === 80x18 ===
  dcraft · acme-platform · staging        Docker 29.10.0 · Compose 2.39.1 · 로컬
-메뉴 · ▸ 스택 상태 · 18개 기능                                        tab 펼치기
+메뉴 · ▸ 스택 상태 · 18개 항목                                        tab 펼치기
 스택 상태                                                                1-12/22
 
 서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 확인 안 됨 1   ■ 중지 1
@@ -129,7 +129,7 @@ web            ✓ 실행 중          1 ◐ 확인   nginx:1.27-alpine     3000
 
 === 80x30 ===
  dcraft · acme-platform · staging        Docker 29.10.0 · Compose 2.39.1 · 로컬
-메뉴 · ▸ 스택 상태 · 18개 기능                                        tab 펼치기
+메뉴 · ▸ 스택 상태 · 18개 항목                                        tab 펼치기
 스택 상태
 
 서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 확인 안 됨 1   ■ 중지 1
@@ -161,7 +161,7 @@ legacy         ✓ 실행 중          1 없음     ghcr.io/acme/legacy:… -
 
 === 80x50 ===
  dcraft · acme-platform · staging        Docker 29.10.0 · Compose 2.39.1 · 로컬
-메뉴 · ▸ 스택 상태 · 18개 기능                                        tab 펼치기
+메뉴 · ▸ 스택 상태 · 18개 항목                                        tab 펼치기
 스택 상태
 
 서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 확인 안 됨 1   ■ 중지 1
@@ -213,7 +213,7 @@ legacy         ✓ 실행 중          1 없음     ghcr.io/acme/legacy:… -
 
 === 120x18 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─── esc 닫기 ╮ 스택 상태                                                                               1-2/8
+╭ 메뉴 · 18 ─── esc 닫기 ╮ 스택 상태                                                                               1-2/8
 │조회                    │
 │  서비스 접속           │ 서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 확인 안 됨 1   ■ 중지 1   ○ 미생성 1
 │  로그 보기             │
@@ -233,7 +233,7 @@ legacy         ✓ 실행 중          1 없음     ghcr.io/acme/legacy:… -
 
 === 120x30 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─── esc 닫기 ╮ 스택 상태
+╭ 메뉴 · 18 ─── esc 닫기 ╮ 스택 상태
 │조회                    │
 │  서비스 접속           │ 서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 확인 안 됨 1   ■ 중지 1   ○ 미생성 1
 │  로그 보기             │
@@ -265,7 +265,7 @@ legacy         ✓ 실행 중          1 없음     ghcr.io/acme/legacy:… -
 
 === 120x50 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─── esc 닫기 ╮ 스택 상태
+╭ 메뉴 · 18 ─── esc 닫기 ╮ 스택 상태
 │조회                    │
 │  서비스 접속           │ 서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 확인 안 됨 1   ■ 중지 1   ○ 미생성 1
 │  로그 보기             │
@@ -317,7 +317,7 @@ legacy         ✓ 실행 중          1 없음     ghcr.io/acme/legacy:… -
 
 === 200x18 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─────── esc 닫기 ╮ 스택 상태                                                                                                                                                           1-2/8
+╭ 메뉴 · 18 ─────── esc 닫기 ╮ 스택 상태                                                                                                                                                           1-2/8
 │조회                        │
 │  서비스 접속               │ 서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 확인 안 됨 1   ■ 중지 1   ○ 미생성 1
 │  로그 보기                 │
@@ -337,7 +337,7 @@ legacy         ✓ 실행 중          1 없음     ghcr.io/acme/legacy:… -
 
 === 200x30 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─────── esc 닫기 ╮ 스택 상태
+╭ 메뉴 · 18 ─────── esc 닫기 ╮ 스택 상태
 │조회                        │
 │  서비스 접속               │ 서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 확인 안 됨 1   ■ 중지 1   ○ 미생성 1
 │  로그 보기                 │
@@ -369,7 +369,7 @@ legacy         ✓ 실행 중          1 없음     ghcr.io/acme/legacy:… -
 
 === 200x50 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─────── esc 닫기 ╮ 스택 상태
+╭ 메뉴 · 18 ─────── esc 닫기 ╮ 스택 상태
 │조회                        │
 │  서비스 접속               │ 서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 확인 안 됨 1   ■ 중지 1   ○ 미생성 1
 │  로그 보기                 │

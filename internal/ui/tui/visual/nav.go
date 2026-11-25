@@ -20,6 +20,12 @@ type NavItem struct {
 	Danger bool
 	// Selected marks the current menu cursor.
 	Selected bool
+	// Group marks a heading that names the entries below it. A group row is
+	// never selectable: the cursor skips it and a click on it does nothing.
+	Group bool
+	// Child marks an entry drawn under a group heading. It is indented and
+	// styled one step quieter than a top-level entry.
+	Child bool
 }
 
 // NavSection is one heading and its features, already in display order.
@@ -43,19 +49,37 @@ type Nav struct {
 	SummaryOffset int
 }
 
-// Count returns the number of items across all sections.
+// Count returns the number of selectable entries across all sections. A group
+// heading is not selectable, so it is not counted: the number always matches the
+// rows a reader can move onto.
 func (n Nav) Count() int {
 	total := 0
 	for _, section := range n.Sections {
-		total += len(section.Items)
+		total += countSelectable(section.Items)
 	}
 	return total
 }
 
-// selected returns the focused item and whether one is marked.
+// countSelectable is how many of a section's rows the cursor can reach.
+func countSelectable(items []NavItem) int {
+	total := 0
+	for _, item := range items {
+		if item.Group {
+			continue
+		}
+		total++
+	}
+	return total
+}
+
+// selected returns the focused item and whether one is marked. A group heading
+// is never marked: it is a label, not a target.
 func (n Nav) selected() (NavItem, bool) {
 	for _, section := range n.Sections {
 		for _, item := range section.Items {
+			if item.Group {
+				continue
+			}
 			if item.Selected {
 				return item, true
 			}
@@ -69,6 +93,7 @@ type navRowKind int
 const (
 	navRowHeading navRowKind = iota
 	navRowItem
+	navRowGroup
 	navRowGap
 )
 
@@ -79,7 +104,8 @@ type navRow struct {
 }
 
 // navRows flattens the navigation into renderable rows. A gap row separates
-// two sections; the first section has none.
+// two sections; the first section has none. A group entry becomes its own row
+// kind so it can be drawn and hit-tested as a heading rather than an item.
 func navRows(nav Nav) []navRow {
 	var rows []navRow
 	for i, section := range nav.Sections {
@@ -88,7 +114,11 @@ func navRows(nav Nav) []navRow {
 		}
 		rows = append(rows, navRow{kind: navRowHeading, heading: section.Title})
 		for _, item := range section.Items {
-			rows = append(rows, navRow{kind: navRowItem, item: item})
+			kind := navRowItem
+			if item.Group {
+				kind = navRowGroup
+			}
+			rows = append(rows, navRow{kind: kind, item: item})
 		}
 	}
 	return rows
@@ -126,13 +156,15 @@ func windowRows(rows []navRow, budget int) []navRow {
 		start = 0
 	}
 	end := start + budget
-	// Drop a trailing heading or gap: it would leave the window ending in a
-	// label with nothing below it.
+	// Drop a trailing heading, group or gap: it would leave the window ending
+	// in a label with nothing below it.
 	for end > start+1 && rows[end-1].kind != navRowItem {
 		end--
 	}
 	// If the window opens on an item whose heading is above, pull the heading
-	// in so the item is not shown under another section's label.
+	// in so the item is not shown under another section's label. A group
+	// heading is pulled in the same way, so a child never appears without the
+	// group it belongs to.
 	if rows[start].kind == navRowItem {
 		for i := start - 1; i >= 0; i-- {
 			if rows[i].kind == navRowHeading {
@@ -150,9 +182,19 @@ func windowRows(rows []navRow, budget int) []navRow {
 			}
 		}
 	}
+	// A leading group heading with no room for any child is dropped rather
+	// than drawn alone.
+	if start < len(rows) && rows[start].kind == navRowGroup {
+		if end-start < 2 {
+			start++
+		}
+	}
 	// A leading gap row is not useful either.
-	if rows[start].kind == navRowGap {
+	if start < len(rows) && rows[start].kind == navRowGap {
 		start++
+	}
+	if start > end {
+		start = end
 	}
 	return rows[start:end]
 }
@@ -238,6 +280,8 @@ func SidebarWithHits(th Theme, width, height int, nav Nav) ([]string, []NavHit) 
 
 // navRowHits returns the drawn row of every feature entry. Rows are 1:1 with
 // renderNavRows, which draws one line per navRow.
+// navRowHits returns the click targets of a row set. A group heading is not a
+// target, so it has no hit; a click on it does nothing at all.
 func navRowHits(rows []navRow, offset int) []NavHit {
 	hits := make([]NavHit, 0, len(rows))
 	for i, row := range rows {
@@ -398,6 +442,8 @@ func renderNavRows(th Theme, rows []navRow, width int, showName bool) []string {
 			out = append(out, th.Bold(TokenMuted, Truncate(row.heading, width, ell)))
 		case navRowItem:
 			out = append(out, navItemLine(th, row.item, width, showName))
+		case navRowGroup:
+			out = append(out, navItemLine(th, row.item, width, showName))
 		}
 	}
 	return out
@@ -407,8 +453,19 @@ func renderNavRows(th Theme, rows []navRow, width int, showName bool) []string {
 // title, risk badge, then the secondary columns (machine name, summary). The
 // badge is a warning and never yields; the secondary columns are information
 // and do.
+//
+// A group heading is a sub-heading: it is drawn quieter than a section heading,
+// is never selectable, and carries no marker. A child entry is indented under
+// its group so the two levels stay readable in a 26-cell sidebar.
 func navItemLine(th Theme, item NavItem, width int, showName bool) string {
 	const markerWidth = 2
+	if item.Group {
+		return groupLine(th, item, width, showName)
+	}
+	indent := ""
+	if item.Child {
+		indent = "  "
+	}
 	marker := "  "
 	if item.Selected {
 		marker = th.Paint(TokenAccent, th.Glyphs.Sel) + " "
@@ -431,24 +488,44 @@ func navItemLine(th Theme, item NavItem, width int, showName bool) string {
 
 	// Reserve the marker and the badge first, then fill what is left with the
 	// title and as much of the secondary columns as fits.
-	room := width - markerWidth - Width(badge)
+	room := width - markerWidth - Width(indent) - Width(badge)
 	if room < 1 {
 		room = 1
 	}
 	title := Truncate(item.Title, room, ellOf(th))
 	label := title + badge
-	if spare := width - markerWidth - Width(label); spare > 0 && secondary != "" {
+	if spare := width - markerWidth - Width(indent) - Width(label); spare > 0 && secondary != "" {
 		label += Truncate(secondary, spare, ellOf(th))
 	}
 
 	switch {
 	case item.Danger:
-		return marker + th.Paint(TokenDanger, label)
+		return indent + marker + th.Paint(TokenDanger, label)
 	case item.Selected:
-		return marker + th.Bold(TokenAccent, label)
+		return indent + marker + th.Bold(TokenAccent, label)
 	default:
-		return marker + label
+		return indent + marker + label
 	}
+}
+
+// groupLine draws a group heading one step quieter than the section heading.
+// It has no cursor marker and no badge: it is a label for the entries below it,
+// not a target.
+func groupLine(th Theme, item NavItem, width int, showName bool) string {
+	const markerWidth = 2
+	secondary := ""
+	if showName && item.Summary != "" {
+		secondary = " · " + item.Summary
+	}
+	room := width - markerWidth
+	if room < 1 {
+		room = 1
+	}
+	label := Truncate(item.Title, room, ellOf(th))
+	if spare := width - markerWidth - Width(label); spare > 0 && secondary != "" {
+		label += Truncate(secondary, spare, ellOf(th))
+	}
+	return "  " + th.Paint(TokenMuted, label)
 }
 
 func ellOf(th Theme) string { return th.Glyphs.Ell }
@@ -500,7 +577,7 @@ func NavRow(th Theme, width int, nav Nav, expanded bool) string {
 	if expanded {
 		parts := make([]string, 0, len(nav.Sections))
 		for _, section := range nav.Sections {
-			parts = append(parts, fmt.Sprintf(msgNavSectionCnt, section.Title, len(section.Items)))
+			parts = append(parts, fmt.Sprintf(msgNavSectionCnt, section.Title, countSelectable(section.Items)))
 		}
 		left.WriteString(th.Bold(TokenMuted, strings.Join(parts, "  ")))
 	} else {
