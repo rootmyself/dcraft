@@ -515,3 +515,18 @@ func TestPTYTUILiveLogHostileLineKeepsTheFrame(t *testing.T) {
 	fake.assertNoSubcommand(t, "stop")
 	fake.assertNoSubcommand(t, "down")
 }
+
+// waitFrameFor waits for text in the frame that is currently drawn, not in any
+// frame the run has produced. The accumulated buffer would match a screen that
+// has already been replaced, which lets the next key land on the wrong screen.
+func (s *ptySession) waitFrameFor(t *testing.T, text string, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for !strings.Contains(currentFrame(s.out.String()), text) {
+		if time.Now().After(deadline) {
+			_ = s.cmd.Process.Kill()
+			t.Fatalf("current frame never contained %q:\n%s", text, s.out.String())
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
