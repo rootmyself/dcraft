@@ -1,12 +1,12 @@
 package tui
 
 const (
-	msgEnvNewAlias     = "새 별칭"
-	msgEnvReloadFailed = "실행환경 목록 불러오기 실패: "
-	msgEnvSwitchFailed = "전환할 실행환경 불러오기 실패."
-	msgEnvSwitchEmpty  = "전환할 실행환경 없음 · 실행환경 생성에서 별칭 추가"
-	msgEnvSwitched     = "실행환경 전환 완료: %s"
-	msgEnvAlreadyCurrent = "이미 현재 실행환경: %s"
+	msgEnvNewAlias         = "새 별칭"
+	msgEnvReloadFailed     = "실행환경 목록 불러오기 실패: "
+	msgEnvSwitchFailed     = "전환할 실행환경 불러오기 실패."
+	msgEnvSwitchEmpty      = "전환할 실행환경 없음 · 실행환경 생성에서 별칭 추가"
+	msgEnvSwitched         = "실행환경 전환 완료: %s"
+	msgEnvAlreadyCurrent   = "이미 현재 실행환경: %s"
 	msgEnvActiveSaveFailed = "활성 실행환경 저장 실패. 다음 시작에 다시 선택 필요."
 	msgEnvActiveInvalid    = "저장된 활성 실행환경을 쓸 수 없음: %s · 다시 선택"
 	msgEnvCreatedNotice    = "실행환경 생성 완료: %s"
@@ -126,17 +126,22 @@ const (
 	msgServiceColumnPort      = "포트"
 
 	// Live screens. Closing a screen only detaches; it never stops services.
-	msgLiveStreaming     = "실시간 로그 (서비스는 계속 실행 중)"
-	msgLiveAttached      = "서비스 접속."
-	msgLiveService       = "서비스"
-	msgLiveInstance      = "인스턴스"
-	msgLiveAllInstances  = "전체"
-	msgLiveCommand       = "명령"
-	msgLiveStopped       = "실시간 화면 닫음. 서비스는 계속 실행 중."
-	msgLiveKeepsRunning  = "서비스는 계속 실행 중"
-	msgLiveScrollKeys    = "PgUp/PgDn · g/G"
-	msgLastOutput        = "마지막 실시간 출력"
-	msgLastOutputOmitted = "마지막 실시간 출력 (앞 %d줄 생략)"
+	msgLiveStreaming    = "실시간 로그 (서비스는 계속 실행 중)"
+	msgLiveAttached     = "서비스 접속."
+	msgLiveService      = "서비스"
+	msgLiveInstance     = "인스턴스"
+	msgLiveAllInstances = "전체"
+	msgLiveCommand      = "명령"
+	msgLiveStopped      = "실시간 화면 닫음. 서비스는 계속 실행 중."
+	msgLiveKeepsRunning = "서비스는 계속 실행 중"
+	// msgLiveKeepsRunningAndDetach is the attach header's second line: the same
+	// promise plus the one key that leaves the shell. An attached shell owns
+	// every other key, so the keycap footer may be covered by a full-screen
+	// child while this line is not.
+	msgLiveKeepsRunningAndDetach = "서비스는 계속 실행 중 · 종료: ctrl+]"
+	msgLiveScrollKeys            = "PgUp/PgDn · g/G"
+	msgLastOutput                = "마지막 실시간 출력"
+	msgLastOutputOmitted         = "마지막 실시간 출력 (앞 %d줄 생략)"
 )
 
 const (

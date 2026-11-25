@@ -17,8 +17,7 @@ func TestBackupTUIWizardSelectsVolumeAndShowsTheEffectBeforeRunning(t *testing.T
 	// The menu order is the registration order; compute the distance from
 	// status so another ticket's feature does not break this journey.
 	steps := []lifecyclePTYStep{
-		{wait: "[↑↓] 이동", send: strings.Repeat("\x1b[B", menuDownPresses(t, "backup"))},
-		{wait: "▸ 데이터 백업", send: "\r"},
+		{wait: "마지막 조회", walk: "데이터 백업", send: "\r"},
 		{wait: "데이터 백업 설정", send: "\r"}, // choose the first named volume
 		{wait: "백업 저장 폴더", send: "\r"},  // accept the shown default path
 		{wait: "백업 계획", send: ""},       // effect preview, nothing has run
@@ -63,8 +62,7 @@ func TestBackupTUIWizardSelectsAMixOfVolumeAndBindFolder(t *testing.T) {
 	// The menu order is the registration order; compute the distance from
 	// status so another ticket's feature does not break this journey.
 	steps := []lifecyclePTYStep{
-		{wait: "[↑↓] 이동", send: strings.Repeat("\x1b[B", menuDownPresses(t, "backup"))},
-		{wait: "▸ 데이터 백업", send: "\r"},
+		{wait: "마지막 조회", walk: "데이터 백업", send: "\r"},
 		{wait: "백업할 데이터 선택", send: " "}, // check the first volume
 		{wait: "> [x] 볼륨 data", send: "down"},
 		{wait: "> [ ] 폴더 ", send: " "}, // add the bind folder

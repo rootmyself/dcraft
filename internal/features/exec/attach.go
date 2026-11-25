@@ -115,14 +115,20 @@ func (f *Feature) Inputs(ctx context.Context, in core.Invocation) ([]core.InputF
 			Options: commandChoices(history),
 		},
 	}
-	// The typed command stays visible so a command that is not in the store can
-	// still be run. The new-command row is what uses it; selecting a stored
-	// command ignores it.
+	// The typed command is only collected when the reader picked the
+	// "new command" row: a pinned shell or a remembered command already names
+	// the exact argv, so asking for a second one would be a step that cannot
+	// change the result. The field is still declared (and required) so the
+	// hidden-until-needed rule lives in the shared input contract instead of
+	// in the exec feature.
 	fields = append(fields, core.InputField{
-		Key:   fieldCommand,
-		Label: msgFieldCommand,
-		Help:  commandHelp,
-		Kind:  core.InputText,
+		Key:          fieldCommand,
+		Label:        msgFieldCommand,
+		Help:         commandHelp,
+		Kind:         core.InputText,
+		Required:     true,
+		DependsOn:    fieldCommandChoice,
+		DependsValue: commandNew,
 	})
 	return fields, nil
 }

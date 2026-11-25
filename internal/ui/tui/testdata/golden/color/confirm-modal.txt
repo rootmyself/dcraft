@@ -120,11 +120,11 @@ Comp│  작업:          Compose 설치 (install-compose)                      
     │  효과:          dcraft가 Docker Compose 실행 파일 설치.              │
 설정│                                                                      │
   실│  출처: https://github.com/docker/compose/releases                    │
-  Gi│  1/22 · PgUp/PgDn                                                    │
+  실│  1/22 · PgUp/PgDn                                                    │
   호│  [ 승인 ]   [ 취소 ]                                                 │
-▸ Co│──────────────────────────────────────────────────────────────────────│
-  S3│  위험 스택을 변경하는 작업. 중단하면 일부 변경이 남을 수 있음.       │
-  비╰──────────────────────────────────────────────────────────────────────╯
+    │──────────────────────────────────────────────────────────────────────│
+    │  위험 스택을 변경하는 작업. 중단하면 일부 변경이 남을 수 있음.       │
+    ╰──────────────────────────────────────────────────────────────────────╯
 [enter] 실행  [esc] 취소  [↑↓] 항목  [?] 도움말
 
 === 80x30 ===
@@ -152,16 +152,16 @@ Comp│  작업:          Compose 설치 (install-compose)                      
     │                                                                      │
 설정│  필요한 승인                                                         │
   실│  [x] 설치 (install)                                                  │
-  Gi│  [ 승인 ]   [ 취소 ]                                                 │
+  실│  [ 승인 ]   [ 취소 ]                                                 │
   호│──────────────────────────────────────────────────────────────────────│
-▸ Co│  위험 스택을 변경하는 작업. 중단하면 일부 변경이 남을 수 있음.       │
-  S3╰──────────────────────────────────────────────────────────────────────╯
-  비밀값 연결 (secrets) · 비밀값 참조 등록.
+    │  위험 스택을 변경하는 작업. 중단하면 일부 변경이 남을 수 있음.       │
+    ╰──────────────────────────────────────────────────────────────────────╯
+    S3 (generate-s3-hook) · S3에서 받아 오는 스크립트를 생성.
 [enter] 실행  [esc] 취소  [↑↓] 항목  [?] 도움말
 
 === 80x50 ===
  dcraft · acme-platform · staging        Docker 29.10.0 · Compose 2.39.1 · 로컬
-메뉴 · ▸ Compose 설치 · 18개 항목                                     tab 펼치기
+메뉴 · ▸ Compose 설치 · 19개 항목                                     tab 펼치기
 Compose 설치
 
 작업
@@ -184,14 +184,14 @@ Compose 설치
     │  출처: https://github.com/docker/compose/releases                    │
 설정│  버전: v2.39.1                                                       │
   실│  대상 경로: /Users/me/.docker/cli-plugins/docker-compose             │
-  Gi│  무결성: sha256 확인 후 원자적으로 교체.                             │
+  실│  무결성: sha256 확인 후 원자적으로 교체.                             │
   호│                                                                      │
-▸ Co│  단계                                                                │
-  S3│    ✓ 대상 확인 (완료)                                                │
-  비│    ✓ 환경 확인 (완료)                                                │
-  최│    ✓ 작업 계획 (완료)                                                │
-    │    · 작업 실행 (예정)                                                │
-    │                                                                      │
+    │  단계                                                                │
+    │    ✓ 대상 확인 (완료)                                                │
+    │    ✓ 환경 확인 (완료)                                                │
+▸ Co│    ✓ 작업 계획 (완료)                                                │
+  비│    · 작업 실행 (예정)                                                │
+  최│                                                                      │
     │  필요한 승인                                                         │
     │  [x] 설치 (install)                                                  │
     │  [ 승인 ]   [ 취소 ]                                                 │
@@ -213,50 +213,50 @@ Compose 설치
 
 === 120x18 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 메뉴 · 18 ─── esc 닫╭─ 승인 확인 ──────────────────────────────────────────────────────── 위험 ╮
+╭ 메뉴 · 19 ─── esc 닫╭─ 승인 확인 ──────────────────────────────────────────────────────── 위험 ╮
 │데이터               │  작업:          Compose 설치 (install-compose)                           │
 │  데이터 백업        │  대상:          /work/acme-platform                                      │
 │  데이터 복원 ▲ 위험 │  실행환경:      staging                                                  │
 │  이전 버전 복… ▲ 위 │  Compose 파일:  /work/acme-platform/compose.yaml, /work/acme-platform/…  │
 │                     │  프로필:        observability                                            │
 │설정                 │  프로젝트 이름: acme-platform                                            │
-│  실행환경 별칭      │  범위:          스택 전체                                                │
-│  Git 호스트 스크립트│  효과:          dcraft가 Docker Compose 실행 파일 설치.                  │
+│  실행환경 생성      │  범위:          스택 전체                                                │
+│  실행환경 전환      │  효과:          dcraft가 Docker Compose 실행 파일 설치.                  │
 │  호스트 스크립트    │                                                                          │
-│▸ Compose 설치       │  출처: https://github.com/docker/compose/releases                        │
-│  S3 호스트 스크립트 │  1/22 · PgUp/PgDn                                                        │
-│  비밀값 연결        │  [ 승인 ]   [ 취소 ]                                                     │
-│  최초 구성          │──────────────────────────────────────────────────────────────────────────│
-│                     │  위험 스택을 변경하는 작업. 중단하면 일부 변경이 남을 수 있음.           │
+│    커스텀           │  출처: https://github.com/docker/compose/releases                        │
+│    Git              │  1/22 · PgUp/PgDn                                                        │
+│    S3               │  [ 승인 ]   [ 취소 ]                                                     │
+│▸ Compose 설치       │──────────────────────────────────────────────────────────────────────────│
+│  비밀값 연결        │  위험 스택을 변경하는 작업. 중단하면 일부 변경이 남을 수 있음.           │
 ╰─────────────────────╰──────────────────────────────────────────────────────────────────────────╯
 [enter] 실행  [esc] 취소  [↑↓] 항목  [?] 도움말
 
 === 120x30 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 메뉴 · 18 ─── esc 닫╭─ 승인 확인 ──────────────────────────────────────────────────────── 위험 ╮
-│조회                 │  작업:          Compose 설치 (install-compose)                           │
-│  서비스 접속        │  대상:          /work/acme-platform                                      │
-│  로그 보기          │  실행환경:      staging                                                  │
-│  스택 상태          │  Compose 파일:  /work/acme-platform/compose.yaml, /work/acme-platform/…  │
-│                     │  프로필:        observability                                            │
-│운영                 │  프로젝트 이름: acme-platform                                            │
-│  스택 제거 ▲ 위험   │  범위:          스택 전체                                                │
-│  스택 재시작        │  효과:          dcraft가 Docker Compose 실행 파일 설치.                  │
-│  스택 중지          │                                                                          │
-│  스택 시작          │  출처: https://github.com/docker/compose/releases                        │
-│  갱신               │  버전: v2.39.1                                                           │
-│                     │  대상 경로: /Users/me/.docker/cli-plugins/docker-compose                 │
-│데이터               │  무결성: sha256 확인 후 원자적으로 교체.                                 │
+╭ 메뉴 · 19 ─── esc 닫╭─ 승인 확인 ──────────────────────────────────────────────────────── 위험 ╮
+│운영                 │  작업:          Compose 설치 (install-compose)                           │
+│  스택 제거 ▲ 위험   │  대상:          /work/acme-platform                                      │
+│  스택 재시작        │  실행환경:      staging                                                  │
+│  스택 중지          │  Compose 파일:  /work/acme-platform/compose.yaml, /work/acme-platform/…  │
+│  스택 시작          │  프로필:        observability                                            │
+│  갱신               │  프로젝트 이름: acme-platform                                            │
+│                     │  범위:          스택 전체                                                │
+│데이터               │  효과:          dcraft가 Docker Compose 실행 파일 설치.                  │
 │  데이터 백업        │                                                                          │
-│  데이터 복원 ▲ 위험 │  단계                                                                    │
-│  이전 버전 복… ▲ 위 │    ✓ 대상 확인 (완료)                                                    │
-│                     │    ✓ 환경 확인 (완료)                                                    │
-│설정                 │    ✓ 작업 계획 (완료)                                                    │
-│  실행환경 별칭      │    · 작업 실행 (예정)                                                    │
-│  Git 호스트 스크립트│                                                                          │
-│  호스트 스크립트    │  필요한 승인                                                             │
-│▸ Compose 설치       │  [x] 설치 (install)                                                      │
-│  S3 호스트 스크립트 │  [ 승인 ]   [ 취소 ]                                                     │
+│  데이터 복원 ▲ 위험 │  출처: https://github.com/docker/compose/releases                        │
+│  이전 버전 복… ▲ 위 │  버전: v2.39.1                                                           │
+│                     │  대상 경로: /Users/me/.docker/cli-plugins/docker-compose                 │
+│설정                 │  무결성: sha256 확인 후 원자적으로 교체.                                 │
+│  실행환경 생성      │                                                                          │
+│  실행환경 전환      │  단계                                                                    │
+│  호스트 스크립트    │    ✓ 대상 확인 (완료)                                                    │
+│    커스텀           │    ✓ 환경 확인 (완료)                                                    │
+│    Git              │    ✓ 작업 계획 (완료)                                                    │
+│    S3               │    · 작업 실행 (예정)                                                    │
+│▸ Compose 설치       │                                                                          │
+│  비밀값 연결        │  필요한 승인                                                             │
+│  최초 구성          │  [x] 설치 (install)                                                      │
+│                     │  [ 승인 ]   [ 취소 ]                                                     │
 │─────────────────────│──────────────────────────────────────────────────────────────────────────│
 │ ▸ Compose 설치      │  위험 스택을 변경하는 작업. 중단하면 일부 변경이 남을 수 있음.           │
 │ dcraft가 Docker Comp╰──────────────────────────────────────────────────────────────────────────╯
@@ -265,7 +265,7 @@ Compose 설치
 
 === 120x50 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 메뉴 · 18 ─── esc 닫기 ╮ Compose 설치
+╭ 메뉴 · 19 ─── esc 닫기 ╮ Compose 설치
 │조회                    │
 │  서비스 접속           │
 │  로그 보기             │
@@ -284,15 +284,15 @@ Compose 설치
 │  이전 버전 복… ▲ 위 │  프로젝트 이름: acme-platform                                            │
 │                     │  범위:          스택 전체                                                │
 │설정                 │  효과:          dcraft가 Docker Compose 실행 파일 설치.                  │
-│  실행환경 별칭      │                                                                          │
-│  Git 호스트 스크립트│  출처: https://github.com/docker/compose/releases                        │
+│  실행환경 생성      │                                                                          │
+│  실행환경 전환      │  출처: https://github.com/docker/compose/releases                        │
 │  호스트 스크립트    │  버전: v2.39.1                                                           │
-│▸ Compose 설치       │  대상 경로: /Users/me/.docker/cli-plugins/docker-compose                 │
-│  S3 호스트 스크립트 │  무결성: sha256 확인 후 원자적으로 교체.                                 │
-│  비밀값 연결        │                                                                          │
-│  최초 구성          │  단계                                                                    │
-│                     │    ✓ 대상 확인 (완료)                                                    │
-│                     │    ✓ 환경 확인 (완료)                                                    │
+│    커스텀           │  대상 경로: /Users/me/.docker/cli-plugins/docker-compose                 │
+│    Git              │  무결성: sha256 확인 후 원자적으로 교체.                                 │
+│    S3               │                                                                          │
+│▸ Compose 설치       │  단계                                                                    │
+│  비밀값 연결        │    ✓ 대상 확인 (완료)                                                    │
+│  최초 구성          │    ✓ 환경 확인 (완료)                                                    │
 │                     │    ✓ 작업 계획 (완료)                                                    │
 │                     │    · 작업 실행 (예정)                                                    │
 │                     │                                                                          │
@@ -317,50 +317,50 @@ Compose 설치
 
 === 200x18 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 메뉴 · 18 ─────── esc 닫기 ╮ Compose 설치                   ╭─ 승인 확인 ──────────────────────────────────────────────────────── 위험 ╮
+╭ 메뉴 · 19 ─────── esc 닫기 ╮ Compose 설치                   ╭─ 승인 확인 ──────────────────────────────────────────────────────── 위험 ╮
 │데이터                      │                                │  작업:          Compose 설치 (install-compose)                           │
 │  데이터 백업               │                                │  대상:          /work/acme-platform                                      │
 │  데이터 복원 ▲ 위험        │                                │  실행환경:      staging                                                  │
 │  이전 버전 복원 ▲ 위험     │                                │  Compose 파일:  /work/acme-platform/compose.yaml, /work/acme-platform/…  │
 │                            │                                │  프로필:        observability                                            │
 │설정                        │                                │  프로젝트 이름: acme-platform                                            │
-│  실행환경 별칭             │                                │  범위:          스택 전체                                                │
-│  Git 호스트 스크립트 생성  │                                │  효과:          dcraft가 Docker Compose 실행 파일 설치.                  │
+│  실행환경 생성             │                                │  범위:          스택 전체                                                │
+│  실행환경 전환             │                                │  효과:          dcraft가 Docker Compose 실행 파일 설치.                  │
 │  호스트 스크립트           │                                │                                                                          │
-│▸ Compose 설치              │                                │  출처: https://github.com/docker/compose/releases                        │
-│  S3 호스트 스크립트 생성   │                                │  1/22 · PgUp/PgDn                                                        │
-│  비밀값 연결               │                                │  [ 승인 ]   [ 취소 ]                                                     │
-│  최초 구성                 │                                │──────────────────────────────────────────────────────────────────────────│
-│                            │                                │  위험 스택을 변경하는 작업. 중단하면 일부 변경이 남을 수 있음.           │
+│    커스텀                  │                                │  출처: https://github.com/docker/compose/releases                        │
+│    Git                     │                                │  1/22 · PgUp/PgDn                                                        │
+│    S3                      │                                │  [ 승인 ]   [ 취소 ]                                                     │
+│▸ Compose 설치              │                                │──────────────────────────────────────────────────────────────────────────│
+│  비밀값 연결               │                                │  위험 스택을 변경하는 작업. 중단하면 일부 변경이 남을 수 있음.           │
 ╰────────────────────────────╯                                ╰──────────────────────────────────────────────────────────────────────────╯
 [enter] 실행  [esc] 취소  [↑↓] 항목  [?] 도움말
 
 === 200x30 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 메뉴 · 18 ─────── esc 닫기 ╮ Compose 설치                   ╭─ 승인 확인 ──────────────────────────────────────────────────────── 위험 ╮
-│조회                        │                                │  작업:          Compose 설치 (install-compose)                           │
-│  서비스 접속               │                                │  대상:          /work/acme-platform                                      │
-│  로그 보기                 │                                │  실행환경:      staging                                                  │
-│  스택 상태                 │                                │  Compose 파일:  /work/acme-platform/compose.yaml, /work/acme-platform/…  │
-│                            │                                │  프로필:        observability                                            │
-│운영                        │                                │  프로젝트 이름: acme-platform                                            │
-│  스택 제거 ▲ 위험          │                                │  범위:          스택 전체                                                │
-│  스택 재시작               │                                │  효과:          dcraft가 Docker Compose 실행 파일 설치.                  │
-│  스택 중지                 │                                │                                                                          │
-│  스택 시작                 │                                │  출처: https://github.com/docker/compose/releases                        │
-│  갱신                      │                                │  버전: v2.39.1                                                           │
-│                            │                                │  대상 경로: /Users/me/.docker/cli-plugins/docker-compose                 │
-│데이터                      │                                │  무결성: sha256 확인 후 원자적으로 교체.                                 │
+╭ 메뉴 · 19 ─────── esc 닫기 ╮ Compose 설치                   ╭─ 승인 확인 ──────────────────────────────────────────────────────── 위험 ╮
+│운영                        │                                │  작업:          Compose 설치 (install-compose)                           │
+│  스택 제거 ▲ 위험          │                                │  대상:          /work/acme-platform                                      │
+│  스택 재시작               │                                │  실행환경:      staging                                                  │
+│  스택 중지                 │                                │  Compose 파일:  /work/acme-platform/compose.yaml, /work/acme-platform/…  │
+│  스택 시작                 │                                │  프로필:        observability                                            │
+│  갱신                      │                                │  프로젝트 이름: acme-platform                                            │
+│                            │                                │  범위:          스택 전체                                                │
+│데이터                      │                                │  효과:          dcraft가 Docker Compose 실행 파일 설치.                  │
 │  데이터 백업               │                                │                                                                          │
-│  데이터 복원 ▲ 위험        │                                │  단계                                                                    │
-│  이전 버전 복원 ▲ 위험     │                                │    ✓ 대상 확인 (완료)                                                    │
-│                            │                                │    ✓ 환경 확인 (완료)                                                    │
-│설정                        │                                │    ✓ 작업 계획 (완료)                                                    │
-│  실행환경 별칭             │                                │    · 작업 실행 (예정)                                                    │
-│  Git 호스트 스크립트 생성  │                                │                                                                          │
-│  호스트 스크립트           │                                │  필요한 승인                                                             │
-│▸ Compose 설치              │                                │  [x] 설치 (install)                                                      │
-│  S3 호스트 스크립트 생성   │                                │  [ 승인 ]   [ 취소 ]                                                     │
+│  데이터 복원 ▲ 위험        │                                │  출처: https://github.com/docker/compose/releases                        │
+│  이전 버전 복원 ▲ 위험     │                                │  버전: v2.39.1                                                           │
+│                            │                                │  대상 경로: /Users/me/.docker/cli-plugins/docker-compose                 │
+│설정                        │                                │  무결성: sha256 확인 후 원자적으로 교체.                                 │
+│  실행환경 생성             │                                │                                                                          │
+│  실행환경 전환             │                                │  단계                                                                    │
+│  호스트 스크립트           │                                │    ✓ 대상 확인 (완료)                                                    │
+│    커스텀                  │                                │    ✓ 환경 확인 (완료)                                                    │
+│    Git                     │                                │    ✓ 작업 계획 (완료)                                                    │
+│    S3                      │                                │    · 작업 실행 (예정)                                                    │
+│▸ Compose 설치              │                                │                                                                          │
+│  비밀값 연결               │                                │  필요한 승인                                                             │
+│  최초 구성                 │                                │  [x] 설치 (install)                                                      │
+│                            │                                │  [ 승인 ]   [ 취소 ]                                                     │
 │────────────────────────────│                                │──────────────────────────────────────────────────────────────────────────│
 │ ▸ Compose 설치             │                                │  위험 스택을 변경하는 작업. 중단하면 일부 변경이 남을 수 있음.           │
 │ dcraft가 Docker Compose 실 │                                ╰──────────────────────────────────────────────────────────────────────────╯
@@ -369,7 +369,7 @@ Compose 설치
 
 === 200x50 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 메뉴 · 18 ─────── esc 닫기 ╮ Compose 설치
+╭ 메뉴 · 19 ─────── esc 닫기 ╮ Compose 설치
 │조회                        │
 │  서비스 접속               │
 │  로그 보기                 │
@@ -388,15 +388,15 @@ Compose 설치
 │  이전 버전 복원 ▲ 위험     │                                │  프로젝트 이름: acme-platform                                            │
 │                            │                                │  범위:          스택 전체                                                │
 │설정                        │                                │  효과:          dcraft가 Docker Compose 실행 파일 설치.                  │
-│  실행환경 별칭             │                                │                                                                          │
-│  Git 호스트 스크립트 생성  │                                │  출처: https://github.com/docker/compose/releases                        │
+│  실행환경 생성             │                                │                                                                          │
+│  실행환경 전환             │                                │  출처: https://github.com/docker/compose/releases                        │
 │  호스트 스크립트           │                                │  버전: v2.39.1                                                           │
-│▸ Compose 설치              │                                │  대상 경로: /Users/me/.docker/cli-plugins/docker-compose                 │
-│  S3 호스트 스크립트 생성   │                                │  무결성: sha256 확인 후 원자적으로 교체.                                 │
-│  비밀값 연결               │                                │                                                                          │
-│  최초 구성                 │                                │  단계                                                                    │
-│                            │                                │    ✓ 대상 확인 (완료)                                                    │
-│                            │                                │    ✓ 환경 확인 (완료)                                                    │
+│    커스텀                  │                                │  대상 경로: /Users/me/.docker/cli-plugins/docker-compose                 │
+│    Git                     │                                │  무결성: sha256 확인 후 원자적으로 교체.                                 │
+│    S3                      │                                │                                                                          │
+│▸ Compose 설치              │                                │  단계                                                                    │
+│  비밀값 연결               │                                │    ✓ 대상 확인 (완료)                                                    │
+│  최초 구성                 │                                │    ✓ 환경 확인 (완료)                                                    │
 │                            │                                │    ✓ 작업 계획 (완료)                                                    │
 │                            │                                │    · 작업 실행 (예정)                                                    │
 │                            │                                │                                                                          │

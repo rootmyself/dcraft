@@ -40,6 +40,13 @@ func newFormState(feature core.Feature, fields []core.InputField, base core.Requ
 		if field.Kind == core.InputChoice && len(field.Options) > 0 {
 			form.choices[field.Key] = 0
 		}
+		// A text field with a dependency starts empty and hidden; the choice it
+		// depends on decides whether it is collected.
+		form.values[field.Key] = ""
+	}
+	// The focus starts on the first field that is actually drawn.
+	if visible := form.visibleFields(); len(visible) > 0 {
+		form.focus = visible[0]
 	}
 	return form
 }
@@ -51,6 +58,70 @@ func (m *Model) formFocusIsText() bool {
 		return false
 	}
 	return m.form.fields[m.form.focus].Kind == core.InputText
+}
+
+// answer is one field's current value: the selected option for a choice, the
+// typed text for a text field. It is what a dependency compares against and what
+// the field is drawn from, so both read the same answer.
+func (f *formState) answer(key string) string {
+	field, ok := core.InputDependsOn(f.fields, key)
+	if !ok {
+		return ""
+	}
+	if field.Kind == core.InputChoice {
+		options := field.Options
+		if len(options) == 0 {
+			return ""
+		}
+		index := f.choices[key]
+		if index < 0 || index >= len(options) {
+			index = 0
+		}
+		return options[index].Value
+	}
+	return f.values[key]
+}
+
+// visibleFields is the drawn and collected fields in declaration order. A field
+// whose dependency is unmet is not drawn, not focused and not submitted.
+func (f *formState) visibleFields() []int {
+	out := make([]int, 0, len(f.fields))
+	for i, field := range f.fields {
+		if field.Visible(f.answer) {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
+// nextVisible moves the focus by delta through the visible fields only, so tab
+// never lands on a field that is not on screen.
+func (f *formState) nextVisible(delta int) {
+	visible := f.visibleFields()
+	if len(visible) == 0 {
+		return
+	}
+	pos := 0
+	for i, index := range visible {
+		if index == f.focus {
+			pos = i
+			break
+		}
+	}
+	pos = (pos + delta + len(visible)) % len(visible)
+	f.focus = visible[pos]
+}
+
+// fieldAfter is the next visible field after index, or false when index is the
+// last one. Confirm on the last field submits; confirming anywhere else moves
+// on, which is why the answer that just changed is re-read here.
+func (f *formState) fieldAfter(index int) (int, bool) {
+	for _, candidate := range f.visibleFields() {
+		if candidate > index {
+			return candidate, true
+		}
+	}
+	return 0, false
 }
 
 func (m *Model) updateFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -72,12 +143,12 @@ func (m *Model) updateFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.notice = msgFormCanceled
 		return m, nil
 	case "tab":
-		form.focus = (form.focus + 1) % len(form.fields)
+		form.nextVisible(1)
 		form.notice = ""
 		form.noticeField = -1
 		return m, nil
 	case "shift+tab":
-		form.focus = (form.focus - 1 + len(form.fields)) % len(form.fields)
+		form.nextVisible(-1)
 		form.notice = ""
 		form.noticeField = -1
 		return m, nil
@@ -102,8 +173,11 @@ func (m *Model) updateFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "enter":
-		if form.focus < len(form.fields)-1 {
-			form.focus++
+		// Changing a choice can hide the field the cursor is on (the typed
+		// command) or reveal one, so the next focused field is recomputed from
+		// the answers as they are now.
+		if next, ok := form.fieldAfter(form.focus); ok {
+			form.focus = next
 			form.notice = ""
 			form.noticeField = -1
 			return m, nil
@@ -140,6 +214,11 @@ func (m *Model) submitForm() (tea.Model, tea.Cmd) {
 	}
 	values := map[string]string{}
 	for i, field := range form.fields {
+		// A hidden field is not part of the request: the feature would
+		// otherwise receive a value the reader cannot see or correct.
+		if !field.Visible(form.answer) {
+			continue
+		}
 		value := strings.TrimSpace(form.values[field.Key])
 		if field.Kind == core.InputChoice {
 			if len(field.Options) == 0 {
@@ -200,6 +279,17 @@ func (m *Model) formLines() ([]string, []bodyHit) {
 	}
 	add("")
 	for i, field := range form.fields {
+		// A field whose dependency is unmet is not drawn at all: the rule is
+		// the field's own, so this renderer never learns which field hides
+		// which.
+		if !field.Visible(form.answer) {
+			continue
+		}
+		// One blank line between field blocks keeps the container choice and
+		// the command choice readable as two sections instead of one list.
+		if len(lines) > 0 && lines[len(lines)-1] != "" {
+			add("")
+		}
 		marker := "  "
 		if i == form.focus {
 			marker = "> "
@@ -238,6 +328,9 @@ func (m *Model) formLines() ([]string, []bodyHit) {
 	add("")
 	add(m.title(msgFormRunTitle))
 	for _, field := range form.fields {
+		if !field.Visible(form.answer) {
+			continue
+		}
 		value := form.reviewValue(field)
 		if value == "" {
 			value = msgFormEmpty
@@ -285,10 +378,16 @@ func (m *Model) helpLines(help string) []string {
 // reviewValue is exactly what the feature will receive for a field: a choice
 // contributes its machine value; text is trimmed when submitted and is shown
 // trimmed here so the review matches the run. A choice whose label differs
-// from its value states both, because the label alone would hide what runs.
+// from its value states both, because the label alone would hide what runs. A
+// choice with an empty machine value (a row that means "something else") is
+// named by its label instead, so the review never reads as "nothing chosen"
+// while a row is plainly selected.
 func (f *formState) reviewValue(field core.InputField) string {
 	if field.Kind == core.InputChoice && len(field.Options) > 0 {
 		option := field.Options[f.choices[field.Key]]
+		if option.Value == "" {
+			return option.Label
+		}
 		if option.Label == option.Value || strings.Contains(option.Label, option.Value) {
 			return option.Value
 		}

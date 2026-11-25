@@ -11,7 +11,7 @@ const (
 	msgMenuCreateSummary = "실행환경 별칭을 만들거나 제거."
 	msgMenuSwitch        = "실행환경 전환"
 	msgMenuSwitchSummary = "작업할 실행환경을 골라 대상 전환."
-	msgUsage   = "dcraft environments --add --name <별칭> [--file <Compose 파일> ...] [--env-file <파일> ...] [--profile <프로필> ...]\n" +
+	msgUsage             = "dcraft environments --add --name <별칭> [--file <Compose 파일> ...] [--env-file <파일> ...] [--profile <프로필> ...]\n" +
 		"  dcraft environments --list\n" +
 		"  dcraft environments --remove --name <별칭>\n\n" +
 		"별칭은 Compose 입력만 묶음. 병합 규칙이나 별도 배포 명세가 아님.\n" +

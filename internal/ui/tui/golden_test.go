@@ -280,6 +280,31 @@ func goldenFacts() visual.Facts {
 // newGoldenModel builds a model with a fixed target and a fixed theme, runs the
 // primary feature once, and seeds the header facts so the frame does not depend
 // on what the stub preflight happened to report.
+// goldenResolver is the production target resolver's shape: it reads and records
+// the active alias, so the switch entry is drawn exactly as a real build draws
+// it. A resolver without that capability would hide the row and the golden would
+// pin a menu no user sees.
+type goldenResolver struct{}
+
+func (goldenResolver) Resolve(_ context.Context, req core.TargetRequest, _ string) (core.Target, []core.Diagnostic, error) {
+	return core.Target{
+		ProjectDir: "/project", Files: []string{"/project/compose.yaml"},
+		EnvFiles: []string{}, Profiles: []string{}, Environment: req.Environment,
+	}, nil, nil
+}
+
+func (goldenResolver) Environments(context.Context, core.TargetRequest, string) ([]core.Environment, []core.Diagnostic, error) {
+	return nil, nil, nil
+}
+
+func (goldenResolver) ActiveEnvironment(context.Context, core.TargetRequest, string) (core.EnvironmentActive, error) {
+	return core.EnvironmentActive{}, nil
+}
+
+func (goldenResolver) SetActiveEnvironment(context.Context, core.TargetRequest, string, string) error {
+	return nil
+}
+
 func newGoldenModel(t *testing.T, features ...core.Feature) *Model {
 	t.Helper()
 	th := visual.Plain()
@@ -289,7 +314,7 @@ func newGoldenModel(t *testing.T, features ...core.Feature) *Model {
 			t.Fatalf("register %s: %v", f.Descriptor().Name, err)
 		}
 	}
-	engine := core.NewEngine(reg, stubResolver{}, stubPreflight{}, stubState{}, stubClock{})
+	engine := core.NewEngine(reg, goldenResolver{}, stubPreflight{}, stubState{}, stubClock{})
 	engine.CWD = func() (string, error) { return goldenDir, nil }
 	engine.NewOperationID = func() string { return "op_golden" }
 	m := NewModel(context.Background(), Options{
@@ -315,21 +340,34 @@ type goldenDescriptorSpec struct {
 	section     core.Section
 	readOnly    bool
 	destructive bool
+	// menu mirrors the entries the real feature declares, so the golden matrix
+	// pins the two-entry environment feature and the host-script heading.
+	menu []core.MenuEntry
 }
 
 var goldenRegistryOrder = []goldenDescriptorSpec{
 	{name: "backup", title: "데이터 백업", summary: "볼륨과 폴더 백업.", section: core.SectionData},
 	{name: "down", title: "스택 제거", summary: "컨테이너와 네트워크 제거.", section: core.SectionOperate, destructive: true},
-	{name: "environments", title: "실행환경 별칭", summary: "이름 붙은 실행환경을 관리.", section: core.SectionConfig},
+	{name: "environments", title: "실행환경 별칭", summary: "이름 붙은 실행환경을 관리.", section: core.SectionConfig,
+		menu: []core.MenuEntry{
+			{Kind: core.MenuRun, Feature: "environments", Label: "실행환경 생성", Summary: "실행환경 별칭을 만들거나 제거."},
+			{Kind: core.MenuSwitchEnvironment, Feature: "environments", Label: "실행환경 전환", Summary: "작업할 실행환경을 골라 대상 전환.", Order: 1},
+		}},
 	{name: "exec", title: "서비스 접속", summary: "실행 중인 서비스에 접속.", section: core.SectionInspect, readOnly: true},
-	{name: "generate-git-hook", title: "Git 호스트 스크립트 생성", summary: "Git 훅 스크립트를 만듦.", section: core.SectionConfig},
-	{name: "hooks", title: "호스트 스크립트", summary: "호스트 스크립트 등록.", section: core.SectionConfig},
+	{name: "generate-git-hook", title: "Git 호스트 스크립트 생성", summary: "Git 훅 스크립트를 만듦.", section: core.SectionConfig,
+		menu: []core.MenuEntry{{Kind: core.MenuRun, Feature: "generate-git-hook", Label: "Git", Summary: "저장소를 받아 오는 스크립트를 생성.", Parent: "hooks", Order: 1}}},
+	{name: "hooks", title: "호스트 스크립트", summary: "호스트 스크립트 등록.", section: core.SectionConfig,
+		menu: []core.MenuEntry{
+			{Kind: core.MenuGroup, Feature: "hooks", Label: "호스트 스크립트", Summary: "up/update 전후에 실행할 스크립트."},
+			{Kind: core.MenuRun, Feature: "hooks", Label: "커스텀", Summary: "이미 있는 스크립트를 경로로 등록.", Parent: "hooks"},
+		}},
 	{name: "install-compose", title: "Compose 설치", summary: "Compose 실행 파일 설치.", section: core.SectionConfig},
 	{name: "logs", title: "로그 보기", summary: "서비스 로그 따라보기.", section: core.SectionInspect, readOnly: true},
 	{name: "restart", title: "스택 재시작", summary: "스택을 다시 시작.", section: core.SectionOperate},
 	{name: "restore", title: "데이터 복원", summary: "백업에서 데이터를 되돌림.", section: core.SectionData, destructive: true},
 	{name: "rollback", title: "이전 버전 복원", summary: "마지막 정상 버전으로 되돌림.", section: core.SectionData, destructive: true},
-	{name: "generate-s3-hook", title: "S3 호스트 스크립트 생성", summary: "S3 훅 스크립트를 만듦.", section: core.SectionConfig},
+	{name: "generate-s3-hook", title: "S3 호스트 스크립트 생성", summary: "S3 훅 스크립트를 만듦.", section: core.SectionConfig,
+		menu: []core.MenuEntry{{Kind: core.MenuRun, Feature: "generate-s3-hook", Label: "S3", Summary: "S3에서 받아 오는 스크립트를 생성.", Parent: "hooks", Order: 2}}},
 	{name: "secrets", title: "비밀값 연결", summary: "비밀값 참조 등록.", section: core.SectionConfig},
 	{name: "status", title: "스택 상태", summary: "현재 스택과 서비스 상태를 보여 줌.", section: core.SectionInspect, readOnly: true},
 	{name: "stop", title: "스택 중지", summary: "선택한 서비스나 스택 중지.", section: core.SectionOperate},
@@ -343,6 +381,7 @@ func goldenDescriptor(spec goldenDescriptorSpec, primary bool) core.Descriptor {
 		Name: spec.name, Title: spec.title, Summary: spec.summary,
 		Usage: "dcraft " + spec.name, Section: spec.section,
 		ReadOnly: spec.readOnly, Destructive: spec.destructive, Primary: primary,
+		Menu: spec.menu,
 	}
 }
 

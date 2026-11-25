@@ -12,7 +12,7 @@ const (
 	msgMenuGroupSummary  = "up/update 전후에 실행할 스크립트."
 	msgMenuCustom        = "커스텀"
 	msgMenuCustomSummary = "이미 있는 스크립트를 경로로 등록."
-	msgUsage   = "dcraft hooks [--list|--add|--remove] [--stage pre|post] [--script 경로]\n\n" +
+	msgUsage             = "dcraft hooks [--list|--add|--remove] [--stage pre|post] [--script 경로]\n\n" +
 		"등록한 스크립트만 up/update 전후에 실행. 파일명만으로는 실행하지 않음.\n" +
 		"처음 실행하거나 내용이 바뀌면 별도의 스크립트 신뢰 승인이 필요.\n" +
 		"스크립트는 사용자 권한으로 프로젝트 폴더에서 실행되며, dcraft는 샌드박싱하거나 자동으로 되돌리지 않음."

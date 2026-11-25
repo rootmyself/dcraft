@@ -284,10 +284,9 @@ func TestTUIConfirmationShowsPlanDeclinesAndInstallsAfterApproval(t *testing.T) 
 	defer session.stop()
 
 	session.waitFor("Docker Compose 사용 불가", 20*time.Second)
-	presses := installComposeMenuSteps(t)
-	for i := 0; i < presses; i++ {
-		session.send("\x1b[B") // down arrow
-	}
+	// The entry is reached by walking to its drawn marker: the press count
+	// depends on how many keys the opening screen swallowed.
+	walkMenuCursor(t, session.file, session.out, "Compose 설치", nil)
 	session.send("\r")
 	session.waitFor("승인 확인", 20*time.Second)
 	session.waitFor("출처", 20*time.Second)
@@ -335,9 +334,21 @@ func installComposeMenuSteps(t *testing.T) int {
 		Downloader: &noopDownloader{},
 		Installer:  &noopInstaller{},
 	})
+	// The navigation is the menu tree: a heading is not selectable and a
+	// feature may declare more than one entry. The switch row is hidden on an
+	// engine that cannot record an active alias, which this fixture cannot.
 	var features []core.Feature
-	for _, group := range reg.BySection() {
-		features = append(features, group.Features...)
+	include := func(entry core.MenuEntry) bool { return entry.Kind != core.MenuSwitchEnvironment }
+	for _, section := range reg.MenuBySection(include).Sections {
+		for _, entry := range section.Entries {
+			if entry.Group {
+				for _, child := range entry.Children {
+					features = append(features, child.Feature)
+				}
+				continue
+			}
+			features = append(features, entry.Feature)
+		}
 	}
 	statusIdx, installIdx := -1, -1
 	for i, f := range features {

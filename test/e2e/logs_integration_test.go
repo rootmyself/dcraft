@@ -233,8 +233,8 @@ func TestIntegrationLogsExecScaledService(t *testing.T) {
 	// instances running.
 	ptyEnv := append([]string{}, dcraftEnv...)
 	s := startPTY(t, dir, ptyEnv, "--path", dir, "-p", name)
-	s.waitFor("[↑↓] 이동", 30*time.Second)
-	s.pressMenuDown(menuDownPresses(t, "logs"))
+	s.waitFor("마지막 조회", 30*time.Second)
+	s.openMenuFeature(t, "logs")
 	s.waitFor("서비스 선택", 30*time.Second)
 	s.press("\r")
 	s.waitFor("로그 보기", 30*time.Second)

@@ -197,8 +197,7 @@ func TestGenerateS3HookTUIWizardShowsThePreviewAndDeclineWritesNothing(t *testin
 	env := fake.env(t, t.TempDir())
 	steps := []lifecyclePTYStep{
 		{wait: "상태 새로 고침", send: ""},
-		{wait: "[↑↓] 이동", send: strings.Repeat("\x1b[B", menuDownPresses(t, "generate-s3-hook"))},
-		{wait: "▸ S3 호스트 스크립트 생성", send: "\r"},
+		{wait: "마지막 조회", walk: "S3", send: "\r"},
 		{wait: "S3 원본", send: "s3://bucket/path/app.tar.gz"},
 		{wait: "app.tar.gz_", send: "\r"},
 		{wait: "> 디렉터리 동기화", send: "down"},
@@ -234,8 +233,7 @@ func TestGenerateS3HookTUIWizardAcceptSavesTheScript(t *testing.T) {
 	env := fake.env(t, t.TempDir())
 	steps := []lifecyclePTYStep{
 		{wait: "상태 새로 고침", send: ""},
-		{wait: "[↑↓] 이동", send: strings.Repeat("\x1b[B", menuDownPresses(t, "generate-s3-hook"))},
-		{wait: "▸ S3 호스트 스크립트 생성", send: "\r"},
+		{wait: "마지막 조회", walk: "S3", send: "\r"},
 		{wait: "S3 원본", send: "s3://bucket/deploy"},
 		{wait: "deploy_", send: "\r"},
 		{wait: "> 디렉터리 동기화", send: "\r"},

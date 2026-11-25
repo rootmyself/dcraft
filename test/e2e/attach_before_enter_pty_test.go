@@ -83,8 +83,8 @@ exit 0
 		"FAKE_PS":          ps,
 	})
 	s := startPTY(t, project, env)
-	s.waitFor("[↑↓] 이동", 30*time.Second)
-	s.pressMenuDown(menuDownPresses(t, "exec"))
+	s.waitFor("마지막 조회", 30*time.Second)
+	s.openMenuFeature(t, "exec")
 	s.waitFor("실행 전 확인", 30*time.Second)
 	s.press("\r")     // the default instance
 	s.press("\x1b[A") // wrap to the new-command row

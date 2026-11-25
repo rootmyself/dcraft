@@ -213,7 +213,7 @@ api-1  | Container api-1  Started
 
 === 120x18 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 메뉴 · 18 ─── esc 닫기 ╮ 스택 시작
+╭ 메뉴 · 19 ─── esc 닫기 ╮ 스택 시작
 │조회                    │
 │  서비스 접속           │ 작업을 실행하는 중…
 │  로그 보기             │   … 위에 더 있음
@@ -233,7 +233,7 @@ api-1  | Container api-1  Started
 
 === 120x30 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 메뉴 · 18 ─── esc 닫기 ╮ 스택 시작
+╭ 메뉴 · 19 ─── esc 닫기 ╮ 스택 시작
 │조회                    │
 │  서비스 접속           │ 작업을 실행하는 중…
 │  로그 보기             │   ✓ 대상 확인 (완료)
@@ -252,11 +252,11 @@ api-1  | Container api-1  Started
 │  이전 버전 복… ▲ 위험  │ cache-1 | Container cache-1  Creating
 │                        │ cache-1 | Container cache-1  Created
 │설정                    │ web-1  | Container web-1  Creating
-│  실행환경 별칭         │ web-1  | Container web-1  Created
-│  Git 호스트 스크립트…  │ api-1  | Container api-1  Creating
+│  실행환경 생성         │ web-1  | Container web-1  Created
+│  실행환경 전환         │ api-1  | Container api-1  Creating
 │  호스트 스크립트       │ api-1  | Container api-1  Created
-│  Compose 설치          │ cache-1 | Container cache-1  Starting
-│  S3 호스트 스크립트 …  │ web-1  | Container web-1  Starting
+│    커스텀              │ cache-1 | Container cache-1  Starting
+│    Git                 │ web-1  | Container web-1  Starting
 │────────────────────────│ api-1  | Container api-1  Starting
 │ ▸ 스택 상태            │ cache-1 | Container cache-1  Started
 │ 현재 스택과 서비스 상  │ web-1  | Container web-1  Started
@@ -265,7 +265,7 @@ api-1  | Container api-1  Started
 
 === 120x50 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 메뉴 · 18 ─── esc 닫기 ╮ 스택 시작
+╭ 메뉴 · 19 ─── esc 닫기 ╮ 스택 시작
 │조회                    │
 │  서비스 접속           │ 작업을 실행하는 중…
 │  로그 보기             │   ✓ 대상 확인 (완료)
@@ -284,15 +284,15 @@ api-1  | Container api-1  Started
 │  이전 버전 복… ▲ 위험  │ api-1  | 7c1b0e2d4f3a CACHED
 │                        │ api-1  | exporting to image
 │설정                    │ api-1  | naming to docker.io/library/acme-api
-│  실행환경 별칭         │ cache-1 | Container cache-1  Creating
-│  Git 호스트 스크립트…  │ cache-1 | Container cache-1  Created
+│  실행환경 생성         │ cache-1 | Container cache-1  Creating
+│  실행환경 전환         │ cache-1 | Container cache-1  Created
 │  호스트 스크립트       │ web-1  | Container web-1  Creating
-│  Compose 설치          │ web-1  | Container web-1  Created
-│  S3 호스트 스크립트 …  │ api-1  | Container api-1  Creating
-│  비밀값 연결           │ api-1  | Container api-1  Created
-│  최초 구성             │ cache-1 | Container cache-1  Starting
-│                        │ web-1  | Container web-1  Starting
-│                        │ api-1  | Container api-1  Starting
+│    커스텀              │ web-1  | Container web-1  Created
+│    Git                 │ api-1  | Container api-1  Creating
+│    S3                  │ api-1  | Container api-1  Created
+│  Compose 설치          │ cache-1 | Container cache-1  Starting
+│  비밀값 연결           │ web-1  | Container web-1  Starting
+│  최초 구성             │ api-1  | Container api-1  Starting
 │                        │ cache-1 | Container cache-1  Started
 │                        │ web-1  | Container web-1  Started
 │                        │ api-1  | Container api-1  Started
@@ -317,7 +317,7 @@ api-1  | Container api-1  Started
 
 === 200x18 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 메뉴 · 18 ─────── esc 닫기 ╮ 스택 시작
+╭ 메뉴 · 19 ─────── esc 닫기 ╮ 스택 시작
 │조회                        │
 │  서비스 접속               │ 작업을 실행하는 중…
 │  로그 보기                 │   … 위에 더 있음
@@ -337,7 +337,7 @@ api-1  | Container api-1  Started
 
 === 200x30 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 메뉴 · 18 ─────── esc 닫기 ╮ 스택 시작
+╭ 메뉴 · 19 ─────── esc 닫기 ╮ 스택 시작
 │조회                        │
 │  서비스 접속               │ 작업을 실행하는 중…
 │  로그 보기                 │   ✓ 대상 확인 (완료)
@@ -356,11 +356,11 @@ api-1  | Container api-1  Started
 │  이전 버전 복원 ▲ 위험     │ cache-1 | Container cache-1  Creating
 │                            │ cache-1 | Container cache-1  Created
 │설정                        │ web-1  | Container web-1  Creating
-│  실행환경 별칭             │ web-1  | Container web-1  Created
-│  Git 호스트 스크립트 생성  │ api-1  | Container api-1  Creating
+│  실행환경 생성             │ web-1  | Container web-1  Created
+│  실행환경 전환             │ api-1  | Container api-1  Creating
 │  호스트 스크립트           │ api-1  | Container api-1  Created
-│  Compose 설치              │ cache-1 | Container cache-1  Starting
-│  S3 호스트 스크립트 생성   │ web-1  | Container web-1  Starting
+│    커스텀                  │ cache-1 | Container cache-1  Starting
+│    Git                     │ web-1  | Container web-1  Starting
 │────────────────────────────│ api-1  | Container api-1  Starting
 │ ▸ 스택 상태                │ cache-1 | Container cache-1  Started
 │ 현재 스택과 서비스 상태를  │ web-1  | Container web-1  Started
@@ -369,7 +369,7 @@ api-1  | Container api-1  Started
 
 === 200x50 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 메뉴 · 18 ─────── esc 닫기 ╮ 스택 시작
+╭ 메뉴 · 19 ─────── esc 닫기 ╮ 스택 시작
 │조회                        │
 │  서비스 접속               │ 작업을 실행하는 중…
 │  로그 보기                 │   ✓ 대상 확인 (완료)
@@ -388,15 +388,15 @@ api-1  | Container api-1  Started
 │  이전 버전 복원 ▲ 위험     │ api-1  | 7c1b0e2d4f3a CACHED
 │                            │ api-1  | exporting to image
 │설정                        │ api-1  | naming to docker.io/library/acme-api
-│  실행환경 별칭             │ cache-1 | Container cache-1  Creating
-│  Git 호스트 스크립트 생성  │ cache-1 | Container cache-1  Created
+│  실행환경 생성             │ cache-1 | Container cache-1  Creating
+│  실행환경 전환             │ cache-1 | Container cache-1  Created
 │  호스트 스크립트           │ web-1  | Container web-1  Creating
-│  Compose 설치              │ web-1  | Container web-1  Created
-│  S3 호스트 스크립트 생성   │ api-1  | Container api-1  Creating
-│  비밀값 연결               │ api-1  | Container api-1  Created
-│  최초 구성                 │ cache-1 | Container cache-1  Starting
-│                            │ web-1  | Container web-1  Starting
-│                            │ api-1  | Container api-1  Starting
+│    커스텀                  │ web-1  | Container web-1  Created
+│    Git                     │ api-1  | Container api-1  Creating
+│    S3                      │ api-1  | Container api-1  Created
+│  Compose 설치              │ cache-1 | Container cache-1  Starting
+│  비밀값 연결               │ web-1  | Container web-1  Starting
+│  최초 구성                 │ api-1  | Container api-1  Starting
 │                            │ cache-1 | Container cache-1  Started
 │                            │ web-1  | Container web-1  Started
 │                            │ api-1  | Container api-1  Started

@@ -282,8 +282,7 @@ func TestRestoreTUIWizardUsesTheGenericPlanAndDataRestoreApproval(t *testing.T) 
 	steps := []lifecyclePTYStep{
 		// The menu order is the registration order; compute the distance from
 		// status so another ticket's feature does not break this journey.
-		{wait: "[↑↓] 이동", send: strings.Repeat("\x1b[B", menuDownPresses(t, "restore"))},
-		{wait: "▸ 데이터 복원", send: "\r"},
+		{wait: "마지막 조회", walk: "데이터 복원", send: "\r"},
 		{wait: "복원할 백업 선택", send: "\r"},
 		{wait: "복원 대상 선택", send: "\r"},
 		{wait: "안전 백업 폴더", send: "\r"},

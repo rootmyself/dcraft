@@ -3,11 +3,11 @@ package s3gen
 // Korean user-facing registration text owned by the S3 generator. Command
 // names, flag names and machine values stay English.
 const (
-	msgTitle   = "S3 호스트 스크립트 생성"
-	msgSummary = "S3 원본·받을 폴더·방식을 물어 보고 검토할 수 있는 배포 스크립트를 만듦. 생성은 등록·실행·신뢰 승인이 아니며 S3에 접속하지 않음."
+	msgTitle       = "S3 호스트 스크립트 생성"
+	msgSummary     = "S3 원본·받을 폴더·방식을 물어 보고 검토할 수 있는 배포 스크립트를 만듦. 생성은 등록·실행·신뢰 승인이 아니며 S3에 접속하지 않음."
 	msgMenuLabel   = "S3"
 	msgMenuSummary = "S3에서 받아 오는 스크립트를 생성."
-	msgUsage   = "dcraft generate-s3-hook --source <s3://bucket/prefix|s3://bucket/path/artifact.tar.gz> --mode <sync|tar> --dest <받을 폴더> --output <스크립트 경로> [--aws-profile <이름>] --approve file_overwrite\n\n" +
+	msgUsage       = "dcraft generate-s3-hook --source <s3://bucket/prefix|s3://bucket/path/artifact.tar.gz> --mode <sync|tar> --dest <받을 폴더> --output <스크립트 경로> [--aws-profile <이름>] --approve file_overwrite\n\n" +
 		"생성한 스크립트는 자동 등록·자동 실행되지 않음. 출력에 표시되는 dcraft hooks --add 명령으로 직접 등록하고, 첫 실행에는 별도의 script_trust 승인이 필요."
 
 	msgFlagSource     = "S3 원본. sync는 디렉터리 접두사(s3://bucket/prefix), tar는 단일 .tar.gz 객체(s3://bucket/path/artifact.tar.gz)를 지정."

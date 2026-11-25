@@ -14,8 +14,7 @@ func TestSecretsTUIWizardShowsEffectAndSavesOnlyAfterConfirmation(t *testing.T) 
 	env := fake.env(t, t.TempDir())
 
 	declineOutput, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
-		{wait: "[↑↓] 이동", send: menuDown(t, "secrets")},
-		{wait: "▸ 비밀값 연결", send: "\r"},
+		{wait: "마지막 조회", walk: "비밀값 연결", send: "\r"},
 		{wait: "서비스 선택", send: "\r"}, // api is the first sorted service
 		{wait: "전달 시점 선택", send: "\r"},
 		{wait: "전달 방식 선택", send: "\r"},
@@ -41,8 +40,7 @@ func TestSecretsTUIWizardShowsEffectAndSavesOnlyAfterConfirmation(t *testing.T) 
 	}
 
 	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
-		{wait: "[↑↓] 이동", send: menuDown(t, "secrets")},
-		{wait: "▸ 비밀값 연결", send: "\r"},
+		{wait: "마지막 조회", walk: "비밀값 연결", send: "\r"},
 		{wait: "서비스 선택", send: "\r"}, // api
 		{wait: "전달 시점 선택", send: "\r"},
 		{wait: "전달 방식 선택", send: "\r"},
@@ -73,8 +71,7 @@ func TestSecretsTUIWizardBuildPhaseFixesDeliveryToBuildKit(t *testing.T) {
 	env := fake.env(t, t.TempDir())
 
 	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
-		{wait: "[↑↓] 이동", send: menuDown(t, "secrets")},
-		{wait: "▸ 비밀값 연결", send: "\r"},
+		{wait: "마지막 조회", walk: "비밀값 연결", send: "\r"},
 		{wait: "서비스 선택", send: "\r"}, // api (first sorted service) has build:
 		{wait: "전달 시점 선택", send: "down"},
 		{wait: "> 빌드 시점", send: "\r"},
@@ -112,8 +109,7 @@ func TestSecretsTUIDeclineLeavesNoConfig(t *testing.T) {
 	env := fake.env(t, t.TempDir())
 
 	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
-		{wait: "[↑↓] 이동", send: menuDown(t, "secrets")},
-		{wait: "▸ 비밀값 연결", send: "\r"},
+		{wait: "마지막 조회", walk: "비밀값 연결", send: "\r"},
 		{wait: "서비스 선택", send: "\r"},
 		{wait: "전달 시점 선택", send: "\r"},
 		{wait: "전달 방식 선택", send: "\r"},

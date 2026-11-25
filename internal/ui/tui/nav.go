@@ -65,7 +65,7 @@ type navSection struct {
 // row stores its index into navMenu.entries, not a pointer, so a later append
 // that reallocates the slice cannot leave the row pointing at a stale copy.
 type tuiMenuRow struct {
-	entryIndex int         // -1 for a heading
+	entryIndex int // -1 for a heading
 	group      *tuiMenuGroup
 }
 
@@ -168,7 +168,8 @@ func (m *Model) menuCount() int {
 
 // visualNav converts the navigation into the renderer model. selected is the
 // navigation index of the current cursor.
-func (m *Model) visualNav(nav navMenu, selected int) visual.Nav {	out := visual.Nav{
+func (m *Model) visualNav(nav navMenu, selected int) visual.Nav {
+	out := visual.Nav{
 		Title:         fmt.Sprintf(msgNavTitle, nav.count()),
 		Filter:        m.filter,
 		FilterActive:  m.filtering,
@@ -353,15 +354,16 @@ func (m *Model) updateFilterKey(msg tea.KeyMsg) tea.Cmd {
 	case "down":
 		m.moveSelection(1)
 		return nil
-	case "space":
-		m.filter += " "
-		m.keepSelectionVisible()
-		return nil
 	}
-	// Every other printable key is filter text. j/k are letters here, not
-	// menu moves, so a search can contain any word.
+	// Every other printable key is filter text, and a space is one of them: it
+	// arrives as KeySpace (whose string is " "), not as a separate word, so the
+	// query must accept it or a label with a space can never be typed.
 	if msg.Type == tea.KeyRunes {
 		m.filter += string(msg.Runes)
+		m.keepSelectionVisible()
+	}
+	if msg.Type == tea.KeySpace {
+		m.filter += " "
 		m.keepSelectionVisible()
 	}
 	return nil

@@ -67,8 +67,8 @@ func TestIntegrationTUIServiceScopeSelectsOnlyOneService(t *testing.T) {
 
 	// stop: choose web only through the TUI scope screen.
 	s := startPTY(t, dir, dcraftEnv)
-	s.waitFor("[↑↓] 이동", 30*time.Second)
-	s.pressMenuDown(menuDownPresses(t, "stop"))
+	s.waitFor("마지막 조회", 30*time.Second)
+	s.openMenuFeature(t, "stop")
 	selectWebScope(s)
 	s.waitFor("작업 실행 확인", 15*time.Second)
 	s.waitFor("범위:", 15*time.Second)
@@ -103,8 +103,8 @@ func TestIntegrationTUIServiceScopeSelectsOnlyOneService(t *testing.T) {
 
 	// restart: choose web only; api must keep its ID, Created and StartedAt.
 	s = startPTY(t, dir, dcraftEnv)
-	s.waitFor("[↑↓] 이동", 30*time.Second)
-	s.pressMenuDown(menuDownPresses(t, "restart"))
+	s.waitFor("마지막 조회", 30*time.Second)
+	s.openMenuFeature(t, "restart")
 	selectWebScope(s)
 	s.waitFor("작업 실행 확인", 15*time.Second)
 	s.waitFor("범위:", 15*time.Second)
@@ -136,8 +136,8 @@ func TestIntegrationTUIServiceScopeSelectsOnlyOneService(t *testing.T) {
 	// update: the plan/confirm screen carries the selected web scope, and the
 	// unselected api container is not recreated.
 	s = startPTY(t, dir, dcraftEnv)
-	s.waitFor("[↑↓] 이동", 30*time.Second)
-	s.pressMenuDown(menuDownPresses(t, "update"))
+	s.waitFor("마지막 조회", 30*time.Second)
+	s.openMenuFeature(t, "update")
 	selectWebScope(s)
 	s.waitFor("작업 실행 확인", 30*time.Second)
 	s.waitFor("범위:", 15*time.Second)

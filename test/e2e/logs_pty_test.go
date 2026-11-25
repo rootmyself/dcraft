@@ -80,6 +80,16 @@ func (s *ptySession) waitFor(text string, timeout time.Duration) {
 	}
 }
 
+// waitForMenu waits until the menu is actually ready, not merely drawn. The
+// footer shows "[↑↓] 이동" while a status run is still streaming too, and an
+// arrow pressed then scrolls the running result instead of moving the cursor.
+// Waiting for the refresh chip proves the run finished and the menu owns the
+// keyboard, so the presses that follow all count.
+func (s *ptySession) waitForMenu(timeout time.Duration) {
+	s.t.Helper()
+	s.waitFor("[r] 새로고침", timeout)
+}
+
 func (s *ptySession) send(text string) {
 	s.t.Helper()
 	if _, err := s.master.Write([]byte(text)); err != nil {
@@ -131,9 +141,23 @@ func navOrder(t *testing.T) []core.Feature {
 		Downloader: &noopDownloader{},
 		Installer:  &noopInstaller{},
 	})
+	// The navigation is the menu tree, not one row per feature: a feature may
+	// declare two entries and a heading is not selectable. The TUI also hides an
+	// entry the runtime cannot serve, so the count here uses the same rule: the
+	// environment switch row needs a resolver that can record the active alias,
+	// and this fixture's Deps has none.
 	var out []core.Feature
-	for _, group := range reg.BySection() {
-		out = append(out, group.Features...)
+	include := func(entry core.MenuEntry) bool { return entry.Kind != core.MenuSwitchEnvironment }
+	for _, section := range reg.MenuBySection(include).Sections {
+		for _, entry := range section.Entries {
+			if entry.Group {
+				for _, child := range entry.Children {
+					out = append(out, child.Feature)
+				}
+				continue
+			}
+			out = append(out, entry.Feature)
+		}
 	}
 	return out
 }
@@ -167,6 +191,79 @@ func (s *ptySession) pressMenuDown(count int) {
 	}
 	keys = append(keys, "\r")
 	s.press(keys...)
+}
+
+// openMenu filters the menu to one entry and runs it. It is the deterministic
+// way to reach an entry from an unknown cursor position: counting arrow presses
+// depends on how many arrived while the opening status run still owned the
+// keyboard, and a lost press lands the cursor somewhere else.
+//
+// The filter is proven by the menu title, not by a cursor marker: the sidebar
+// draws that marker for the selected entry anyway, so a stale frame could match
+// before the filter even started. `메뉴 · 1` is only true when exactly one entry
+// survives, and Enter on it commits the filter; the second Enter runs it.
+func (s *ptySession) openMenu(label string) {
+	s.t.Helper()
+	s.walkToEntry(label)
+	s.press("\r") // run the entry the cursor now marks
+}
+
+// walkToEntry moves the menu cursor with the down arrow until the drawn frame
+// marks the wanted entry, then stops. Counting presses is not enough: a press
+// that arrives while the opening status run still owns the keyboard scrolls the
+// result instead of moving the cursor, and the count then lands elsewhere. This
+// reads the frame that is actually on screen, so a lost press costs one more
+// press rather than a wrong entry.
+func (s *ptySession) walkToEntry(label string) {
+	s.t.Helper()
+	marker := "▸ " + label
+	seen := false
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		if strings.Contains(currentFrame(s.out.String()), marker) {
+			seen = true
+			// The frame the test just read is the one the Enter acts on.
+			time.Sleep(50 * time.Millisecond)
+			return
+		}
+		s.press("\x1b[B")
+	}
+	if !seen {
+		s.t.Fatalf("menu never marked %q:\n%s", label, s.out.String())
+	}
+}
+
+// currentFrame is the text of the last drawn frame. The TUI paints each frame
+// from the home position, so the final chunk is what the reader sees; the
+// accumulated buffer also holds every earlier frame, which would let a stale
+// marker satisfy a check.
+func currentFrame(output string) string {
+	frames := strings.Split(output, "\x1b[H")
+	return visibleText(frames[len(frames)-1])
+}
+
+// menuLabel is the menu entry label a feature's first entry declares, read from
+// the same registry the binary assembles. The e2e opens entries by this label
+// instead of counting presses.
+func menuLabel(t *testing.T, name string) string {
+	t.Helper()
+	for _, f := range navOrder(t) {
+		if f.Descriptor().Name == name {
+			for _, entry := range f.Descriptor().Menu {
+				if entry.Kind != core.MenuGroup {
+					return entry.Label
+				}
+			}
+			return f.Descriptor().Title
+		}
+	}
+	t.Fatalf("feature %q is not in the menu", name)
+	return ""
+}
+
+func (s *ptySession) openMenuFeature(t *testing.T, name string) {
+	t.Helper()
+	s.openMenu(menuLabel(t, name))
 }
 
 // assertRestored proves the terminal is not left in raw mode after a normal
@@ -242,8 +339,8 @@ func TestPTYTUILogsScreenReturnsToTheMenuAndKeepsServices(t *testing.T) {
 	project := liveProject(t)
 	env := fake.env(t, t.TempDir(), map[string]string{"DOCKER_FAKE_LOG_FOLLOW_LINE": "followed line"})
 	s := startPTY(t, project, env)
-	s.waitFor("[↑↓] 이동", 15*time.Second)
-	s.pressMenuDown(menuDownPresses(t, "logs"))
+	s.waitFor("마지막 조회", 15*time.Second)
+	s.openMenuFeature(t, "logs")
 	s.waitFor("서비스 선택", 15*time.Second)
 	s.press("\r")
 	s.waitFor("로그 보기", 15*time.Second)
@@ -265,8 +362,8 @@ func TestPTYTUIExecScreenShowsTargetRunsAndReturnsToTheMenu(t *testing.T) {
 	project := liveProject(t)
 	env := fake.env(t, t.TempDir(), map[string]string{"DOCKER_FAKE_EXEC_STDOUT": "remote-stdout"})
 	s := startPTY(t, project, env)
-	s.waitFor("[↑↓] 이동", 15*time.Second)
-	s.pressMenuDown(menuDownPresses(t, "exec"))
+	s.waitFor("마지막 조회", 15*time.Second)
+	s.openMenuFeature(t, "exec")
 	s.waitFor("실행 전 확인", 15*time.Second)
 	if !strings.Contains(s.out.String(), "서비스 인스턴스") || !strings.Contains(s.out.String(), "명령") {
 		t.Fatalf("exec form does not show service/instance/command:\n%s", s.out.String())
@@ -308,8 +405,8 @@ func TestPTYTUILogsScreenScrollsUnderAPinnedHeaderAndRestoresTerminal(t *testing
 	project := liveProject(t)
 	env := fake.env(t, t.TempDir(), map[string]string{"DOCKER_FAKE_LOG_FOLLOW_LINE": "followed line"})
 	s := startPTY(t, project, env)
-	s.waitFor("[↑↓] 이동", 15*time.Second)
-	s.pressMenuDown(menuDownPresses(t, "logs"))
+	s.waitFor("마지막 조회", 15*time.Second)
+	s.openMenuFeature(t, "logs")
 	s.waitFor("서비스 선택", 15*time.Second)
 	s.press("\r")
 	s.waitFor("실시간 로그", 15*time.Second)
@@ -342,8 +439,8 @@ func TestPTYTUIExecAttachDetachesWithCtrlBracketAndRestoresTerminal(t *testing.T
 	project := liveProject(t)
 	env := fake.env(t, t.TempDir(), map[string]string{"DOCKER_FAKE_EXEC_ECHO": "1"})
 	s := startPTY(t, project, env)
-	s.waitFor("[↑↓] 이동", 15*time.Second)
-	s.pressMenuDown(menuDownPresses(t, "exec"))
+	s.waitFor("마지막 조회", 15*time.Second)
+	s.openMenuFeature(t, "exec")
 	s.waitFor("실행 전 확인", 15*time.Second)
 	s.press("\r")     // default instance, move to the command choice
 	s.press("\x1b[A") // wrap to the new-command row
@@ -380,8 +477,8 @@ func TestPTYTUILiveLogHostileLineKeepsTheFrame(t *testing.T) {
 	project := liveProject(t)
 	env := fake.env(t, t.TempDir(), map[string]string{"DOCKER_FAKE_LOG_HOSTILE": "1"})
 	s := startPTY(t, project, env)
-	s.waitFor("[↑↓] 이동", 15*time.Second)
-	s.pressMenuDown(menuDownPresses(t, "logs"))
+	s.waitFor("마지막 조회", 15*time.Second)
+	s.openMenuFeature(t, "logs")
 	s.waitFor("서비스 선택", 15*time.Second)
 	s.press("\r")
 	s.waitFor("실시간 로그", 15*time.Second)

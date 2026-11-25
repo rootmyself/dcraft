@@ -93,15 +93,15 @@ Compose 파일  /work/acme-
   이전 버전 복원 ▲ 위험
 
 설정
-  실행환경 별칭
-  Git 호스트 스크립트 생성
+  실행환경 생성
+  실행환경 전환
   호스트 스크립트
+    커스텀
+    Git
+    S3
   Compose 설치
-  S3 호스트 스크립트 생성
   비밀값 연결
   최초 구성
-
-
 
 
 
@@ -109,7 +109,7 @@ Compose 파일  /work/acme-
 
 === 80x18 ===
  dcraft · acme-platform · staging        Docker 29.10.0 · Compose 2.39.1 · 로컬
-메뉴 · ▸ 스택 상태 · 18개 항목                                        tab 펼치기
+메뉴 · ▸ 스택 상태 · 19개 항목                                        tab 펼치기
 스택 상태
 
 ○ 서비스 없음
@@ -129,7 +129,7 @@ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-
 
 === 80x30 ===
  dcraft · acme-platform · staging        Docker 29.10.0 · Compose 2.39.1 · 로컬
-메뉴 · ▸ 스택 상태 · 18개 항목                                        tab 펼치기
+메뉴 · ▸ 스택 상태 · 19개 항목                                        tab 펼치기
 스택 상태
 
 ○ 서비스 없음
@@ -161,7 +161,7 @@ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-
 
 === 80x50 ===
  dcraft · acme-platform · staging        Docker 29.10.0 · Compose 2.39.1 · 로컬
-메뉴 · ▸ 스택 상태 · 18개 항목                                        tab 펼치기
+메뉴 · ▸ 스택 상태 · 19개 항목                                        tab 펼치기
 스택 상태
 
 ○ 서비스 없음
@@ -194,15 +194,15 @@ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-
   이전 버전 복원 ▲ 위험 (rollback) · 마지막 정상 버전으로 되돌림.
 
 설정
-  실행환경 별칭 (environments) · 이름 붙은 실행환경을 관리.
-  Git 호스트 스크립트 생성 (generate-git-hook) · Git 훅 스크립트를 만듦.
-  호스트 스크립트 (hooks) · 호스트 스크립트 등록.
+  실행환경 생성 (environments) · 실행환경 별칭을 만들거나 제거.
+  실행환경 전환 (environments) · 작업할 실행환경을 골라 대상 전환.
+  호스트 스크립트 · up/update 전후에 실행할 스크립트.
+    커스텀 (hooks) · 이미 있는 스크립트를 경로로 등록.
+    Git (generate-git-hook) · 저장소를 받아 오는 스크립트를 생성.
+    S3 (generate-s3-hook) · S3에서 받아 오는 스크립트를 생성.
   Compose 설치 (install-compose) · Compose 실행 파일 설치.
-  S3 호스트 스크립트 생성 (generate-s3-hook) · S3 훅 스크립트를 만듦.
   비밀값 연결 (secrets) · 비밀값 참조 등록.
   최초 구성 (init) · Compose 파일과 .env를 생성.
-
-
 
 
 
@@ -213,7 +213,7 @@ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-
 
 === 120x18 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 메뉴 · 18 ─── esc 닫기 ╮ 스택 상태
+╭ 메뉴 · 19 ─── esc 닫기 ╮ 스택 상태
 │조회                    │
 │  서비스 접속           │ ○ 서비스 없음
 │  로그 보기             │
@@ -233,7 +233,7 @@ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-
 
 === 120x30 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 메뉴 · 18 ─── esc 닫기 ╮ 스택 상태
+╭ 메뉴 · 19 ─── esc 닫기 ╮ 스택 상태
 │조회                    │
 │  서비스 접속           │ ○ 서비스 없음
 │  로그 보기             │
@@ -252,11 +252,11 @@ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-
 │  이전 버전 복… ▲ 위험  │
 │                        │
 │설정                    │
-│  실행환경 별칭         │
-│  Git 호스트 스크립트…  │
+│  실행환경 생성         │
+│  실행환경 전환         │
 │  호스트 스크립트       │
-│  Compose 설치          │
-│  S3 호스트 스크립트 …  │
+│    커스텀              │
+│    Git                 │
 │────────────────────────│
 │ ▸ 스택 상태            │
 │ 현재 스택과 서비스 상  │
@@ -265,7 +265,7 @@ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-
 
 === 120x50 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 메뉴 · 18 ─── esc 닫기 ╮ 스택 상태
+╭ 메뉴 · 19 ─── esc 닫기 ╮ 스택 상태
 │조회                    │
 │  서비스 접속           │ ○ 서비스 없음
 │  로그 보기             │
@@ -284,15 +284,15 @@ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-
 │  이전 버전 복… ▲ 위험  │
 │                        │
 │설정                    │
-│  실행환경 별칭         │
-│  Git 호스트 스크립트…  │
+│  실행환경 생성         │
+│  실행환경 전환         │
 │  호스트 스크립트       │
+│    커스텀              │
+│    Git                 │
+│    S3                  │
 │  Compose 설치          │
-│  S3 호스트 스크립트 …  │
 │  비밀값 연결           │
 │  최초 구성             │
-│                        │
-│                        │
 │                        │
 │                        │
 │                        │
@@ -317,7 +317,7 @@ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-
 
 === 200x18 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 메뉴 · 18 ─────── esc 닫기 ╮ 스택 상태
+╭ 메뉴 · 19 ─────── esc 닫기 ╮ 스택 상태
 │조회                        │
 │  서비스 접속               │ ○ 서비스 없음
 │  로그 보기                 │
@@ -337,7 +337,7 @@ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-
 
 === 200x30 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 메뉴 · 18 ─────── esc 닫기 ╮ 스택 상태
+╭ 메뉴 · 19 ─────── esc 닫기 ╮ 스택 상태
 │조회                        │
 │  서비스 접속               │ ○ 서비스 없음
 │  로그 보기                 │
@@ -356,11 +356,11 @@ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-
 │  이전 버전 복원 ▲ 위험     │
 │                            │
 │설정                        │
-│  실행환경 별칭             │
-│  Git 호스트 스크립트 생성  │
+│  실행환경 생성             │
+│  실행환경 전환             │
 │  호스트 스크립트           │
-│  Compose 설치              │
-│  S3 호스트 스크립트 생성   │
+│    커스텀                  │
+│    Git                     │
 │────────────────────────────│
 │ ▸ 스택 상태                │
 │ 현재 스택과 서비스 상태를  │
@@ -369,7 +369,7 @@ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-
 
 === 200x50 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 메뉴 · 18 ─────── esc 닫기 ╮ 스택 상태
+╭ 메뉴 · 19 ─────── esc 닫기 ╮ 스택 상태
 │조회                        │
 │  서비스 접속               │ ○ 서비스 없음
 │  로그 보기                 │
@@ -388,15 +388,15 @@ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-
 │  이전 버전 복원 ▲ 위험     │
 │                            │
 │설정                        │
-│  실행환경 별칭             │
-│  Git 호스트 스크립트 생성  │
+│  실행환경 생성             │
+│  실행환경 전환             │
 │  호스트 스크립트           │
+│    커스텀                  │
+│    Git                     │
+│    S3                      │
 │  Compose 설치              │
-│  S3 호스트 스크립트 생성   │
 │  비밀값 연결               │
 │  최초 구성                 │
-│                            │
-│                            │
 │                            │
 │                            │
 │                            │

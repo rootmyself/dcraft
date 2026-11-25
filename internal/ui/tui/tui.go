@@ -278,13 +278,15 @@ func NewModel(ctx context.Context, opts Options) *Model {
 		m.phase = phaseNoPrimary
 		return m
 	}
+	// The cursor follows the primary feature, never registration order: the
+	// screen opening on the primary entry is what the menu says is running. It
+	// is set before any startup screen can return early, so the first menu frame
+	// always marks the feature whose result is about to arrive.
+	m.selected = m.primaryMenuIndex()
 	if opts.Engine != nil && opts.Target.Environment == "" && opts.Engine.SupportsEnvironments() {
 		m.phase = phaseLoadingEnvironments
 		return m
 	}
-	// The cursor follows the primary feature, never registration order: the
-	// screen opening on the primary entry is what the menu says is running.
-	m.selected = m.primaryMenuIndex()
 	m.phase = phaseLoading
 	m.events = make(chan core.Stage, 64)
 	return m

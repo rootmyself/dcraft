@@ -494,6 +494,9 @@ func historyFor(t *testing.T, stateDir string) string {
 type lifecyclePTYStep struct {
 	wait string
 	send string
+	// walk is a menu entry label to move the cursor onto before send, read from
+	// the drawn frame rather than counted from the opening screen.
+	walk string
 	// action runs after the wait text appears and before send. It is used to
 	// simulate an external change between a preview and the next keypress.
 	action func()
@@ -530,6 +533,9 @@ func runLifecyclePTYSteps(t *testing.T, dir string, env []string, steps []lifecy
 	}
 	for _, step := range steps {
 		waitFor(step.wait)
+		if step.walk != "" {
+			walkPTYMenuCursor(t, f, out, step.walk)
+		}
 		if step.action != nil {
 			step.action()
 		}
@@ -574,8 +580,7 @@ func TestLifecycleTUIMenuSelectsStopAndQuitsWithoutChangingServices(t *testing.T
 	env := fake.env(t, t.TempDir())
 	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
 		{wait: "상태 새로 고침", send: ""},
-		{wait: "[↑↓] 이동", send: menuDown(t, "stop")},
-		{wait: "▸ 스택 중지", send: "\r"},
+		{wait: "마지막 조회", walk: "스택 중지", send: "\r"},
 		{wait: "서비스 선택", send: "\r"},
 		{wait: "작업 실행 확인", send: ""},
 	})
@@ -596,8 +601,7 @@ func TestLifecycleTUIRunsUpThroughTheSameEngine(t *testing.T) {
 	env := fake.env(t, t.TempDir())
 	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
 		{wait: "상태 새로 고침", send: ""},
-		{wait: "[↑↓] 이동", send: menuDown(t, "up")},
-		{wait: "▸ 스택 시작", send: "\r"},
+		{wait: "마지막 조회", walk: "스택 시작", send: "\r"},
 		{wait: "서비스 선택", send: "\r"},
 		{wait: "작업 실행 확인", send: "\r"},
 		{wait: "스택 시작.", send: ""},
@@ -840,4 +844,25 @@ func parseLifecycleStatus(t *testing.T, dir string, env []string, explicit strin
 		t.Fatalf("explicit status exit=%d stderr=%q", res.code, res.stderr)
 	}
 	return parseStatus(t, res.stdout)
+}
+
+// walkPTYMenuCursor presses the down arrow until the drawn frame marks the
+// wanted menu entry, then stops. A press that arrives while the opening status
+// run still owns the keyboard scrolls the result instead of moving the cursor,
+// so a fixed count can land elsewhere; the drawn frame is the only proof.
+func walkPTYMenuCursor(t *testing.T, f *os.File, out *syncBuffer, label string) {
+	t.Helper()
+	marker := "▸ " + label
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		if screenContains(currentFrame(out.String()), marker) {
+			time.Sleep(50 * time.Millisecond)
+			return
+		}
+		if _, err := f.Write([]byte("\x1b[B")); err != nil {
+			t.Fatalf("send down: %v", err)
+		}
+		time.Sleep(40 * time.Millisecond)
+	}
+	t.Fatalf("menu never marked %q:\n%s", label, out.String())
 }
