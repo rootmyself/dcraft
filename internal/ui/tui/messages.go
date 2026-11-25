@@ -1,7 +1,6 @@
 package tui
 
 const (
-	msgEnvNewAlias         = "새 별칭"
 	msgEnvReloadFailed     = "실행환경 목록 불러오기 실패: "
 	msgEnvSwitchFailed     = "전환할 실행환경 불러오기 실패."
 	msgEnvSwitchEmpty      = "전환할 실행환경 없음 · 실행환경 생성에서 별칭 추가"
