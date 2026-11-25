@@ -37,5 +37,5 @@ func (m *Model) sidebar() []string {
 	}
 	width := visual.SidebarWidth(m.width)
 	height := visual.BodyRows(m.height)
-	return visual.Sidebar(m.theme, width, height, m.nav())
+	return visual.Sidebar(m.theme, width, height, m.navView())
 }

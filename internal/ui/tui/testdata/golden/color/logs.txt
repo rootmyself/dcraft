@@ -213,7 +213,7 @@ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/�
 
 === 120x18 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─── esc 닫기 ╮ 로그 보기
+╭ 메뉴 · 19 ─── esc 닫기 ╮ 로그 보기
 │조회                    │
 │  서비스 접속           │ 실시간 로그 (서비스는 계속 실행 중)
 │  로그 보기             │ 서비스: 스택 전체
@@ -233,7 +233,7 @@ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/�
 
 === 120x30 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─── esc 닫기 ╮ 로그 보기
+╭ 메뉴 · 19 ─── esc 닫기 ╮ 로그 보기
 │조회                    │
 │  서비스 접속           │ 실시간 로그 (서비스는 계속 실행 중)
 │  로그 보기             │ 서비스: 스택 전체
@@ -252,11 +252,11 @@ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/�
 │  이전 버전 복… ▲ 위험  │ api-1  | 2026-11-20T09:14:49.343Z INFO  request completed method=GET path=/v1/health status…
 │                        │ api-1  | 2026-11-20T09:14:50.350Z INFO  request completed method=GET path=/v1/health status…
 │설정                    │ api-1  | 2026-11-20T09:14:51.357Z INFO  request completed method=GET path=/v1/health status…
-│  실행환경 별칭         │ api-1  | 2026-11-20T09:14:52.364Z INFO  request completed method=GET path=/v1/health status…
-│  Git 호스트 스크립트…  │ api-1  | 2026-11-20T09:14:53.371Z INFO  request completed method=GET path=/v1/health status…
+│  실행환경 생성         │ api-1  | 2026-11-20T09:14:52.364Z INFO  request completed method=GET path=/v1/health status…
+│  실행환경 전환         │ api-1  | 2026-11-20T09:14:53.371Z INFO  request completed method=GET path=/v1/health status…
 │  호스트 스크립트       │ api-1  | 2026-11-20T09:14:54.378Z INFO  request completed method=GET path=/v1/health status…█
-│  Compose 설치          │ api-1  | 2026-11-20T09:14:55.385Z INFO  request completed method=GET path=/v1/health status…█
-│  S3 호스트 스크립트 …  │ api-1  | 2026-11-20T09:14:56.392Z INFO  request completed method=GET path=/v1/health status…█
+│    커스텀              │ api-1  | 2026-11-20T09:14:55.385Z INFO  request completed method=GET path=/v1/health status…█
+│    Git                 │ api-1  | 2026-11-20T09:14:56.392Z INFO  request completed method=GET path=/v1/health status…█
 │────────────────────────│ api-1  | 2026-11-20T09:14:57.399Z INFO  request completed method=GET path=/v1/health status…█
 │ ▸ 스택 상태            │ api-1  | 2026-11-20T09:14:58.406Z INFO  request completed method=GET path=/v1/health status…█
 │ 현재 스택과 서비스 상  │ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/health status…█
@@ -265,7 +265,7 @@ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/�
 
 === 120x50 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─── esc 닫기 ╮ 로그 보기
+╭ 메뉴 · 19 ─── esc 닫기 ╮ 로그 보기
 │조회                    │
 │  서비스 접속           │ 실시간 로그 (서비스는 계속 실행 중)
 │  로그 보기             │ 서비스: 스택 전체
@@ -284,15 +284,15 @@ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/�
 │  이전 버전 복… ▲ 위험  │ api-1  | 2026-11-20T09:14:29.203Z INFO  request completed method=GET path=/v1/health status…
 │                        │ api-1  | 2026-11-20T09:14:30.210Z INFO  request completed method=GET path=/v1/health status…
 │설정                    │ api-1  | 2026-11-20T09:14:31.217Z INFO  request completed method=GET path=/v1/health status…
-│  실행환경 별칭         │ api-1  | 2026-11-20T09:14:32.224Z INFO  request completed method=GET path=/v1/health status…
-│  Git 호스트 스크립트…  │ api-1  | 2026-11-20T09:14:33.231Z INFO  request completed method=GET path=/v1/health status…
+│  실행환경 생성         │ api-1  | 2026-11-20T09:14:32.224Z INFO  request completed method=GET path=/v1/health status…
+│  실행환경 전환         │ api-1  | 2026-11-20T09:14:33.231Z INFO  request completed method=GET path=/v1/health status…
 │  호스트 스크립트       │ api-1  | 2026-11-20T09:14:34.238Z INFO  request completed method=GET path=/v1/health status…█
-│  Compose 설치          │ api-1  | 2026-11-20T09:14:35.245Z INFO  request completed method=GET path=/v1/health status…█
-│  S3 호스트 스크립트 …  │ api-1  | 2026-11-20T09:14:36.252Z INFO  request completed method=GET path=/v1/health status…█
-│  비밀값 연결           │ api-1  | 2026-11-20T09:14:37.259Z INFO  request completed method=GET path=/v1/health status…█
-│  최초 구성             │ api-1  | 2026-11-20T09:14:38.266Z INFO  request completed method=GET path=/v1/health status…█
-│                        │ api-1  | 2026-11-20T09:14:39.273Z INFO  request completed method=GET path=/v1/health status…█
-│                        │ api-1  | 2026-11-20T09:14:40.280Z INFO  request completed method=GET path=/v1/health status…█
+│    커스텀              │ api-1  | 2026-11-20T09:14:35.245Z INFO  request completed method=GET path=/v1/health status…█
+│    Git                 │ api-1  | 2026-11-20T09:14:36.252Z INFO  request completed method=GET path=/v1/health status…█
+│    S3                  │ api-1  | 2026-11-20T09:14:37.259Z INFO  request completed method=GET path=/v1/health status…█
+│  Compose 설치          │ api-1  | 2026-11-20T09:14:38.266Z INFO  request completed method=GET path=/v1/health status…█
+│  비밀값 연결           │ api-1  | 2026-11-20T09:14:39.273Z INFO  request completed method=GET path=/v1/health status…█
+│  최초 구성             │ api-1  | 2026-11-20T09:14:40.280Z INFO  request completed method=GET path=/v1/health status…█
 │                        │ api-1  | 2026-11-20T09:14:41.287Z INFO  request completed method=GET path=/v1/health status…█
 │                        │ api-1  | 2026-11-20T09:14:42.294Z INFO  request completed method=GET path=/v1/health status…█
 │                        │ api-1  | 2026-11-20T09:14:43.301Z INFO  request completed method=GET path=/v1/health status…█
@@ -317,7 +317,7 @@ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/�
 
 === 200x18 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─────── esc 닫기 ╮ 로그 보기
+╭ 메뉴 · 19 ─────── esc 닫기 ╮ 로그 보기
 │조회                        │
 │  서비스 접속               │ 실시간 로그 (서비스는 계속 실행 중)
 │  로그 보기                 │ 서비스: 스택 전체
@@ -337,7 +337,7 @@ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/�
 
 === 200x30 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─────── esc 닫기 ╮ 로그 보기
+╭ 메뉴 · 19 ─────── esc 닫기 ╮ 로그 보기
 │조회                        │
 │  서비스 접속               │ 실시간 로그 (서비스는 계속 실행 중)
 │  로그 보기                 │ 서비스: 스택 전체
@@ -356,11 +356,11 @@ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/�
 │  이전 버전 복원 ▲ 위험     │ api-1  | 2026-11-20T09:14:49.343Z INFO  request completed method=GET path=/v1/health status=200 duration=8ms
 │                            │ api-1  | 2026-11-20T09:14:50.350Z INFO  request completed method=GET path=/v1/health status=200 duration=9ms
 │설정                        │ api-1  | 2026-11-20T09:14:51.357Z INFO  request completed method=GET path=/v1/health status=200 duration=10ms
-│  실행환경 별칭             │ api-1  | 2026-11-20T09:14:52.364Z INFO  request completed method=GET path=/v1/health status=200 duration=11ms
-│  Git 호스트 스크립트 생성  │ api-1  | 2026-11-20T09:14:53.371Z INFO  request completed method=GET path=/v1/health status=200 duration=12ms
+│  실행환경 생성             │ api-1  | 2026-11-20T09:14:52.364Z INFO  request completed method=GET path=/v1/health status=200 duration=11ms
+│  실행환경 전환             │ api-1  | 2026-11-20T09:14:53.371Z INFO  request completed method=GET path=/v1/health status=200 duration=12ms
 │  호스트 스크립트           │ api-1  | 2026-11-20T09:14:54.378Z INFO  request completed method=GET path=/v1/health status=200 duration=13ms                                                           █
-│  Compose 설치              │ api-1  | 2026-11-20T09:14:55.385Z INFO  request completed method=GET path=/v1/health status=200 duration=3ms                                                            █
-│  S3 호스트 스크립트 생성   │ api-1  | 2026-11-20T09:14:56.392Z INFO  request completed method=GET path=/v1/health status=200 duration=4ms                                                            █
+│    커스텀                  │ api-1  | 2026-11-20T09:14:55.385Z INFO  request completed method=GET path=/v1/health status=200 duration=3ms                                                            █
+│    Git                     │ api-1  | 2026-11-20T09:14:56.392Z INFO  request completed method=GET path=/v1/health status=200 duration=4ms                                                            █
 │────────────────────────────│ api-1  | 2026-11-20T09:14:57.399Z INFO  request completed method=GET path=/v1/health status=200 duration=5ms                                                            █
 │ ▸ 스택 상태                │ api-1  | 2026-11-20T09:14:58.406Z INFO  request completed method=GET path=/v1/health status=200 duration=6ms                                                            █
 │ 현재 스택과 서비스 상태를  │ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/health status=200 duration=7ms                                                            █
@@ -369,7 +369,7 @@ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/�
 
 === 200x50 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 기능 · 18 ─────── esc 닫기 ╮ 로그 보기
+╭ 메뉴 · 19 ─────── esc 닫기 ╮ 로그 보기
 │조회                        │
 │  서비스 접속               │ 실시간 로그 (서비스는 계속 실행 중)
 │  로그 보기                 │ 서비스: 스택 전체
@@ -388,15 +388,15 @@ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/�
 │  이전 버전 복원 ▲ 위험     │ api-1  | 2026-11-20T09:14:29.203Z INFO  request completed method=GET path=/v1/health status=200 duration=10ms
 │                            │ api-1  | 2026-11-20T09:14:30.210Z INFO  request completed method=GET path=/v1/health status=200 duration=11ms
 │설정                        │ api-1  | 2026-11-20T09:14:31.217Z INFO  request completed method=GET path=/v1/health status=200 duration=12ms
-│  실행환경 별칭             │ api-1  | 2026-11-20T09:14:32.224Z INFO  request completed method=GET path=/v1/health status=200 duration=13ms
-│  Git 호스트 스크립트 생성  │ api-1  | 2026-11-20T09:14:33.231Z INFO  request completed method=GET path=/v1/health status=200 duration=3ms
+│  실행환경 생성             │ api-1  | 2026-11-20T09:14:32.224Z INFO  request completed method=GET path=/v1/health status=200 duration=13ms
+│  실행환경 전환             │ api-1  | 2026-11-20T09:14:33.231Z INFO  request completed method=GET path=/v1/health status=200 duration=3ms
 │  호스트 스크립트           │ api-1  | 2026-11-20T09:14:34.238Z INFO  request completed method=GET path=/v1/health status=200 duration=4ms                                                            █
-│  Compose 설치              │ api-1  | 2026-11-20T09:14:35.245Z INFO  request completed method=GET path=/v1/health status=200 duration=5ms                                                            █
-│  S3 호스트 스크립트 생성   │ api-1  | 2026-11-20T09:14:36.252Z INFO  request completed method=GET path=/v1/health status=200 duration=6ms                                                            █
-│  비밀값 연결               │ api-1  | 2026-11-20T09:14:37.259Z INFO  request completed method=GET path=/v1/health status=200 duration=7ms                                                            █
-│  최초 구성                 │ api-1  | 2026-11-20T09:14:38.266Z INFO  request completed method=GET path=/v1/health status=200 duration=8ms                                                            █
-│                            │ api-1  | 2026-11-20T09:14:39.273Z INFO  request completed method=GET path=/v1/health status=200 duration=9ms                                                            █
-│                            │ api-1  | 2026-11-20T09:14:40.280Z INFO  request completed method=GET path=/v1/health status=200 duration=10ms                                                           █
+│    커스텀                  │ api-1  | 2026-11-20T09:14:35.245Z INFO  request completed method=GET path=/v1/health status=200 duration=5ms                                                            █
+│    Git                     │ api-1  | 2026-11-20T09:14:36.252Z INFO  request completed method=GET path=/v1/health status=200 duration=6ms                                                            █
+│    S3                      │ api-1  | 2026-11-20T09:14:37.259Z INFO  request completed method=GET path=/v1/health status=200 duration=7ms                                                            █
+│  Compose 설치              │ api-1  | 2026-11-20T09:14:38.266Z INFO  request completed method=GET path=/v1/health status=200 duration=8ms                                                            █
+│  비밀값 연결               │ api-1  | 2026-11-20T09:14:39.273Z INFO  request completed method=GET path=/v1/health status=200 duration=9ms                                                            █
+│  최초 구성                 │ api-1  | 2026-11-20T09:14:40.280Z INFO  request completed method=GET path=/v1/health status=200 duration=10ms                                                           █
 │                            │ api-1  | 2026-11-20T09:14:41.287Z INFO  request completed method=GET path=/v1/health status=200 duration=11ms                                                           █
 │                            │ api-1  | 2026-11-20T09:14:42.294Z INFO  request completed method=GET path=/v1/health status=200 duration=12ms                                                           █
 │                            │ api-1  | 2026-11-20T09:14:43.301Z INFO  request completed method=GET path=/v1/health status=200 duration=13ms                                                           █

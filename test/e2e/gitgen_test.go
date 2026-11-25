@@ -165,8 +165,7 @@ func TestGenerateGitHookTUIWizardShowsThePreviewAndDeclineWritesNothing(t *testi
 		{wait: "상태 새로 고침", send: ""},
 		// The menu order is the registration order; compute the distance from
 		// status so another ticket's feature does not break this journey.
-		{wait: "[↑↓] 이동", send: strings.Repeat("\x1b[B", menuDownPresses(t, "generate-git-hook"))},
-		{wait: "▸ Git 호스트 스크립트 생성", send: "\r"},
+		{wait: "마지막 조회", walk: "Git", send: "\r"},
 		lifecyclePTYStep{wait: "저장소", send: "https://127.0.0.1:1/never.git"},
 		lifecyclePTYStep{wait: "never.git", send: "\r"},
 		lifecyclePTYStep{wait: "branch, tag 또는 전체 SHA", send: "main"},

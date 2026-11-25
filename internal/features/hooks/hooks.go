@@ -67,6 +67,13 @@ func (f *Feature) Descriptor() core.Descriptor {
 		Requires:       core.Requirements{core.RequirementDockerCLI},
 		TargetOptional: true,
 		Wizard:         true,
+		// The menu entry is drawn as a heading so the two generated-script
+		// features appear as its children. The feature's own entry keeps the
+		// registration of an existing script as the first child.
+		Menu: []core.MenuEntry{
+			{Kind: core.MenuGroup, Feature: "hooks", Label: msgMenuGroup, Summary: msgMenuGroupSummary},
+			{Kind: core.MenuRun, Feature: "hooks", Label: msgMenuCustom, Summary: msgMenuCustomSummary, Parent: "hooks"},
+		},
 		Flags: []core.Flag{
 			{Name: "list", Kind: core.FlagBool, Usage: msgFlagList},
 			{Name: "add", Kind: core.FlagBool, Usage: msgFlagAdd},

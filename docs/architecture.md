@@ -438,6 +438,19 @@ Rules:
 - With no aliases, `Target.Environment` stays empty and standard Compose
   defaults apply. `--env` with no registered aliases is an error, never a
   fallback.
+- `active_environment: <alias>` is an optional top-level TUI convenience: the
+  alias the reader last chose or created. A value that names a registered alias
+  starts the session on it without the selection screen; an unregistered or
+  empty value is reported above the screen and ignored, never an error, and is
+  left in the file until the reader chooses again. Removing the active alias
+  clears the record and returns the project to the standard Compose inputs.
+  The CLI never reads it: `--env` stays mandatory, so a stored screen state can
+  never change what a non-interactive run applies.
+- The record is written only by the TUI, through `core.Engine`'s
+  `ActiveEnvironment`/`SetActiveEnvironment` seam, which the target resolver
+  implements over `internal/environments`. The write takes the same project
+  config lock and atomic replacement as every other `.dcraft.yaml` edit, so a
+  concurrent alias edit cannot lose the record.
 - `--env` cannot be combined with `-f`, `--env-file` or `--profile`: the alias
   is the single source of those inputs, so there is no second merge language.
 - The resolved `core.Target` carries `Environment=alias` plus the expanded
@@ -549,7 +562,7 @@ type core.Feature interface {
 | `TargetOptional` | feature does not operate on a Compose project; a folder without Compose files is valid |
 | `AcceptsArgs` | allows positional args; flags then stop at the first arg |
 | `Wizard` | TUI entry uses the generic guided flow (`core.Wizard`) instead of the generic confirmation screen; the CLI path is unchanged |
-| `EnvironmentAdmin` | the TUI entry first shows the environment administration screen (issue a new alias or switch the active target) instead of running the feature directly; the feature itself is unchanged |
+| `Menu` | the TUI menu entries this feature declares (`MenuEntry`: kind, label, summary, parent, order). Empty means one `run` entry under `Title`/`Summary`. A feature may declare two entries (create/switch an environment) and a `group` entry that other features name as their `Parent` |
 | `StreamsProgress` | the feature can report its own tool output through `Invocation.IO.Progress` while it runs (`up`); the CLI never supplies that writer, so its captured output is unchanged |
 | `Flags []core.Flag` | feature-owned flags parsed by the shared CLI |
 | `Hooks` | registered host-script scope; `HookUpUpdate` only on `up`/`update`, rejected on read-only features |
@@ -870,12 +883,32 @@ row H            footer   (one row of keycaps)
 - Wide (`≥100`): a persistent left sidebar of `clamp(width×22/100, 26, 30)`
   cells plus a one-cell gap, so the body gets `width − sidebar − 1`. The sidebar
   lists the four sections the descriptors declare (`조회`/`운영`/`데이터`/`설정`)
-  in that fixed order, registration order inside each section, with the focused
-  entry's summary in a pinned band. A sidebar too short for both keeps its
-  entries and drops the band. Its title bar carries `esc 닫기` on the right; the
-  hint is dropped before the title when the pane is too narrow for both.
+  in that fixed order, the declared menu entries inside each section, with the
+  focused entry's summary in a pinned band. A sidebar too short for both keeps
+  its entries and drops the band. Its title bar carries `esc 닫기` on the right;
+  the hint is dropped before the title when the pane is too narrow for both.
+- The menu is the registry's declared entries, not one row per feature: a
+  feature may declare two entries and a `group` entry is a heading for the
+  features that name it as their `Parent`. The heading keeps its own feature's
+  registration position, is drawn one step quieter than a section heading, is
+  indented two cells above its children, and is never a target: the cursor skips
+  it and a click on it does nothing. Child order inside one parent is the
+  declared `Order`, then registration order. A heading whose children are all
+  hidden (by the filter or by a capability the runtime lacks) is dropped with
+  them.
+- The cursor is an index into the drawn entry list, not into registration order,
+  so it can never point at a row that is not on screen. The count in the title is
+  the number of selectable entries (`메뉴 · 19`); a heading is not counted.
+- `/` matches an entry's label or summary. A match on a child keeps its parent
+  heading, and a match on a heading keeps every child, so a filtered menu still
+  shows where an entry lives. The query accepts a space like any other
+  character: `KeySpace` stringifies to a space, not to the word `space`.
+- The entry's kind decides what Enter does: `run` opens the feature, and
+  `switch-environment` opens the environment switch list (and `r` reopens it).
+  An entry the runtime cannot serve (the switch row on an engine without the
+  environment write seam) is left out entirely.
 - Medium (`60–99`) and compact-by-height (`<18` rows): a one-row navigation
-  summary under the header (`메뉴 · ▸ <title> · N개 기능` … `tab 펼치기`).
+  summary under the header (`메뉴 · ▸ <title> · N개 항목` … `tab 펼치기`).
   `tab`/`shift+tab` expands it in place into per-section counts; the row count
   never changes, so opening the menu never costs the body a line. The summary
   stays at every height because the current position must remain visible: without
@@ -1713,7 +1746,11 @@ Published for later screens; do not create a second selection model.
 - The argv is passed to `docker compose exec` unchanged after the service.
   dcraft never invokes `sh -c`. The interactive screen offers `/bin/bash` and
   `/bin/sh` as pinned choices, and `/bin/bash` is the default; a CLI run still
-  requires the argv after `--` and is never guessed.
+  requires the argv after `--` and is never guessed. The form's typed command
+  field is declared with `DependsOn: command-choice, DependsValue: ""`: a pinned
+  shell or a remembered command already names the exact argv, so confirming the
+  command choice runs it and the extra field appears only for
+  `새 명령 직접 입력`.
 - Before an *interactive* attach whose argv starts with `/bin/bash` or `bash`,
   dcraft asks the instance once by running that same argv0 with `--version`,
   through the same streaming boundary, with both outputs discarded and no TTY.
@@ -1754,7 +1791,25 @@ Published for later screens; do not create a second selection model.
   an attached command forwards every key except `ctrl+]`, which detaches (or the
   command exits by itself). `?` is a character a shell needs, so the attach
   screen has no help chip. The last screen remains visible in the management
-  view.
+  view. The attach header states the detach key in its fixed line
+  (`서비스는 계속 실행 중 · 종료: ctrl+]`), so a full-screen child that covers
+  the keycap footer cannot hide the one key that leaves the shell.
+- An attached shell's `clear` (`ESC[2J`) empties the scrollback as well as the
+  screen. A shell's clear means "start from an empty screen", and keeping the
+  cleared rows one PgUp away is what made it look like only half the screen was
+  cleared; the emulator's own handler would push the visible rows into the
+  scrollback first. A full-screen child's clear stays screen-only (the shell
+  history behind it is not that child's to erase), a log stream keeps its
+  history (a clear sequence inside container output is just output), and
+  `ESC[3J` always empties both. Erase-below/above (`ESC[J`, `ESC[1J`) are
+  cursor-relative edits and never touch the history.
+- A `core.InputProvider` feature opens a generic form. Fields are separated by
+  one blank line so unrelated groups read as sections. A field may declare
+  `DependsOn`/`DependsValue` (the same vocabulary as `WizardStep`): it is hidden
+  until the named field holds that exact value, is skipped by `tab`, is not
+  validated, and contributes no value to the request. The typed command of the
+  exec form uses this: a pinned shell or a remembered command is a complete
+  argv, so the extra field appears only for the `새 명령 직접 입력` row.
 - The child's grid starts at the size of the band it is drawn in, not the whole
   terminal: a child sized to the window would draw under dcraft's header and
   footer. It then only grows: the emulator truncates the bottom of its buffer
@@ -1775,7 +1830,9 @@ Published for later screens; do not create a second selection model.
   its own, so the 10000-line history applies to a shell or a log, not to it.
 - A `core.InputProvider` feature opens a generic form (choice and text fields)
   that shows the resolved values before running; `esc` runs nothing, and the
-  feature validates the values again through `WithInputs`.
+  feature validates the values again through `WithInputs`. A field hidden by its
+  `DependsOn`/`DependsValue` dependency is absent from that request, so the
+  feature can never act on a value the reader could not see.
 - The TUI never passes JSON mode, never uses the CLI's standard streams for a
   live feature, and normal quit touches no service.
 

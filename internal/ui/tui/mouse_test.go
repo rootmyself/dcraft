@@ -127,66 +127,62 @@ func TestMouseEnvironmentClickSelectsAndDoubleClickRuns(t *testing.T) {
 	}
 }
 
-// The environment administration screen is a selectable list too: a click
-// moves the marker, a double click takes the action, and a switch never runs
-// the primary feature.
-func TestMouseEnvironmentAdministrationSelectsAndSwitchesWithoutRunning(t *testing.T) {
+// The switch list is a selectable list too: a click moves the marker, a double
+// click switches, and the switch never runs the primary feature while the
+// primary is not read-only.
+func TestMouseEnvironmentSwitchSelectsAndSwitchesWithoutRunning(t *testing.T) {
 	status := &stubFeature{desc: descriptor("status", true), body: "old result"}
 	adminDesc := descriptor("aliases", false)
-	adminDesc.EnvironmentAdmin = true
+	adminDesc.Menu = []core.MenuEntry{
+		{Kind: core.MenuRun, Feature: "aliases", Label: "실행환경 생성", Summary: "별칭 생성."},
+		{Kind: core.MenuSwitchEnvironment, Feature: "aliases", Label: "실행환경 전환", Summary: "대상 전환.", Order: 1},
+	}
 	admin := &stubFeature{desc: adminDesc}
 	resolver := envResolver()
 	m := newEnvTestModel(t, resolver, core.TargetRequest{Environment: "dev"}, status, admin)
 	m.theme = *plainTheme()
 	initModel(t, m)
 	resize(t, m, 120, 30)
-	m.Update(tea.KeyMsg{Type: tea.KeyDown})
-	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if m.phase != phaseEnvironmentActions {
-		t.Fatalf("phase = %v, want the administration screen", m.phase)
+	// The switch entry is the last visible menu row; walk to it by name.
+	for _, entry := range m.nav().entries {
+		if entry.menu.Entry.Kind == core.MenuSwitchEnvironment {
+			m.selected = entry.index
+		}
 	}
-	// The primary feature runs once on startup, before the screen opened.
+	if entry, ok := m.selectedMenu(); !ok || entry.menu.Entry.Kind != core.MenuSwitchEnvironment {
+		t.Fatalf("cursor is not on the switch entry")
+	}
+	cmd := m.startSelected()
+	feed(t, m, execute(t, cmd))
+	if m.phase != phaseSelectingEnvironment || m.envScreen != envScreenSwitch {
+		t.Fatalf("phase=%v screen=%v, want the switch list", m.phase, m.envScreen)
+	}
+	// The primary feature runs once on startup, before the list opened.
 	baseline := status.runs
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
-	// The wheel targets the body; x=10 sits inside the sidebar pane, and the
-	// pane's wheel has one meaning of its own.
-	wheel(t, m, 60, 8, true)
-	if m.envAction != 1 {
-		t.Fatalf("wheel left the action at %d, want 1", m.envAction)
-	}
-	clickRow(t, m, msgEnvNewAlias, now)
-	if m.envAction != 0 {
-		t.Fatalf("click selected action %d, want 0", m.envAction)
-	}
-	if m.phase != phaseEnvironmentActions || status.runs != baseline {
-		t.Fatalf("single click took the action: phase=%v runs=%d want %d", m.phase, status.runs, baseline)
-	}
-	clickRow(t, m, msgEnvSwitch, now.Add(time.Second))
-	if m.envAction != 1 {
-		t.Fatalf("click selected action %d, want 1", m.envAction)
-	}
-	cmd := clickRow(t, m, msgEnvSwitch, now.Add(time.Second+100*time.Millisecond))
-	feed(t, m, execute(t, cmd))
-	if m.phase != phaseSelectingEnvironment || !m.envSwitch {
-		t.Fatalf("double click did not open the switch list: phase=%v switch=%v", m.phase, m.envSwitch)
-	}
-	clickRow(t, m, "prod", now.Add(2*time.Second))
+	clickRow(t, m, "prod", now)
 	if m.envSelected != 1 || m.phase != phaseSelectingEnvironment {
 		t.Fatalf("click did not select prod without switching: selected=%d phase=%v", m.envSelected, m.phase)
 	}
-	clickRow(t, m, "prod", now.Add(2*time.Second+100*time.Millisecond))
-	if m.phase != phaseReady || m.envSwitch {
-		t.Fatalf("double click did not finish the switch: phase=%v switch=%v", m.phase, m.envSwitch)
+	cmd = clickRow(t, m, "prod", now.Add(100*time.Millisecond))
+	feed(t, m, execute(t, cmd))
+	if m.phase != phaseReady {
+		t.Fatalf("double click did not finish the switch: phase=%v", m.phase)
 	}
 	if m.target.Environment != "prod" || m.facts.Environment != "prod" {
 		t.Fatalf("target=%q header=%q, want prod", m.target.Environment, m.facts.Environment)
 	}
-	if status.runs != baseline {
-		t.Fatalf("the switch ran the primary feature: runs=%d, want %d", status.runs, baseline)
+	// A read-only primary reopens on the new target, so it runs once more; the
+	// environment feature behind the switch must never run.
+	if status.runs != baseline+1 {
+		t.Fatalf("the switch did not reopen the primary screen: runs=%d, want %d", status.runs, baseline+1)
 	}
-	if view := m.View(); strings.Contains(view, "old result") {
-		t.Fatalf("the switch kept the stale result:\n%s", view)
+	if admin.runs != 0 {
+		t.Fatalf("the switch ran the environment feature: %d", admin.runs)
+	}
+	if view := m.View(); !strings.Contains(view, "전환 완료") {
+		t.Fatalf("the switch did not state it completed:\n%s", view)
 	}
 }
 

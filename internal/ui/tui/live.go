@@ -342,8 +342,10 @@ func (m *Model) liveHeaderLines() []string {
 	var state []string
 	if m.live.mode == core.LiveAttach {
 		// msgLiveAttached is the existing attach text; the running-state line
-		// repeats the promise the stream sentence carries in one line.
-		state = append(state, m.title(msgLiveAttached), m.hintText(msgLiveKeepsRunning))
+		// repeats the promise the stream sentence carries in one line and adds
+		// the detach key, so an attached shell always says how to leave it even
+		// when a full-screen child covers the frame's keycaps.
+		state = append(state, m.title(msgLiveAttached), m.hintText(msgLiveKeepsRunningAndDetach))
 	} else {
 		state = append(state, m.title(msgLiveStreaming))
 	}

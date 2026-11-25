@@ -55,7 +55,7 @@ func TestSidebarAppearsAtOneHundredColumns(t *testing.T) {
 
 	resize(t, m, 99, 30)
 	view := m.View()
-	if strings.Contains(view, "╭ 기능") {
+	if strings.Contains(view, "╭ 메뉴") {
 		t.Fatalf("99 columns drew the sidebar:\n%s", view)
 	}
 	if !strings.Contains(view, "tab 펼치기") {
@@ -64,7 +64,7 @@ func TestSidebarAppearsAtOneHundredColumns(t *testing.T) {
 
 	resize(t, m, 100, 30)
 	view = m.View()
-	if !strings.Contains(view, "기능 · 5") {
+	if !strings.Contains(view, "메뉴 · 5") {
 		t.Fatalf("100 columns has no sidebar:\n%s", view)
 	}
 	if strings.Contains(view, "tab 펼치기") {
@@ -104,7 +104,7 @@ func TestTabExpandsNavigationWithoutChangingRowCount(t *testing.T) {
 	resize(t, m, 80, 24)
 	before := len(viewLines(t, m))
 	collapsed := m.View()
-	if !strings.Contains(collapsed, "5개 기능") || !strings.Contains(collapsed, "tab 펼치기") {
+	if !strings.Contains(collapsed, "5개 항목") || !strings.Contains(collapsed, "tab 펼치기") {
 		t.Fatalf("collapsed nav row missing:\n%s", collapsed)
 	}
 
@@ -241,7 +241,7 @@ func TestSelectionSurvivesAResultRoundTrip(t *testing.T) {
 	if got := m.active.Descriptor().Title; got != "데이터 복원" {
 		t.Fatalf("active = %q, want 데이터 복원", got)
 	}
-	if got := m.features[m.selected].Descriptor().Title; got != "데이터 복원" {
+	if got := m.selectedFeature().Descriptor().Title; got != "데이터 복원" {
 		t.Fatalf("selection = %q, want 데이터 복원", got)
 	}
 	if !strings.Contains(m.View(), "복원 본문") {
@@ -415,12 +415,12 @@ func TestBodyMenuShowsTheOneLineSummary(t *testing.T) {
 func TestSidebarPersistsAcrossScreens(t *testing.T) {
 	m, _ := navModel(t)
 	resize(t, m, 120, 30)
-	if !strings.Contains(m.View(), "╭ 기능") {
+	if !strings.Contains(m.View(), "╭ 메뉴") {
 		t.Fatalf("no sidebar on the menu")
 	}
 	cmd := pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
 	feed(t, m, execute(t, cmd))
-	if !strings.Contains(m.View(), "╭ 기능") {
+	if !strings.Contains(m.View(), "╭ 메뉴") {
 		t.Fatalf("sidebar disappeared after a run:\n%s", m.View())
 	}
 	nm, _ := m.Update(resultMsg{res: core.Result{
@@ -428,7 +428,7 @@ func TestSidebarPersistsAcrossScreens(t *testing.T) {
 		Diagnostics: []core.Diagnostic{{Category: core.CategoryInternal, Severity: core.SeverityError, Message: "실패.", NextActions: []string{"다시 실행."}}},
 	}})
 	m = nm.(*Model)
-	if !strings.Contains(m.View(), "╭ 기능") {
+	if !strings.Contains(m.View(), "╭ 메뉴") {
 		t.Fatalf("sidebar disappeared on failure:\n%s", m.View())
 	}
 }
@@ -642,7 +642,7 @@ func TestSingleFeatureKeepsTheFullWidth(t *testing.T) {
 	initModel(t, m)
 	resize(t, m, 120, 30)
 	view := m.View()
-	if strings.Contains(view, "╭ 기능") {
+	if strings.Contains(view, "╭ 메뉴") {
 		t.Fatalf("single-feature registry drew a sidebar:\n%s", view)
 	}
 	if strings.Contains(view, "tab 펼치기") {
@@ -738,15 +738,14 @@ func TestEnterRunsNothingWhileTheFilterHidesEveryEntry(t *testing.T) {
 			if got := m.selectedFeature().Descriptor().Name; got != "logs" {
 				t.Fatalf("%d cols: down did not select logs, got %q", width, got)
 			}
-			cursor := m.selected
 
 			pressKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
 			typeKeys(t, m, "zzzz")
 			pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
 			// Both layouts state that nothing matched: the sidebar draws the
-			// empty text, the one-row summary draws zero features.
+			// empty text, the one-row summary draws zero entries.
 			view := m.View()
-			if !strings.Contains(view, "기능 없음") && !strings.Contains(view, "0개 기능") {
+			if !strings.Contains(view, "기능 없음") && !strings.Contains(view, "0개 항목") {
 				t.Fatalf("%d cols: the empty filter state is not drawn:\n%s", width, view)
 			}
 
@@ -759,8 +758,10 @@ func TestEnterRunsNothingWhileTheFilterHidesEveryEntry(t *testing.T) {
 			if m.phase != phaseReady {
 				t.Fatalf("%d cols: enter left the menu phase: %v", width, m.phase)
 			}
-			if m.selected != cursor {
-				t.Fatalf("%d cols: enter moved the cursor to %d, want %d", width, m.selected, cursor)
+			// No row is drawn, so there is no cursor to mark: the selection is
+			// empty rather than a stale index pointing at a hidden entry.
+			if _, ok := m.selectedMenu(); ok {
+				t.Fatalf("%d cols: a hidden entry is still addressable", width)
 			}
 
 			// The arrows scroll the long result, exactly as when the menu is
@@ -770,11 +771,12 @@ func TestEnterRunsNothingWhileTheFilterHidesEveryEntry(t *testing.T) {
 			if m.body.Top == before {
 				t.Fatalf("%d cols: down did not scroll the result body while the filter hid the menu:\n%s", width, m.View())
 			}
-			if m.selected != cursor {
-				t.Fatalf("%d cols: down moved a hidden cursor to %d, want %d", width, m.selected, cursor)
+			if _, ok := m.selectedMenu(); ok {
+				t.Fatalf("%d cols: down restored a hidden selection", width)
 			}
 
-			// Clearing the filter brings the selection back: Enter works again.
+			// Clearing the filter brings the menu back and the cursor lands on
+			// a visible entry, so Enter runs what the screen shows.
 			pressKey(t, m, tea.KeyMsg{Type: tea.KeyEsc})
 			if m.filter != "" {
 				t.Fatalf("%d cols: esc left the filter %q", width, m.filter)
@@ -782,10 +784,17 @@ func TestEnterRunsNothingWhileTheFilterHidesEveryEntry(t *testing.T) {
 			if view := m.View(); !strings.Contains(view, logs.Descriptor().Title) {
 				t.Fatalf("%d cols: esc did not restore the menu:\n%s", width, view)
 			}
+			selected, ok := m.selectedMenu()
+			if !ok {
+				t.Fatalf("%d cols: clearing the filter left no selection", width)
+			}
 			cmd = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
 			feed(t, m, execute(t, cmd))
-			if logs.runs != runs+1 {
-				t.Fatalf("%d cols: enter works again only after a cleared filter: runs %d -> %d", width, runs, logs.runs)
+			if m.phase != phaseReady {
+				t.Fatalf("%d cols: enter left the menu phase: %v", width, m.phase)
+			}
+			if got := m.active; got == nil || got.Descriptor().Name != selected.menu.Entry.Feature {
+				t.Fatalf("%d cols: enter did not open the visible selection %q", width, selected.menu.Entry.Label)
 			}
 		})
 	}

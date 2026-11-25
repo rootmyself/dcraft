@@ -106,5 +106,5 @@ func (m *Model) activateNav(index int, double bool) tea.Cmd {
 		m.confirmScroll = 0
 		return nil
 	}
-	return m.start(m.features[index])
+	return m.startSelected()
 }

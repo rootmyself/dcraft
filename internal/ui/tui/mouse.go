@@ -24,7 +24,6 @@ type hitKind int
 const (
 	hitNavItem hitKind = iota
 	hitEnvItem
-	hitEnvAction
 	hitServiceRow
 	hitWizardCard
 	hitWizardInput
@@ -121,9 +120,9 @@ func (m *Model) mouseTargets() []hitTarget {
 		// every phase. Whether that click moves, asks first, or only reports a
 		// running operation is decided by the phase, not by whether a hit
 		// exists.
-		_, navHits := visual.SidebarWithHits(m.theme, visual.SidebarWidth(m.width), visual.BodyRows(m.height), m.nav())
+		_, navHits := visual.SidebarWithHits(m.theme, visual.SidebarWidth(m.width), visual.BodyRows(m.height), m.navView())
 		for _, nav := range navHits {
-			index := m.featureIndex(nav.Name)
+			index := m.menuIndexForFeature(nav.Name)
 			if index < 0 {
 				continue
 			}
@@ -190,7 +189,7 @@ func isWheel(button tea.MouseButton) bool {
 func (m *Model) activateHit(hit hitTarget, double bool) tea.Cmd {
 	switch hit.kind {
 	case hitNavItem:
-		if hit.index < 0 || hit.index >= len(m.features) {
+		if hit.index < 0 || !m.menuIndexExists(hit.index) {
 			return nil
 		}
 		return m.activateNav(hit.index, double)
@@ -201,14 +200,6 @@ func (m *Model) activateHit(hit hitTarget, double bool) tea.Cmd {
 		m.envSelected = hit.index
 		if double {
 			return m.chooseEnvironment()
-		}
-	case hitEnvAction:
-		if m.phase != phaseEnvironmentActions || hit.index < 0 || hit.index > 1 {
-			return nil
-		}
-		m.envAction = hit.index
-		if double {
-			return m.chooseEnvironmentAction()
 		}
 	case hitServiceRow:
 		if double {
@@ -391,9 +382,6 @@ func (m *Model) updateWheel(msg tea.MouseMsg) tea.Cmd {
 				m.envSelected = (m.envSelected + delta + len(m.envs)) % len(m.envs)
 			}
 		}
-		return nil
-	case phaseEnvironmentActions:
-		m.envAction = 1 - m.envAction
 		return nil
 	case phaseSelectingServices:
 		total := len(m.serviceOptions) + 1

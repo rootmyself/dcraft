@@ -32,6 +32,10 @@ type Catalog struct {
 	Path string
 	// Environments preserve config file order.
 	Environments []core.Environment
+	// Active is the alias the project recorded as active, or empty when none is
+	// recorded. It is a TUI convenience only: the CLI still requires an explicit
+	// --env on every run.
+	Active core.EnvironmentActive
 }
 
 // Names returns the registered aliases in config order.
@@ -142,6 +146,9 @@ func parseCatalogRoot(projectDir string, root *yaml.Node) (Catalog, error) {
 	cat := Catalog{Path: filepath.Join(projectDir, FileName)}
 	envNode := projectconfig.MappingValue(root, "environments")
 	if envNode == nil || envNode.Tag == "!!null" {
+		// No alias is registered, so a recorded alias cannot be valid. It is
+		// still reported so the reader learns why the startup screen is back.
+		cat.Active = parseActive(root, cat)
 		return cat, nil
 	}
 	if envNode.Kind != yaml.MappingNode {
@@ -169,7 +176,32 @@ func parseCatalogRoot(projectDir string, root *yaml.Node) (Catalog, error) {
 		}
 		cat.Environments = append(cat.Environments, env)
 	}
+	cat.Active = parseActive(root, cat)
 	return cat, nil
+}
+
+// ActiveEnvironmentKey is the optional top-level record of the alias the TUI
+// opens on. It is a dcraft convenience, not a selection: every CLI run still
+// requires an explicit --env, and a value this project does not register is
+// reported as invalid instead of failing the read.
+const ActiveEnvironmentKey = "active_environment"
+
+// parseActive reads the recorded alias against the aliases that were just
+// parsed. An empty or missing key is no record at all.
+func parseActive(root *yaml.Node, cat Catalog) core.EnvironmentActive {
+	node := projectconfig.MappingValue(root, ActiveEnvironmentKey)
+	if node == nil || node.Tag == "!!null" {
+		return core.EnvironmentActive{}
+	}
+	if node.Kind != yaml.ScalarNode || node.Tag != "!!str" {
+		return core.EnvironmentActive{}
+	}
+	name := strings.TrimSpace(node.Value)
+	if name == "" {
+		return core.EnvironmentActive{}
+	}
+	_, exists := cat.Find(name)
+	return core.EnvironmentActive{Name: name, Invalid: !exists}
 }
 
 var aliasRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,31}$`)

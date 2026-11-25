@@ -205,6 +205,10 @@ func TestEnvironmentAliasWithoutConfigKeepsComposeDefaults(t *testing.T) {
 type ptyStep struct {
 	waitText string
 	send     string
+	// walk is a menu entry label to move the cursor onto before send. The
+	// arrow count depends on how many presses the opening run swallowed, so a
+	// step that walks reads the drawn frame instead of counting keys.
+	walk string
 }
 
 func runPTYSteps(t *testing.T, dir string, env []string, steps []ptyStep) (string, int) {
@@ -238,6 +242,9 @@ func runPTYSteps(t *testing.T, dir string, env []string, steps []ptyStep) (strin
 		if step.waitText != "" {
 			waitFor(step.waitText)
 		}
+		if step.walk != "" {
+			walkMenuCursor(t, f, out, step.walk, waitFor)
+		}
 		if step.send != "" {
 			if _, err := f.Write([]byte(step.send)); err != nil {
 				t.Fatalf("send %q: %v", step.send, err)
@@ -263,7 +270,10 @@ func runPTYSteps(t *testing.T, dir string, env []string, steps []ptyStep) (strin
 	}
 }
 
-func TestTUIEnvironmentSelectionAndQuitChangesNothing(t *testing.T) {
+// Picking the session's environment records it as the active alias, so the next
+// start opens on it. Nothing else about the project changes: no stack call runs
+// and the aliases themselves are untouched.
+func TestTUIEnvironmentSelectionRecordsTheActiveAlias(t *testing.T) {
 	fake := newFakeDocker(t)
 	project := t.TempDir()
 	_, hashes := writeEnvironmentProject(t, project)
@@ -299,7 +309,24 @@ func TestTUIEnvironmentSelectionAndQuitChangesNothing(t *testing.T) {
 	if !strings.Contains(configCall, "--env-file "+filepath.Join(realProject, ".env.dev")) || !strings.Contains(configCall, "--profile dev") {
 		t.Fatalf("TUI selection did not reach Compose with the alias inputs: %q", configCall)
 	}
-	assertFilesUnchanged(t, hashes)
+	// Only the record changed: the aliases are the same and the Compose files
+	// were not touched.
+	config, err := os.ReadFile(filepath.Join(project, ".dcraft.yaml"))
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	if !strings.Contains(string(config), "active_environment: dev") {
+		t.Fatalf("the chosen alias was not recorded:\n%s", config)
+	}
+	for path, want := range hashes {
+		if filepath.Base(path) == ".dcraft.yaml" {
+			continue
+		}
+		got := sha256File(t, path)
+		if got != want {
+			t.Fatalf("%s changed", path)
+		}
+	}
 }
 
 func TestTUIQuitFromEnvironmentSelectionDoesNotRunAnything(t *testing.T) {
@@ -317,4 +344,26 @@ func TestTUIQuitFromEnvironmentSelectionDoesNotRunAnything(t *testing.T) {
 		t.Fatalf("quitting from selection contacted Docker: %v", calls)
 	}
 	assertFilesUnchanged(t, hashes)
+}
+
+// walkMenuCursor presses the down arrow until the drawn frame marks the wanted
+// menu entry, then stops. A press that arrives while the opening status run
+// still owns the keyboard scrolls the result instead of moving the cursor, so a
+// fixed count can land elsewhere; the drawn frame is the only proof.
+func walkMenuCursor(t *testing.T, f *os.File, out *syncBuffer, label string, waitFor func(string)) {
+	t.Helper()
+	marker := "▸ " + label
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		if screenContains(currentFrame(out.String()), marker) {
+			time.Sleep(50 * time.Millisecond)
+			return
+		}
+		if _, err := f.Write([]byte("\x1b[B")); err != nil {
+			t.Fatalf("send down: %v", err)
+		}
+		time.Sleep(40 * time.Millisecond)
+	}
+	_ = waitFor
+	t.Fatalf("menu never marked %q:\n%s", label, out.String())
 }

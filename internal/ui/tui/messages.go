@@ -1,12 +1,15 @@
 package tui
 
 const (
-	msgEnvActionsTitle = "실행환경"
-	msgEnvNewAlias     = "새 별칭"
-	msgEnvSwitch       = "전환"
-	msgEnvCurrent      = " (현재)"
-	msgEnvReloadFailed = "실행환경 목록 불러오기 실패: "
-	msgEnvSwitchFailed = "전환할 실행환경 불러오기 실패."
+	msgEnvReloadFailed     = "실행환경 목록 불러오기 실패: "
+	msgEnvSwitchFailed     = "전환할 실행환경 불러오기 실패."
+	msgEnvSwitchEmpty      = "전환할 실행환경 없음 · 실행환경 생성에서 별칭 추가"
+	msgEnvSwitched         = "실행환경 전환 완료: %s"
+	msgEnvAlreadyCurrent   = "이미 현재 실행환경: %s"
+	msgEnvActiveSaveFailed = "활성 실행환경 저장 실패. 다음 시작에 다시 선택 필요."
+	msgEnvActiveInvalid    = "저장된 활성 실행환경을 쓸 수 없음: %s · 다시 선택"
+	msgEnvCreatedNotice    = "실행환경 생성 완료: %s"
+	msgEnvRemovedNotice    = "실행환경 제거 완료: %s"
 )
 
 // Korean user-facing TUI text.
@@ -30,7 +33,7 @@ const (
 	msgDetailTitle          = "전체 값"
 	// Navigation. The section headings come from core.Section.KoreanLabel, so
 	// only the frame around them is text owned by the TUI.
-	msgNavTitle      = "기능 · %d"
+	msgNavTitle      = "메뉴 · %d"
 	msgNavEmpty      = "조건에 맞는 기능 없음. /로 다른 낱말 검색 · esc로 해제."
 	msgStageTimeline = "단계"
 	msgStagePending  = "예정"
@@ -41,6 +44,9 @@ const (
 	msgEnvChecking      = "실행환경을 확인하는 중…"
 	msgEnvSelectTitle   = "실행환경 선택"
 	msgEnvSelectIntro   = "이 폴더에 이름 붙인 실행환경 있음. 작업할 실행환경 선택."
+	msgEnvSwitchTitle   = "실행환경 전환"
+	msgEnvSwitchIntro   = "작업할 실행환경으로 대상 전환. 스택은 중지하지 않음."
+	msgEnvCurrent       = " (현재)"
 	msgEnvIsolationNote = "실행환경은 Compose 입력과 dcraft 상태·이력만 구분. 외부 볼륨·bind mount·네트워크·고정 호스트 포트는 공유 가능."
 	msgEnvDefaultFiles  = "기본 Compose 파일"
 	msgEnvComposeFiles  = "Compose 파일"
@@ -119,17 +125,22 @@ const (
 	msgServiceColumnPort      = "포트"
 
 	// Live screens. Closing a screen only detaches; it never stops services.
-	msgLiveStreaming     = "실시간 로그 (서비스는 계속 실행 중)"
-	msgLiveAttached      = "서비스 접속."
-	msgLiveService       = "서비스"
-	msgLiveInstance      = "인스턴스"
-	msgLiveAllInstances  = "전체"
-	msgLiveCommand       = "명령"
-	msgLiveStopped       = "실시간 화면 닫음. 서비스는 계속 실행 중."
-	msgLiveKeepsRunning  = "서비스는 계속 실행 중"
-	msgLiveScrollKeys    = "PgUp/PgDn · g/G"
-	msgLastOutput        = "마지막 실시간 출력"
-	msgLastOutputOmitted = "마지막 실시간 출력 (앞 %d줄 생략)"
+	msgLiveStreaming    = "실시간 로그 (서비스는 계속 실행 중)"
+	msgLiveAttached     = "서비스 접속."
+	msgLiveService      = "서비스"
+	msgLiveInstance     = "인스턴스"
+	msgLiveAllInstances = "전체"
+	msgLiveCommand      = "명령"
+	msgLiveStopped      = "실시간 화면 닫음. 서비스는 계속 실행 중."
+	msgLiveKeepsRunning = "서비스는 계속 실행 중"
+	// msgLiveKeepsRunningAndDetach is the attach header's second line: the same
+	// promise plus the one key that leaves the shell. An attached shell owns
+	// every other key, so the keycap footer may be covered by a full-screen
+	// child while this line is not.
+	msgLiveKeepsRunningAndDetach = "서비스는 계속 실행 중 · 종료: ctrl+]"
+	msgLiveScrollKeys            = "PgUp/PgDn · g/G"
+	msgLastOutput                = "마지막 실시간 출력"
+	msgLastOutputOmitted         = "마지막 실시간 출력 (앞 %d줄 생략)"
 )
 
 const (

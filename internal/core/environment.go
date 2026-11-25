@@ -28,3 +28,24 @@ type Environment struct {
 type EnvironmentSource interface {
 	Environments(ctx context.Context, req TargetRequest, cwd string) ([]Environment, []Diagnostic, error)
 }
+
+// EnvironmentActive is the alias a project is currently working in, as recorded
+// in the project config. Invalid reports that the stored value names an alias
+// this project does not register (or one whose files are gone): the caller shows
+// the value and lets the reader choose again instead of failing the session.
+type EnvironmentActive struct {
+	Name    string
+	Invalid bool
+}
+
+// EnvironmentSetter is the optional write capability of a Resolver: recording
+// which alias the TUI should open on next time. The configuration file belongs
+// to the resolver's own layer, so the UI never touches it.
+//
+// A name records that alias as active. An empty name clears the record, which is
+// how removing the active alias returns the project to the standard Compose
+// inputs.
+type EnvironmentSetter interface {
+	ActiveEnvironment(ctx context.Context, req TargetRequest, cwd string) (EnvironmentActive, error)
+	SetActiveEnvironment(ctx context.Context, req TargetRequest, cwd, name string) error
+}

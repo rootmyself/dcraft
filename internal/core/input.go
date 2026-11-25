@@ -18,9 +18,9 @@ type InputOption struct {
 	Label string `json:"label"`
 }
 
-// InputField is one missing input a feature needs from an interactive
-// interface. The CLI never prompts: it requires the equivalent flag or
-// argument and fails with Korean guidance when it is missing.
+// InputField is one value a feature needs from an interactive interface. The
+// CLI never prompts: it requires the equivalent flag or argument and fails with
+// Korean guidance when it is missing.
 type InputField struct {
 	Key      string        `json:"key"`
 	Label    string        `json:"label"`
@@ -28,6 +28,37 @@ type InputField struct {
 	Kind     InputKind     `json:"kind"`
 	Options  []InputOption `json:"options,omitempty"`
 	Required bool          `json:"required"`
+	// DependsOn and DependsValue hide the field until another answered field
+	// has the exact value. The same vocabulary as WizardStep.DependsOn: an
+	// empty DependsOn always shows the field, and a hidden field contributes no
+	// value and is not validated.
+	DependsOn    string `json:"depends_on,omitempty"`
+	DependsValue string `json:"depends_value,omitempty"`
+}
+
+// Visible reports whether the field is drawn and collected, using answer to read
+// the value of the field it depends on. It is the one rule the renderer, the key
+// handler and the submit path share, so a hidden field can never be drawn,
+// skipped inconsistently or submitted by accident.
+func (f InputField) Visible(answer func(key string) string) bool {
+	if f.DependsOn == "" {
+		return true
+	}
+	if answer == nil {
+		return false
+	}
+	return answer(f.DependsOn) == f.DependsValue
+}
+
+// InputDependsOn is the dependency of one field expressed as a lookup. It is
+// kept here so a caller that reads fields does not re-implement the rule.
+func InputDependsOn(fields []InputField, key string) (InputField, bool) {
+	for _, field := range fields {
+		if field.Key == key {
+			return field, true
+		}
+	}
+	return InputField{}, false
 }
 
 // InputProvider is an optional feature capability for interactive input

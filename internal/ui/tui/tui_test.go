@@ -285,6 +285,12 @@ type stubEnvResolver struct {
 	envErr     error
 	envCalls   int
 	lastTarget core.TargetRequest
+	// active is the recorded alias, activeErr fails the read, saveErr fails
+	// the write and saved records what the TUI asked to persist.
+	active    core.EnvironmentActive
+	activeErr error
+	saveErr   error
+	saved     []string
 }
 
 func (r *stubEnvResolver) Environments(ctx context.Context, req core.TargetRequest, cwd string) ([]core.Environment, []core.Diagnostic, error) {
@@ -293,6 +299,22 @@ func (r *stubEnvResolver) Environments(ctx context.Context, req core.TargetReque
 		return nil, nil, r.envErr
 	}
 	return r.envs, nil, nil
+}
+
+func (r *stubEnvResolver) ActiveEnvironment(ctx context.Context, req core.TargetRequest, cwd string) (core.EnvironmentActive, error) {
+	if r.activeErr != nil {
+		return core.EnvironmentActive{}, r.activeErr
+	}
+	return r.active, nil
+}
+
+func (r *stubEnvResolver) SetActiveEnvironment(ctx context.Context, req core.TargetRequest, cwd, name string) error {
+	if r.saveErr != nil {
+		return r.saveErr
+	}
+	r.saved = append(r.saved, name)
+	r.active = core.EnvironmentActive{Name: name}
+	return nil
 }
 
 func (r *stubEnvResolver) Resolve(ctx context.Context, req core.TargetRequest, cwd string) (core.Target, []core.Diagnostic, error) {
@@ -327,89 +349,120 @@ func envResolver() *stubEnvResolver {
 	}}
 }
 
-func TestEnvironmentAdministrationSwitchDoesNotRunFeature(t *testing.T) {
+// envMenuEntries is the two-entry menu the environments feature declares. Tests
+// that exercise the environment screens use it instead of the real feature, so
+// they do not need a wizard or a config file.
+func envMenuEntries(name string) []core.MenuEntry {
+	return []core.MenuEntry{
+		{Kind: core.MenuRun, Feature: name, Label: "실행환경 생성", Summary: "별칭을 만들거나 제거."},
+		{Kind: core.MenuSwitchEnvironment, Feature: name, Label: "실행환경 전환", Summary: "작업할 실행환경으로 전환.", Order: 1},
+	}
+}
+
+// openSwitchList puts the cursor on the switch entry and opens the list the way
+// the menu does.
+func openSwitchList(t *testing.T, m *Model) {
+	t.Helper()
+	for _, entry := range m.nav().entries {
+		if entry.menu.Entry.Kind == core.MenuSwitchEnvironment {
+			m.selected = entry.index
+			cmd := m.startSelected()
+			feed(t, m, execute(t, cmd))
+			return
+		}
+	}
+	t.Fatalf("no switch entry in the menu:\n%s", m.View())
+}
+
+func TestEnvironmentSwitchDoesNotRunFeature(t *testing.T) {
 	status := &stubFeature{desc: descriptor("status", true), body: "old result"}
 	adminDesc := descriptor("aliases", false)
-	adminDesc.EnvironmentAdmin = true
+	adminDesc.Menu = envMenuEntries("aliases")
 	admin := &stubFeature{desc: adminDesc}
 	resolver := envResolver()
 	m := newEnvTestModel(t, resolver, core.TargetRequest{Environment: "dev"}, status, admin)
 	initModel(t, m)
-	m.Update(tea.KeyMsg{Type: tea.KeyDown})
-	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if view := m.View(); !strings.Contains(view, "새 별칭") || !strings.Contains(view, "전환") {
-		t.Fatalf("missing administration actions:\n%s", view)
-	}
 	resolver.envs = append(resolver.envs, core.Environment{Name: "stage"})
-	m.Update(tea.KeyMsg{Type: tea.KeyDown})
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	openSwitchList(t, m)
+	if view := m.View(); !strings.Contains(view, "실행환경 전환") {
+		t.Fatalf("switch list missing its own title:\n%s", view)
+	}
+	// Move to the appended alias; the list opens on the current one.
+	m.envSelected = 2
+	cmd := press(m, tea.KeyMsg{Type: tea.KeyEnter})
 	feed(t, m, execute(t, cmd))
-	if view := m.View(); !strings.Contains(view, "stage") || !strings.Contains(view, "현재") {
-		t.Fatalf("switch list missing updated aliases or current target:\n%s", view)
+	if view := m.View(); !strings.Contains(view, "stage") {
+		t.Fatalf("switch did not update the header:\n%s", view)
 	}
-	for i := 0; i < 3; i++ {
-		m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	if !strings.Contains(m.View(), "전환 완료") {
+		t.Fatalf("switch did not state it completed:\n%s", m.View())
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if view := m.View(); !strings.Contains(view, "stage") || strings.Contains(view, "old result") {
-		t.Fatalf("switch did not update header and clear result:\n%s", view)
+	if len(resolver.saved) != 1 || resolver.saved[0] != "stage" {
+		t.Fatalf("active alias was not recorded: %v", resolver.saved)
 	}
-	if status.runs != 1 || admin.runs != 0 {
-		t.Fatalf("switch ran a feature: status=%d admin=%d", status.runs, admin.runs)
+	if admin.runs != 0 {
+		t.Fatalf("switch ran the environment feature: %d", admin.runs)
 	}
 }
 
 func TestEnvironmentSwitchKeepsLongListSelectionVisible(t *testing.T) {
 	status := &stubFeature{desc: descriptor("status", true), body: "old result"}
 	adminDesc := descriptor("aliases", false)
-	adminDesc.EnvironmentAdmin = true
+	adminDesc.Menu = envMenuEntries("aliases")
 	admin := &stubFeature{desc: adminDesc}
 	resolver := envResolver()
 	m := newEnvTestModel(t, resolver, core.TargetRequest{Environment: "dev"}, status, admin)
 	initModel(t, m)
 	resize(t, m, 80, 24)
-	m.Update(tea.KeyMsg{Type: tea.KeyDown})
-	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	for i := 0; i < 30; i++ {
 		resolver.envs = append(resolver.envs, core.Environment{Name: fmt.Sprintf("env%02d", i)})
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyDown})
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	feed(t, m, execute(t, cmd))
-	for i := 0; i < 30; i++ {
-		m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	openSwitchList(t, m)
+	// The list opens on the current alias, so the count starts there.
+	downs := 30
+	for i := 0; i < downs; i++ {
+		press(m, tea.KeyMsg{Type: tea.KeyDown})
 	}
-	if view := m.View(); !strings.Contains(view, "> env27") {
-		t.Fatalf("selected environment is not visible:\n%s", view)
+	if view := m.View(); !strings.Contains(view, "> ") {
+		t.Fatalf("no selection is visible:\n%s", view)
+	}
+	selected := m.envs[m.envSelected].Name
+	if view := m.View(); !strings.Contains(view, "> "+selected) {
+		t.Fatalf("selected environment %q is not visible:\n%s", selected, view)
 	}
 	resize(t, m, 40, 18)
-	if view := m.View(); !strings.Contains(view, "> env27") {
+	if view := m.View(); !strings.Contains(view, "> "+selected) {
 		t.Fatalf("selected environment disappeared after resize:\n%s", view)
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyHome})
+	press(m, tea.KeyMsg{Type: tea.KeyHome})
 	if view := m.View(); !strings.Contains(view, "> dev") {
 		t.Fatalf("home did not select a visible first environment:\n%s", view)
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyEnd})
-	if view := m.View(); !strings.Contains(view, "> env29") {
+	press(m, tea.KeyMsg{Type: tea.KeyEnd})
+	last := m.envs[len(m.envs)-1].Name
+	if view := m.View(); !strings.Contains(view, "> "+last) {
 		t.Fatalf("end did not select a visible last environment:\n%s", view)
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyUp})
-	m.Update(tea.KeyMsg{Type: tea.KeyUp})
-	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if view := m.View(); !strings.Contains(view, "env27") || strings.Contains(view, "old result") {
-		t.Fatalf("switch did not select visible target:\n%s", view)
+	press(m, tea.KeyMsg{Type: tea.KeyUp})
+	press(m, tea.KeyMsg{Type: tea.KeyUp})
+	cmd := press(m, tea.KeyMsg{Type: tea.KeyEnter})
+	feed(t, m, execute(t, cmd))
+	if m.target.Environment != "env27" {
+		t.Fatalf("target = %q, want env27", m.target.Environment)
 	}
-	if status.runs != 1 || admin.runs != 0 {
-		t.Fatalf("switch ran a feature: status=%d admin=%d", status.runs, admin.runs)
+	if view := m.View(); !strings.Contains(view, "전환 완료: env27") {
+		t.Fatalf("switch did not state it completed:\n%s", view)
+	}
+	if admin.runs != 0 {
+		t.Fatalf("switch ran the environment feature: %d", admin.runs)
 	}
 }
 
 func TestEnvironmentIssuanceSelectsNewAlias(t *testing.T) {
 	status := &stubFeature{desc: descriptor("status", true), body: "body"}
 	adminDesc := descriptor("aliases", false)
-	adminDesc.EnvironmentAdmin = true
 	adminDesc.Wizard = true
+	adminDesc.Menu = envMenuEntries("aliases")
 	admin := &wizardStub{desc: adminDesc, steps: core.WizardSpec{
 		Title:             "별칭 발급",
 		EnvironmentAnswer: "name",
@@ -427,7 +480,8 @@ func TestEnvironmentIssuanceSelectsNewAlias(t *testing.T) {
 	engine.NewOperationID = func() string { return "op_env_create" }
 	m := NewModel(context.Background(), Options{Engine: engine, Registry: reg, Target: core.TargetRequest{Environment: "dev"}})
 	initModel(t, m)
-	feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeyEnter}, tea.KeyMsg{Type: tea.KeyEnter}})
+	m.selected = m.menuIndexFor(core.MenuRun, "aliases")
+	feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeyEnter}, tea.KeyMsg{Type: tea.KeyEnter}})
 	feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("new")}, tea.KeyMsg{Type: tea.KeyEnter}})
 	resolver.envs = append(resolver.envs, core.Environment{Name: "new"})
 	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -435,22 +489,30 @@ func TestEnvironmentIssuanceSelectsNewAlias(t *testing.T) {
 		_, next := m.Update(msg)
 		feed(t, m, execute(t, next))
 	}
-	if !admin.applied || resolver.envCalls != 1 || !strings.Contains(m.View(), "new") {
-		t.Fatalf("issuance did not reload and select alias, calls=%d applied=%v:\n%s", resolver.envCalls, admin.applied, m.View())
+	if !admin.applied {
+		t.Fatalf("issuance did not apply")
 	}
-	feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeyUp}, tea.KeyMsg{Type: tea.KeyEnter}})
-	if resolver.lastTarget.Environment != "new" {
-		t.Fatalf("next feature target = %q, want new", resolver.lastTarget.Environment)
+	if m.target.Environment != "new" || m.facts.Environment != "new" {
+		t.Fatalf("issued alias not selected: target=%q header=%q", m.target.Environment, m.facts.Environment)
+	}
+	if len(resolver.saved) != 1 || resolver.saved[0] != "new" {
+		t.Fatalf("issued alias was not recorded as active: %v", resolver.saved)
+	}
+	if view := m.View(); !strings.Contains(view, "생성 완료") {
+		t.Fatalf("issuance did not state it completed:\n%s", view)
+	}
+	if status.runs != 2 {
+		t.Fatalf("the primary screen did not reopen on the issued alias: runs=%d", status.runs)
 	}
 }
 
-// The issued alias comes from the spec's declared answer, so the TUI selects it
-// for any EnvironmentAdmin feature, whatever its step is named.
+// The issued alias comes from the spec's declared answer, so the TUI adopts it
+// for any feature that declares one, whatever its step is named.
 func TestEnvironmentIssuanceSelectsDeclaredAnswerStep(t *testing.T) {
 	status := &stubFeature{desc: descriptor("status", true), body: "body"}
 	adminDesc := descriptor("aliases", false)
-	adminDesc.EnvironmentAdmin = true
 	adminDesc.Wizard = true
+	adminDesc.Menu = envMenuEntries("aliases")
 	admin := &wizardStub{desc: adminDesc, steps: core.WizardSpec{
 		Title:             "별칭 발급",
 		EnvironmentAnswer: "alias",
@@ -468,7 +530,8 @@ func TestEnvironmentIssuanceSelectsDeclaredAnswerStep(t *testing.T) {
 	engine.NewOperationID = func() string { return "op_env_create" }
 	m := NewModel(context.Background(), Options{Engine: engine, Registry: reg, Target: core.TargetRequest{Environment: "dev"}})
 	initModel(t, m)
-	feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeyEnter}, tea.KeyMsg{Type: tea.KeyEnter}})
+	m.selected = m.menuIndexFor(core.MenuRun, "aliases")
+	feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeyEnter}, tea.KeyMsg{Type: tea.KeyEnter}})
 	feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("stage")}, tea.KeyMsg{Type: tea.KeyEnter}})
 	resolver.envs = append(resolver.envs, core.Environment{Name: "stage"})
 	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -476,8 +539,8 @@ func TestEnvironmentIssuanceSelectsDeclaredAnswerStep(t *testing.T) {
 		_, next := m.Update(msg)
 		feed(t, m, execute(t, next))
 	}
-	if !admin.applied || resolver.envCalls != 1 {
-		t.Fatalf("issuance did not apply and reload alias, calls=%d applied=%v", resolver.envCalls, admin.applied)
+	if !admin.applied {
+		t.Fatalf("issuance did not apply")
 	}
 	if m.target.Environment != "stage" || m.facts.Environment != "stage" {
 		t.Fatalf("issued alias not selected: target=%q header=%q", m.target.Environment, m.facts.Environment)

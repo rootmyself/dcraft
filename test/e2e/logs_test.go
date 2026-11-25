@@ -78,6 +78,23 @@ case "$sub" in
     exit 0 ;;
   exec)
     if [ -n "$DOCKER_FAKE_EXEC_BLOCK" ]; then sleep 30; fi
+    # The pre-attach probe runs the same argv0 with --version and no terminal;
+    # it must answer and exit so the real attach can follow.
+    case "$*" in
+      *"--version"*) echo "GNU bash, version 5.2"; exit 0 ;;
+    esac
+    if [ -n "$DOCKER_FAKE_EXEC_SHELL" ]; then
+      # A shell-like child: a long banner that scrolls off the screen, then the
+      # sequence a shell's clear sends, then a prompt with no newline.
+      i=0
+      while [ "$i" -lt "$DOCKER_FAKE_EXEC_SHELL" ]; do
+        printf 'banner line %02d\r\n' "$i"
+        i=$((i+1))
+      done
+      printf '\033[H\033[2J'
+      printf 'probe:/ # '
+      while :; do sleep 1; done
+    fi
     if [ -n "$DOCKER_FAKE_EXEC_ECHO" ]; then
       echo "ready"
       IFS= read -r line

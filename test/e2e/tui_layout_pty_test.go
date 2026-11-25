@@ -131,11 +131,11 @@ func TestPTYTUIResizeReflowsAndKeepsTheFrame(t *testing.T) {
 	env := fake.env(t, t.TempDir())
 
 	s := startPTY(t, project, env)
-	s.waitFor("[↑↓] 이동", 15*time.Second)
+	s.waitFor("마지막 조회", 15*time.Second)
 	s.waitFor("스택 상태", 15*time.Second)
 
 	// Wide: the persistent sidebar is drawn.
-	if !screenContains(s.out.String(), "╭ 기능") {
+	if !screenContains(s.out.String(), "╭ 메뉴") {
 		t.Fatalf("wide layout has no sidebar:\n%s", visibleText(s.out.String()))
 	}
 
@@ -159,7 +159,7 @@ func TestPTYTUIResizeReflowsAndKeepsTheFrame(t *testing.T) {
 		// The breakpoint is a layout switch, not a resize artefact: below 100
 		// columns the sidebar is gone and the one-row navigation is drawn.
 		wantSidebar := size.cols >= 100
-		if got := strings.Contains(frame, "╭ 기능"); got != wantSidebar {
+		if got := strings.Contains(frame, "╭ 메뉴"); got != wantSidebar {
 			t.Fatalf("%dx%d: sidebar present = %v, want %v:\n%s", size.cols, size.rows, got, wantSidebar, frame)
 		}
 	}
@@ -180,11 +180,11 @@ func TestPTYTUIReturningToAScreenKeepsTheCursorAndResult(t *testing.T) {
 	env := fake.env(t, t.TempDir())
 
 	s := startPTY(t, project, env)
-	s.waitFor("[↑↓] 이동", 15*time.Second)
+	s.waitFor("마지막 조회", 15*time.Second)
 	s.waitFor("스택 상태", 15*time.Second)
 
 	// Walk to stop and open the scope table, then leave it with esc.
-	s.pressMenuDown(menuDownPresses(t, "stop"))
+	s.openMenuFeature(t, "stop")
 	s.waitFor("서비스 선택", 15*time.Second)
 	s.send("\x1b")
 	time.Sleep(400 * time.Millisecond)
@@ -225,7 +225,7 @@ func TestPTYTUINoColorStillRendersStructure(t *testing.T) {
 	env := append(fake.env(t, t.TempDir()), "NO_COLOR=1")
 
 	s := startPTY(t, project, env)
-	s.waitFor("[↑↓] 이동", 15*time.Second)
+	s.waitFor("마지막 조회", 15*time.Second)
 	s.waitFor("스택 상태", 15*time.Second)
 
 	tail := s.out.String()
@@ -277,7 +277,7 @@ func TestPTYTUIRendersPerColorProfile(t *testing.T) {
 			// the same helper and then override TERM by starting the process
 			// with the profile's TERM already in the environment.
 			s := startPTYWithTerm(t, project, env, tc.term)
-			s.waitFor("[↑↓] 이동", 15*time.Second)
+			s.waitFor("마지막 조회", 15*time.Second)
 			s.waitFor("스택 상태", 15*time.Second)
 
 			tail := s.out.String()
@@ -323,7 +323,7 @@ func TestPTYTUIRawModeIsRestoredAfterSeveralResizes(t *testing.T) {
 	env := fake.env(t, t.TempDir())
 
 	s := startPTY(t, project, env)
-	s.waitFor("[↑↓] 이동", 15*time.Second)
+	s.waitFor("마지막 조회", 15*time.Second)
 	for i := 0; i < 3; i++ {
 		if err := pty.Setsize(s.master, &pty.Winsize{Rows: 30, Cols: 100}); err != nil {
 			t.Fatalf("Setsize: %v", err)
@@ -353,7 +353,7 @@ func TestPTY16ColorKeepsDistinctStateTokens(t *testing.T) {
 	writeProject(t, project)
 	env := fake.env(t, t.TempDir())
 	s := startPTYWithTerm(t, project, env, "xterm")
-	s.waitFor("[↑↓] 이동", 15*time.Second)
+	s.waitFor("마지막 조회", 15*time.Second)
 	s.waitFor("스택 상태", 15*time.Second)
 	tail := s.out.String()
 	for _, bad := range []string{"38;2", "38;5", "48;2", "48;5"} {

@@ -5,7 +5,13 @@ package environments
 const (
 	msgTitle   = "실행환경 별칭"
 	msgSummary = "Compose 파일·환경 파일·프로필 조합을 실행환경 별칭으로 만들고 확인·제거."
-	msgUsage   = "dcraft environments --add --name <별칭> [--file <Compose 파일> ...] [--env-file <파일> ...] [--profile <프로필> ...]\n" +
+	// The TUI menu offers two entries over this one feature. They are menu
+	// labels only: each screen keeps its own title.
+	msgMenuCreate        = "실행환경 생성"
+	msgMenuCreateSummary = "실행환경 별칭을 만들거나 제거."
+	msgMenuSwitch        = "실행환경 전환"
+	msgMenuSwitchSummary = "작업할 실행환경을 골라 대상 전환."
+	msgUsage             = "dcraft environments --add --name <별칭> [--file <Compose 파일> ...] [--env-file <파일> ...] [--profile <프로필> ...]\n" +
 		"  dcraft environments --list\n" +
 		"  dcraft environments --remove --name <별칭>\n\n" +
 		"별칭은 Compose 입력만 묶음. 병합 규칙이나 별도 배포 명세가 아님.\n" +
@@ -28,7 +34,7 @@ const (
 	msgInputActionOne = "dcraft environments --help로 입력 형식 확인."
 	msgInputActionTwo = "별칭 이름과 Compose 파일·환경 파일 경로 확인."
 
-	msgWizardTitle          = "실행환경 별칭 만들기"
+	msgWizardTitle          = "실행환경 생성·제거"
 	msgWizardNameTitle      = "별칭 이름"
 	msgWizardNamePrompt     = "이 별칭을 부를 이름을 직접 입력. 자동으로 정해지지 않음."
 	msgWizardNameHint       = "예: local · staging · production"

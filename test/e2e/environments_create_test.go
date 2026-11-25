@@ -175,14 +175,10 @@ func TestEnvironmentTUIWizardPreviewDeclineThenAccept(t *testing.T) {
 	}
 	hashes := map[string]string{compose: sha256File(t, compose)}
 	env := fake.env(t, t.TempDir())
-	down := menuDown(t, "environments")
-
 	// Decline at the preview: esc must leave the folder untouched.
 	output, code := runPTYSteps(t, project, env, []ptyStep{
-		{waitText: "[↑↓] 이동"},
-		{send: down},
-		{waitText: "▸ 실행환경 별칭", send: "\r"},
-		{waitText: "새 별칭", send: "\r"},
+		{waitText: "마지막 조회", walk: "실행환경 생성", send: "\r"},
+		{waitText: "실행환경 생성·제거"},
 		{waitText: "별칭 이름", send: "dev\r"},
 		{waitText: "Compose 파일", send: "\r"},
 		{waitText: "환경 파일", send: ".env.dev\r\r"},
@@ -211,10 +207,8 @@ func TestEnvironmentTUIWizardPreviewDeclineThenAccept(t *testing.T) {
 
 	// Accept the same flow: enter saves, then the presenter confirms.
 	output, code = runPTYSteps(t, project, env, []ptyStep{
-		{waitText: "[↑↓] 이동"},
-		{send: down},
-		{waitText: "▸ 실행환경 별칭", send: "\r"},
-		{waitText: "새 별칭", send: "\r"},
+		{waitText: "마지막 조회", walk: "실행환경 생성", send: "\r"},
+		{waitText: "실행환경 생성·제거"},
 		{waitText: "별칭 이름", send: "dev\r"},
 		{waitText: "Compose 파일", send: "\r"},
 		{waitText: "환경 파일", send: ".env.dev\r\r"},

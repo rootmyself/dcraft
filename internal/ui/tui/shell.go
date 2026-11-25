@@ -85,7 +85,7 @@ func (m *Model) screenKeycaps() []visual.Keycap {
 			{Key: "q", Label: msgKeyQuit, Priority: 0},
 		}
 	}
-	if m.phase == phaseSelectingEnvironment || m.phase == phaseEnvironmentActions {
+	if m.phase == phaseSelectingEnvironment {
 		// The environment screen ignores "/", "r" and "tab"; advertising the
 		// menu row here would name keys that do nothing.
 		keys := []visual.Keycap{
@@ -94,7 +94,7 @@ func (m *Model) screenKeycaps() []visual.Keycap {
 			{Key: "q", Label: msgKeyQuit, Priority: 0},
 			{Key: "?", Label: msgKeyHelp, Priority: 3},
 		}
-		if m.envSwitch || m.phase == phaseEnvironmentActions {
+		if m.envScreen == envScreenSwitch {
 			keys = append(keys, visual.Keycap{Key: "esc", Label: msgKeyCancel, Priority: 0})
 		}
 		return keys
@@ -368,8 +368,6 @@ func (m *Model) phaseBodyWithHits() ([]string, []bodyHit) {
 	switch m.phase {
 	case phaseSelectingEnvironment:
 		return m.environmentLines()
-	case phaseEnvironmentActions:
-		return m.environmentActionLines()
 	case phaseForm:
 		return m.formLines()
 	}
@@ -440,6 +438,12 @@ func (m *Model) resultBody() bodyLayout {
 			hits = append(hits, bodyHit{row: bandStart, h: len(drawn), kind: hitResultRow})
 		}
 	}
+	// The completion of an environment change is the last line of the body: it
+	// belongs to the screen that followed the change, not to a panel that would
+	// hide the result the reader came to verify.
+	for _, notice := range m.envNotices {
+		lines = append(lines, m.successText(notice))
+	}
 
 	// The full list is drawn wherever the navigation is not already a list:
 	// the wide layout has the persistent sidebar. The medium layout keeps the
@@ -460,7 +464,7 @@ func (m *Model) resultBody() bodyLayout {
 		menuLines, navHits := m.menuLines(budget)
 		base := len(lines)
 		for _, nav := range navHits {
-			if index := m.featureIndex(nav.Name); index >= 0 {
+			if index := m.menuIndexForFeature(nav.Name); index >= 0 {
 				hits = append(hits, bodyHit{row: base + nav.Row, kind: hitNavItem, index: index})
 			}
 		}
@@ -907,9 +911,6 @@ func (m *Model) phaseBody() string {
 		return msgEnvChecking
 	case phaseSelectingEnvironment:
 		return m.environmentView()
-	case phaseEnvironmentActions:
-		lines, _ := m.environmentActionLines()
-		return strings.Join(lines, "\n") + "\n"
 	case phaseLoadingServices:
 		return msgServiceLoading
 	case phaseSelectingServices:
@@ -931,10 +932,22 @@ func (m *Model) phaseBody() string {
 	}
 }
 
-// environmentLines lists named environments; nothing is preselected. Each row
-// carries its index so a click selects the same environment the marker names.
+// environmentLines lists named environments. The screen's reason decides the
+// title and the intro: the startup screen picks the session's target, the menu
+// entry switches the current one. A saved active alias that could not be used is
+// stated above the list instead of being silently dropped.
 func (m *Model) environmentLines() ([]string, []bodyHit) {
-	lines := []string{m.title(msgEnvSelectTitle), msgEnvSelectIntro}
+	title := msgEnvSelectTitle
+	intro := msgEnvSelectIntro
+	if m.envScreen == envScreenSwitch {
+		title = msgEnvSwitchTitle
+		intro = msgEnvSwitchIntro
+	}
+	lines := []string{m.title(title)}
+	if m.envNotice != "" {
+		lines = append(lines, m.noticeText(m.envNotice))
+	}
+	lines = append(lines, intro)
 	hits := make([]bodyHit, 0, len(m.envs))
 	for i, env := range m.envs {
 		marker := "  "
@@ -952,24 +965,7 @@ func (m *Model) environmentLines() ([]string, []bodyHit) {
 	return lines, hits
 }
 
-// environmentActionLines is the administration screen: two selectable actions
-// drawn with the marker the keyboard moves, plus the same rows as mouse
-// targets.
-func (m *Model) environmentActionLines() ([]string, []bodyHit) {
-	markers := [2]string{"  ", "  "}
-	markers[m.envAction] = "> "
-	lines := []string{
-		m.title(msgEnvActionsTitle),
-		markers[0] + msgEnvNewAlias,
-		markers[1] + msgEnvSwitch,
-	}
-	return lines, []bodyHit{
-		{row: 1, kind: hitEnvAction, index: 0},
-		{row: 2, kind: hitEnvAction, index: 1},
-	}
-}
-
-// environmentView lists named environments; nothing is preselected.
+// environmentView lists named environments.
 func (m *Model) environmentView() string {
 	lines, _ := m.environmentLines()
 	return strings.Join(lines, "\n") + "\n"
@@ -1052,4 +1048,10 @@ func (m *Model) hintText(s string) string {
 
 func (m *Model) noticeText(s string) string {
 	return m.theme.Bold(visual.TokenWarning, s)
+}
+
+// successText is the completion channel: a change that finished as asked. It is
+// a color channel, not a word change, so a colorless screen still reads.
+func (m *Model) successText(s string) string {
+	return m.theme.Bold(visual.TokenSuccess, s)
 }

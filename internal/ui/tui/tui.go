@@ -54,7 +54,6 @@ const (
 	phaseNoPrimary phase = iota
 	phaseLoadingEnvironments
 	phaseSelectingEnvironment
-	phaseEnvironmentActions
 	phaseLoadingServices
 	phaseSelectingServices
 	phaseLoading
@@ -66,6 +65,18 @@ const (
 	phaseWizardStep
 	phaseWizardPreview
 	phaseReady
+)
+
+// envScreen is why the environment list is open. The two openings share one row
+// list but not one title or one outcome: the startup screen picks the target the
+// session starts on, and the menu entry switches the current one.
+type envScreen int
+
+const (
+	// envScreenStartup is the opening selection when no active alias applies.
+	envScreenStartup envScreen = iota
+	// envScreenSwitch is the menu entry's switch list.
+	envScreenSwitch
 )
 
 // Model is the Bubble Tea model. It is exported for behavior tests.
@@ -89,9 +100,19 @@ type Model struct {
 
 	envs        []core.Environment
 	envSelected int
-	envSwitch   bool
-	envAction   int
-	envCreated  string
+	// envScreen is why the environment list is open. It decides the title and
+	// what confirming a row does.
+	envScreen envScreen
+	// envNotice is the one line shown above the environment list, for a saved
+	// active alias that could not be used and for an environment screen that
+	// had nothing to open.
+	envNotice string
+	// envCreated is the alias a successful wizard apply issued; the reload
+	// selects it and the run starts on it.
+	envCreated string
+	// envNotices are the one-time completions of an environment change. They
+	// are drawn under the result and cleared by the next key or run.
+	envNotices []string
 
 	phase        phase
 	result       *core.Result
@@ -257,12 +278,11 @@ func NewModel(ctx context.Context, opts Options) *Model {
 		m.phase = phaseNoPrimary
 		return m
 	}
-	for i, f := range m.features {
-		if f.Descriptor().Name == m.primary.Descriptor().Name {
-			m.selected = i
-			break
-		}
-	}
+	// The cursor follows the primary feature, never registration order: the
+	// screen opening on the primary entry is what the menu says is running. It
+	// is set before any startup screen can return early, so the first menu frame
+	// always marks the feature whose result is about to arrive.
+	m.selected = m.primaryMenuIndex()
 	if opts.Engine != nil && opts.Target.Environment == "" && opts.Engine.SupportsEnvironments() {
 		m.phase = phaseLoadingEnvironments
 		return m
@@ -290,6 +310,13 @@ type progressTickMsg struct{}
 type environmentListMsg struct {
 	envs []core.Environment
 	err  error
+	// active is the alias the project recorded as active. It is read in the
+	// same pass as the list so the startup screen can start on it directly.
+	active core.EnvironmentActive
+	// startup marks the one list read that opens the session. Only that read
+	// consults the recorded alias; the switch list and a post-wizard reload
+	// always show the list.
+	startup bool
 }
 
 type servicesMsg struct {
@@ -400,24 +427,48 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.phase = phaseReady
 			return m, nil
 		}
-		if m.envSwitch {
-			if msg.err != nil || len(msg.envs) == 0 {
-				m.envSwitch = false
+		if msg.startup && msg.err == nil && msg.active.Name != "" && !msg.active.Invalid {
+			// A recorded alias the project still registers starts the session
+			// directly: the reader already made this choice once.
+			m.target.Environment = msg.active.Name
+			m.facts.Environment = msg.active.Name
+			return m, m.start(m.primary)
+		}
+		if msg.startup && msg.err == nil && msg.active.Name != "" {
+			// The value no longer names a usable alias. It is stated above the
+			// list and left in the file: this screen does not edit a value the
+			// reader has not chosen again.
+			m.envNotice = fmt.Sprintf(msgEnvActiveInvalid, msg.active.Name)
+		}
+		if msg.err != nil {
+			m.envNotice = ""
+			if m.envScreen == envScreenSwitch {
 				m.phase = phaseReady
 				m.notice = msgEnvSwitchFailed
 				return m, nil
 			}
+			return m, m.start(m.primary)
+		}
+		if m.envScreen == envScreenSwitch {
+			if len(msg.envs) == 0 {
+				// Nothing to switch to: the menu states the next action
+				// instead of opening an empty list.
+				m.phase = phaseReady
+				m.notice = msgEnvSwitchEmpty
+				return m, nil
+			}
 			m.envs = msg.envs
-			m.envSelected = -1
+			m.envSelected = m.currentEnvironmentIndex()
 			m.phase = phaseSelectingEnvironment
 			return m, nil
 		}
-		// On startup the primary feature reports catalog failures through the engine.
-		if msg.err != nil || len(msg.envs) == 0 {
-			return m, m.start(m.primary)
-		}
 		m.envs = msg.envs
 		m.envSelected = -1
+		if len(msg.envs) == 0 {
+			// No alias exists, so there is nothing to choose: the primary
+			// screen starts on the standard Compose inputs.
+			return m, m.start(m.primary)
+		}
 		m.phase = phaseSelectingEnvironment
 		return m, nil
 	case servicesMsg:
@@ -506,8 +557,13 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		created := ""
+		removedAlias := ""
 		if m.wizardApplying && res.Outcome == core.OutcomeSuccess && m.wizardSpec.EnvironmentAnswer != "" {
-			created = strings.TrimSpace(m.wizardAnswers[m.wizardSpec.EnvironmentAnswer])
+			if action := strings.TrimSpace(m.wizardAnswers["action"]); action == "remove" {
+				removedAlias = strings.TrimSpace(m.wizardAnswers[m.wizardSpec.EnvironmentAnswer])
+			} else {
+				created = strings.TrimSpace(m.wizardAnswers[m.wizardSpec.EnvironmentAnswer])
+			}
 		}
 		if m.wizardApplying {
 			m.wizardApplying = false
@@ -531,13 +587,24 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.lastLive = tailOrKeep(m.captureLiveTail(), m.lastLive)
 			m.closeLive()
 		}
-		if created != "" && m.engine != nil && m.engine.SupportsEnvironments() {
-			m.envCreated = created
-			m.phase = phaseLoadingEnvironments
-			return m, m.listEnvironmentsCmd()
+		// An alias change is the same destination as a switch: the alias becomes
+		// active, the project config records it, and the primary screen reopens
+		// on it. A removal clears the record so the project returns to the
+		// standard Compose inputs.
+		if created != "" {
+			return m, m.activateCreatedEnvironment(created)
+		}
+		if removedAlias != "" {
+			return m, m.clearRemovedEnvironment(removedAlias)
 		}
 		return m, nil
 	case tea.KeyMsg:
+		// A completion notice lives until the next key: it described the change
+		// that just happened, and the first action afterwards starts a new
+		// screen state.
+		if len(m.envNotices) > 0 {
+			m.envNotices = nil
+		}
 		// The help panel is the outermost layer: while it is open it owns
 		// every key, and closing it runs nothing.
 		if m.helpOpen {
@@ -610,9 +677,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, tea.Quit
 		case "esc":
-			if m.phase == phaseEnvironmentActions || (m.phase == phaseSelectingEnvironment && m.envSwitch) {
-				m.envSwitch = false
+			if m.phase == phaseSelectingEnvironment {
 				m.phase = phaseReady
+				m.envNotice = ""
 				return m, nil
 			}
 			if m.isWizardPhase() {
@@ -661,19 +728,6 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.isWizardPhase() {
 			return m, m.updateWizard(msg)
 		}
-		if m.phase == phaseEnvironmentActions {
-			switch msg.String() {
-			case "?":
-				m.openHelp()
-			case "up", "k":
-				m.envAction = 1 - m.envAction
-			case "down", "j":
-				m.envAction = 1 - m.envAction
-			case "enter":
-				return m, m.chooseEnvironmentAction()
-			}
-			return m, nil
-		}
 		if m.phase == phaseSelectingEnvironment {
 			switch msg.String() {
 			case "?":
@@ -718,14 +772,17 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "r":
-			if m.active == nil || m.phase != phaseReady {
+			if m.phase != phaseReady {
 				return m, nil
 			}
 			if m.resultDismissed && m.result != nil {
 				m.resultDismissed = false
 				return m, nil
 			}
-			return m, m.start(m.active)
+			// Refresh follows the selected menu entry: switching an environment
+			// is a screen, so r reopens that list instead of running the
+			// feature behind it.
+			return m, m.startSelected()
 		case "up", "k":
 			if m.navMenuVisible() {
 				if m.selectionVisible() {
@@ -749,9 +806,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// the navigation, the highlighted feature is not visible; running
 			// it would act on an unseen selection.
 			if m.selectionVisible() {
-				if f := m.selectedFeature(); f != nil {
-					return m, m.start(f)
-				}
+				return m, m.startSelected()
 			}
 			return m, nil
 		}
@@ -759,44 +814,180 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// chooseEnvironment is Enter on an environment row: it either runs the primary
-// feature against the chosen target or, when the screen was opened to switch,
-// only changes the target. Mouse and keyboard share this one path so a switch
-// can never start a run.
+// chooseEnvironment is Enter on an environment row. The screen's reason decides
+// the outcome: the startup screen starts the primary feature on the chosen
+// target, and the switch list only changes the target and reopens the primary
+// screen so the switch is never a blank body.
 func (m *Model) chooseEnvironment() tea.Cmd {
-	if m.envSelected < 0 || m.envSelected >= len(m.envs) || m.primary == nil {
+	if m.envSelected < 0 || m.envSelected >= len(m.envs) {
 		return nil
 	}
-	m.target.Environment = m.envs[m.envSelected].Name
-	if m.envSwitch {
-		m.envSwitch = false
-		m.facts.Environment = m.target.Environment
-		m.result = nil
-		m.resultDismissed = false
-		m.resetScrollState()
+	chosen := m.envs[m.envSelected].Name
+	if m.envScreen == envScreenSwitch {
+		return m.switchEnvironment(chosen)
+	}
+	return m.startWithEnvironment(chosen)
+}
+
+// currentEnvironmentIndex is the row of the target's environment, or -1 when the
+// target has none. The switch list opens on the current one so the reader sees
+// where they are before moving.
+func (m *Model) currentEnvironmentIndex() int {
+	for i, env := range m.envs {
+		if env.Name == m.target.Environment {
+			return i
+		}
+	}
+	return -1
+}
+
+// switchEnvironment moves the target to name, records it as the active alias and
+// reopens the primary screen. A failure to record the alias never undoes the
+// switch: the target already moved, so the reader keeps it and is told the alias
+// did not stick.
+func (m *Model) switchEnvironment(name string) tea.Cmd {
+	m.envNotice = ""
+	if name == m.target.Environment {
 		m.phase = phaseReady
+		m.notice = fmt.Sprintf(msgEnvAlreadyCurrent, name)
+		return nil
+	}
+	m.target.Environment = name
+	m.facts.Environment = name
+	m.result = nil
+	m.resultDismissed = false
+	m.resetScrollState()
+	notices := []string{fmt.Sprintf(msgEnvSwitched, name)}
+	if err := m.saveActiveEnvironment(name); err != nil {
+		notices = append(notices, msgEnvActiveSaveFailed)
+	}
+	return m.finishEnvironmentChange(notices)
+}
+
+// activateCreatedEnvironment adopts the alias a successful apply issued: it
+// becomes the target, the project config records it as active, and the primary
+// screen reopens on it. The wizard itself only creates the alias; activating it
+// uses the same path as a switch.
+func (m *Model) activateCreatedEnvironment(name string) tea.Cmd {
+	m.target.Environment = name
+	m.facts.Environment = name
+	m.result = nil
+	m.resultDismissed = false
+	m.resetScrollState()
+	notices := []string{fmt.Sprintf(msgEnvCreatedNotice, name)}
+	if err := m.saveActiveEnvironment(name); err != nil {
+		notices = append(notices, msgEnvActiveSaveFailed)
+	}
+	return m.finishEnvironmentChange(notices)
+}
+
+// clearRemovedEnvironment handles the removal of an alias. Removing the active
+// one clears the record and returns the project to the standard Compose inputs,
+// because a target naming a removed alias would fail on the next run.
+func (m *Model) clearRemovedEnvironment(name string) tea.Cmd {
+	notices := []string{fmt.Sprintf(msgEnvRemovedNotice, name)}
+	if m.target.Environment == name {
+		m.target.Environment = ""
+		m.facts.Environment = ""
+	}
+	if err := m.saveActiveEnvironment(m.target.Environment); err != nil {
+		notices = append(notices, msgEnvActiveSaveFailed)
+	}
+	m.result = nil
+	m.resultDismissed = false
+	m.resetScrollState()
+	return m.finishEnvironmentChange(notices)
+}
+
+// saveActiveEnvironment records the chosen alias so the next session opens on it.
+// The engine writes the project config through the resolver's own layer; the TUI
+// never touches the file. A resolver without the capability is not an error,
+// just a choice that does not persist.
+func (m *Model) saveActiveEnvironment(name string) error {
+	if m.engine == nil {
+		return nil
+	}
+	_, err := m.engine.SetActiveEnvironment(m.ctx, m.target, name)
+	return err
+}
+
+// startWithEnvironment is the startup screen's confirm: it starts the primary
+// feature on the chosen target and records the choice so the next session opens
+// on it.
+func (m *Model) startWithEnvironment(name string) tea.Cmd {
+	m.target.Environment = name
+	m.facts.Environment = name
+	if err := m.saveActiveEnvironment(name); err != nil {
+		m.notice = msgEnvActiveSaveFailed
+	} else {
+		m.envNotice = ""
+	}
+	return m.start(m.primary)
+}
+
+// finishEnvironmentChange shows the completed notices and reopens the primary
+// screen when it is safe to run on its own. A mutating primary would ask for a
+// confirmation or open a wizard, so an environment change never launches it by
+// itself.
+func (m *Model) finishEnvironmentChange(notices []string) tea.Cmd {
+	m.envNotices = notices
+	m.selected = m.primaryMenuIndex()
+	m.phase = phaseReady
+	if m.primary == nil || !m.primary.Descriptor().ReadOnly {
 		return nil
 	}
 	return m.start(m.primary)
 }
 
-// chooseEnvironmentAction is Enter on the environment administration screen.
-func (m *Model) chooseEnvironmentAction() tea.Cmd {
-	if m.envAction == 0 {
-		return m.startRunPath(m.active)
+// startSelected opens the menu entry the cursor points at.
+func (m *Model) startSelected() tea.Cmd {
+	entry, ok := m.selectedMenu()
+	if !ok {
+		return nil
 	}
-	m.envSwitch = true
+	return m.startMenu(entry.menu)
+}
+
+// startMenu opens one menu entry. A switch entry opens the list instead of
+// running the feature behind it.
+func (m *Model) startMenu(menu core.Menu) tea.Cmd {
+	if menu.Entry.Kind == core.MenuSwitchEnvironment {
+		return m.openEnvironmentSwitch()
+	}
+	return m.start(menu.Feature)
+}
+
+// openEnvironmentSwitch opens the switch list from the menu.
+func (m *Model) openEnvironmentSwitch() tea.Cmd {
+	m.envScreen = envScreenSwitch
+	m.envNotice = ""
+	m.envSelected = -1
 	m.phase = phaseLoadingEnvironments
 	return m.listEnvironmentsCmd()
+}
+
+// primaryMenuIndex is the navigation index of the primary feature's first entry.
+func (m *Model) primaryMenuIndex() int {
+	if m.primary == nil {
+		return -1
+	}
+	return m.menuIndexForFeature(m.primary.Descriptor().Name)
 }
 
 func (m *Model) listEnvironmentsCmd() tea.Cmd {
 	engine := m.engine
 	ctx := m.ctx
 	req := m.target
+	// Only the startup read consults the recorded alias. The switch list and
+	// the post-wizard reload always show the list.
+	startup := m.envScreen == envScreenStartup && m.phase == phaseLoadingEnvironments && m.envCreated == ""
 	return func() tea.Msg {
 		envs, _, err := engine.Environments(ctx, req)
-		return environmentListMsg{envs: envs, err: err}
+		msg := environmentListMsg{envs: envs, err: err, startup: startup}
+		if startup && err == nil {
+			msg.active, _ = engine.ActiveEnvironment(ctx, req)
+		}
+		return msg
 	}
 }
 
@@ -841,12 +1032,6 @@ func (m *Model) start(f core.Feature) tea.Cmd {
 	}
 	m.ensureRequest(f)
 	m.pending = nil
-	if f.Descriptor().EnvironmentAdmin && m.engine != nil && m.engine.SupportsEnvironments() {
-		m.active = f
-		m.envAction = 0
-		m.phase = phaseEnvironmentActions
-		return nil
-	}
 	if m.wantsServiceSelection(f) {
 		return m.beginServiceSelection(f)
 	}
@@ -1356,7 +1541,7 @@ func (m *Model) menuLines(budget int) ([]string, []visual.NavHit) {
 	if budget <= 0 {
 		budget = menuWindow
 	}
-	return visual.MenuLinesWithHits(m.theme, m.bodyWidth(), m.nav(), budget, !m.compact())
+	return visual.MenuLinesWithHits(m.theme, m.bodyWidth(), m.navView(), budget, !m.compact())
 }
 
 // compactByHeight reports a terminal too short for the decorated layout. The
@@ -1383,7 +1568,7 @@ func (m *Model) navLine() string {
 	if !m.navMenuVisible() {
 		return ""
 	}
-	return visual.NavRow(m.theme, m.bodyWidth(), m.nav(), m.navExpanded)
+	return visual.NavRow(m.theme, m.bodyWidth(), m.navView(), m.navExpanded)
 }
 
 // serviceSelectCellWidth is the exact width of the selection column. It is

@@ -3,9 +3,11 @@ package gitgen
 // Korean user-facing registration text owned by the Git generator. Command
 // names, flag names and machine values stay English.
 const (
-	msgTitle   = "Git 호스트 스크립트 생성"
-	msgSummary = "저장소·ref·받을 폴더를 물어 보고 검토할 수 있는 Git 갱신 스크립트를 만듦. 생성은 등록·실행·신뢰 승인이 아니며 원격에 접속하지 않음."
-	msgUsage   = "dcraft generate-git-hook --repo <저장소> --ref <branch|tag|전체 SHA> --dest <받을 폴더> --output <스크립트 경로> [--stage pre|post] --approve file_overwrite\n\n" +
+	msgTitle       = "Git 호스트 스크립트 생성"
+	msgSummary     = "저장소·ref·받을 폴더를 물어 보고 검토할 수 있는 Git 갱신 스크립트를 만듦. 생성은 등록·실행·신뢰 승인이 아니며 원격에 접속하지 않음."
+	msgMenuLabel   = "Git"
+	msgMenuSummary = "저장소를 받아 오는 스크립트를 생성."
+	msgUsage       = "dcraft generate-git-hook --repo <저장소> --ref <branch|tag|전체 SHA> --dest <받을 폴더> --output <스크립트 경로> [--stage pre|post] --approve file_overwrite\n\n" +
 		"생성한 스크립트는 자동 등록·자동 실행되지 않음. 출력에 표시되는 dcraft hooks --add 명령으로 직접 등록하고, 첫 실행에는 별도의 script_trust 승인이 필요."
 
 	msgFlagRepo  = "Git 저장소 URL 또는 로컬 경로. 인증 정보가 들어간 URL은 거부."

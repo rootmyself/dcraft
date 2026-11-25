@@ -73,6 +73,14 @@ type Options struct {
 	// waits on the row after its prompt, while a log has no caret and its
 	// trailing blank is not output.
 	KeepCaretRow bool
+	// ClearScrollbackOnED2 makes the child's erase-display (ESC[2J, what
+	// `clear` sends) reset the scrollback as well as the screen. A shell's
+	// `clear` means "start from an empty screen"; keeping the cleared rows
+	// reachable above the prompt is what made the reader scroll into text the
+	// command removed. Only an attached shell asks for this, and only on its
+	// main screen: a full-screen child's own clear stays screen-only, because
+	// the shell history behind it belongs to the reader.
+	ClearScrollbackOnED2 bool
 }
 
 // View is a child's terminal screen. Write feeds the child's output; Window
@@ -104,12 +112,20 @@ type View struct {
 	// closed is this view's own closed flag. A write after Close must fail
 	// instead of feeding a pump that has stopped.
 	closed bool
+	// clearScrollback is set by the erase-display handler while the emulator is
+	// parsing and acted on by Write once the parse is finished, because the
+	// emulator's lock is held for the whole parse.
+	clearScrollback bool
 }
 
 // New creates a view for a child that owns a pseudo-terminal. Its output already
 // carries the terminal driver's newline translation.
+//
+// An attached shell's `clear` empties the scrollback as well: the shell asked to
+// start from an empty screen, and leaving the cleared rows one PgUp away is what
+// made `clear` look like it only half worked.
 func New(cols, rows int) *View {
-	return NewWith(cols, rows, Options{KeepCaretRow: true})
+	return NewWith(cols, rows, Options{KeepCaretRow: true, ClearScrollbackOnED2: true})
 }
 
 // NewPipe creates a view for a stream that is not a terminal, such as
@@ -139,8 +155,32 @@ func NewWith(cols, rows int, opts Options) *View {
 		emu: emu, rows: rows, cols: cols, opts: opts,
 		in: newInputQueue(), pumpDone: make(chan struct{}),
 	}
+	// Erase-display (ESC[2J) is the sequence `clear` sends. The emulator's own
+	// handler pushes the visible rows onto the scrollback before clearing, which
+	// is right for a full-screen program and wrong for a shell: the reader's
+	// `clear` would leave the cleared text one PgUp away. This handler only
+	// records the request; the clear itself happens after the emulator has
+	// finished parsing, so it never re-enters a locked emulator.
+	if opts.ClearScrollbackOnED2 {
+		emu.RegisterCsiHandler('J', v.recordClearHandler())
+	}
 	go v.pumpInput()
 	return v
+}
+
+// recordClearHandler notes an erase-display that means "clear" and lets the
+// emulator's own handler draw the screen. The scrollback is emptied by Write
+// after the parse, once the emulator's lock is free: calling into the emulator
+// from inside a handler would deadlock on that lock.
+func (v *View) recordClearHandler() vt.CsiHandler {
+	return func(params ansi.Params) bool {
+		if n, _, _ := params.Param(0, 0); n == 2 {
+			v.clearScrollback = true
+		}
+		// Returning false runs the emulator's own handler too, which is what
+		// actually clears the visible rows.
+		return false
+	}
 }
 
 // pumpInput moves the emulator's own input into the queue. The emulator writes
@@ -182,6 +222,16 @@ func (v *View) Write(p []byte) (int, error) {
 	}
 	if _, err := v.emu.Write(out); err != nil {
 		return 0, err
+	}
+	// The attached shell's `clear` keeps no history: the parse above has
+	// finished, so the emulator's lock is free and the scrollback can be
+	// emptied without re-entering it. A full-screen child is excluded: its
+	// clear is screen-only and the shell history behind it is not its to erase.
+	if v.clearScrollback {
+		v.clearScrollback = false
+		if !v.emu.IsAltScreen() {
+			v.emu.ClearScrollback()
+		}
 	}
 	// Write reports how many of the caller's bytes it consumed, not how many it
 	// fed the grid: the newline translation makes the two lengths differ, and a

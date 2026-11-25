@@ -81,6 +81,47 @@ func (e *Engine) Environments(ctx context.Context, req TargetRequest) ([]Environ
 	return source.Environments(ctx, req, cwd)
 }
 
+// ActiveEnvironment is the alias the project recorded as active, or an empty
+// value when none is recorded. A resolver without the capability reports no
+// active alias, so the startup selection screen keeps its existing behavior.
+func (e *Engine) ActiveEnvironment(ctx context.Context, req TargetRequest) (EnvironmentActive, error) {
+	setter, ok := e.Resolver.(EnvironmentSetter)
+	if !ok {
+		return EnvironmentActive{}, nil
+	}
+	cwd, err := e.cwd()
+	if err != nil {
+		return EnvironmentActive{}, FailCause(err, Diagnostic{
+			Category:    CategoryTargetInvalid,
+			Severity:    SeverityError,
+			Message:     msgWorkingDirUnknown,
+			NextActions: []string{msgWorkingDirAction},
+		})
+	}
+	return setter.ActiveEnvironment(ctx, req, cwd)
+}
+
+// SetActiveEnvironment records which alias the TUI should open on next time. An
+// empty name clears the record. A resolver without the capability returns false
+// instead of writing anything, so the caller can state that the choice did not
+// persist.
+func (e *Engine) SetActiveEnvironment(ctx context.Context, req TargetRequest, name string) (bool, error) {
+	setter, ok := e.Resolver.(EnvironmentSetter)
+	if !ok {
+		return false, nil
+	}
+	cwd, err := e.cwd()
+	if err != nil {
+		return true, FailCause(err, Diagnostic{
+			Category:    CategoryTargetInvalid,
+			Severity:    SeverityError,
+			Message:     msgWorkingDirUnknown,
+			NextActions: []string{msgWorkingDirAction},
+		})
+	}
+	return true, setter.SetActiveEnvironment(ctx, req, cwd, name)
+}
+
 // Run executes one operation. It never returns a Go error: every outcome is
 // expressed in the Result so both interfaces render the same truth.
 func (e *Engine) Run(ctx context.Context, req Request, sink Sink) (res Result) {
