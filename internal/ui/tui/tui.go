@@ -196,6 +196,13 @@ type Model struct {
 	serviceCursor  int
 	serviceChecked []bool
 	serviceWhole   bool
+	// serviceScope is how the current scope screen behaves: most features keep
+	// the whole-stack row, and a feature that needs a named service demands a
+	// selection instead.
+	serviceScope scopeMode
+	// serviceCap caps how many services the screen may collect. Zero means no
+	// cap.
+	serviceCap int
 	// live is non-nil while a feature attaches to a running process. The TUI
 	// renders its output and forwards keys for core.LiveAttach.
 	live   *liveState
@@ -1096,7 +1103,20 @@ func (m *Model) beginServiceSelection(f core.Feature) tea.Cmd {
 	m.serviceOptions = nil
 	m.serviceCursor = 0
 	m.serviceChecked = nil
-	m.serviceWhole = true
+	m.serviceScope = scopeWholeStack
+	m.serviceCap = 0
+	if scope, ok := f.(core.ServiceScope); ok {
+		if scope.RequiresServiceScope() {
+			m.serviceScope = scopeRequired
+		}
+		m.serviceCap = scope.MaxServices()
+	}
+	// A scope that demands a selection starts with nothing chosen and the
+	// cursor on the first service; the whole-stack mode starts on that row.
+	m.serviceWhole = m.serviceScope == scopeWholeStack
+	if m.serviceScope == scopeRequired {
+		m.serviceCursor = 0
+	}
 	// The table starts at its first row, never at the previous screen's scroll
 	// position: the select screen measures different rows than a result body.
 	m.body = visual.Viewport{}
@@ -1121,18 +1141,35 @@ func (m *Model) resetServiceSelection() {
 	m.serviceCursor = 0
 	m.serviceChecked = nil
 	m.serviceWhole = true
+	m.serviceScope = scopeWholeStack
+	m.serviceCap = 0
 	// The table window is reset with the rows it measured: a later screen with
 	// a different service count must not start mid-list.
 	m.body = visual.Viewport{}
 }
 
-// updateServiceKey drives the scope table. The first row is the whole stack and
-// is selected until an individual service is checked; space on the whole row
-// clears every individual choice. Enter feeds Request.Services, esc returns to
-// the menu, and q/ctrl+c quit without running anything. The cursor window follows
-// the selection, so every row stays reachable on a large stack.
+// serviceRowCount is how many cursor positions the scope table has: the whole
+// stack row when it exists, plus one per service.
+func (m *Model) serviceRowCount() int {
+	return len(m.serviceOptions) + m.wholeRowOffset()
+}
+
+// wholeRowOffset is 1 when the whole-stack row is the first target, 0 when the
+// screen requires a named service.
+func (m *Model) wholeRowOffset() int {
+	if m.serviceScope == scopeWholeStack {
+		return 1
+	}
+	return 0
+}
+
+// updateServiceKey drives the scope table. When the screen offers the whole
+// stack, that row is the first target and space on it clears every individual
+// choice. Enter feeds Request.Services, esc returns to the menu, and q/ctrl+c
+// quit without running anything. The cursor window follows the selection, so
+// every row stays reachable on a large stack.
 func (m *Model) updateServiceKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	total := len(m.serviceOptions) + 1
+	total := m.serviceRowCount()
 	switch msg.String() {
 	case "up", "k":
 		m.serviceCursor = (m.serviceCursor - 1 + total) % total
@@ -1159,18 +1196,29 @@ func (m *Model) updateServiceKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.followServiceCursor()
 		return m, nil
 	case " ":
-		if m.serviceCursor == 0 {
+		if offset := m.wholeRowOffset(); offset == 1 && m.serviceCursor == 0 {
 			m.serviceWhole = true
 			for i := range m.serviceChecked {
 				m.serviceChecked[i] = false
 			}
 			return m, nil
 		}
-		index := m.serviceCursor - 1
+		index := m.serviceCursor - m.wholeRowOffset()
 		if index < 0 || index >= len(m.serviceOptions) || !m.serviceOptions[index].Configured {
 			return m, nil
 		}
+		// A cap keeps the selection readable: the earliest choices stay, and
+		// the screen says why the extra one was refused.
+		if !m.serviceChecked[index] && m.serviceCap > 0 && countChecked(m.serviceChecked) >= m.serviceCap {
+			m.notice = fmt.Sprintf(msgServiceCap, m.serviceCap)
+			return m, nil
+		}
+		m.notice = ""
 		m.serviceChecked[index] = !m.serviceChecked[index]
+		if m.serviceScope == scopeRequired {
+			m.serviceWhole = false
+			return m, nil
+		}
 		m.serviceWhole = !anyChecked(m.serviceChecked)
 		return m, nil
 	case "enter":
@@ -1185,6 +1233,13 @@ func (m *Model) updateServiceKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					services = append(services, svc.Name)
 				}
 			}
+		}
+		if len(services) == 0 && m.serviceScope == scopeRequired {
+			// Nothing selected: the screen says what is missing and stays open.
+			// A required-scope screen never runs against every service, because
+			// that is exactly the whole-stack case it removed.
+			m.notice = msgServiceRequired
+			return m, nil
 		}
 		m.resetServiceSelection()
 		m.req.Feature = feature.Descriptor().Name
@@ -1201,6 +1256,29 @@ func (m *Model) updateServiceKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	return m, nil
 }
+
+func countChecked(checked []bool) int {
+	n := 0
+	for _, ok := range checked {
+		if ok {
+			n++
+		}
+	}
+	return n
+}
+
+// scopeMode is how a supporting feature's service screen behaves. Most
+// features act on the whole stack by default, so their screen offers that row;
+// a feature whose work is meaningless without a named service requires a
+// selection instead.
+type scopeMode int
+
+const (
+	// scopeWholeStack offers the whole-stack row (the default).
+	scopeWholeStack scopeMode = iota
+	// scopeRequired demands at least one service and hides the whole-stack row.
+	scopeRequired
+)
 
 // pageRows is how far PgUp/PgDn move on the scope table: one visible window.
 func (m *Model) pageRows() int {
@@ -1609,9 +1687,10 @@ func (m *Model) serviceTable(compact bool) core.Table {
 		}
 		state := present.StateLabelValue(svc.State)
 		stateBadge := present.StateBadgeValue(svc.State)
+		stateEmphasis := present.StateEmphasisValue(svc.State)
 		if compact {
 			if folded, ok := serviceFoldedHealth(svc.Health); ok {
-				state, stateBadge = folded, present.HealthBadgeValue(svc.Health)
+				state, stateBadge, stateEmphasis = folded, present.HealthBadgeValue(svc.Health), core.EmphasisNone
 			}
 		}
 		table.Rows = append(table.Rows, core.Row{
@@ -1619,7 +1698,7 @@ func (m *Model) serviceTable(compact bool) core.Table {
 			Cells: []core.Cell{
 				{Text: marker + checked},
 				{Text: svc.Name, Detail: svc.Name},
-				{Text: state, Badge: stateBadge},
+				{Text: state, Badge: stateBadge, Emphasis: stateEmphasis},
 				{Text: fmt.Sprintf("%d", svc.Instances)},
 				{Text: present.HealthLabelValue(svc.Health), Badge: present.HealthBadgeValue(svc.Health)},
 				{Text: serviceImageLabel(svc), Detail: svc.Image},
@@ -1663,11 +1742,19 @@ func (m *Model) serviceScreenLayout() serviceScreenLayout {
 		fixed = append(fixed, msgConfirmEnvironment+": "+m.target.Environment)
 	}
 	if !compact {
-		fixed = append(fixed, "", m.hintText(msgServiceSelectIntro))
+		fixed = append(fixed, "", m.hintText(m.serviceIntro()))
+	}
+	if m.notice != "" {
+		// A refusal ("select a service", "the cap is four") is the reason Enter
+		// did nothing. It belongs above the table, where it is always drawn,
+		// rather than in the tail a compact screen drops.
+		fixed = append(fixed, "", m.noticeText(m.notice))
 	}
 	fixed = append(fixed, "")
 	wholeRow := len(fixed)
-	fixed = append(fixed, m.wholeStackRow())
+	if m.serviceScope == scopeWholeStack {
+		fixed = append(fixed, m.wholeStackRow())
+	}
 
 	table := m.serviceTable(compact)
 	tail := m.serviceTail(compact)
@@ -1679,12 +1766,20 @@ func (m *Model) serviceScreenLayout() serviceScreenLayout {
 		}, 0)
 		return serviceScreenLayout{screen: screenLines{Fixed: fixed, Band: rows, Tail: tail}, wholeRow: wholeRow}
 	}
+	cursor := m.serviceCursor
+	if m.serviceScope == scopeWholeStack {
+		// The whole-stack row is pinned above the table, so the cursor is a
+		// table row only when it points at a service.
+		cursor = m.serviceCursor
+	} else {
+		// Without the whole row the cursor indexes the table directly, and the
+		// table's cursor is one-based.
+		cursor++
+	}
 	layout := visual.LayoutTableOptions(th, table, width, visual.TableOptions{
 		Compact:        compact,
 		CompactColumns: 3,
-		// The whole-stack row is pinned above the table, so the cursor is a
-		// table row only when it points at a service.
-		CursorRow: m.serviceCursor,
+		CursorRow:      cursor,
 	})
 	if layout.Header != "" {
 		fixed = append(fixed, layout.Header)
@@ -1692,16 +1787,21 @@ func (m *Model) serviceScreenLayout() serviceScreenLayout {
 	return serviceScreenLayout{screen: screenLines{Fixed: fixed, Band: layout.Rows, Tail: tail}, wholeRow: wholeRow}
 }
 
+// serviceIntro is the one-line explanation above the table. A screen that
+// requires a named service must not claim that "전체 선택 시 스택 전체" applies.
+func (m *Model) serviceIntro() string {
+	if m.serviceScope == scopeRequired {
+		return msgServiceIntroLogs
+	}
+	return msgServiceSelectIntro
+}
+
 // serviceTail is the guidance below the table. Compact keeps only the
-// unconfigured marker, because it states a fact about a visible row; the note
-// about engine revalidation can wait for a decorated screen.
+// unconfigured marker, because it states a fact about a visible row.
 func (m *Model) serviceTail(compact bool) []string {
 	var tail []string
 	if flag := m.unconfiguredFlag(); flag != "" {
 		tail = append(tail, flag)
-	}
-	if !compact {
-		tail = append(tail, "", m.hintText(msgServiceSelectionNote))
 	}
 	return tail
 }
@@ -1765,7 +1865,7 @@ func (m *Model) followServiceCursor() {
 		m.body.Top = v.Top
 		return
 	}
-	v.Follow(m.serviceCursor - 1)
+	v.Follow(m.serviceCursor - m.wholeRowOffset())
 	m.body.Top = v.Top
 }
 

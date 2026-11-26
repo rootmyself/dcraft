@@ -177,7 +177,7 @@ func TestEnvironmentTUIWizardPreviewDeclineThenAccept(t *testing.T) {
 	env := fake.env(t, t.TempDir())
 	// Decline at the preview: esc must leave the folder untouched.
 	output, code := runPTYSteps(t, project, env, []ptyStep{
-		{waitText: "마지막 조회", walk: "실행환경 생성", send: "\r"},
+		{waitText: "마지막 조회", walk: "생성", send: "\r"},
 		{waitText: "실행환경 생성·제거"},
 		{waitText: "별칭 이름", send: "dev\r"},
 		{waitText: "Compose 파일", send: "\r"},
@@ -207,7 +207,7 @@ func TestEnvironmentTUIWizardPreviewDeclineThenAccept(t *testing.T) {
 
 	// Accept the same flow: enter saves, then the presenter confirms.
 	output, code = runPTYSteps(t, project, env, []ptyStep{
-		{waitText: "마지막 조회", walk: "실행환경 생성", send: "\r"},
+		{waitText: "마지막 조회", walk: "생성", send: "\r"},
 		{waitText: "실행환경 생성·제거"},
 		{waitText: "별칭 이름", send: "dev\r"},
 		{waitText: "Compose 파일", send: "\r"},

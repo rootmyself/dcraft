@@ -155,11 +155,11 @@ func TestLogsDescriptorIsReadOnlyLiveStreamingWithServiceSelection(t *testing.T)
 	}
 }
 
-func TestLogsDefaultsToFollowingTheWholeStackWithoutColorWhenNotATTY(t *testing.T) {
+func TestLogsDefaultsToFollowingSelectedServicesWithoutColorWhenNotATTY(t *testing.T) {
 	streamer := &fakeStreamer{write: "p-web-1 | hello\n"}
 	out := &strings.Builder{}
 	f := New(&fakeBackend{snap: scaledSnapshot()}, streamer)
-	payload, err := f.Run(context.Background(), invocation(nil, nil, core.IO{Stdout: out, TTY: false}, &fakeReporter{}))
+	payload, err := f.Run(context.Background(), invocation([]string{"web"}, nil, core.IO{Stdout: out, TTY: false}, &fakeReporter{}))
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -167,14 +167,14 @@ func TestLogsDefaultsToFollowingTheWholeStackWithoutColorWhenNotATTY(t *testing.
 	if !call.req.Follow || call.req.Color || call.req.Index != -1 {
 		t.Fatalf("request = %+v", call.req)
 	}
-	if strings.Join(call.req.Services, ",") != "db,web" {
+	if strings.Join(call.req.Services, ",") != "web" {
 		t.Fatalf("services = %v", call.req.Services)
 	}
 	if call.req.Tail != "" || call.req.Since != "" || call.req.Timestamps {
 		t.Fatalf("unexpected defaults: %+v", call.req)
 	}
 	report := payload.(Payload).Logs
-	if !report.Follow || strings.Join(report.Services, ",") != "db,web" || report.Index != -1 {
+	if !report.Follow || strings.Join(report.Services, ",") != "web" || report.Index != -1 {
 		t.Fatalf("payload = %+v", report)
 	}
 	if !strings.Contains(out.String(), "p-web-1 | hello") {
@@ -243,7 +243,7 @@ func TestLogsReportsBackendFailureInTheSelectionStage(t *testing.T) {
 	f := New(&fakeBackend{err: core.Fail(core.Diagnostic{
 		Category: core.CategoryNoConfiguration, Severity: core.SeverityError, Message: "Compose 설정 찾기 실패.",
 	})}, &fakeStreamer{})
-	_, err := f.Run(context.Background(), invocation(nil, nil, core.IO{Stdout: &strings.Builder{}}, reporter))
+	_, err := f.Run(context.Background(), invocation([]string{"web"}, nil, core.IO{Stdout: &strings.Builder{}}, reporter))
 	if err == nil {
 		t.Fatal("expected a backend failure")
 	}
@@ -260,7 +260,7 @@ func TestLogsCancellationDetachesWithoutStoppingServices(t *testing.T) {
 	f := New(&fakeBackend{snap: scaledSnapshot()}, streamer)
 	done := make(chan error, 1)
 	go func() {
-		_, err := f.Run(ctx, invocation(nil, nil, core.IO{Stdout: &strings.Builder{}}, reporter))
+		_, err := f.Run(ctx, invocation([]string{"web"}, nil, core.IO{Stdout: &strings.Builder{}}, reporter))
 		done <- err
 	}()
 	time.Sleep(50 * time.Millisecond)
@@ -315,4 +315,89 @@ func TestLogsPresenterStatesThatServicesKeepRunning(t *testing.T) {
 			t.Fatalf("presenter missing %q:\n%s", want, text)
 		}
 	}
+}
+
+// A fanout screen watches several services at once: one child per service, each
+// with its own stream, and one service ending never stops the others.
+func TestLogsFanoutRunsOneStreamPerService(t *testing.T) {
+	streamer := &fakeStreamer{}
+	streams := &recordingFanout{out: map[string]*strings.Builder{}}
+	f := New(&fakeBackend{snap: scaledSnapshot()}, streamer)
+	_, err := f.Run(context.Background(), invocation([]string{"web", "db"}, nil, core.IO{Fanout: streams}, &fakeReporter{}))
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := streamer.callCount(); got != 2 {
+		t.Fatalf("streams = %d, want one per service", got)
+	}
+	if len(streams.done) != 2 {
+		t.Fatalf("done reports = %v, want one per service", streams.done)
+	}
+	for _, label := range []string{"web", "db"} {
+		if err := streams.done[label]; err != nil {
+			t.Fatalf("%s ended with an unexpected error: %v", label, err)
+		}
+	}
+}
+
+// Without a selection the run refuses before contacting the streamer: a
+// whole-stack log cannot name which service produced a line.
+func TestLogsWithoutAServiceIsRefusedBeforeStreaming(t *testing.T) {
+	streamer := &fakeStreamer{}
+	f := New(&fakeBackend{snap: scaledSnapshot()}, streamer)
+	_, err := f.Run(context.Background(), invocation(nil, nil, core.IO{Stdout: &strings.Builder{}}, &fakeReporter{}))
+	if err == nil {
+		t.Fatal("a whole-stack log selection was accepted")
+	}
+	var ce *core.Error
+	if !errors.As(err, &ce) || len(ce.Diagnostics) == 0 || ce.Diagnostics[0].Category != core.CategorySelectionRequired {
+		t.Fatalf("error = %v, want selection_required", err)
+	}
+	if streamer.callCount() != 0 {
+		t.Fatal("the streamer ran without a service")
+	}
+}
+
+// The descriptor tells the generic scope screen that logs need a name and caps
+// the tab count.
+func TestLogsDeclaresTheScopeCapability(t *testing.T) {
+	f := New(&fakeBackend{}, &fakeStreamer{})
+	scope, ok := any(f).(core.ServiceScope)
+	if !ok {
+		t.Fatal("logs does not implement core.ServiceScope")
+	}
+	if !scope.RequiresServiceScope() {
+		t.Fatal("logs does not require a service selection")
+	}
+	if got := scope.MaxServices(); got != 4 {
+		t.Fatalf("MaxServices = %d, want 4 tabs", got)
+	}
+}
+
+// recordingFanout hands out one buffer per label and records how each stream
+// ended, standing in for the TUI's tab surface.
+type recordingFanout struct {
+	mu   sync.Mutex
+	out  map[string]*strings.Builder
+	done map[string]error
+}
+
+func (f *recordingFanout) Stream(label string) core.IO {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.out == nil {
+		f.out = map[string]*strings.Builder{}
+	}
+	buf := &strings.Builder{}
+	f.out[label] = buf
+	return core.IO{Stdout: buf, Stderr: buf}
+}
+
+func (f *recordingFanout) StreamDone(label string, err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.done == nil {
+		f.done = map[string]error{}
+	}
+	f.done[label] = err
 }

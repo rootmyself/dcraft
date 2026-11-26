@@ -748,7 +748,7 @@ func TestTUIEnterAndQuitDoesNotChangeServices(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("TUI exit = %d\n%s", code, output)
 	}
-	for _, want := range []string{"dcraft", "스택 상태", "[r] 새로고침", "[q] 종료"} {
+	for _, want := range []string{"dcraft", "서비스 상태", "[r] 새로고침", "[q] 종료"} {
 		if !screenContains(output, want) {
 			t.Fatalf("TUI output missing %q:\n%s", want, output)
 		}

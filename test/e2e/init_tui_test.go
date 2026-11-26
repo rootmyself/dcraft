@@ -8,14 +8,11 @@ import (
 )
 
 func initWizardNavigation() []lifecyclePTYStep {
-	// The TUI opens on status. init is registered last, so four downs reach it
-	// through the same menu every other feature uses.
+	// The TUI opens on the status screen. The configuration section puts init
+	// first, so the menu cursor reaches it by walking to the label rather than
+	// counting presses.
 	return []lifecyclePTYStep{
-		{wait: "마지막 조회", send: "\x1b[B"},
-		{wait: "▸ 스택 중지", send: "\x1b[B"},
-		{wait: "▸ 스택 시작", send: "\x1b[B"},
-		{wait: "▸ 갱신", send: "\x1b[B"},
-		{wait: "▸ 최초 구성", send: "\r"},
+		{wait: "마지막 조회", walk: "최초 구성", send: "\r"},
 	}
 }
 
@@ -63,9 +60,9 @@ func TestInitTUIWizardDeclinesWithoutWritingAndSavesAfterConfirmation(t *testing
 	steps = append(steps,
 		lifecyclePTYStep{wait: "다음 명령: dcraft up", send: "\r"},
 		lifecyclePTYStep{wait: "Compose 파일 저장.", send: ""},
-		// The saved screen points at the menu, not the command: the file is a
-		// standard Compose input in this folder, so the menu finds it.
-		lifecyclePTYStep{wait: "메뉴에서 스택 시작 선택", send: ""},
+		// The saved screen reports the file and stops: the next step is a
+		// different screen, so no command or menu hint follows it.
+		lifecyclePTYStep{wait: "검증:", send: ""},
 	)
 	output, code = runLifecyclePTYSteps(t, project, env, steps)
 	if code != 0 {
@@ -80,8 +77,8 @@ func TestInitTUIWizardDeclinesWithoutWritingAndSavesAfterConfirmation(t *testing
 			t.Fatalf("saved file missing %q:\n%s", want, data)
 		}
 	}
-	if strings.Contains(output, "실행") && strings.Contains(output, "스택 시작") {
-		t.Fatalf("init ran the stack after saving:\n%s", output)
+	if strings.Contains(output, "다음 행동") || strings.Contains(output, "메뉴에서 스택 시작") {
+		t.Fatalf("the saved screen still carries a next-action hint:\n%s", output)
 	}
 }
 

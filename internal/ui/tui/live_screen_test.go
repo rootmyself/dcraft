@@ -347,11 +347,11 @@ func TestLiveLongOutputStaysReachable(t *testing.T) {
 
 	// The position row names the reachable total, not a truncated window.
 	row := indicatorRow(t, m)
-	if !strings.Contains(row, fmt.Sprintf("/%d", len(m.live.view.Lines()))) {
+	if !strings.Contains(row, fmt.Sprintf("/%d", len(m.currentStream().view.Lines()))) {
 		t.Fatalf("position row does not state the real total: %q", row)
 	}
 	// The oldest line is still reachable: the grid retained it.
-	if got := len(m.live.view.Lines()); got < total {
+	if got := len(m.currentStream().view.Lines()); got < total {
 		t.Fatalf("grid holds %d lines, want at least %d", got, total)
 	}
 	pressKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("g")})
@@ -653,7 +653,7 @@ func TestLiveAttachPositionRowDoesNotAdvertiseScrollKeys(t *testing.T) {
 	// Fill the band past its height so the position row appears. The child's
 	// output is the grid's, so writing lines is what a remote process does.
 	for i := 0; i < 40; i++ {
-		fmt.Fprintf(m.live.writer, "remote-%02d\r\n", i)
+		fmt.Fprintf(m.currentStream().writer, "remote-%02d\r\n", i)
 	}
 	// The counter states a total large enough to hold everything written, and
 	// the range it prints ends at that total: the row describes one snapshot,
@@ -671,7 +671,7 @@ func TestLiveAttachPositionRowDoesNotAdvertiseScrollKeys(t *testing.T) {
 	if total < 40 {
 		t.Fatalf("position row total = %d, want at least the 40 lines written", total)
 	}
-	if got := len(m.live.view.Lines()); got < total {
+	if got := len(m.currentStream().view.Lines()); got < total {
 		t.Fatalf("counter claims %d rows but the grid holds %d", total, got)
 	}
 	if strings.Contains(row, "PgUp") || strings.Contains(row, "g/G") {
@@ -715,9 +715,9 @@ func TestLiveBurstLosesNoOutput(t *testing.T) {
 	// "renderer fell behind" case a channel buffer used to lose lines on.
 	burst := 700
 	for i := 0; i < burst; i++ {
-		fmt.Fprintf(m.live.writer, "burst-%03d\r\n", i)
+		fmt.Fprintf(m.currentStream().writer, "burst-%03d\r\n", i)
 	}
-	rows := m.live.view.Lines()
+	rows := m.currentStream().view.Lines()
 	if got := len(rows); got < burst {
 		t.Fatalf("grid holds %d rows, want at least the %d written", got, burst)
 	}

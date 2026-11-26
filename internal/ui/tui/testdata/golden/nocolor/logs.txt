@@ -8,11 +8,11 @@
 로그 보기
 
 실시간 로그 (서비스는 계속 실행 중)
+[api]
 서비스: 스택 전체
 인스턴스: 전체
 명령: logs
 
-api-1  | 2026-11-20T09:14:52.364Z INFO…
 api-1  | 2026-11-20T09:14:53.371Z INFO…
 api-1  | 2026-11-20T09:14:54.378Z INFO…
 api-1  | 2026-11-20T09:14:55.385Z INFO…
@@ -20,7 +20,7 @@ api-1  | 2026-11-20T09:14:56.392Z INFO…
 api-1  | 2026-11-20T09:14:57.399Z INFO…
 api-1  | 2026-11-20T09:14:58.406Z INFO…
 api-1  | 2026-11-20T09:14:59.413Z INFO…█
-53-60/60                 PgUp/PgDn · g/G
+54-60/60                 PgUp/PgDn · g/G
 [q] 화면 닫기  [ctrl+c] 중단
 
 === 40x30 ===
@@ -28,11 +28,11 @@ api-1  | 2026-11-20T09:14:59.413Z INFO…█
 로그 보기
 
 실시간 로그 (서비스는 계속 실행 중)
+[api]
 서비스: 스택 전체
 인스턴스: 전체
 명령: logs
 
-api-1  | 2026-11-20T09:14:40.280Z INFO…
 api-1  | 2026-11-20T09:14:41.287Z INFO…
 api-1  | 2026-11-20T09:14:42.294Z INFO…
 api-1  | 2026-11-20T09:14:43.301Z INFO…
@@ -52,7 +52,7 @@ api-1  | 2026-11-20T09:14:56.392Z INFO…█
 api-1  | 2026-11-20T09:14:57.399Z INFO…█
 api-1  | 2026-11-20T09:14:58.406Z INFO…█
 api-1  | 2026-11-20T09:14:59.413Z INFO…█
-41-60/60                 PgUp/PgDn · g/G
+42-60/60                 PgUp/PgDn · g/G
 [q] 화면 닫기  [ctrl+c] 중단
 
 === 40x50 ===
@@ -60,11 +60,11 @@ api-1  | 2026-11-20T09:14:59.413Z INFO…█
 로그 보기
 
 실시간 로그 (서비스는 계속 실행 중)
+[api]
 서비스: 스택 전체
 인스턴스: 전체
 명령: logs
 
-api-1  | 2026-11-20T09:14:20.140Z INFO…
 api-1  | 2026-11-20T09:14:21.147Z INFO…
 api-1  | 2026-11-20T09:14:22.154Z INFO…
 api-1  | 2026-11-20T09:14:23.161Z INFO…
@@ -78,7 +78,7 @@ api-1  | 2026-11-20T09:14:30.210Z INFO…
 api-1  | 2026-11-20T09:14:31.217Z INFO…
 api-1  | 2026-11-20T09:14:32.224Z INFO…
 api-1  | 2026-11-20T09:14:33.231Z INFO…
-api-1  | 2026-11-20T09:14:34.238Z INFO…█
+api-1  | 2026-11-20T09:14:34.238Z INFO…
 api-1  | 2026-11-20T09:14:35.245Z INFO…█
 api-1  | 2026-11-20T09:14:36.252Z INFO…█
 api-1  | 2026-11-20T09:14:37.259Z INFO…█
@@ -104,7 +104,7 @@ api-1  | 2026-11-20T09:14:56.392Z INFO…█
 api-1  | 2026-11-20T09:14:57.399Z INFO…█
 api-1  | 2026-11-20T09:14:58.406Z INFO…█
 api-1  | 2026-11-20T09:14:59.413Z INFO…█
-21-60/60                 PgUp/PgDn · g/G
+22-60/60                 PgUp/PgDn · g/G
 [q] 화면 닫기  [ctrl+c] 중단
 
 === 80x18 ===
@@ -112,11 +112,11 @@ api-1  | 2026-11-20T09:14:59.413Z INFO…█
 로그 보기
 
 실시간 로그 (서비스는 계속 실행 중)
+[api]
 서비스: 스택 전체
 인스턴스: 전체
 명령: logs
 
-api-1  | 2026-11-20T09:14:52.364Z INFO  request completed method=GET path=/v1/…
 api-1  | 2026-11-20T09:14:53.371Z INFO  request completed method=GET path=/v1/…
 api-1  | 2026-11-20T09:14:54.378Z INFO  request completed method=GET path=/v1/…
 api-1  | 2026-11-20T09:14:55.385Z INFO  request completed method=GET path=/v1/…
@@ -124,7 +124,7 @@ api-1  | 2026-11-20T09:14:56.392Z INFO  request completed method=GET path=/v1/�
 api-1  | 2026-11-20T09:14:57.399Z INFO  request completed method=GET path=/v1/…
 api-1  | 2026-11-20T09:14:58.406Z INFO  request completed method=GET path=/v1/…
 api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/…█
-53-60/60                                                         PgUp/PgDn · g/G
+54-60/60                                                         PgUp/PgDn · g/G
 [q] 화면 닫기  [ctrl+c] 중단  [PgUp/PgDn] 스크롤  [g/G] 처음/끝  [?] 도움말
 
 === 80x30 ===
@@ -132,11 +132,11 @@ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/�
 로그 보기
 
 실시간 로그 (서비스는 계속 실행 중)
+[api]
 서비스: 스택 전체
 인스턴스: 전체
 명령: logs
 
-api-1  | 2026-11-20T09:14:40.280Z INFO  request completed method=GET path=/v1/…
 api-1  | 2026-11-20T09:14:41.287Z INFO  request completed method=GET path=/v1/…
 api-1  | 2026-11-20T09:14:42.294Z INFO  request completed method=GET path=/v1/…
 api-1  | 2026-11-20T09:14:43.301Z INFO  request completed method=GET path=/v1/…
@@ -156,7 +156,7 @@ api-1  | 2026-11-20T09:14:56.392Z INFO  request completed method=GET path=/v1/�
 api-1  | 2026-11-20T09:14:57.399Z INFO  request completed method=GET path=/v1/…█
 api-1  | 2026-11-20T09:14:58.406Z INFO  request completed method=GET path=/v1/…█
 api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/…█
-41-60/60                                                         PgUp/PgDn · g/G
+42-60/60                                                         PgUp/PgDn · g/G
 [q] 화면 닫기  [ctrl+c] 중단  [PgUp/PgDn] 스크롤  [g/G] 처음/끝  [?] 도움말
 
 === 80x50 ===
@@ -164,11 +164,11 @@ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/�
 로그 보기
 
 실시간 로그 (서비스는 계속 실행 중)
+[api]
 서비스: 스택 전체
 인스턴스: 전체
 명령: logs
 
-api-1  | 2026-11-20T09:14:20.140Z INFO  request completed method=GET path=/v1/…
 api-1  | 2026-11-20T09:14:21.147Z INFO  request completed method=GET path=/v1/…
 api-1  | 2026-11-20T09:14:22.154Z INFO  request completed method=GET path=/v1/…
 api-1  | 2026-11-20T09:14:23.161Z INFO  request completed method=GET path=/v1/…
@@ -182,7 +182,7 @@ api-1  | 2026-11-20T09:14:30.210Z INFO  request completed method=GET path=/v1/�
 api-1  | 2026-11-20T09:14:31.217Z INFO  request completed method=GET path=/v1/…
 api-1  | 2026-11-20T09:14:32.224Z INFO  request completed method=GET path=/v1/…
 api-1  | 2026-11-20T09:14:33.231Z INFO  request completed method=GET path=/v1/…
-api-1  | 2026-11-20T09:14:34.238Z INFO  request completed method=GET path=/v1/…█
+api-1  | 2026-11-20T09:14:34.238Z INFO  request completed method=GET path=/v1/…
 api-1  | 2026-11-20T09:14:35.245Z INFO  request completed method=GET path=/v1/…█
 api-1  | 2026-11-20T09:14:36.252Z INFO  request completed method=GET path=/v1/…█
 api-1  | 2026-11-20T09:14:37.259Z INFO  request completed method=GET path=/v1/…█
@@ -208,7 +208,7 @@ api-1  | 2026-11-20T09:14:56.392Z INFO  request completed method=GET path=/v1/�
 api-1  | 2026-11-20T09:14:57.399Z INFO  request completed method=GET path=/v1/…█
 api-1  | 2026-11-20T09:14:58.406Z INFO  request completed method=GET path=/v1/…█
 api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/…█
-21-60/60                                                         PgUp/PgDn · g/G
+22-60/60                                                         PgUp/PgDn · g/G
 [q] 화면 닫기  [ctrl+c] 중단  [PgUp/PgDn] 스크롤  [g/G] 처음/끝  [?] 도움말
 
 === 120x18 ===
@@ -216,11 +216,11 @@ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/�
 ╭ 메뉴 · 19 ─── esc 닫기 ╮ 로그 보기
 │조회                    │
 │  서비스 접속           │ 실시간 로그 (서비스는 계속 실행 중)
-│  로그 보기             │ 서비스: 스택 전체
-│▸ 스택 상태             │ 인스턴스: 전체
-│                        │ 명령: logs
-│운영                    │
-│  스택 제거 ▲ 위험      │ api-1  | 2026-11-20T09:14:52.364Z INFO  request completed method=GET path=/v1/health status…
+│  로그 보기             │ [api]
+│▸ 스택 상태             │ 서비스: 스택 전체
+│                        │ 인스턴스: 전체
+│운영                    │ 명령: logs
+│  스택 제거 ▲ 위험      │
 │  스택 재시작           │ api-1  | 2026-11-20T09:14:53.371Z INFO  request completed method=GET path=/v1/health status…
 │  스택 중지             │ api-1  | 2026-11-20T09:14:54.378Z INFO  request completed method=GET path=/v1/health status…
 │  스택 시작             │ api-1  | 2026-11-20T09:14:55.385Z INFO  request completed method=GET path=/v1/health status…
@@ -228,7 +228,7 @@ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/�
 │                        │ api-1  | 2026-11-20T09:14:57.399Z INFO  request completed method=GET path=/v1/health status…
 │데이터                  │ api-1  | 2026-11-20T09:14:58.406Z INFO  request completed method=GET path=/v1/health status…
 │  데이터 백업           │ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/health status…█
-╰────────────────────────╯ 53-60/60                                                                      PgUp/PgDn · g/G
+╰────────────────────────╯ 54-60/60                                                                      PgUp/PgDn · g/G
 [q] 화면 닫기  [ctrl+c] 중단  [PgUp/PgDn] 스크롤  [g/G] 처음/끝  [?] 도움말
 
 === 120x30 ===
@@ -236,11 +236,11 @@ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/�
 ╭ 메뉴 · 19 ─── esc 닫기 ╮ 로그 보기
 │조회                    │
 │  서비스 접속           │ 실시간 로그 (서비스는 계속 실행 중)
-│  로그 보기             │ 서비스: 스택 전체
-│▸ 스택 상태             │ 인스턴스: 전체
-│                        │ 명령: logs
-│운영                    │
-│  스택 제거 ▲ 위험      │ api-1  | 2026-11-20T09:14:40.280Z INFO  request completed method=GET path=/v1/health status…
+│  로그 보기             │ [api]
+│▸ 스택 상태             │ 서비스: 스택 전체
+│                        │ 인스턴스: 전체
+│운영                    │ 명령: logs
+│  스택 제거 ▲ 위험      │
 │  스택 재시작           │ api-1  | 2026-11-20T09:14:41.287Z INFO  request completed method=GET path=/v1/health status…
 │  스택 중지             │ api-1  | 2026-11-20T09:14:42.294Z INFO  request completed method=GET path=/v1/health status…
 │  스택 시작             │ api-1  | 2026-11-20T09:14:43.301Z INFO  request completed method=GET path=/v1/health status…
@@ -260,7 +260,7 @@ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/�
 │────────────────────────│ api-1  | 2026-11-20T09:14:57.399Z INFO  request completed method=GET path=/v1/health status…█
 │ ▸ 스택 상태            │ api-1  | 2026-11-20T09:14:58.406Z INFO  request completed method=GET path=/v1/health status…█
 │ 현재 스택과 서비스 상  │ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/health status…█
-╰────────────────────────╯ 41-60/60                                                                      PgUp/PgDn · g/G
+╰────────────────────────╯ 42-60/60                                                                      PgUp/PgDn · g/G
 [q] 화면 닫기  [ctrl+c] 중단  [PgUp/PgDn] 스크롤  [g/G] 처음/끝  [?] 도움말
 
 === 120x50 ===
@@ -268,11 +268,11 @@ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/�
 ╭ 메뉴 · 19 ─── esc 닫기 ╮ 로그 보기
 │조회                    │
 │  서비스 접속           │ 실시간 로그 (서비스는 계속 실행 중)
-│  로그 보기             │ 서비스: 스택 전체
-│▸ 스택 상태             │ 인스턴스: 전체
-│                        │ 명령: logs
-│운영                    │
-│  스택 제거 ▲ 위험      │ api-1  | 2026-11-20T09:14:20.140Z INFO  request completed method=GET path=/v1/health status…
+│  로그 보기             │ [api]
+│▸ 스택 상태             │ 서비스: 스택 전체
+│                        │ 인스턴스: 전체
+│운영                    │ 명령: logs
+│  스택 제거 ▲ 위험      │
 │  스택 재시작           │ api-1  | 2026-11-20T09:14:21.147Z INFO  request completed method=GET path=/v1/health status…
 │  스택 중지             │ api-1  | 2026-11-20T09:14:22.154Z INFO  request completed method=GET path=/v1/health status…
 │  스택 시작             │ api-1  | 2026-11-20T09:14:23.161Z INFO  request completed method=GET path=/v1/health status…
@@ -286,7 +286,7 @@ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/�
 │설정                    │ api-1  | 2026-11-20T09:14:31.217Z INFO  request completed method=GET path=/v1/health status…
 │  실행환경 생성         │ api-1  | 2026-11-20T09:14:32.224Z INFO  request completed method=GET path=/v1/health status…
 │  호스트 스크립트       │ api-1  | 2026-11-20T09:14:33.231Z INFO  request completed method=GET path=/v1/health status…
-│    커스텀              │ api-1  | 2026-11-20T09:14:34.238Z INFO  request completed method=GET path=/v1/health status…█
+│    커스텀              │ api-1  | 2026-11-20T09:14:34.238Z INFO  request completed method=GET path=/v1/health status…
 │    Git                 │ api-1  | 2026-11-20T09:14:35.245Z INFO  request completed method=GET path=/v1/health status…█
 │    S3                  │ api-1  | 2026-11-20T09:14:36.252Z INFO  request completed method=GET path=/v1/health status…█
 │  Compose 설치          │ api-1  | 2026-11-20T09:14:37.259Z INFO  request completed method=GET path=/v1/health status…█
@@ -312,7 +312,7 @@ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/�
 │────────────────────────│ api-1  | 2026-11-20T09:14:57.399Z INFO  request completed method=GET path=/v1/health status…█
 │ ▸ 스택 상태            │ api-1  | 2026-11-20T09:14:58.406Z INFO  request completed method=GET path=/v1/health status…█
 │ 현재 스택과 서비스 상  │ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/health status…█
-╰────────────────────────╯ 21-60/60                                                                      PgUp/PgDn · g/G
+╰────────────────────────╯ 22-60/60                                                                      PgUp/PgDn · g/G
 [q] 화면 닫기  [ctrl+c] 중단  [PgUp/PgDn] 스크롤  [g/G] 처음/끝  [?] 도움말
 
 === 200x18 ===
@@ -320,11 +320,11 @@ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/�
 ╭ 메뉴 · 19 ─────── esc 닫기 ╮ 로그 보기
 │조회                        │
 │  서비스 접속               │ 실시간 로그 (서비스는 계속 실행 중)
-│  로그 보기                 │ 서비스: 스택 전체
-│▸ 스택 상태                 │ 인스턴스: 전체
-│                            │ 명령: logs
-│운영                        │
-│  스택 제거 ▲ 위험          │ api-1  | 2026-11-20T09:14:52.364Z INFO  request completed method=GET path=/v1/health status=200 duration=11ms
+│  로그 보기                 │ [api]
+│▸ 스택 상태                 │ 서비스: 스택 전체
+│                            │ 인스턴스: 전체
+│운영                        │ 명령: logs
+│  스택 제거 ▲ 위험          │
 │  스택 재시작               │ api-1  | 2026-11-20T09:14:53.371Z INFO  request completed method=GET path=/v1/health status=200 duration=12ms
 │  스택 중지                 │ api-1  | 2026-11-20T09:14:54.378Z INFO  request completed method=GET path=/v1/health status=200 duration=13ms
 │  스택 시작                 │ api-1  | 2026-11-20T09:14:55.385Z INFO  request completed method=GET path=/v1/health status=200 duration=3ms
@@ -332,7 +332,7 @@ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/�
 │                            │ api-1  | 2026-11-20T09:14:57.399Z INFO  request completed method=GET path=/v1/health status=200 duration=5ms
 │데이터                      │ api-1  | 2026-11-20T09:14:58.406Z INFO  request completed method=GET path=/v1/health status=200 duration=6ms
 │  데이터 백업               │ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/health status=200 duration=7ms                                                            █
-╰────────────────────────────╯ 53-60/60                                                                                                                                                  PgUp/PgDn · g/G
+╰────────────────────────────╯ 54-60/60                                                                                                                                                  PgUp/PgDn · g/G
 [q] 화면 닫기  [ctrl+c] 중단  [PgUp/PgDn] 스크롤  [g/G] 처음/끝  [?] 도움말
 
 === 200x30 ===
@@ -340,11 +340,11 @@ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/�
 ╭ 메뉴 · 19 ─────── esc 닫기 ╮ 로그 보기
 │조회                        │
 │  서비스 접속               │ 실시간 로그 (서비스는 계속 실행 중)
-│  로그 보기                 │ 서비스: 스택 전체
-│▸ 스택 상태                 │ 인스턴스: 전체
-│                            │ 명령: logs
-│운영                        │
-│  스택 제거 ▲ 위험          │ api-1  | 2026-11-20T09:14:40.280Z INFO  request completed method=GET path=/v1/health status=200 duration=10ms
+│  로그 보기                 │ [api]
+│▸ 스택 상태                 │ 서비스: 스택 전체
+│                            │ 인스턴스: 전체
+│운영                        │ 명령: logs
+│  스택 제거 ▲ 위험          │
 │  스택 재시작               │ api-1  | 2026-11-20T09:14:41.287Z INFO  request completed method=GET path=/v1/health status=200 duration=11ms
 │  스택 중지                 │ api-1  | 2026-11-20T09:14:42.294Z INFO  request completed method=GET path=/v1/health status=200 duration=12ms
 │  스택 시작                 │ api-1  | 2026-11-20T09:14:43.301Z INFO  request completed method=GET path=/v1/health status=200 duration=13ms
@@ -364,7 +364,7 @@ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/�
 │────────────────────────────│ api-1  | 2026-11-20T09:14:57.399Z INFO  request completed method=GET path=/v1/health status=200 duration=5ms                                                            █
 │ ▸ 스택 상태                │ api-1  | 2026-11-20T09:14:58.406Z INFO  request completed method=GET path=/v1/health status=200 duration=6ms                                                            █
 │ 현재 스택과 서비스 상태를  │ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/health status=200 duration=7ms                                                            █
-╰────────────────────────────╯ 41-60/60                                                                                                                                                  PgUp/PgDn · g/G
+╰────────────────────────────╯ 42-60/60                                                                                                                                                  PgUp/PgDn · g/G
 [q] 화면 닫기  [ctrl+c] 중단  [PgUp/PgDn] 스크롤  [g/G] 처음/끝  [?] 도움말
 
 === 200x50 ===
@@ -372,11 +372,11 @@ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/�
 ╭ 메뉴 · 19 ─────── esc 닫기 ╮ 로그 보기
 │조회                        │
 │  서비스 접속               │ 실시간 로그 (서비스는 계속 실행 중)
-│  로그 보기                 │ 서비스: 스택 전체
-│▸ 스택 상태                 │ 인스턴스: 전체
-│                            │ 명령: logs
-│운영                        │
-│  스택 제거 ▲ 위험          │ api-1  | 2026-11-20T09:14:20.140Z INFO  request completed method=GET path=/v1/health status=200 duration=12ms
+│  로그 보기                 │ [api]
+│▸ 스택 상태                 │ 서비스: 스택 전체
+│                            │ 인스턴스: 전체
+│운영                        │ 명령: logs
+│  스택 제거 ▲ 위험          │
 │  스택 재시작               │ api-1  | 2026-11-20T09:14:21.147Z INFO  request completed method=GET path=/v1/health status=200 duration=13ms
 │  스택 중지                 │ api-1  | 2026-11-20T09:14:22.154Z INFO  request completed method=GET path=/v1/health status=200 duration=3ms
 │  스택 시작                 │ api-1  | 2026-11-20T09:14:23.161Z INFO  request completed method=GET path=/v1/health status=200 duration=4ms
@@ -390,7 +390,7 @@ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/�
 │설정                        │ api-1  | 2026-11-20T09:14:31.217Z INFO  request completed method=GET path=/v1/health status=200 duration=12ms
 │  실행환경 생성             │ api-1  | 2026-11-20T09:14:32.224Z INFO  request completed method=GET path=/v1/health status=200 duration=13ms
 │  호스트 스크립트           │ api-1  | 2026-11-20T09:14:33.231Z INFO  request completed method=GET path=/v1/health status=200 duration=3ms
-│    커스텀                  │ api-1  | 2026-11-20T09:14:34.238Z INFO  request completed method=GET path=/v1/health status=200 duration=4ms                                                            █
+│    커스텀                  │ api-1  | 2026-11-20T09:14:34.238Z INFO  request completed method=GET path=/v1/health status=200 duration=4ms
 │    Git                     │ api-1  | 2026-11-20T09:14:35.245Z INFO  request completed method=GET path=/v1/health status=200 duration=5ms                                                            █
 │    S3                      │ api-1  | 2026-11-20T09:14:36.252Z INFO  request completed method=GET path=/v1/health status=200 duration=6ms                                                            █
 │  Compose 설치              │ api-1  | 2026-11-20T09:14:37.259Z INFO  request completed method=GET path=/v1/health status=200 duration=7ms                                                            █
@@ -416,5 +416,5 @@ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/�
 │────────────────────────────│ api-1  | 2026-11-20T09:14:57.399Z INFO  request completed method=GET path=/v1/health status=200 duration=5ms                                                            █
 │ ▸ 스택 상태                │ api-1  | 2026-11-20T09:14:58.406Z INFO  request completed method=GET path=/v1/health status=200 duration=6ms                                                            █
 │ 현재 스택과 서비스 상태를  │ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/health status=200 duration=7ms                                                            █
-╰────────────────────────────╯ 21-60/60                                                                                                                                                  PgUp/PgDn · g/G
+╰────────────────────────────╯ 22-60/60                                                                                                                                                  PgUp/PgDn · g/G
 [q] 화면 닫기  [ctrl+c] 중단  [PgUp/PgDn] 스크롤  [g/G] 처음/끝  [?] 도움말

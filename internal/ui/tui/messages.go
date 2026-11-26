@@ -106,11 +106,13 @@ const (
 	msgServiceLoading       = "서비스 목록을 확인하는 중…"
 	msgServiceSelectTitle   = "서비스 선택"
 	msgServiceSelectIntro   = "적용 범위 선택. 전체 선택 시 스택 전체에 적용."
-	msgServiceSelectionNote = "선택은 같은 엔진 규칙으로 다시 검증됨. 인스턴스 단위 선택은 로그·exec 화면에서만 제공."
 	msgServiceWhole         = "전체 (스택 전체)"
 	msgServiceCanceled      = "서비스 선택 취소. 아무것도 실행하지 않았음."
 	msgServiceNotConfigured = "현재 설정에 없음"
 	msgServiceNoServices    = "서비스가 없음. Compose 파일에 services 항목이 있는지 확인."
+	msgServiceRequired      = "서비스를 하나 이상 선택."
+	msgServiceCap           = "최대 %d개까지 선택 가능."
+	msgServiceIntroLogs     = "로그를 볼 서비스 선택 · 최대 4개"
 	msgServiceNoPort        = "-"
 	// State and health wording comes from internal/stack/present; the service
 	// scope screen draws the same words as the status table.
@@ -139,6 +141,10 @@ const (
 	// child while this line is not.
 	msgLiveKeepsRunningAndDetach = "서비스는 계속 실행 중 · 종료: ctrl+]"
 	msgLiveScrollKeys            = "PgUp/PgDn · g/G"
+	msgLiveTabDone               = " · 종료"
+	msgLiveTabFailed             = " · 실패"
+	msgLiveNextTab               = "다음 서비스"
+	msgLivePrevTab               = "이전 서비스"
 	msgLastOutput                = "마지막 실시간 출력"
 	msgLastOutputOmitted         = "마지막 실시간 출력 (앞 %d줄 생략)"
 )

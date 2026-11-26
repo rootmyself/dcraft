@@ -265,6 +265,9 @@ func (m *Model) activateHit(hit hitTarget, double bool) tea.Cmd {
 // whole-stack row clears every individual choice, exactly like Space on it.
 func (m *Model) selectServiceRow(index int) {
 	if index < 0 || index >= len(m.serviceOptions) {
+		if m.serviceScope != scopeWholeStack {
+			return
+		}
 		m.serviceCursor = 0
 		m.serviceWhole = true
 		for i := range m.serviceChecked {
@@ -273,10 +276,16 @@ func (m *Model) selectServiceRow(index int) {
 		m.followServiceCursor()
 		return
 	}
-	m.serviceCursor = index + 1
+	m.serviceCursor = index + m.wholeRowOffset()
 	if m.serviceOptions[index].Configured && index < len(m.serviceChecked) {
+		if !m.serviceChecked[index] && m.serviceCap > 0 && countChecked(m.serviceChecked) >= m.serviceCap {
+			m.notice = fmt.Sprintf(msgServiceCap, m.serviceCap)
+			m.followServiceCursor()
+			return
+		}
+		m.notice = ""
 		m.serviceChecked[index] = !m.serviceChecked[index]
-		m.serviceWhole = !anyChecked(m.serviceChecked)
+		m.serviceWhole = m.serviceScope != scopeRequired && !anyChecked(m.serviceChecked)
 	}
 	m.followServiceCursor()
 }
@@ -384,7 +393,7 @@ func (m *Model) updateWheel(msg tea.MouseMsg) tea.Cmd {
 		}
 		return nil
 	case phaseSelectingServices:
-		total := len(m.serviceOptions) + 1
+		total := m.serviceRowCount()
 		m.serviceCursor = (m.serviceCursor + delta + total) % total
 		m.followServiceCursor()
 		return nil

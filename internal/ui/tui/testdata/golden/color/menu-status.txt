@@ -8,8 +8,8 @@
 스택 상태
 
 서비스 8   ✓ 실행 중 5   인스턴스 7
-▲ 비정상 1   ◐ 확인 안 됨 1   ■ 중지 1
-○ 미생성 1
+▲ 비정상 1   ◐ 앱 확인 안 됨 1
+■ 중지 1   ○ 미생성 1
 
 마지막 조회   09:14:05
 Compose 파일  /work/acme-
@@ -28,8 +28,8 @@ Compose 파일  /work/acme-
 스택 상태
 
 서비스 8   ✓ 실행 중 5   인스턴스 7
-▲ 비정상 1   ◐ 확인 안 됨 1   ■ 중지 1
-○ 미생성 1
+▲ 비정상 1   ◐ 앱 확인 안 됨 1
+■ 중지 1   ○ 미생성 1
 
 마지막 조회   09:14:05
 Compose 파일  /work/acme-
@@ -60,8 +60,8 @@ legacy                   ✓ 실행 중
 스택 상태
 
 서비스 8   ✓ 실행 중 5   인스턴스 7
-▲ 비정상 1   ◐ 확인 안 됨 1   ■ 중지 1
-○ 미생성 1
+▲ 비정상 1   ◐ 앱 확인 안 됨 1
+■ 중지 1   ○ 미생성 1
 
 마지막 조회   09:14:05
 Compose 파일  /work/acme-
@@ -112,7 +112,7 @@ legacy                   ✓ 실행 중
 메뉴 · ▸ 스택 상태 · 19개 항목                                        tab 펼치기
 스택 상태                                                                  1-3/8
 
-서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 확인 안 됨 1   ■ 중지 1
+서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 앱 확인 안 됨 1   ■ 중지 1
 ○ 미생성 1
 
 마지막 조회   09:14:05
@@ -132,7 +132,7 @@ web            ✓ 실행 중          1 ◐ 확인   nginx:1.27-alpine    3000�
 메뉴 · ▸ 스택 상태 · 19개 항목                                        tab 펼치기
 스택 상태
 
-서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 확인 안 됨 1   ■ 중지 1
+서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 앱 확인 안 됨 1   ■ 중지 1
 ○ 미생성 1
 
 마지막 조회   09:14:05
@@ -164,7 +164,7 @@ legacy         ✓ 실행 중          1 없음     ghcr.io/acme/legacy:… -
 메뉴 · ▸ 스택 상태 · 19개 항목                                        tab 펼치기
 스택 상태
 
-서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 확인 안 됨 1   ■ 중지 1
+서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 앱 확인 안 됨 1   ■ 중지 1
 ○ 미생성 1
 
 마지막 조회   09:14:05
@@ -215,7 +215,7 @@ legacy         ✓ 실행 중          1 없음     ghcr.io/acme/legacy:… -
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
 ╭ 메뉴 · 19 ─── esc 닫기 ╮ 스택 상태                                                                               1-6/8
 │조회                    │
-│  서비스 접속           │ 서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 확인 안 됨 1   ■ 중지 1   ○ 미생성 1
+│  서비스 접속           │ 서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 앱 확인 안 됨 1   ■ 중지 1   ○ 미생성 1
 │  로그 보기             │
 │▸ 스택 상태             │ 마지막 조회   09:14:05
 │                        │ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-platform/compose.staging.yaml
@@ -235,7 +235,7 @@ legacy         ✓ 실행 중          1 없음     ghcr.io/acme/legacy:… -
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
 ╭ 메뉴 · 19 ─── esc 닫기 ╮ 스택 상태
 │조회                    │
-│  서비스 접속           │ 서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 확인 안 됨 1   ■ 중지 1   ○ 미생성 1
+│  서비스 접속           │ 서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 앱 확인 안 됨 1   ■ 중지 1   ○ 미생성 1
 │  로그 보기             │
 │▸ 스택 상태             │ 마지막 조회   09:14:05
 │                        │ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-platform/compose.staging.yaml
@@ -267,7 +267,7 @@ legacy         ✓ 실행 중          1 없음     ghcr.io/acme/legacy:… -
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
 ╭ 메뉴 · 19 ─── esc 닫기 ╮ 스택 상태
 │조회                    │
-│  서비스 접속           │ 서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 확인 안 됨 1   ■ 중지 1   ○ 미생성 1
+│  서비스 접속           │ 서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 앱 확인 안 됨 1   ■ 중지 1   ○ 미생성 1
 │  로그 보기             │
 │▸ 스택 상태             │ 마지막 조회   09:14:05
 │                        │ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-platform/compose.staging.yaml
@@ -319,7 +319,7 @@ legacy         ✓ 실행 중          1 없음     ghcr.io/acme/legacy:… -
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
 ╭ 메뉴 · 19 ─────── esc 닫기 ╮ 스택 상태                                                                                                                                                           1-6/8
 │조회                        │
-│  서비스 접속               │ 서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 확인 안 됨 1   ■ 중지 1   ○ 미생성 1
+│  서비스 접속               │ 서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 앱 확인 안 됨 1   ■ 중지 1   ○ 미생성 1
 │  로그 보기                 │
 │▸ 스택 상태                 │ 마지막 조회   09:14:05
 │                            │ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-platform/compose.staging.yaml
@@ -339,7 +339,7 @@ legacy         ✓ 실행 중          1 없음     ghcr.io/acme/legacy:… -
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
 ╭ 메뉴 · 19 ─────── esc 닫기 ╮ 스택 상태
 │조회                        │
-│  서비스 접속               │ 서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 확인 안 됨 1   ■ 중지 1   ○ 미생성 1
+│  서비스 접속               │ 서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 앱 확인 안 됨 1   ■ 중지 1   ○ 미생성 1
 │  로그 보기                 │
 │▸ 스택 상태                 │ 마지막 조회   09:14:05
 │                            │ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-platform/compose.staging.yaml
@@ -371,7 +371,7 @@ legacy         ✓ 실행 중          1 없음     ghcr.io/acme/legacy:… -
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
 ╭ 메뉴 · 19 ─────── esc 닫기 ╮ 스택 상태
 │조회                        │
-│  서비스 접속               │ 서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 확인 안 됨 1   ■ 중지 1   ○ 미생성 1
+│  서비스 접속               │ 서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 앱 확인 안 됨 1   ■ 중지 1   ○ 미생성 1
 │  로그 보기                 │
 │▸ 스택 상태                 │ 마지막 조회   09:14:05
 │                            │ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-platform/compose.staging.yaml

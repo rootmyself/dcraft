@@ -32,7 +32,7 @@ func TestPTYUIEnvironmentSwitchRecordsAndReusesTheActiveAlias(t *testing.T) {
 
 	// Switching from the menu records the new alias, states it, and reopens the
 	// status screen on it.
-	s.openMenu("실행환경 전환")
+	s.openMenu("전환")
 	s.waitFrameFor(t, "실행환경 전환", 20*time.Second)
 	s.press("\x1b[B") // dev (현재) -> prod
 	s.press("\r")

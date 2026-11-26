@@ -4,12 +4,18 @@ package logs
 const (
 	msgTitle   = "서비스 로그"
 	msgSummary = "선택한 서비스의 로그를 실시간으로 따라보거나 마지막 로그를 읽음."
-	msgUsage   = "dcraft logs [-s <서비스>] [-i <인스턴스>] [--no-follow] [--tail <줄 수>] [--since <시각>] [--timestamps]\n" +
+	msgUsage   = "dcraft logs -s <서비스> [-i <인스턴스>] [--no-follow] [--tail <줄 수>] [--since <시각>] [--timestamps]\n" +
+		"  -s/--service는 필수이며 여러 번 지정 가능. 전체 스택 로그는 지원하지 않음.\n" +
 		"  기본은 실시간 따라보기. ctrl+c로 화면만 분리하며 서비스는 중지하지 않음.\n" +
+		"  대화형 화면에서는 최대 4개 서비스를 탭으로 함께 보여 줌.\n" +
 		"  --json은 실시간 로그를 하나의 결과로 표현할 수 없어 지원하지 않음."
 
 	msgStageSelect = "인스턴스 선택"
 	msgStageStream = "로그 스트림"
+
+	msgServiceRequired          = "로그를 볼 서비스 하나 이상 선택 필요."
+	msgServiceRequiredActionOne = "dcraft logs -s <서비스> [-s <서비스> ...]"
+	msgServiceRequiredActionTwo = "서비스 이름은 dcraft status에서 확인."
 
 	msgFlagNoFollow   = "실시간 따라보기를 끄고 현재까지의 로그만 읽음."
 	msgFlagTail       = "처음에 표시할 로그 줄 수 (예: 100). 기본은 Compose 전체."

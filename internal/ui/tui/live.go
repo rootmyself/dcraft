@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"sort"
 	"strings"
 	"sync"
 
@@ -11,28 +12,55 @@ import (
 	"github.com/rootmyself/dcraft/internal/ui/tui/visual"
 )
 
-// liveState is the TUI side of an attached command or a log stream. Its output
-// is a terminal screen, not a list of lines: a shell writes a prompt with no
-// newline, echoes each key and redraws the line when the user edits it, and none
-// of that survives a line-buffered reader. The grid in termview keeps the
-// child's cursor and cells, and this file lays those rows out in the frame.
+// liveState is the TUI side of an attached command or a set of log streams. Its
+// output is a terminal screen, not a list of lines: a child writes a prompt with
+// no newline, echoes each key and redraws the line, and none of that survives a
+// line-buffered reader. The grid in termview keeps the child's cursor and cells,
+// and this file lays those rows out in the frame.
+//
+// A log run may watch several services at once. Each service gets its own grid
+// and its own stream, drawn as one tab at a time: the reader compares services
+// by switching tabs, and one failing stream never blanks the others.
 //
 // Nothing here owns stack lifetime: leaving the screen cancels the run context
 // and detaches, it never stops a service.
 type liveState struct {
 	mode core.LiveMode
-	// view is the child's terminal screen.
-	view *termview.View
-	// writer is the stream the feature writes to. It feeds the grid and signals
-	// the repaint, so one write is one screen update without a per-line message.
-	writer *liveWriter
+	// streams are the grids of this screen in tab order. An attached command
+	// has exactly one; a log screen has one per selected service, capped by
+	// liveMaxTabs.
+	streams []*liveStream
+	// selected is the tab index the screen draws. It is the only stream the
+	// scroll keys move.
+	selected int
 	// notice is the one state message under the output, such as "중단 중".
 	notice string
 	// stopping reports that a detach has been requested.
 	stopping bool
-	// once closes the view exactly once when the run ends.
+	// once closes the streams exactly once when the run ends.
 	once sync.Once
 }
+
+// liveStream is one service's grid plus the state of its own process. The
+// writer and the exit state are per stream because a log run opens one stream
+// per service: one may end while the others keep following.
+type liveStream struct {
+	// name is the service name, or empty for an attached command.
+	name string
+	// view is the child's terminal screen.
+	view *termview.View
+	// writer feeds the grid and signals the repaint.
+	writer *liveWriter
+	// done reports that this stream's process has ended on its own.
+	done bool
+	// err is the failure this stream ended with, empty for a clean exit.
+	err string
+}
+
+// liveMaxTabs is how many log streams one screen may show. A single screen
+// compares a handful of services; past that the tabs stop being readable and a
+// selection mistake costs more than it saves.
+const liveMaxTabs = 4
 
 // liveNotifyCapacity is the repaint signal's buffer. One is enough: the signal
 // coalesces a burst of output into a single repaint, and a full buffer means a
@@ -77,6 +105,63 @@ func (w *liveWriter) close() {
 	w.closed = true
 }
 
+// fanout is the TUI's implementation of core.Fanout: it hands a feature one
+// stream per service and records how each stream ended, so a log screen can
+// label a finished tab and keep the others running.
+type fanout struct {
+	m *Model
+	// labels are the streams the screen draws, in tab order.
+	labels []string
+}
+
+func (f *fanout) Stream(label string) core.IO {
+	stream := f.stream(label)
+	if stream == nil {
+		return core.IO{}
+	}
+	return core.IO{Stdout: stream.writer, Stderr: stream.writer, Width: f.m.bodyWidth(), Height: f.m.liveBandRows()}
+}
+
+// stream finds the live stream a label names, creating none: setupLive already
+// made exactly the tabs the selection declared, in the same order.
+func (f *fanout) stream(label string) *liveStream {
+	if f.m.live == nil {
+		return nil
+	}
+	for _, stream := range f.m.live.streams {
+		if stream.name == label {
+			return stream
+		}
+	}
+	return nil
+}
+
+func (f *fanout) StreamDone(label string, err error) {
+	stream := f.stream(label)
+	if stream == nil {
+		return
+	}
+	stream.done = true
+	if err != nil {
+		stream.err = err.Error()
+	}
+	// A finished stream repaints once so the tab row states the new state even
+	// when the child wrote nothing else.
+	f.m.signalLive()
+}
+
+// signalLive asks the render loop for one repaint without blocking a feature
+// goroutine.
+func (m *Model) signalLive() {
+	if m.liveCh == nil {
+		return
+	}
+	select {
+	case m.liveCh <- struct{}{}:
+	default:
+	}
+}
+
 // setupLive wires a live feature's streams. Both modes get a grid: a log stream
 // and an attached command differ in whether the child reads input, not in how
 // its output is drawn.
@@ -93,36 +178,85 @@ func (m *Model) setupLive(f core.Feature) {
 	ch := make(chan struct{}, liveNotifyCapacity)
 	m.liveCh = ch
 	m.live = &liveState{mode: live.LiveMode()}
-	cols, rows := m.liveGridSize()
-	var view *termview.View
+
 	if live.LiveMode() == core.LiveAttach {
-		// An attached command owns a pseudo-terminal and draws with cursor
-		// movement, so its bytes already carry the terminal's newline rule.
-		view = termview.New(cols, rows)
-	} else {
-		// A log stream is not a terminal: `docker compose logs` writes bare
-		// newlines, so the view applies the terminal driver's rule itself.
-		view = termview.NewPipe(cols, rows)
+		stream := m.newLiveStream("")
+		m.live.streams = []*liveStream{stream}
+		// Keys reach the child through the grid's input stream, which is also
+		// where the terminal's own replies to the child travel.
+		m.req.IO = core.IO{
+			Stdin: stream.view.Input(), Stdout: stream.writer, Stderr: stream.writer,
+			TTY: true, Width: m.bodyWidth(), Height: m.liveBandRows(),
+		}
+		return
 	}
-	writer := &liveWriter{view: view, notify: ch}
-	m.live.view = view
-	m.live.writer = writer
+
+	// A log screen opens one stream per selected service. The streams are
+	// created in name order so a tab's position never depends on selection
+	// order, and the feature receives the same labels through the fanout.
+	names := logStreamNames(m.req.Services)
+	if len(names) == 0 {
+		// A log screen normally names its services. A caller that runs one
+		// stream without a selection still needs a surface, so it gets one
+		// unnamed tab instead of an empty screen.
+		names = []string{""}
+	}
+	streams := make([]*liveStream, 0, len(names))
+	for _, name := range names {
+		streams = append(streams, m.newLiveStream(name))
+	}
+	m.live.streams = streams
+	m.live.selected = 0
 	// A live screen starts at the tail: the newest output is what the reader
 	// came to see. Scrolling up stops following until the bottom is reached.
 	m.liveTop = 0
 	m.liveFollow = true
 	m.req.IO = core.IO{
-		Stdout: writer,
-		Stderr: writer,
-		Width:  cols,
-		Height: rows,
+		Width:  m.bodyWidth(),
+		Height: m.liveBandRows(),
+		Fanout: &fanout{m: m, labels: names},
 	}
-	if m.live.mode == core.LiveAttach {
-		// Keys reach the child through the grid's input stream, which is also
-		// where the terminal's own replies to the child travel.
-		m.req.IO.Stdin = view.Input()
-		m.req.IO.TTY = true
+	// The single-stream case also fills Stdout/Stderr: a feature that watches
+	// one service does not need the fanout, and a plain writer keeps that path
+	// the same as before.
+	if len(streams) == 1 {
+		m.req.IO.Stdout = streams[0].writer
+		m.req.IO.Stderr = streams[0].writer
 	}
+}
+
+// newLiveStream creates one grid sized to the body band. An attach stream owns a
+// pseudo-terminal; a log stream is a pipe, so the view applies the terminal
+// driver's newline rule itself.
+func (m *Model) newLiveStream(name string) *liveStream {
+	cols, rows := m.liveGridSize()
+	var view *termview.View
+	if m.live != nil && m.live.mode == core.LiveAttach {
+		view = termview.New(cols, rows)
+	} else {
+		view = termview.NewPipe(cols, rows)
+	}
+	return &liveStream{name: name, view: view, writer: &liveWriter{view: view, notify: m.liveCh}}
+}
+
+// logStreamNames orders the selected services for the tab row: a name repeated
+// twice is one tab, and the order is the name order so the row is predictable.
+func logStreamNames(services []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(services))
+	for _, raw := range services {
+		name := strings.TrimSpace(raw)
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	if len(out) > liveMaxTabs {
+		out = out[:liveMaxTabs]
+	}
+	return out
 }
 
 // liveGridSize is the grid the child draws into: the body region the screen has
@@ -140,15 +274,20 @@ func (m *Model) liveGridSize() (cols, rows int) {
 	return cols, rows
 }
 
-// resizeLive keeps the child's grid the size of the band it is drawn in, so a
-// full-screen child such as an editor fills the band and a resize reaches it.
+// resizeLive keeps the children's grids the size of the band they are drawn in,
+// so a full-screen child such as an editor fills the band and a resize reaches
+// it.
 func (m *Model) resizeLive() {
-	if m.live != nil && m.live.view != nil {
+	if m.live != nil {
 		cols, rows := m.liveGridSize()
-		m.live.view.Resize(cols, rows)
-		// The grid never shrinks (a shorter buffer would truncate the newest
-		// rows), so the recorded size is the grid's, not the window's.
-		m.req.IO.Width, m.req.IO.Height = m.live.view.Size()
+		for _, stream := range m.live.streams {
+			stream.view.Resize(cols, rows)
+		}
+		if m.live.mode == core.LiveAttach && m.req.IO.TTY {
+			// The grid never shrinks (a shorter buffer would truncate the newest
+			// rows), so the recorded size is the grid's, not the window's.
+			m.req.IO.Width, m.req.IO.Height = m.live.streams[0].view.Size()
+		}
 	}
 	// The running `up` log is a grid too: a resize must reach it or its lines
 	// wrap at the old column count.
@@ -165,20 +304,18 @@ func (m *Model) resizeLive() {
 	}
 }
 
-// closeLive ends the screen: the child's input closes, the grid is released and
-// the screen state is cleared. The caller keeps what it wants first.
+// closeLive ends the screen: the children's input closes, the grids are released
+// and the screen state is cleared. The caller keeps what it wants first.
 func (m *Model) closeLive() {
 	if m.live == nil {
 		return
 	}
 	m.live.once.Do(func() {
-		// Stop the writer signalling before the channel closes: a feature
+		// Stop the writers signalling before the channel closes: a feature
 		// goroutine may still be writing when its run is cancelled.
-		if m.live.writer != nil {
-			m.live.writer.close()
-		}
-		if m.live.view != nil {
-			_ = m.live.view.Close()
+		for _, stream := range m.live.streams {
+			stream.writer.close()
+			_ = stream.view.Close()
 		}
 		if m.liveCh != nil {
 			close(m.liveCh)
@@ -186,6 +323,35 @@ func (m *Model) closeLive() {
 	})
 	m.live = nil
 	m.liveCh = nil
+}
+
+// currentStream is the stream the screen is drawing: the selected log tab, or
+// the single attach stream.
+func (m *Model) currentStream() *liveStream {
+	if m.live == nil || len(m.live.streams) == 0 {
+		return nil
+	}
+	if m.live.selected < 0 || m.live.selected >= len(m.live.streams) {
+		return m.live.streams[0]
+	}
+	return m.live.streams[m.live.selected]
+}
+
+// moveLiveTab moves the log tab selection by delta, wrapping at both ends. It
+// never changes an attach screen, which has one stream and forwards tab to the
+// child.
+func (m *Model) moveLiveTab(delta int) {
+	if m.live == nil || m.live.mode == core.LiveAttach || len(m.live.streams) < 2 {
+		return
+	}
+	next := (m.live.selected + delta + len(m.live.streams)) % len(m.live.streams)
+	if next == m.live.selected {
+		return
+	}
+	m.live.selected = next
+	// Each tab keeps its own window: arriving at a tab starts at its tail.
+	m.liveTop = 0
+	m.liveFollow = true
 }
 
 func tailOrKeep(tail, previous []string) []string {
@@ -229,12 +395,20 @@ func (m *Model) updateLiveKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if msg.String() == "ctrl+]" {
 			return m.stopLive(), nil
 		}
-		if bytes := keyBytes(msg); len(bytes) > 0 && m.live.view != nil {
-			m.live.view.SendText(string(bytes))
+		if stream := m.currentStream(); stream != nil {
+			if bytes := keyBytes(msg); len(bytes) > 0 {
+				stream.view.SendText(string(bytes))
+			}
 		}
 		return m, nil
 	}
 	switch msg.String() {
+	case "tab":
+		m.moveLiveTab(1)
+		return m, nil
+	case "shift+tab":
+		m.moveLiveTab(-1)
+		return m, nil
 	case "pgup", "pgdown", "home", "end", "g", "G":
 		// The log screen owns these keys: they move the output window and
 		// never reach the child (logs has no input stream). A short log that
@@ -252,7 +426,8 @@ func (m *Model) updateLiveKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // liveScrolls reports whether the output overflows the band. It is the same
 // computation the frame draws, so a key is never advertised by accident.
 func (m *Model) liveScrolls() bool {
-	if m.live == nil || m.live.view == nil {
+	stream := m.currentStream()
+	if stream == nil {
 		return false
 	}
 	return m.liveViewport().Overflow()
@@ -289,8 +464,8 @@ func (m *Model) stopLive() *Model {
 	if m.runCancel != nil {
 		m.runCancel()
 	}
-	if m.live.view != nil {
-		_ = m.live.view.Close()
+	for _, stream := range m.live.streams {
+		_ = stream.view.Close()
 	}
 	return m
 }
@@ -298,17 +473,18 @@ func (m *Model) stopLive() *Model {
 // captureLiveTail is what the management screen keeps after a detach: the rows
 // the child's screen was showing, so the reader keeps the context they left in.
 func (m *Model) captureLiveTail() []string {
-	if m.live == nil || m.live.view == nil {
+	stream := m.currentStream()
+	if stream == nil {
 		return nil
 	}
-	total := m.live.view.Window(0, 0).Total
+	total := stream.view.Window(0, 0).Total
 	start := total - liveTailRows
 	if start < 0 {
 		start = 0
 	}
 	// Only the tail is needed, so only the tail is read: the scrollback can hold
 	// thousands of rows the panel will never show.
-	win := m.live.view.Window(start, total)
+	win := stream.view.Window(start, total)
 	palette := m.livePalette()
 	out := make([]string, 0, len(win.Rows))
 	for _, line := range win.Rows {
@@ -347,7 +523,7 @@ func (m *Model) liveHeaderLines() []string {
 		// when a full-screen child covers the frame's keycaps.
 		state = append(state, m.title(msgLiveAttached), m.hintText(msgLiveKeepsRunningAndDetach))
 	} else {
-		state = append(state, m.title(msgLiveStreaming))
+		state = append(state, m.title(msgLiveStreaming), m.liveTabRow())
 	}
 	instance := msgLiveAllInstances
 	if index := strings.TrimSpace(m.req.Options["index"]); index != "" {
@@ -358,6 +534,32 @@ func (m *Model) liveHeaderLines() []string {
 		msgLiveInstance+": "+instance,
 		msgLiveCommand+": "+m.liveCommandText(),
 	)
+}
+
+// liveTabRow is the one-line tab strip: every selected service in name order,
+// the current one marked, and a finished stream labelled so the reader knows why
+// it stopped moving. With one service the row is the service name alone, so a
+// single-service screen keeps its former shape.
+func (m *Model) liveTabRow() string {
+	if m.live == nil || len(m.live.streams) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(m.live.streams))
+	for i, stream := range m.live.streams {
+		label := stream.name
+		switch {
+		case stream.err != "":
+			label += msgLiveTabFailed
+		case stream.done:
+			label += msgLiveTabDone
+		}
+		if i == m.live.selected {
+			parts = append(parts, m.theme.Bold(visual.TokenAccent, "["+label+"]"))
+			continue
+		}
+		parts = append(parts, m.hintText(" "+label+" "))
+	}
+	return strings.Join(parts, " ")
 }
 
 // liveCommandText names what is running: the attached argv when the screen
@@ -414,26 +616,29 @@ func (m *Model) liveBandRows() int {
 // shown. Following is applied last so the window reaches the final line instead
 // of stopping one short.
 func (m *Model) liveViewport() visual.Viewport {
-	if m.live == nil || m.live.view == nil {
+	stream := m.currentStream()
+	if stream == nil {
 		return visual.Viewport{}
 	}
-	return m.liveViewportOf(m.liveRowCount())
+	return m.liveViewportOf(stream.view.Window(0, 0).Total)
 }
 
-// liveRowCount is how many rows the grid holds, read without materialising them
-// so a key handler that only needs the window never pays for the rows.
+// liveRowCount is how many rows the current grid holds, read without
+// materialising them so a key handler that only needs the window never pays for
+// the rows.
 func (m *Model) liveRowCount() int {
-	if m.live == nil || m.live.view == nil {
+	stream := m.currentStream()
+	if stream == nil {
 		return 0
 	}
-	return m.live.view.Window(0, 0).Total
+	return stream.view.Window(0, 0).Total
 }
 
 // liveViewportOf is the one window computation over a given total. The layout
 // pass reads the total once and draws a window of the same grid, so the counter,
 // the drawn rows and the keys cannot describe different moments.
 func (m *Model) liveViewportOf(total int) visual.Viewport {
-	if m.live == nil || m.live.view == nil {
+	if m.live == nil || m.currentStream() == nil {
 		return visual.Viewport{}
 	}
 	height := m.liveBandRows()
@@ -532,18 +737,19 @@ func (m *Model) liveLayout() bodyLayout {
 	return bodyLayout{lines: lines, viewport: vp, scrolls: vp.Overflow()}
 }
 
-// liveOutputRows draws the window's rows from the child's grid. The cursor is
-// painted into the cell it sits on when the child still shows it, so the reader
-// can see where typing will land; a full-screen child that hides it keeps its
-// own highlight.
+// liveOutputRows draws the window's rows from the current child's grid. The
+// cursor is painted into the cell it sits on when the child still shows it, so
+// the reader can see where typing will land; a full-screen child that hides it
+// keeps its own highlight.
 func (m *Model) liveOutputRows(vp visual.Viewport) []string {
-	if m.live == nil || m.live.view == nil {
+	stream := m.currentStream()
+	if stream == nil {
 		return nil
 	}
 	start, end := vp.Window()
 	// One snapshot carries the rows and the caret, so a write cannot move the
 	// caret onto a row from a different moment than the cells drawn.
-	win := m.live.view.Window(start, end)
+	win := stream.view.Window(start, end)
 	palette := m.livePalette()
 	// Only an attached command has a caret, and only a painted screen can show
 	// one: the inversion is an escape, and NO_COLOR promises none.

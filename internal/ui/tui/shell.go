@@ -68,13 +68,14 @@ func (m *Model) screenKeycaps() []visual.Keycap {
 		// A log stream owns the scroll keys when its output does not fit. The
 		// approved live row keeps its mandatory chips and gains only the keys
 		// this screen actually accepts.
-		return []visual.Keycap{
+		items := []visual.Keycap{
 			{Key: "q", Label: msgKeyCloseScreen, Priority: 0},
 			{Key: "ctrl+c", Label: msgKeyStop, Priority: 1},
 			{Key: "PgUp/PgDn", Label: msgKeyScroll, Priority: 2},
 			{Key: "g/G", Label: msgKeyEnds, Priority: 3},
 			{Key: "?", Label: msgKeyHelp, Priority: 3},
 		}
+		return append(items, m.liveTabKeycaps()...)
 	}
 	if m.live == nil && (m.phase == phaseLoading || m.phase == phasePlanning) &&
 		m.active != nil && m.active.Descriptor().ReadOnly {
@@ -187,6 +188,11 @@ func (m *Model) screenKeycaps() []visual.Keycap {
 		return items
 	}
 	items := m.resultScrollKeycaps(visual.FooterItems(m.footerPhase()))
+	if m.live != nil && m.live.mode != core.LiveAttach {
+		// A log screen switches between service tabs. The chips are part of the
+		// approved live row only when there is more than one tab to switch to.
+		items = append(items, m.liveTabKeycaps()...)
+	}
 	if m.progressScrolls() {
 		// The log viewport is the only surface PgUp/PgDn move while a run is
 		// in flight; state the keys next to the mandatory cancel/quit chips.
@@ -196,6 +202,15 @@ func (m *Model) screenKeycaps() []visual.Keycap {
 		)
 	}
 	return items
+}
+
+// liveTabKeycaps is the tab-switch chips for a log screen with more than one
+// service. With one tab, tab does nothing, so the row stays as it was.
+func (m *Model) liveTabKeycaps() []visual.Keycap {
+	if m.live == nil || m.live.mode == core.LiveAttach || len(m.live.streams) < 2 {
+		return nil
+	}
+	return []visual.Keycap{{Key: "tab", Label: msgLiveNextTab, Priority: 1}}
 }
 
 // withoutHelp drops the help chip from a row for a screen that cannot open the

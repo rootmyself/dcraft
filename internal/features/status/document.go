@@ -119,7 +119,7 @@ func documentTable(snap stack.Snapshot) *core.Table {
 			Selectable: svc.Configured,
 			Cells: []core.Cell{
 				{Text: svc.Name, Detail: svc.Name, Kind: core.ValueService},
-				{Text: present.StateLabel(svc.State), Badge: present.StateBadge(svc.State)},
+				{Text: present.StateLabel(svc.State), Badge: present.StateBadge(svc.State), Emphasis: present.StateEmphasis(svc.State)},
 				{Text: fmt.Sprintf("%d", len(svc.Instances))},
 				{Text: present.HealthLabel(svc.Health), Badge: present.HealthBadge(svc.Health)},
 				{Text: imageText(svc), Detail: imageText(svc), Kind: core.ValueImage},

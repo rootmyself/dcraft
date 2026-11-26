@@ -23,7 +23,7 @@ func TestHooksTUIShowsPlanTrustApprovalAndDeclineRunsNothing(t *testing.T) {
 	env := fake.env(t, t.TempDir())
 
 	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
-		{wait: "마지막 조회", walk: "스택 시작", send: "\r"},
+		{wait: "마지막 조회", walk: "서비스 시작", send: "\r"},
 		{wait: "서비스 선택", send: "\r"},
 		{wait: "승인 확인", send: ""},
 		{wait: "스크립트 신뢰", send: ""},

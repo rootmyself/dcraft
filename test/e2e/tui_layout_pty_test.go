@@ -132,7 +132,7 @@ func TestPTYTUIResizeReflowsAndKeepsTheFrame(t *testing.T) {
 
 	s := startPTY(t, project, env)
 	s.waitFor("마지막 조회", 15*time.Second)
-	s.waitFor("스택 상태", 15*time.Second)
+	s.waitFor("서비스 상태", 15*time.Second)
 
 	// Wide: the persistent sidebar is drawn.
 	if !screenContains(s.out.String(), "╭ 메뉴") {
@@ -181,7 +181,7 @@ func TestPTYTUIReturningToAScreenKeepsTheCursorAndResult(t *testing.T) {
 
 	s := startPTY(t, project, env)
 	s.waitFor("마지막 조회", 15*time.Second)
-	s.waitFor("스택 상태", 15*time.Second)
+	s.waitFor("서비스 상태", 15*time.Second)
 
 	// Walk to stop and open the scope table, then leave it with esc.
 	s.openMenuFeature(t, "stop")
@@ -190,10 +190,10 @@ func TestPTYTUIReturningToAScreenKeepsTheCursorAndResult(t *testing.T) {
 	time.Sleep(400 * time.Millisecond)
 
 	tail := s.out.String()
-	if !screenContains(tail, "▸ 스택 중지") {
+	if !screenContains(tail, "▸ 서비스 중지") {
 		t.Fatalf("the cursor did not stay on the feature that was left:\n%s", visibleText(tail))
 	}
-	if !screenContains(tail, "스택 상태") {
+	if !screenContains(tail, "서비스 상태") {
 		t.Fatalf("the last result was lost on return:\n%s", visibleText(tail))
 	}
 	if screenContains(tail[safeIndex(tail, "서비스 선택"):], "선택 서비스") {
@@ -226,7 +226,7 @@ func TestPTYTUINoColorStillRendersStructure(t *testing.T) {
 
 	s := startPTY(t, project, env)
 	s.waitFor("마지막 조회", 15*time.Second)
-	s.waitFor("스택 상태", 15*time.Second)
+	s.waitFor("서비스 상태", 15*time.Second)
 
 	tail := s.out.String()
 	if sgr := sgrOnly.FindAllString(tail, -1); len(sgr) > 0 {
@@ -278,14 +278,14 @@ func TestPTYTUIRendersPerColorProfile(t *testing.T) {
 			// with the profile's TERM already in the environment.
 			s := startPTYWithTerm(t, project, env, tc.term)
 			s.waitFor("마지막 조회", 15*time.Second)
-			s.waitFor("스택 상태", 15*time.Second)
+			s.waitFor("서비스 상태", 15*time.Second)
 
 			tail := s.out.String()
 			cols := 120
 			if bad := overWideRows(tail, cols); len(bad) > 0 {
 				t.Fatalf("%s: row wider than the terminal: %q", tc.name, bad[0])
 			}
-			for _, want := range []string{"dcraft", "스택 상태", "[q] 종료"} {
+			for _, want := range []string{"dcraft", "서비스 상태", "[q] 종료"} {
 				if !screenContains(tail, want) {
 					t.Fatalf("%s: frame missing %q:\n%s", tc.name, want, visibleText(tail))
 				}
@@ -354,7 +354,7 @@ func TestPTY16ColorKeepsDistinctStateTokens(t *testing.T) {
 	env := fake.env(t, t.TempDir())
 	s := startPTYWithTerm(t, project, env, "xterm")
 	s.waitFor("마지막 조회", 15*time.Second)
-	s.waitFor("스택 상태", 15*time.Second)
+	s.waitFor("서비스 상태", 15*time.Second)
 	tail := s.out.String()
 	for _, bad := range []string{"38;2", "38;5", "48;2", "48;5"} {
 		if strings.Contains(tail, bad) {

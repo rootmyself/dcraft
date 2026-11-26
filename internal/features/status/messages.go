@@ -41,7 +41,7 @@ const (
 	msgBadgeRunning    = "실행 중 %d"
 	msgBadgeInstances  = "인스턴스 %d"
 	msgBadgeUnhealthy  = "비정상 %d"
-	msgBadgeUnverified = "확인 안 됨 %d"
+	msgBadgeUnverified = "앱 확인 안 됨 %d"
 	msgBadgeStopped    = "중지 %d"
 	msgBadgeNotCreated = "미생성 %d"
 

@@ -21,6 +21,16 @@ type LiveFeature interface {
 	LiveMode() LiveMode
 }
 
+// ServiceScope is an optional capability for a feature whose work names
+// services. The generic scope screen asks it whether a selection is required
+// instead of deriving the answer from a feature name.
+type ServiceScope interface {
+	RequiresServiceScope() bool
+	// MaxServices caps how many services one screen may collect. Zero means the
+	// feature imposes no cap.
+	MaxServices() int
+}
+
 // CanceledReporter is an optional capability for a feature whose cancellation
 // has a specific, honest effect (a detached stream, an atomic install that is
 // either absent or complete). The engine keeps the canceled outcome and exit

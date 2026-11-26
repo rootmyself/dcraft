@@ -342,8 +342,10 @@ func TestPTYTUILogsScreenReturnsToTheMenuAndKeepsServices(t *testing.T) {
 	s.waitFor("마지막 조회", 15*time.Second)
 	s.openMenuFeature(t, "logs")
 	s.waitFor("서비스 선택", 15*time.Second)
+	// The screen requires a named service: pick the first row, then confirm.
+	s.press(" ")
 	s.press("\r")
-	s.waitFor("로그 보기", 15*time.Second)
+	s.waitFor("서비스 로그", 15*time.Second)
 	s.waitFor("followed line", 15*time.Second)
 	s.send("q")
 	s.waitFor("마지막 실시간 출력", 15*time.Second)
@@ -408,11 +410,13 @@ func TestPTYTUILogsScreenScrollsUnderAPinnedHeaderAndRestoresTerminal(t *testing
 	s.waitFor("마지막 조회", 15*time.Second)
 	s.openMenuFeature(t, "logs")
 	s.waitFor("서비스 선택", 15*time.Second)
+	// The services are listed in name order, so the first row is db.
+	s.press(" ")
 	s.press("\r")
 	s.waitFor("실시간 로그", 15*time.Second)
 	s.waitFor("followed line", 15*time.Second)
-	// The pinned header states what is being watched while the band scrolls.
-	for _, want := range []string{"서비스: 스택 전체", "인스턴스: 전체", "명령: logs"} {
+	// The pinned header names the selected service while the band scrolls.
+	for _, want := range []string{"서비스: db", "인스턴스: 전체", "명령: logs"} {
 		s.waitFor(want, 15*time.Second)
 	}
 	// The faked stream is short, so the position row may be absent; scrolling

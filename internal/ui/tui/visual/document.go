@@ -209,11 +209,21 @@ func LayoutTableOptions(th Theme, table core.Table, width int, opts TableOptions
 				}
 				layout.Truncations = append(layout.Truncations, DetailEntry{Label: label, Value: value, Kind: cell.Kind})
 			}
+			if cell.DetailNote != "" {
+				label := p.col.Header
+				if p.orig != 0 && lead != "" {
+					label = lead + " · " + p.col.Header
+				}
+				layout.Truncations = append(layout.Truncations, DetailEntry{Label: label, Value: cell.DetailNote})
+			}
 			cells[i] = alignCell(p.col.Align, text, widths[i], ell)
-			if cell.Badge != core.BadgeNone {
+			switch {
+			case cell.Emphasis == core.EmphasisDanger:
+				cells[i] = th.Paint(TokenDanger, cells[i])
+			case cell.Badge != core.BadgeNone:
 				_, token := badgeGlyph(th, cell.Badge)
 				cells[i] = th.Paint(token, cells[i])
-			} else if !row.Selectable {
+			case !row.Selectable:
 				cells[i] = th.Paint(TokenMuted, cells[i])
 			}
 		}

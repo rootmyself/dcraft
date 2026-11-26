@@ -862,7 +862,7 @@ func goldenLiveHostileModel(t *testing.T) *Model {
 		_, _ = fmt.Fprintln(view, line)
 	}
 	ch := make(chan struct{}, 1)
-	m.live = &liveState{mode: core.LiveStream, view: view}
+	m.live = &liveState{mode: core.LiveStream, streams: []*liveStream{{name: "api", view: view, writer: &liveWriter{view: view, notify: ch}}}}
 	m.liveCh = ch
 	m.liveFollow = true
 	return m
@@ -889,7 +889,7 @@ func goldenLogs(t *testing.T) *Model {
 		_, _ = fmt.Fprintln(view, line)
 	}
 	ch := make(chan struct{}, 1)
-	m.live = &liveState{mode: core.LiveStream, view: view}
+	m.live = &liveState{mode: core.LiveStream, streams: []*liveStream{{name: "api", view: view, writer: &liveWriter{view: view, notify: ch}}}}
 	m.liveCh = ch
 	m.liveFollow = true
 	return m
