@@ -15,7 +15,7 @@ const (
 	msgUsage             = "dcraft hooks [--list|--add|--remove] [--stage pre|post] [--script 경로]\n\n" +
 		"등록한 스크립트만 up/update 전후에 실행. 파일명만으로는 실행하지 않음.\n" +
 		"처음 실행하거나 내용이 바뀌면 별도의 스크립트 신뢰 승인이 필요.\n" +
-		"스크립트는 사용자 권한으로 프로젝트 폴더에서 실행되며, dcraft는 샌드박싱하거나 자동으로 되돌리지 않음."
+		"스크립트는 사용자 권한으로 프로젝트 폴더에서 실행되며 dcraft는 샌드박싱하거나 자동으로 되돌리지 않음."
 
 	msgFlagList   = "등록된 스크립트와 신뢰 상태를 표시 (기본)."
 	msgFlagAdd    = "스크립트 등록."
@@ -35,11 +35,11 @@ const (
 	msgInputActionOne  = "dcraft hooks --help로 입력 형식 확인."
 	msgInputActionTwo  = "경로와 실행 시점(pre/post)을 확인."
 
-	msgAdded        = "스크립트 등록. 등록과 신뢰 승인은 별개이며, 다음 up/update에서 경로·시점·내용 식별자를 확인한 뒤 승인 필요."
+	msgAdded        = "스크립트 등록. 등록과 신뢰 승인은 별개이며 다음 up/update에서 경로·시점·내용 식별자를 확인한 뒤 승인 필요."
 	msgRemoved      = "스크립트 등록 제거."
 	msgNoHooks      = "등록된 호스트 스크립트가 없음. up/update는 스크립트를 실행하지 않음."
 	msgTrustPending = "아직 승인되지 않았거나 내용이 바뀐 스크립트가 있음. up/update 전에 별도 스크립트 신뢰 승인이 필요."
-	msgDisclosure   = "호스트 스크립트는 up/update에서만 실행됨. 사용자 권한으로 프로젝트 폴더에서 실행되며, dcraft는 샌드박싱하거나 자동으로 되돌리지 않음."
+	msgDisclosure   = "호스트 스크립트는 up/update에서만 실행됨. 사용자 권한으로 프로젝트 폴더에서 실행되며 dcraft는 샌드박싱하거나 자동으로 되돌리지 않음."
 
 	msgWizardTitle        = "호스트 스크립트 등록"
 	msgWizardActionTitle  = "동작 선택"

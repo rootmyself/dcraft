@@ -300,7 +300,7 @@ func (c *Controller) selectVolumeTarget(ctx context.Context, in core.Invocation,
 	var sel targetSelection
 	err := core.RunStage(in.Reporter, "select_target", msgStageSelect, func() error {
 		if strings.TrimSpace(in.Option("bind")) != "" {
-			return targetError(fmt.Errorf("%w: 이 백업은 연결 폴더가 아니라 이름 있는 볼륨 백업. --volume을 사용.", ErrTargetMismatch))
+			return targetError(fmt.Errorf("%w: 이 백업은 이름 있는 볼륨 백업. --volume을 사용.", ErrTargetMismatch))
 		}
 		discovery, err := backup.Discover(ctx, c.cfg.Backend, target, projectName)
 		if err != nil {
@@ -377,7 +377,7 @@ func (c *Controller) selectBindTarget(ctx context.Context, in core.Invocation, t
 	var sel targetSelection
 	err := core.RunStage(in.Reporter, "select_target", msgStageSelect, func() error {
 		if strings.TrimSpace(in.Option("volume")) != "" {
-			return targetError(fmt.Errorf("%w: 이 백업은 이름 있는 볼륨이 아니라 연결 폴더 백업. --bind를 사용.", ErrTargetMismatch))
+			return targetError(fmt.Errorf("%w: 이 백업은 연결 폴더 백업. --bind를 사용.", ErrTargetMismatch))
 		}
 		discovery, err := backup.Discover(ctx, c.cfg.Backend, target, projectName)
 		if err != nil {
@@ -939,7 +939,7 @@ func (c *Controller) WizardPreview(answers map[string]string) (string, error) {
 	switch artifact.Manifest.Source.Kind {
 	case data.KindVolume:
 		if len(binds) > 0 {
-			return "", targetError(fmt.Errorf("%w: 이 백업은 연결 폴더가 아니라 볼륨 백업. 대상 목록에서 볼륨 선택.", ErrTargetMismatch))
+			return "", targetError(fmt.Errorf("%w: 이 백업은 볼륨 백업. 대상 목록에서 볼륨 선택.", ErrTargetMismatch))
 		}
 		requested := ""
 		if len(volumes) > 0 {
@@ -948,7 +948,7 @@ func (c *Controller) WizardPreview(answers map[string]string) (string, error) {
 		source, err = selectVolumeSource(cache.discovery.Sources, requested, artifact.Manifest)
 	case data.KindBind:
 		if len(volumes) > 0 {
-			return "", targetError(fmt.Errorf("%w: 이 백업은 볼륨이 아니라 연결 폴더 백업. 대상 목록에서 폴더 선택.", ErrTargetMismatch))
+			return "", targetError(fmt.Errorf("%w: 이 백업은 연결 폴더 백업. 대상 목록에서 폴더 선택.", ErrTargetMismatch))
 		}
 		requested := ""
 		if len(binds) > 0 {

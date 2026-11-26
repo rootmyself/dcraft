@@ -8,7 +8,7 @@ const (
 	msgMenuLabel   = "Git"
 	msgMenuSummary = "저장소를 받아 오는 스크립트를 생성."
 	msgUsage       = "dcraft generate-git-hook --repo <저장소> --ref <branch|tag|전체 SHA> --dest <받을 폴더> --output <스크립트 경로> [--stage pre|post] --approve file_overwrite\n\n" +
-		"생성한 스크립트는 자동 등록·자동 실행되지 않음. 출력에 표시되는 dcraft hooks --add 명령으로 직접 등록하고, 첫 실행에는 별도의 script_trust 승인이 필요."
+		"생성한 스크립트는 자동 등록·자동 실행되지 않음. 출력에 표시되는 dcraft hooks --add 명령으로 직접 등록하고 첫 실행에는 별도의 script_trust 승인이 필요."
 
 	msgFlagRepo  = "Git 저장소 URL 또는 로컬 경로. 인증 정보가 들어간 URL은 거부."
 	msgFlagRef   = "branch, tag 또는 40/64자 전체 SHA. refs/heads/..., refs/tags/... 형식도 허용."
@@ -37,7 +37,7 @@ const (
 	msgPlanNext        = "다음 단계 (자동 등록·자동 실행 아님)"
 	msgPlanNewFile     = "새 파일을 만듦."
 	msgPlanReplaceFile = "기존 파일을 교체. 기존 내용은 사라짐."
-	msgPlanKindAuto    = "자동 판별(auto): 실행할 때 원격에서 branch/tag를 확인하고, 같은 이름이 둘 다 있으면 추측하지 않고 실패."
+	msgPlanKindAuto    = "자동 판별(auto): 실행할 때 원격에서 branch/tag를 확인하고 같은 이름이 둘 다 있으면 추측하지 않고 실패."
 	msgPlanKindBranch  = "branch: refs/heads/ 네임스페이스로 fetch."
 	msgPlanKindTag     = "tag: refs/tags/ 네임스페이스로 fetch하고 annotated tag는 commit으로 peel."
 	msgPlanKindCommit  = "전체 SHA: 짧은 SHA 없이 해당 commit을 직접 fetch. 서버가 임의 커밋 fetch 허용 필요."
@@ -46,7 +46,7 @@ const (
 		"  - 작업 트리에 커밋되지 않은 변경(추적/미추적)이 있으면 아무것도 바꾸지 않고 실패.\n" +
 		"  - 마지막으로 받은 commit과 현재 HEAD가 다르면 로컬 commit/checkout으로 보고 중단.\n" +
 		"  - git reset --hard, 강제 checkout, 폴더 삭제, 임의 경로 덮어쓰기, 도구 설치는 하지 않음.\n" +
-		"  - checkout 전에 이전 HEAD를 refs/dcraft/previous에 보관하고, checkout은 detached HEAD일 수 있음.\n" +
+		"  - checkout 전에 이전 HEAD를 refs/dcraft/previous에 보관하고 checkout은 detached HEAD일 수 있음.\n" +
 		"  - 받은 폴더를 Compose build context/볼륨 등 실제 입력으로 연결. dcraft는 기존 Compose를 자동 수정하지 않음."
 	msgPlanPrereqBody = "  - 실행 시 git CLI가 PATH에 있어야 함. 생성 시에는 Git이 없어도 됨.\n" +
 		"  - 인증은 기존 credential helper 또는 SSH agent를 사용. 스크립트 파일에는 인증 정보가 없음.\n" +

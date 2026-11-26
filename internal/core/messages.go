@@ -17,7 +17,7 @@ const (
 	msgWorkingDirUnknown = "현재 작업 폴더 확인 불가."
 	msgWorkingDirAction  = "터미널을 다시 열거나 --path로 대상 폴더 지정."
 
-	msgApprovalRequiredActionOne = "대화형 화면에서 승인하거나, 자동화에서는 해당 승인 옵션을 명시."
+	msgApprovalRequiredActionOne = "대화형 화면에서 승인하거나 자동화에서는 해당 승인 옵션을 명시."
 	msgApprovalRequiredActionTwo = "승인 없이는 작업을 실행하지 않음."
 
 	msgApprovalInstallActionOne   = "변경 내용: 공식 Compose 배포물 1개를 현재 사용자의 Docker CLI 플러그인 경로에 추가. Docker CLI·Engine·Desktop은 변경하지 않으며 관리자 권한을 요청하지 않음."
@@ -43,7 +43,7 @@ const (
 	msgCanceledActionTwo = "중단된 작업을 성공으로 간주 금지."
 
 	msgInternalError       = "예상하지 못한 오류가 발생."
-	msgInternalErrorAction = "dcraft status로 다시 확인하고, 같은 문제가 반복되면 출력 내용을 보관."
+	msgInternalErrorAction = "dcraft status로 다시 확인하고 같은 문제가 반복되면 출력 내용을 보관."
 
 	msgPlanUnsupported       = "이 작업은 실행 전에 확인할 계획을 제공하지 않음."
 	msgPlanUnsupportedAction = "대화형 화면 없이 승인 옵션을 명시해 실행하거나 dcraft --help로 사용법 확인."

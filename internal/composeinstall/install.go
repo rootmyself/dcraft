@@ -459,7 +459,7 @@ func checksumFailure(cause error, detail string) error {
 		Message:  msgChecksumMismatch,
 		Detail:   detail,
 		NextActions: []string{
-			"다시 시도하고, 같은 오류가 반복되면 네트워크 프록시나 공식 릴리스 페이지 확인.",
+			"다시 시도하고 같은 오류가 반복되면 네트워크 프록시나 공식 릴리스 페이지 확인.",
 			"dcraft는 체크섬이 맞지 않는 파일을 설치하지 않았음.",
 			"임시 다운로드 파일은 정리되었음.",
 		},

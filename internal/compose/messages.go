@@ -41,7 +41,7 @@ const (
 	msgEnginePermissionActionThree = "dcraft는 관리자 권한 상승을 대신 수행하지 않음."
 
 	msgNoConfiguration                 = "대상 폴더에서 Compose 설정 찾지 못함."
-	msgNoConfigurationActionOne        = "dcraft init으로 Dockerfile 또는 이미지에서 compose.yaml을 만들거나, compose.yaml 또는 docker-compose.yml을 대상 폴더에 추가."
+	msgNoConfigurationActionOne        = "dcraft init으로 Dockerfile 또는 이미지에서 compose.yaml을 만들거나 compose.yaml 또는 docker-compose.yml을 대상 폴더에 추가."
 	msgNoConfigurationActionTwo        = "다른 폴더를 대상으로 하려면 --path로 지정."
 	msgNoConfigurationActionThree      = "dcraft는 상위 폴더를 자동으로 탐색하지 않음."
 	msgInvalidConfiguration            = "Compose 설정을 읽을 수 없음."

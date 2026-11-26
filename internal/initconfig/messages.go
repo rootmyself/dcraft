@@ -26,7 +26,7 @@ Dockerfile 방식:
 기존 Compose 파일이 있으면 덮어쓰지 않음. 파일을 직접 확인하거나
 --output <기존 파일> --approve file_overwrite를 함께 지정 필요.
 Dockerfile의 EXPOSE/CMD는 자동으로 읽지 않음. 포트와 명령은 직접 입력한
-값만 기록하며, 이미지/Dockerfile에서 포트나 데이터 경로를 추측하지 않음.`
+값만 기록하며 이미지/Dockerfile에서 포트나 데이터 경로를 추측하지 않음.`
 
 	msgStageCollect  = "입력 확인"
 	msgStagePreview  = "생성 미리보기"
@@ -65,7 +65,7 @@ Dockerfile의 EXPOSE/CMD는 자동으로 읽지 않음. 포트와 명령은 직�
 	msgComposeRejectedAct = "표시된 Compose 오류의 필드를 수정한 뒤 다시 실행."
 	msgComposeNoFile      = "저장된 파일은 없으며 기존 파일도 변경되지 않았음."
 	msgComposeMissing     = "Docker Compose 찾지 못함. dcraft init은 생성 내용을 Compose로 검증."
-	msgComposeMissingAct  = "Docker Compose를 설치한 뒤 다시 실행하거나, 설치를 승인해 dcraft install-compose를 사용."
+	msgComposeMissingAct  = "Docker Compose를 설치한 뒤 다시 실행하거나 설치를 승인해 dcraft install-compose를 사용."
 	msgComposeOutput      = "Compose 검증 결과 해석 실패. 파일을 저장하지 않았음."
 	msgComposeServiceMiss = "생성한 서비스가 Compose 검증 결과에 없음. 파일을 저장하지 않았음."
 	msgComposeNameMiss    = "Compose가 프로젝트 이름 확인 실패. 파일을 저장하지 않았음."
@@ -150,7 +150,7 @@ Dockerfile의 EXPOSE/CMD는 자동으로 읽지 않음. 포트와 명령은 직�
 	msgWizardRestartFailure = "on-failure"
 
 	msgNoticeOtherExisting = "기존 Compose 파일이 여러 개 있음. 이번에는 선택한 파일만 바꾸며 나머지는 그대로 둠."
-	msgNoticeOverride      = "기존 override 파일이 있음: %s. dcraft는 수정하지 않으며, 생성 후 Compose가 이 파일을 자동으로 병합."
+	msgNoticeOverride      = "기존 override 파일이 있음: %s. dcraft는 수정하지 않으며 생성 후 Compose가 이 파일을 자동으로 병합."
 
 	msgSaved     = "Compose 파일 저장."
 	msgSavedPath = "저장 경로"

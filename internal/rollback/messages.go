@@ -29,7 +29,7 @@ const (
 
 	msgImageMissing = "기록된 이전 이미지 찾지 못함."
 	msgImageAct1    = "이전 이미지나 보존 태그(dcraft-good/...)가 삭제되었거나 다른 이미지로 이동."
-	msgImageAct2    = "dcraft는 없는 이미지를 최신 이미지로 대신하지 않음. 이미지를 복원한 뒤 다시 실행하거나, 현재 상태를 확인하고 dcraft update로 새 정상 버전을 기록."
+	msgImageAct2    = "dcraft는 없는 이미지를 최신 이미지로 대신하지 않음. 이미지를 복원한 뒤 다시 실행하거나 현재 상태를 확인하고 dcraft update로 새 정상 버전을 기록."
 
 	msgImageIDMissing  = "기록된 이미지 ID가 로컬에 없음: %s"
 	msgImageTagMissing = "기록된 보존 태그가 없음: %s"
@@ -37,18 +37,18 @@ const (
 
 	msgSecretUnavailable = "기록된 비밀값 원본을 다시 읽을 수 없음."
 	msgSecretAct1        = "기록된 당시 참조의 환경변수·파일 원본이 있는지 확인. 비밀값 자체는 출력하지 않음."
-	msgSecretAct2        = "이전 비밀값의 재현은 보장되지 않음. 외부 원본을 복구한 뒤 다시 실행하거나, 현재 값으로 dcraft update를 실행."
+	msgSecretAct2        = "이전 비밀값의 재현은 보장되지 않음. 외부 원본을 복구한 뒤 다시 실행하거나 현재 값으로 dcraft update를 실행."
 
 	msgApplyFailed  = "이전 이미지를 적용하지 못 (%s)."
 	msgApplyAct1    = "완료된 단계와 현재 컨테이너 상태 확인. 부분 반영이 남아 있을 수 있음."
-	msgApplyAct2    = "dcraft status로 현재 상태를 확인하고, 필요하면 dcraft rollback을 다시 실행."
+	msgApplyAct2    = "dcraft status로 현재 상태를 확인하고 필요하면 dcraft rollback을 다시 실행."
 	msgApplyAct3    = "같은 기록으로 다시 실행하면 같은 이미지를 유지. dcraft는 실패한 복원을 성공으로 기록하지 않음."
 	msgStateUnknown = "현재 컨테이너 상태 읽지 못함."
 
 	msgVerifyImageMismatch = "복원 결과의 이미지가 기록과 다름."
 	msgVerifyImageDetail   = "%s: 기록 %s, 실제 %s"
 	msgVerifyAct1          = "컨테이너를 다시 만드는 동안 외부에서 이미지가 바뀌지 않았는지 확인."
-	msgVerifyAct2          = "dcraft status로 실제 실행 이미지를 확인하고, 같은 문제가 반복되면 기록된 보존 태그와 이미지를 점검."
+	msgVerifyAct2          = "dcraft status로 실제 실행 이미지를 확인하고 같은 문제가 반복되면 기록된 보존 태그와 이미지를 점검."
 
 	msgReadinessFailed  = "복원 후 실행 상태가 정상으로 확인되지 않았음: %s"
 	msgReadinessTimeout = "%d초 안에 복원 후 실행 상태가 정상으로 확인되지 않았음: %s"

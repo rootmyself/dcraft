@@ -25,7 +25,7 @@ const (
 	msgHelpHint            = "도움말: dcraft --help\n"
 	msgJSONNeedsCommand    = "오류: --json을 사용할 때는 명령 지정 필요. 예: dcraft status --json\n도움말: dcraft --help\n"
 	msgJSONLiveUnsupported = "오류: 실시간 로그는 하나의 JSON 결과로 표현할 수 없어 --json과 함께 실행 불가.\n" +
-		" --json 없이 실행하고, 로그를 멈추려면 ctrl+c를 누르기. 서비스는 중지되지 않음.\n" +
+		" --json 없이 실행하고 로그를 멈추려면 ctrl+c를 누르기. 서비스는 중지되지 않음.\n" +
 		" 도움말: dcraft logs --help\n"
 )
 

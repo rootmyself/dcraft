@@ -78,7 +78,7 @@ const (
 	msgModalCancel  = "취소"
 	msgHelpTitle    = "도움말"
 	msgHelpClose    = "닫기"
-	msgBusyQuit     = "작업 진행 중. 지금 화면을 닫으면 일부 변경이 남을 수 있음. 완료된 뒤 종료하거나, 중단하려면 ctrl+c."
+	msgBusyQuit     = "작업 진행 중. 지금 화면을 닫으면 일부 변경이 남을 수 있음. 완료된 뒤 종료하거나 중단하려면 ctrl+c."
 	// A sidebar click during a mutating run reports instead of navigating:
 	// dcraft has no daemon, so the progress on screen would be lost.
 	msgNavBlocked = "작업 진행 중. 완료된 뒤 메뉴로 이동 가능."

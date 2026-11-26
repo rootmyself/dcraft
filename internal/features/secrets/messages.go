@@ -103,7 +103,7 @@ AWS Secrets Manager 원본은 설치된 AWS CLI의 기존 자격 증명 사용. 
 	msgPreviewBuildFixed      = "빌드 시점은 전달 방식이 BuildKit secret mount로 고정됨. 위에서 고른 환경변수/파일 방식 대신 Dockerfile의 RUN --mount=type=secret로 전달."
 	msgPreviewBuildDockerfile = "Dockerfile에 RUN --mount=type=secret,id=<target> ... 를 추가해야 값이 전달됨. dcraft는 Dockerfile을 자동으로 수정하지 않음."
 	msgPreviewBuildCache      = "값 변경은 Docker 빌드 캐시를 무효화하지 않음. 새 값을 반영하려면 dcraft update --no-cache를 사용."
-	msgPreviewAWS             = "AWS Secrets Manager 값은 설치된 AWS CLI의 기존 자격 증명으로 조회. 자격 증명은 dcraft 설정에 저장하지 않으며, 현재 작업이 참조하는 원본만 원본별 한 번 조회. 바이너리 전용 원본은 지원하지 않음."
+	msgPreviewAWS             = "AWS Secrets Manager 값은 설치된 AWS CLI의 기존 자격 증명으로 조회. 자격 증명은 dcraft 설정에 저장하지 않으며 현재 작업이 참조하는 원본만 원본별 한 번 조회. 바이너리 전용 원본은 지원하지 않음."
 
 	msgPhaseRuntime       = "실행 시점 (runtime)"
 	msgPhaseBuild         = "빌드 시점 (build)"
@@ -120,11 +120,11 @@ AWS Secrets Manager 원본은 설치된 AWS CLI의 기존 자격 증명 사용. 
 	msgEffectUnknown = "전달 방식 확인 불가."
 
 	msgEnvVisible      = "환경변수 전달 값은 Docker 조회 권한이 있는 사용자가 컨테이너 환경에서 읽을 수 있음."
-	msgFileApp         = "파일 전달은 앱이 /run/secrets/<target> 경로를 직접 읽어야 하며, dcraft는 앱의 파일 소비를 보장하지 않음."
+	msgFileApp         = "파일 전달은 앱이 /run/secrets/<target> 경로를 직접 읽어야 하며 dcraft는 앱의 파일 소비를 보장하지 않음."
 	msgBuildFixed      = "빌드 시점은 BuildKit secret mount로만 전달. dcraft는 ARG·ENV로 조용히 대체하지 않음."
 	msgBuildDockerfile = "Dockerfile이 RUN --mount=type=secret,id=<target>로 값 소비 필요. dcraft는 Dockerfile을 자동으로 수정하지 않음. 필요한 예시만 안내."
 	msgBuildCache      = "비밀값 변경은 Docker 빌드 캐시를 무효화하지 않음. 새 값을 반영하려면 dcraft update --no-cache로 다시 빌드. dcraft는 이전 값을 저장하거나 비교하지 않음."
-	msgBuildNoFallback = "dcraft는 값을 이미지 설정이나 history에 넣지 않지만, Dockerfile이 값을 출력하거나 이미지에 복사하는 동작은 막을 수 없음."
+	msgBuildNoFallback = "dcraft는 값을 이미지 설정이나 history에 넣지 않지만 Dockerfile이 값을 출력하거나 이미지에 복사하는 동작은 막을 수 없음."
 
 	msgAWSCredentialDisclosure = "AWS Secrets Manager 원본은 설치된 AWS CLI의 기존 자격 증명(환경변수, 공유 설정, SSO, 인스턴스 역할)을 사용. dcraft는 자격 증명을 설정·상태·생성 스크립트에 저장하지 않음."
 	msgAWSFetchPolicy          = "dcraft는 현재 작업이 실제 참조하는 AWS 원본만 조회. 한 작업에서 같은 원본은 한 번만 조회. 선언만 된 다른 참조는 조회하지 않음. 조회한 값은 다음 작업으로 저장하거나 비교하지 않음."

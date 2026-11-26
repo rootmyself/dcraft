@@ -8,7 +8,7 @@ const (
 	msgMenuLabel   = "S3"
 	msgMenuSummary = "S3에서 받아 오는 스크립트를 생성."
 	msgUsage       = "dcraft generate-s3-hook --source <s3://bucket/prefix|s3://bucket/path/artifact.tar.gz> --mode <sync|tar> --dest <받을 폴더> --output <스크립트 경로> [--aws-profile <이름>] --approve file_overwrite\n\n" +
-		"생성한 스크립트는 자동 등록·자동 실행되지 않음. 출력에 표시되는 dcraft hooks --add 명령으로 직접 등록하고, 첫 실행에는 별도의 script_trust 승인이 필요."
+		"생성한 스크립트는 자동 등록·자동 실행되지 않음. 출력에 표시되는 dcraft hooks --add 명령으로 직접 등록하고 첫 실행에는 별도의 script_trust 승인이 필요."
 
 	msgFlagSource     = "S3 원본. sync는 디렉터리 접두사(s3://bucket/prefix), tar는 단일 .tar.gz 객체(s3://bucket/path/artifact.tar.gz)를 지정."
 	msgFlagMode       = "가져오기 방식: sync(디렉터리 동기화, 삭제 동기화 없음) 또는 tar(.tar.gz 다운로드·검증·해제 후 복사)."

@@ -6,3 +6,6 @@
 
 # Distribution build output
 /dist/
+
+# humanize-korean run artifacts
+_workspace/

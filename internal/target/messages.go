@@ -11,7 +11,7 @@ const (
 	msgTargetNotDirectory         = "대상 경로가 폴더가 아님."
 	msgTargetNotDirectoryAction   = "--path에는 Compose 파일이 있는 폴더 지정."
 	msgNoConfiguration            = "대상 폴더에서 Compose 설정 찾지 못함."
-	msgNoConfigurationActionOne   = "dcraft init으로 Dockerfile 또는 이미지에서 compose.yaml을 만들거나, compose.yaml 또는 docker-compose.yml을 대상 폴더에 추가."
+	msgNoConfigurationActionOne   = "dcraft init으로 Dockerfile 또는 이미지에서 compose.yaml을 만들거나 compose.yaml 또는 docker-compose.yml을 대상 폴더에 추가."
 	msgNoConfigurationActionTwo   = "다른 폴더를 대상으로 하려면 --path로 지정."
 	msgNoConfigurationActionThree = "dcraft는 상위 폴더를 자동으로 탐색하지 않음."
 	msgComposeFileMissing         = "지정한 Compose 파일을 찾을 수 없음."
@@ -23,7 +23,7 @@ const (
 	msgEnvironmentRequired        = "실행환경 선택 필요. 사용 가능한 실행환경: %s"
 	msgEnvironmentInputConflict   = "실행환경을 선택했을 때는 -f, --env-file, --profile을 함께 사용 불가."
 	msgEnvironmentUnknownNone     = "이 폴더에는 이름 붙인 실행환경이 없음: %s"
-	msgEnvironmentLimits          = "실행환경은 Compose 입력과 dcraft 상태·이력을 구분하지만, 외부 볼륨·bind mount·네트워크·고정 호스트 포트는 격리하지 않음."
+	msgEnvironmentLimits          = "실행환경은 Compose 입력과 dcraft 상태·이력을 구분하지만 외부 볼륨·bind mount·네트워크·고정 호스트 포트는 격리하지 않음."
 	msgProjectNameShared          = "실행환경 %s가 같은 Compose 프로젝트 이름 '%s'을 사용."
 	msgEnvironmentOverlap         = "실행환경 '%s'와 '%s'가 같은 호스트 자원 사용."
 )
@@ -32,7 +32,7 @@ var (
 	msgComposeFileActions                = []string{"-f로 지정한 파일 경로 확인. 상대 경로는 현재 작업 폴더 기준."}
 	msgEnvFileActions                    = []string{"--env-file로 지정한 파일 경로 확인. 상대 경로는 현재 작업 폴더 기준."}
 	msgEnvironmentRequiredActionOne      = "--env <별칭>으로 실행환경을 명시적으로 지정."
-	msgEnvironmentRequiredActionTwo      = "대화형 화면에서는 실행환경을 직접 선택해야 하며, 첫 항목이나 prod를 자동으로 고르지 않음."
+	msgEnvironmentRequiredActionTwo      = "대화형 화면에서는 실행환경을 직접 선택해야 하며 첫 항목이나 prod를 자동으로 고르지 않음."
 	msgEnvironmentRequiredActionThree    = "실행환경 목록은 프로젝트 폴더의 .dcraft.yaml에서 확인 가능."
 	msgEnvironmentInputConflictActionOne = "선택한 실행환경의 Compose 파일·환경 파일·프로필은 .dcraft.yaml에서 수정."
 	msgEnvironmentInputConflictActionTwo = "직접 파일을 지정하려면 --env를 제거."

@@ -65,5 +65,5 @@ const (
 	msgPresentNone      = "(없음)"
 	msgPresentAddHint   = "추가: dcraft environments --add --name <별칭> [--file ...] [--env-file ...] [--profile ...]"
 	msgPresentTUIHint   = "대화형 화면에서는 같은 내용을 단계별로 입력하고 저장 전에 미리 볼 수 있음."
-	msgPresentLimits    = "실행환경은 Compose 입력과 dcraft 상태·이력을 구분하지만, 외부 볼륨·bind mount·네트워크·고정 호스트 포트는 격리하지 않음."
+	msgPresentLimits    = "실행환경은 Compose 입력과 dcraft 상태·이력을 구분하지만 외부 볼륨·bind mount·네트워크·고정 호스트 포트는 격리하지 않음."
 )

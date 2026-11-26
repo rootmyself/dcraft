@@ -8,7 +8,7 @@ const (
 
 선택한 스택의 이름 있는 데이터 볼륨과 Compose가 선언한 호스트 연결 폴더만 백업.
 이미지·로그·환경 변수·비밀 파일을 무차별로 모으지 않음. 소비 서비스를 확인해
-도구가 중지한 서비스만 백업 후 다시 시작하며, 다른 스택의 컨테이너는 중지하지 않음.`
+도구가 중지한 서비스만 백업 후 다시 시작하며 다른 스택의 컨테이너는 중지하지 않음.`
 
 	msgNoBackend       = "백업 기능이 데이터 경계와 연결되지 않았음."
 	msgNoBackendAction = "dcraft를 다시 빌드하거나 설치한 뒤 실행."
@@ -68,7 +68,7 @@ const (
 
 	msgConsumerUnsafe       = "다른 스택의 컨테이너가 같은 볼륨을 사용하고 있어 일관된 백업을 만들 수 없음."
 	msgConsumerUnsafeAction = "해당 컨테이너를 소유한 스택이나 사용자가 직접 중지한 뒤 다시 실행."
-	msgConsumerUnsafeNoStop = "dcraft는 다른 스택의 컨테이너를 중지하지 않았고, 일관성을 보장하지 않음."
+	msgConsumerUnsafeNoStop = "dcraft는 다른 스택의 컨테이너를 중지하지 않았고 일관성을 보장하지 않음."
 	msgConsumerUnsafeRetry  = "확인할 수 없는 소비자가 있으면 백업을 진행하지 않음."
 
 	msgPausedUnsafe       = "일시 중지된 서비스를 안전하게 중지하고 원래 상태로 되돌릴 수 없음."
@@ -76,10 +76,10 @@ const (
 	msgPausedUnsafeNoStop = "dcraft는 서비스를 중지하거나 백업을 만들지 않았음."
 
 	msgIdentityFailed       = "스택 이름을 확인하지 못해 백업하지 않았음."
-	msgIdentityFailedAction = "dcraft status로 스택을 확인하고, 상태 폴더(DCRAFT_STATE_DIR)의 권한과 JSON 내용 확인."
+	msgIdentityFailedAction = "dcraft status로 스택을 확인하고 상태 폴더(DCRAFT_STATE_DIR)의 권한과 JSON 내용 확인."
 
 	msgStopFailed       = "서비스를 중지하지 못해 백업하지 않았음."
-	msgStopFailedAction = "dcraft status로 현재 서비스 상태를 확인하고, 남아 있는 컨테이너를 직접 확인."
+	msgStopFailedAction = "dcraft status로 현재 서비스 상태를 확인하고 남아 있는 컨테이너를 직접 확인."
 	msgStopFailedNoData = "백업 파일은 만들지 않았음. 중지가 일부 진행됐다면 원래 실행 중이던 서비스를 다시 시작하려고 시도."
 
 	msgArchiveFailed       = "볼륨 복사 완료 실패."
@@ -109,7 +109,7 @@ const (
 
 	msgSensitiveNotice       = "선택한 데이터에는 비밀번호·토큰·개인정보가 포함될 수 있음. dcraft는 내용을 검사하거나 암호화하지 않음. 백업 파일을 안전하게 보관하고 공유 금지."
 	msgOwnershipNote         = "볼륨 백업은 컨테이너 파일의 uid/gid와 모드를 tar에 기록. 호스트에서 직접 풀면 컨테이너 소유권을 완전히 복원할 수 없으므로 복원은 dcraft restore를 사용."
-	msgBindOwnershipNote     = "연결 폴더 백업은 호스트 사용자 권한으로 직접 tar를 만들며 파일 모드·uid/gid·심볼릭 링크·하드 링크를 기록. 확장 속성(xattr)·ACL은 보존하지 않고, 일부 플랫폼에서는 소유권 복원 불가."
+	msgBindOwnershipNote     = "연결 폴더 백업은 호스트 사용자 권한으로 직접 tar를 만들며 파일 모드·uid/gid·심볼릭 링크·하드 링크를 기록. 확장 속성(xattr)·ACL은 보존하지 않고 일부 플랫폼에서는 소유권 복원 불가."
 	msgHelperImageNotice     = "볼륨 복사는 Docker 컨테이너(tar)로 수행하며 이미지는 %s."
 	msgBindHostArchiveNotice = "연결 폴더는 Docker 컨테이너를 사용하지 않고 호스트에서 직접 tar로 복사."
 	msgNoAutoDeleteNote      = "dcraft는 기존 백업을 자동으로 삭제하거나 예약·원격 업로드하지 않음."
@@ -136,7 +136,7 @@ const (
 	msgPlanNoneRunning   = "없음"
 	msgPlanCreateDir     = "저장 폴더가 없으면 실행 시 새로 만듦."
 	msgPlanOutputExists  = "저장 폴더가 이미 있으며 쓰기 가능 여부는 실행 직전에 다시 확인."
-	msgPlanLock          = "실행 중에는 같은 스택의 다른 작업을 막는 잠금을 잡고, 다른 스택은 건드리지 않음."
+	msgPlanLock          = "실행 중에는 같은 스택의 다른 작업을 막는 잠금을 잡고 다른 스택은 건드리지 않음."
 	msgPlanConsumerOther = "다른 스택의 소비자가 감지되어 백업 계획 제공 불가."
 	msgPlanSharedNone    = "다른 스택 공유: 없음"
 	msgPlanSharedSome    = "다른 스택 공유: %s (백업을 진행하지 않음)"

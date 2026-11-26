@@ -52,7 +52,7 @@ const (
 
 	msgApplyActionOne      = "Docker 상태와 상태 폴더(DCRAFT_STATE_DIR) 권한·여유 공간 확인."
 	msgApplyActionTwo      = "해결한 뒤 dcraft up을 다시 실행."
-	msgEnvSourceActionOne  = "원본 환경변수가 설정된 셸에서 실행하거나, 참조 이름 확인."
+	msgEnvSourceActionOne  = "원본 환경변수가 설정된 셸에서 실행하거나 참조 이름 확인."
 	msgEnvSourceActionTwo  = "dcraft는 빈 값이나 없는 환경변수를 비밀값으로 전달하지 않음."
 	msgFileSourceActionOne = "원본 파일 경로가 프로젝트 폴더 기준으로 실제 존재하는지 확인."
 	msgFileSourceActionTwo = "읽기 권한이 있는 비어 있지 않은 일반 파일 지정."
@@ -61,7 +61,7 @@ const (
 const (
 	msgAppliedOverride        = "dcraft 관리 Compose override: %s (사용자 Compose 파일은 수정하지 않았음.)"
 	msgPartialOverwrite       = "비밀값 전달 준비가 실패했지만 이미 존재하던 파일 일부가 새 값으로 갱신되었을 수 있음. dcraft는 이전 값을 저장하지 않아 되돌리지 않음."
-	msgPartialOverwriteAction = "dcraft status로 현재 상태를 확인하고, 필요한 경우 dcraft up을 다시 실행."
+	msgPartialOverwriteAction = "dcraft status로 현재 상태를 확인하고 필요한 경우 dcraft up을 다시 실행."
 )
 
 // Build-time delivery (ticket #10). The values reach BuildKit only through a
@@ -72,12 +72,12 @@ const (
 	msgBuildApplied              = "빌드 시점 비밀값을 BuildKit secret mount로 준비: %s (dcraft 관리 Compose override: %s)"
 	msgBuildCacheNotice          = "Docker 빌드 캐시는 비밀값 내용을 캐시 키에 포함하지 않음. 원본 값을 바꾼 뒤에는 dcraft update --no-cache로 다시 빌드해야 새 값이 반영됨. dcraft는 이전 값을 저장하거나 비교하지 않음."
 	msgBuildNoFallback           = "빌드 시점 비밀값은 BuildKit secret mount로만 전달. ARG·ENV로 조용히 대체하지 않음."
-	msgBuildImageDisclosure      = "dcraft는 값을 이미지 설정이나 history에 넣지 않지만, Dockerfile이 값을 출력하거나 이미지에 복사하는 동작은 막을 수 없음."
+	msgBuildImageDisclosure      = "dcraft는 값을 이미지 설정이나 history에 넣지 않지만 Dockerfile이 값을 출력하거나 이미지에 복사하는 동작은 막을 수 없음."
 	msgBuildMountMissing         = "서비스 '%s'의 Dockerfile(%s)에 BuildKit secret mount id=%s 참조가 없음. Dockerfile의 해당 RUN에 다음을 추가해야 값이 전달됨: RUN --mount=type=secret,id=%s ... . dcraft는 Dockerfile을 자동으로 수정하지 않음."
 	msgBuildDockerfileUnreadable = "서비스 '%s'의 Dockerfile(%s)을 읽지 못해 BuildKit secret mount 참조 확인 실패: %v. Dockerfile에 RUN --mount=type=secret,id=%s 가 있는지 직접 확인."
 	msgBuildDockerfileUnknown    = "서비스 '%s'의 Dockerfile 경로를 확인하지 못해 BuildKit secret mount 참조 확인 실패. Dockerfile에 RUN --mount=type=secret,id=%s 가 있는지 직접 확인."
 	msgBuildFinishFailed         = "빌드 후 환경변수 원본 임시 파일 정리 실패. 상태 폴더의 build-secrets 파일 권한과 여유 공간 확인."
-	msgBuildEnvLifetime          = "환경변수 원본 빌드 비밀값은 빌드 명령이 실행되는 동안에만 상태 폴더의 0600 파일로 존재하고, 빌드가 끝나면 삭제됨. 파일 원본은 다음 빌드를 위해 남으며 down 또는 성공적인 빌드 후 정리됨."
+	msgBuildEnvLifetime          = "환경변수 원본 빌드 비밀값은 빌드 명령이 실행되는 동안에만 상태 폴더의 0600 파일로 존재하고 빌드가 끝나면 삭제됨. 파일 원본은 다음 빌드를 위해 남으며 down 또는 성공적인 빌드 후 정리됨."
 )
 
 // AWS Secrets Manager source (ticket #10). The credential chain belongs to the
@@ -120,7 +120,7 @@ const (
 	msgAWSCredentialDisclosure    = "AWS 자격 증명은 기존 AWS CLI 인증 수단 사용. dcraft는 자격 증명을 저장하거나 출력하지 않음."
 )
 
-const msgBuildAWSLifetime = "AWS Secrets Manager 빌드 비밀값은 빌드 명령이 실행되는 동안에만 상태 폴더의 0600 파일로 존재하고, 빌드가 끝나면 삭제됨. 다음 빌드에서 기존 AWS 인증으로 다시 조회하며 이전 값을 저장하거나 비교하지 않음."
+const msgBuildAWSLifetime = "AWS Secrets Manager 빌드 비밀값은 빌드 명령이 실행되는 동안에만 상태 폴더의 0600 파일로 존재하고 빌드가 끝나면 삭제됨. 다음 빌드에서 기존 AWS 인증으로 다시 조회하며 이전 값을 저장하거나 비교하지 않음."
 
 const (
 	msgMaterializedMissing       = "재시작에 필요한 비밀값 전달 파일이 없음: %s:%s"

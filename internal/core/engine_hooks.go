@@ -138,7 +138,7 @@ func (e *Engine) runHooksPost(ctx context.Context, rec *recorder, res *Result, a
 			Detail:   hookErrorDetail(err),
 			NextActions: []string{
 				"dcraft status로 스택 상태 확인.",
-				"사후 스크립트를 다시 실행하려면 작업을 다시 실행해야 하며, 배포를 자동으로 되돌리지 않음.",
+				"사후 스크립트를 다시 실행하려면 작업을 다시 실행해야 하며 배포를 자동으로 되돌리지 않음.",
 			},
 		})
 		return true
@@ -339,7 +339,7 @@ func hookTrustDiagnostic(plan HookPlan) Diagnostic {
 		NextActions: []string{
 			"경로·실행 시점·내용 식별자를 확인한 뒤 자동화에서는 --approve script_trust를 명시.",
 			"대화형 화면에서는 같은 계획을 확인한 뒤 승인 가능.",
-			"스크립트는 사용자 권한으로 프로젝트 폴더에서 실행되며, dcraft는 샌드박싱하거나 자동으로 되돌리지 않음.",
+			"스크립트는 사용자 권한으로 프로젝트 폴더에서 실행되며 dcraft는 샌드박싱하거나 자동으로 되돌리지 않음.",
 		},
 	}
 }
@@ -361,7 +361,7 @@ func hookPlanText(plan HookPlan) string {
 		fmt.Fprintf(&b, "  - %s: %s\n    내용 식별자: sha256:%s\n    상태: %s\n", entry.Stage, entry.Path, entry.SHA256, state)
 	}
 	b.WriteString("스크립트는 사용자 권한으로 프로젝트 폴더에서 실행됨.\n")
-	b.WriteString("일부 외부 변경이 남을 수 있고, dcraft는 샌드박싱하거나 자동으로 되돌리지 않음.\n")
+	b.WriteString("일부 외부 변경이 남을 수 있고 dcraft는 샌드박싱하거나 자동으로 되돌리지 않음.\n")
 	if plan.RequiresApproval {
 		b.WriteString("승인: 스크립트 신뢰 (script_trust) 필요")
 	}

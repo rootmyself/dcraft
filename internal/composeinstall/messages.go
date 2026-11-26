@@ -69,7 +69,7 @@ func manualInstallActions(dir string) []string {
 // published with one rename-like operation, so the target is either absent or
 // complete; this is what the user needs to know after an interruption.
 const (
-	msgInstallCanceled          = "설치가 중단되었음. 설치 대상에는 완전한 파일만 나타나며, 중단된 다운로드나 검증 단계의 임시 파일은 정리됨."
+	msgInstallCanceled          = "설치가 중단되었음. 설치 대상에는 완전한 파일만 나타나며 중단된 다운로드나 검증 단계의 임시 파일은 정리됨."
 	msgInstallCanceledActionOne = "대상 경로에 docker-compose 파일이 없으면 설치되지 않은 것. 있으면 설치가 완료된 뒤 중단된 것이므로 docker compose version으로 확인."
 	msgInstallCanceledActionTwo = "Docker CLI·Engine·Desktop은 이 작업으로 변경되지 않았음."
 )

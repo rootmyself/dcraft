@@ -313,7 +313,7 @@ func commandPreview(gen s3gen.Generated) string {
 		fmt.Fprintf(&b, "      tar -xzf <임시 폴더>/artifact.tar.gz -C <빈 임시 폴더>\n")
 		fmt.Fprintf(&b, "      cp -R <빈 임시 폴더>/. %s/\n", dest)
 		b.WriteString("  - 절대 경로, .. 경로, 밖을 가리키는 심볼릭/하드 링크, 지원하지 않는 파일 형식을 거부.\n")
-		b.WriteString("  - 압축은 빈 임시 폴더에만 풀고, 검증 후 받을 폴더로 복사. 받을 폴더에 심볼릭 링크가 있으면 복사하지 않음.\n")
+		b.WriteString("  - 압축은 빈 임시 폴더에만 풀고 검증 후 받을 폴더로 복사. 받을 폴더에 심볼릭 링크가 있으면 복사하지 않음.\n")
 		b.WriteString("  - 원본에 없는 받을 폴더의 기존 파일은 삭제하지 않음.\n")
 		b.WriteString("  - 임시 파일과 임시 폴더는 스크립트 종료 시 정리.\n")
 		return b.String()
