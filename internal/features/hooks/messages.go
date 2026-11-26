@@ -8,7 +8,7 @@ const (
 	// Menu labels. The group heading owns the generated-script features that
 	// declare it as Parent; this feature's own entry is the "custom" child that
 	// registers a script the project already has.
-	msgMenuGroup         = "호스트 스크립트"
+	msgMenuGroup         = "스크립트"
 	msgMenuGroupSummary  = "up/update 전후에 실행할 스크립트."
 	msgMenuCustom        = "커스텀"
 	msgMenuCustomSummary = "이미 있는 스크립트를 경로로 등록."

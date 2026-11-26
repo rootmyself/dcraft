@@ -72,7 +72,7 @@ func (f *Feature) Descriptor() core.Descriptor {
 		// Generated host scripts live under the host-script heading with the
 		// script this project already has.
 		Menu: []core.MenuEntry{
-			{Kind: core.MenuRun, Feature: "generate-s3-hook", Label: msgMenuLabel, Summary: msgMenuSummary, Parent: "hooks", Order: 2},
+			{Kind: core.MenuRun, Feature: "generate-s3-hook", Label: msgMenuLabel, Summary: msgMenuSummary, Parent: "hooks", Order: 1},
 		},
 		Flags: []core.Flag{
 			{Name: "source", Kind: core.FlagString, Required: true, Usage: msgFlagSource},

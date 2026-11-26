@@ -25,6 +25,9 @@ func (f *Feature) Descriptor() core.Descriptor {
 		Section:        core.SectionOperate,
 		Destructive:    true,
 		RecordsHistory: true,
+		Menu: []core.MenuEntry{
+			{Kind: core.MenuRun, Feature: "down", Label: msgMenuLabel, Summary: msgMenuSummary, Order: 4},
+		},
 	}
 }
 

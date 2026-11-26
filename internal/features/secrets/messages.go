@@ -3,7 +3,7 @@ package secrets
 // Korean user-facing text owned by the secrets feature. Command names, flags,
 // phase/delivery/source machine values and JSON keys stay English.
 const (
-	msgTitle   = "비밀값 연결"
+	msgTitle   = "비밀값 설정"
 	msgSummary = "비밀값 원본 참조를 저장·조회·제거."
 	msgUsage   = `dcraft secrets [--add | --remove | --list] [--json]
   dcraft secrets --add -s <서비스> --phase runtime --delivery environment|file --source env|file --ref <참조> [--target <이름>]

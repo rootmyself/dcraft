@@ -253,10 +253,10 @@ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/�
 │                        │ api-1  | 2026-11-20T09:14:50.350Z INFO  request completed method=GET path=/v1/health status…
 │설정                    │ api-1  | 2026-11-20T09:14:51.357Z INFO  request completed method=GET path=/v1/health status…
 │  실행환경 생성         │ api-1  | 2026-11-20T09:14:52.364Z INFO  request completed method=GET path=/v1/health status…
-│  실행환경 전환         │ api-1  | 2026-11-20T09:14:53.371Z INFO  request completed method=GET path=/v1/health status…
-│  호스트 스크립트       │ api-1  | 2026-11-20T09:14:54.378Z INFO  request completed method=GET path=/v1/health status…█
-│    커스텀              │ api-1  | 2026-11-20T09:14:55.385Z INFO  request completed method=GET path=/v1/health status…█
-│    Git                 │ api-1  | 2026-11-20T09:14:56.392Z INFO  request completed method=GET path=/v1/health status…█
+│  호스트 스크립트       │ api-1  | 2026-11-20T09:14:53.371Z INFO  request completed method=GET path=/v1/health status…
+│    커스텀              │ api-1  | 2026-11-20T09:14:54.378Z INFO  request completed method=GET path=/v1/health status…█
+│    Git                 │ api-1  | 2026-11-20T09:14:55.385Z INFO  request completed method=GET path=/v1/health status…█
+│    S3                  │ api-1  | 2026-11-20T09:14:56.392Z INFO  request completed method=GET path=/v1/health status…█
 │────────────────────────│ api-1  | 2026-11-20T09:14:57.399Z INFO  request completed method=GET path=/v1/health status…█
 │ ▸ 스택 상태            │ api-1  | 2026-11-20T09:14:58.406Z INFO  request completed method=GET path=/v1/health status…█
 │ 현재 스택과 서비스 상  │ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/health status…█
@@ -285,14 +285,14 @@ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/�
 │                        │ api-1  | 2026-11-20T09:14:30.210Z INFO  request completed method=GET path=/v1/health status…
 │설정                    │ api-1  | 2026-11-20T09:14:31.217Z INFO  request completed method=GET path=/v1/health status…
 │  실행환경 생성         │ api-1  | 2026-11-20T09:14:32.224Z INFO  request completed method=GET path=/v1/health status…
-│  실행환경 전환         │ api-1  | 2026-11-20T09:14:33.231Z INFO  request completed method=GET path=/v1/health status…
-│  호스트 스크립트       │ api-1  | 2026-11-20T09:14:34.238Z INFO  request completed method=GET path=/v1/health status…█
-│    커스텀              │ api-1  | 2026-11-20T09:14:35.245Z INFO  request completed method=GET path=/v1/health status…█
-│    Git                 │ api-1  | 2026-11-20T09:14:36.252Z INFO  request completed method=GET path=/v1/health status…█
-│    S3                  │ api-1  | 2026-11-20T09:14:37.259Z INFO  request completed method=GET path=/v1/health status…█
-│  Compose 설치          │ api-1  | 2026-11-20T09:14:38.266Z INFO  request completed method=GET path=/v1/health status…█
-│  비밀값 연결           │ api-1  | 2026-11-20T09:14:39.273Z INFO  request completed method=GET path=/v1/health status…█
-│  최초 구성             │ api-1  | 2026-11-20T09:14:40.280Z INFO  request completed method=GET path=/v1/health status…█
+│  호스트 스크립트       │ api-1  | 2026-11-20T09:14:33.231Z INFO  request completed method=GET path=/v1/health status…
+│    커스텀              │ api-1  | 2026-11-20T09:14:34.238Z INFO  request completed method=GET path=/v1/health status…█
+│    Git                 │ api-1  | 2026-11-20T09:14:35.245Z INFO  request completed method=GET path=/v1/health status…█
+│    S3                  │ api-1  | 2026-11-20T09:14:36.252Z INFO  request completed method=GET path=/v1/health status…█
+│  Compose 설치          │ api-1  | 2026-11-20T09:14:37.259Z INFO  request completed method=GET path=/v1/health status…█
+│  비밀값 연결           │ api-1  | 2026-11-20T09:14:38.266Z INFO  request completed method=GET path=/v1/health status…█
+│  최초 구성             │ api-1  | 2026-11-20T09:14:39.273Z INFO  request completed method=GET path=/v1/health status…█
+│  실행환경 전환         │ api-1  | 2026-11-20T09:14:40.280Z INFO  request completed method=GET path=/v1/health status…█
 │                        │ api-1  | 2026-11-20T09:14:41.287Z INFO  request completed method=GET path=/v1/health status…█
 │                        │ api-1  | 2026-11-20T09:14:42.294Z INFO  request completed method=GET path=/v1/health status…█
 │                        │ api-1  | 2026-11-20T09:14:43.301Z INFO  request completed method=GET path=/v1/health status…█
@@ -357,10 +357,10 @@ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/�
 │                            │ api-1  | 2026-11-20T09:14:50.350Z INFO  request completed method=GET path=/v1/health status=200 duration=9ms
 │설정                        │ api-1  | 2026-11-20T09:14:51.357Z INFO  request completed method=GET path=/v1/health status=200 duration=10ms
 │  실행환경 생성             │ api-1  | 2026-11-20T09:14:52.364Z INFO  request completed method=GET path=/v1/health status=200 duration=11ms
-│  실행환경 전환             │ api-1  | 2026-11-20T09:14:53.371Z INFO  request completed method=GET path=/v1/health status=200 duration=12ms
-│  호스트 스크립트           │ api-1  | 2026-11-20T09:14:54.378Z INFO  request completed method=GET path=/v1/health status=200 duration=13ms                                                           █
-│    커스텀                  │ api-1  | 2026-11-20T09:14:55.385Z INFO  request completed method=GET path=/v1/health status=200 duration=3ms                                                            █
-│    Git                     │ api-1  | 2026-11-20T09:14:56.392Z INFO  request completed method=GET path=/v1/health status=200 duration=4ms                                                            █
+│  호스트 스크립트           │ api-1  | 2026-11-20T09:14:53.371Z INFO  request completed method=GET path=/v1/health status=200 duration=12ms
+│    커스텀                  │ api-1  | 2026-11-20T09:14:54.378Z INFO  request completed method=GET path=/v1/health status=200 duration=13ms                                                           █
+│    Git                     │ api-1  | 2026-11-20T09:14:55.385Z INFO  request completed method=GET path=/v1/health status=200 duration=3ms                                                            █
+│    S3                      │ api-1  | 2026-11-20T09:14:56.392Z INFO  request completed method=GET path=/v1/health status=200 duration=4ms                                                            █
 │────────────────────────────│ api-1  | 2026-11-20T09:14:57.399Z INFO  request completed method=GET path=/v1/health status=200 duration=5ms                                                            █
 │ ▸ 스택 상태                │ api-1  | 2026-11-20T09:14:58.406Z INFO  request completed method=GET path=/v1/health status=200 duration=6ms                                                            █
 │ 현재 스택과 서비스 상태를  │ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/health status=200 duration=7ms                                                            █
@@ -389,14 +389,14 @@ api-1  | 2026-11-20T09:14:59.413Z INFO  request completed method=GET path=/v1/�
 │                            │ api-1  | 2026-11-20T09:14:30.210Z INFO  request completed method=GET path=/v1/health status=200 duration=11ms
 │설정                        │ api-1  | 2026-11-20T09:14:31.217Z INFO  request completed method=GET path=/v1/health status=200 duration=12ms
 │  실행환경 생성             │ api-1  | 2026-11-20T09:14:32.224Z INFO  request completed method=GET path=/v1/health status=200 duration=13ms
-│  실행환경 전환             │ api-1  | 2026-11-20T09:14:33.231Z INFO  request completed method=GET path=/v1/health status=200 duration=3ms
-│  호스트 스크립트           │ api-1  | 2026-11-20T09:14:34.238Z INFO  request completed method=GET path=/v1/health status=200 duration=4ms                                                            █
-│    커스텀                  │ api-1  | 2026-11-20T09:14:35.245Z INFO  request completed method=GET path=/v1/health status=200 duration=5ms                                                            █
-│    Git                     │ api-1  | 2026-11-20T09:14:36.252Z INFO  request completed method=GET path=/v1/health status=200 duration=6ms                                                            █
-│    S3                      │ api-1  | 2026-11-20T09:14:37.259Z INFO  request completed method=GET path=/v1/health status=200 duration=7ms                                                            █
-│  Compose 설치              │ api-1  | 2026-11-20T09:14:38.266Z INFO  request completed method=GET path=/v1/health status=200 duration=8ms                                                            █
-│  비밀값 연결               │ api-1  | 2026-11-20T09:14:39.273Z INFO  request completed method=GET path=/v1/health status=200 duration=9ms                                                            █
-│  최초 구성                 │ api-1  | 2026-11-20T09:14:40.280Z INFO  request completed method=GET path=/v1/health status=200 duration=10ms                                                           █
+│  호스트 스크립트           │ api-1  | 2026-11-20T09:14:33.231Z INFO  request completed method=GET path=/v1/health status=200 duration=3ms
+│    커스텀                  │ api-1  | 2026-11-20T09:14:34.238Z INFO  request completed method=GET path=/v1/health status=200 duration=4ms                                                            █
+│    Git                     │ api-1  | 2026-11-20T09:14:35.245Z INFO  request completed method=GET path=/v1/health status=200 duration=5ms                                                            █
+│    S3                      │ api-1  | 2026-11-20T09:14:36.252Z INFO  request completed method=GET path=/v1/health status=200 duration=6ms                                                            █
+│  Compose 설치              │ api-1  | 2026-11-20T09:14:37.259Z INFO  request completed method=GET path=/v1/health status=200 duration=7ms                                                            █
+│  비밀값 연결               │ api-1  | 2026-11-20T09:14:38.266Z INFO  request completed method=GET path=/v1/health status=200 duration=8ms                                                            █
+│  최초 구성                 │ api-1  | 2026-11-20T09:14:39.273Z INFO  request completed method=GET path=/v1/health status=200 duration=9ms                                                            █
+│  실행환경 전환             │ api-1  | 2026-11-20T09:14:40.280Z INFO  request completed method=GET path=/v1/health status=200 duration=10ms                                                           █
 │                            │ api-1  | 2026-11-20T09:14:41.287Z INFO  request completed method=GET path=/v1/health status=200 duration=11ms                                                           █
 │                            │ api-1  | 2026-11-20T09:14:42.294Z INFO  request completed method=GET path=/v1/health status=200 duration=12ms                                                           █
 │                            │ api-1  | 2026-11-20T09:14:43.301Z INFO  request completed method=GET path=/v1/health status=200 duration=13ms                                                           █

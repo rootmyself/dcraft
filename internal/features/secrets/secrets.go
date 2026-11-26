@@ -75,6 +75,9 @@ func (f *Feature) Descriptor() core.Descriptor {
 		Section:          core.SectionConfig,
 		SupportsServices: true,
 		Wizard:           true,
+		Menu: []core.MenuEntry{
+			{Kind: core.MenuRun, Feature: "secrets", Label: msgTitle, Summary: msgSummary, Order: 3},
+		},
 		Flags: []core.Flag{
 			{Name: "add", Kind: core.FlagBool, Usage: msgFlagAdd},
 			{Name: "remove", Kind: core.FlagBool, Usage: msgFlagRemove},

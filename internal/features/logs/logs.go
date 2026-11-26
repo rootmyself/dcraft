@@ -57,6 +57,9 @@ func (f *Feature) Descriptor() core.Descriptor {
 		Section:          core.SectionInspect,
 		ReadOnly:         true,
 		SupportsServices: true,
+		Menu: []core.MenuEntry{
+			{Kind: core.MenuRun, Feature: "logs", Label: msgTitle, Summary: msgSummary, Order: 2},
+		},
 		Flags: []core.Flag{
 			{Name: "no-follow", Kind: core.FlagBool, Usage: msgFlagNoFollow},
 			{Name: "tail", Kind: core.FlagString, Usage: msgFlagTail},

@@ -28,6 +28,9 @@ func (f *Feature) Descriptor() core.Descriptor {
 		RecordsHistory:   true,
 		SupportsServices: true,
 		Hooks:            core.HookUpUpdate,
+		Menu: []core.MenuEntry{
+			{Kind: core.MenuRun, Feature: "update", Label: msgMenuLabel, Summary: msgMenuSummary, Order: 3},
+		},
 		Flags: []core.Flag{
 			{Name: "no-cache", Kind: core.FlagBool, Usage: msgFlagNoCache},
 			{Name: "build-pull", Kind: core.FlagBool, Usage: msgFlagBuildPull},

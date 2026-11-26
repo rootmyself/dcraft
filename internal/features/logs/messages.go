@@ -2,8 +2,8 @@ package logs
 
 // Korean user-facing text owned by the logs feature.
 const (
-	msgTitle   = "로그 보기"
-	msgSummary = "스택 또는 서비스의 로그를 실시간으로 따라보거나 마지막 로그를 읽음."
+	msgTitle   = "서비스 로그"
+	msgSummary = "선택한 서비스의 로그를 실시간으로 따라보거나 마지막 로그를 읽음."
 	msgUsage   = "dcraft logs [-s <서비스>] [-i <인스턴스>] [--no-follow] [--tail <줄 수>] [--since <시각>] [--timestamps]\n" +
 		"  기본은 실시간 따라보기. ctrl+c로 화면만 분리하며 서비스는 중지하지 않음.\n" +
 		"  --json은 실시간 로그를 하나의 결과로 표현할 수 없어 지원하지 않음."

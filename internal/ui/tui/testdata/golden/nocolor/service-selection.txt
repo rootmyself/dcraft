@@ -253,10 +253,10 @@
 │                        │  [ ] svc-08             ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-sv… -
 │설정                    │  [ ] svc-09             ✓ 실행 중          1 정상     ghcr.io/acme/platform-sv… -
 │  실행환경 생성         │  [ ] svc-10             ■ 중지됨           0 없음     ghcr.io/acme/platform-sv… 9009→8080
-│  실행환경 전환         │  [ ] svc-11             ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/platform-sv… -
-│  호스트 스크립트       │  [ ] svc-12             ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-sv… -
-│    커스텀              │  [ ] svc-13             ✓ 실행 중          1 정상     ghcr.io/acme/platform-sv… 9012→8080
-│    Git                 │  [ ] svc-14             ■ 중지됨           0 없음     ghcr.io/acme/platform-sv… -
+│  호스트 스크립트       │  [ ] svc-11             ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/platform-sv… -
+│    커스텀              │  [ ] svc-12             ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-sv… -
+│    Git                 │  [ ] svc-13             ✓ 실행 중          1 정상     ghcr.io/acme/platform-sv… 9012→8080
+│    S3                  │  [ ] svc-14             ■ 중지됨           0 없음     ghcr.io/acme/platform-sv… -
 │────────────────────────│                                                                    ↓ 11개 더 있음 · PgUp/PgDn
 │ ▸ 제목 stop            │ 현재 설정에 없음: svc-25
 │ 요약 stop              │
@@ -285,14 +285,14 @@
 │                        │  [ ] svc-08             ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-sv… -
 │설정                    │  [ ] svc-09             ✓ 실행 중          1 정상     ghcr.io/acme/platform-sv… -
 │  실행환경 생성         │  [ ] svc-10             ■ 중지됨           0 없음     ghcr.io/acme/platform-sv… 9009→8080
-│  실행환경 전환         │  [ ] svc-11             ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/platform-sv… -
-│  호스트 스크립트       │  [ ] svc-12             ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-sv… -
-│    커스텀              │  [ ] svc-13             ✓ 실행 중          1 정상     ghcr.io/acme/platform-sv… 9012→8080
-│    Git                 │  [ ] svc-14             ■ 중지됨           0 없음     ghcr.io/acme/platform-sv… -
-│    S3                  │  [ ] svc-15             ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/platform-sv… -
-│  Compose 설치          │  [ ] svc-16             ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-sv… 9015→8080
-│  비밀값 연결           │  [ ] svc-17             ✓ 실행 중          1 정상     ghcr.io/acme/platform-sv… -
-│  최초 구성             │  [ ] svc-18             ■ 중지됨           0 없음     ghcr.io/acme/platform-sv… -
+│  호스트 스크립트       │  [ ] svc-11             ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/platform-sv… -
+│    커스텀              │  [ ] svc-12             ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-sv… -
+│    Git                 │  [ ] svc-13             ✓ 실행 중          1 정상     ghcr.io/acme/platform-sv… 9012→8080
+│    S3                  │  [ ] svc-14             ■ 중지됨           0 없음     ghcr.io/acme/platform-sv… -
+│  Compose 설치          │  [ ] svc-15             ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/platform-sv… -
+│  비밀값 연결           │  [ ] svc-16             ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-sv… 9015→8080
+│  최초 구성             │  [ ] svc-17             ✓ 실행 중          1 정상     ghcr.io/acme/platform-sv… -
+│  실행환경 전환         │  [ ] svc-18             ■ 중지됨           0 없음     ghcr.io/acme/platform-sv… -
 │                        │  [ ] svc-19             ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/platform-sv… 9018→8080
 │                        │  [ ] svc-20             ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-sv… -
 │                        │  [ ] svc-21             ✓ 실행 중          1 정상     ghcr.io/acme/platform-sv… -
@@ -357,10 +357,10 @@
 │                            │  [ ] svc-08                   ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-svc-08:2026… -
 │설정                        │  [ ] svc-09                   ✓ 실행 중          1 정상     ghcr.io/acme/platform-svc-09:2026… -
 │  실행환경 생성             │  [ ] svc-10                   ■ 중지됨           0 없음     ghcr.io/acme/platform-svc-10:2026… 9009→8080
-│  실행환경 전환             │  [ ] svc-11                   ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/platform-svc-11:2026… -
-│  호스트 스크립트           │  [ ] svc-12                   ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-svc-12:2026… -
-│    커스텀                  │  [ ] svc-13                   ✓ 실행 중          1 정상     ghcr.io/acme/platform-svc-13:2026… 9012→8080
-│    Git                     │  [ ] svc-14                   ■ 중지됨           0 없음     ghcr.io/acme/platform-svc-14:2026… -
+│  호스트 스크립트           │  [ ] svc-11                   ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/platform-svc-11:2026… -
+│    커스텀                  │  [ ] svc-12                   ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-svc-12:2026… -
+│    Git                     │  [ ] svc-13                   ✓ 실행 중          1 정상     ghcr.io/acme/platform-svc-13:2026… 9012→8080
+│    S3                      │  [ ] svc-14                   ■ 중지됨           0 없음     ghcr.io/acme/platform-svc-14:2026… -
 │────────────────────────────│                                                                                                                                                ↓ 11개 더 있음 · PgUp/PgDn
 │ ▸ 제목 stop                │ 현재 설정에 없음: svc-25
 │ 요약 stop                  │
@@ -389,14 +389,14 @@
 │                            │  [ ] svc-08                   ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-svc-08:2026… -
 │설정                        │  [ ] svc-09                   ✓ 실행 중          1 정상     ghcr.io/acme/platform-svc-09:2026… -
 │  실행환경 생성             │  [ ] svc-10                   ■ 중지됨           0 없음     ghcr.io/acme/platform-svc-10:2026… 9009→8080
-│  실행환경 전환             │  [ ] svc-11                   ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/platform-svc-11:2026… -
-│  호스트 스크립트           │  [ ] svc-12                   ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-svc-12:2026… -
-│    커스텀                  │  [ ] svc-13                   ✓ 실행 중          1 정상     ghcr.io/acme/platform-svc-13:2026… 9012→8080
-│    Git                     │  [ ] svc-14                   ■ 중지됨           0 없음     ghcr.io/acme/platform-svc-14:2026… -
-│    S3                      │  [ ] svc-15                   ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/platform-svc-15:2026… -
-│  Compose 설치              │  [ ] svc-16                   ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-svc-16:2026… 9015→8080
-│  비밀값 연결               │  [ ] svc-17                   ✓ 실행 중          1 정상     ghcr.io/acme/platform-svc-17:2026… -
-│  최초 구성                 │  [ ] svc-18                   ■ 중지됨           0 없음     ghcr.io/acme/platform-svc-18:2026… -
+│  호스트 스크립트           │  [ ] svc-11                   ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/platform-svc-11:2026… -
+│    커스텀                  │  [ ] svc-12                   ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-svc-12:2026… -
+│    Git                     │  [ ] svc-13                   ✓ 실행 중          1 정상     ghcr.io/acme/platform-svc-13:2026… 9012→8080
+│    S3                      │  [ ] svc-14                   ■ 중지됨           0 없음     ghcr.io/acme/platform-svc-14:2026… -
+│  Compose 설치              │  [ ] svc-15                   ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/platform-svc-15:2026… -
+│  비밀값 연결               │  [ ] svc-16                   ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-svc-16:2026… 9015→8080
+│  최초 구성                 │  [ ] svc-17                   ✓ 실행 중          1 정상     ghcr.io/acme/platform-svc-17:2026… -
+│  실행환경 전환             │  [ ] svc-18                   ■ 중지됨           0 없음     ghcr.io/acme/platform-svc-18:2026… -
 │                            │  [ ] svc-19                   ◐ 재시작 중        1 ▲ 비정상 ghcr.io/acme/platform-svc-19:2026… 9018→8080
 │                            │  [ ] svc-20                   ○ 생성됨           0 ◐ 확인   ghcr.io/acme/platform-svc-20:2026… -
 │                            │  [ ] svc-21                   ✓ 실행 중          1 정상     ghcr.io/acme/platform-svc-21:2026… -

@@ -111,6 +111,9 @@ func (f *Feature) Descriptor() core.Descriptor {
 		// Docker CLI and must work in a folder without Compose files.
 		Requires:       core.Requirements{core.RequirementDockerCLI},
 		TargetOptional: true,
+		Menu: []core.MenuEntry{
+			{Kind: core.MenuRun, Feature: featureName, Label: msgTitle, Summary: msgSummary, Order: 4},
+		},
 	}
 }
 

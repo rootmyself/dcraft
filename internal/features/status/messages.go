@@ -2,8 +2,8 @@ package status
 
 // Korean user-facing text owned by the status feature.
 const (
-	msgTitle   = "스택 상태"
-	msgSummary = "현재 폴더 스택의 서비스 상태와 연결 정보 확인."
+	msgTitle   = "서비스 상태"
+	msgSummary = "현재 폴더 서비스의 상태와 연결 정보 확인."
 	msgUsage   = "dcraft status [--path <폴더>] [--json]"
 
 	msgStageInspect    = "스택 조회"

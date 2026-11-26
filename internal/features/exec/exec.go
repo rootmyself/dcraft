@@ -67,6 +67,9 @@ func (f *Feature) Descriptor() core.Descriptor {
 		ReadOnly:         true,
 		SupportsServices: true,
 		AcceptsArgs:      true,
+		Menu: []core.MenuEntry{
+			{Kind: core.MenuRun, Feature: "exec", Label: msgTitle, Summary: msgSummary, Order: 1},
+		},
 		Flags: []core.Flag{
 			{Name: "index", Shorthand: "i", Kind: core.FlagString, Usage: msgFlagIndex},
 			{Name: "no-tty", Shorthand: "T", Kind: core.FlagBool, Usage: msgFlagNoTTY},

@@ -79,7 +79,7 @@ func TestRegistrationWiresStatusIntoBothInterfaces(t *testing.T) {
 
 	model := tui.NewModel(nil, tui.Options{Engine: a.Engine, Registry: a.Registry})
 	viewText := model.View()
-	if !strings.Contains(viewText, "스택 상태") {
+	if !strings.Contains(viewText, "서비스 상태") {
 		t.Fatalf("TUI did not open on the registered primary feature:\n%s", viewText)
 	}
 }

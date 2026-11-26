@@ -74,7 +74,7 @@ func (f *Feature) Descriptor() core.Descriptor {
 		// Generated host scripts live under the host-script heading with the
 		// script this project already has.
 		Menu: []core.MenuEntry{
-			{Kind: core.MenuRun, Feature: "generate-git-hook", Label: msgMenuLabel, Summary: msgMenuSummary, Parent: "hooks", Order: 1},
+			{Kind: core.MenuRun, Feature: "generate-git-hook", Label: msgMenuLabel, Summary: msgMenuSummary, Parent: "hooks", Order: 0},
 		},
 		Flags: []core.Flag{
 			{Name: "repo", Kind: core.FlagString, Required: true, Usage: msgFlagRepo},

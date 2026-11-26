@@ -33,6 +33,9 @@ func (f *Feature) Descriptor() core.Descriptor {
 		Section:  core.SectionInspect,
 		ReadOnly: true,
 		Primary:  true,
+		Menu: []core.MenuEntry{
+			{Kind: core.MenuRun, Feature: "status", Label: msgTitle, Summary: msgSummary, Order: 0},
+		},
 	}
 }
 
