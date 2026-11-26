@@ -38,6 +38,11 @@ const (
 	// The continuation heading of a modal risk band that had to be cut.
 	msgRiskContinuation = "위험 · 이어서"
 
+	// msgButtonFocus marks the button Enter will press. The marker is the
+	// non-color channel: a colorless terminal still shows which answer is
+	// selected.
+	msgButtonFocus = "▸ "
+
 	// The scroll hint states what is off screen and always names the keys.
 	msgHintBoth  = "↑ %d개 · ↓ %d개 더 있음 · PgUp/PgDn"
 	msgHintAbove = "↑ %d개 더 있음 · PgUp/PgDn"
@@ -50,6 +55,7 @@ const (
 	msgKeyRun         = "실행"
 	msgKeyCancel      = "취소"
 	msgKeyItem        = "항목"
+	msgKeyButton      = "버튼"
 	msgKeyHelp        = "도움말"
 	msgKeySubmit      = "제출"
 	msgKeyNextField   = "다음 항목"

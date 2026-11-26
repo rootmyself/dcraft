@@ -19,6 +19,11 @@ func (m *Model) footerPhase() visual.Phase {
 	if m.live != nil {
 		return visual.PhaseLive
 	}
+	if m.progressDone {
+		// The run finished: the screen offers the report and a plain quit, not
+		// the busy row that advertises a cancel key nothing can cancel.
+		return visual.PhaseMenu
+	}
 	switch m.phase {
 	case phaseConfirm:
 		return visual.PhaseConfirm
@@ -54,6 +59,21 @@ func (m *Model) screenKeycaps() []visual.Keycap {
 			{Key: "esc", Label: msgKeyClear, Priority: 0},
 			{Key: "enter", Label: msgKeyCommit, Priority: 0},
 		}
+	}
+	if m.progressDone {
+		// The run finished: Enter opens the report, q leaves without it. The
+		// log's scroll keys still work, so the row keeps them when it overflows.
+		items := []visual.Keycap{
+			{Key: "enter", Label: msgKeyShowResult, Priority: 0},
+			{Key: "q", Label: msgKeyQuit, Priority: 0},
+		}
+		if m.progressScrolls() {
+			items = append(items,
+				visual.Keycap{Key: "PgUp/PgDn", Label: msgKeyScroll, Priority: 2},
+				visual.Keycap{Key: "g/G", Label: msgKeyEnds, Priority: 3},
+			)
+		}
+		return items
 	}
 	if m.live != nil && m.live.mode == core.LiveAttach {
 		// Attach ends with ctrl+], never with ctrl+c (which is forwarded to the
@@ -940,7 +960,7 @@ func (m *Model) phaseBody() string {
 	case phaseLoading:
 		// A live screen is laid out as a body (fixed header plus a scrolling
 		// band) by layoutBody; phaseBody only handles non-live work.
-		return m.workingBody(msgWorking)
+		return m.workingBody(m.progressHeadingText())
 	default:
 		// phaseReady has no single-string body: its document is rendered as
 		// lines by renderBody so the table can scroll under a fixed header.

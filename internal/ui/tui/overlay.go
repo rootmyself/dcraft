@@ -72,12 +72,13 @@ func (m *Model) confirmFeature() core.Feature {
 // shrinks, so a narrow terminal scrolls instead of dropping a field.
 func (m *Model) confirmSpec() visual.ModalSpec {
 	spec := visual.ModalSpec{
-		Title:     msgConfirmTitle,
-		Badge:     msgConfirmRiskLabel,
-		RiskLabel: msgConfirmRiskLabel,
-		Risk:      []string{msgConfirmRisk},
-		Buttons:   []string{msgModalApprove, msgModalCancel},
-		ScrollTop: m.confirmScroll,
+		Title:       msgConfirmTitle,
+		Badge:       msgConfirmRiskLabel,
+		RiskLabel:   msgConfirmRiskLabel,
+		Risk:        []string{msgConfirmRisk},
+		Buttons:     []string{msgModalApprove, msgModalCancel},
+		ButtonFocus: m.confirmButton,
+		ScrollTop:   m.confirmScroll,
 	}
 	if len(m.pendingApprovals) > 0 {
 		spec.Title = msgApprovalConfirmTitle
@@ -162,11 +163,12 @@ func (m *Model) helpSpec() visual.ModalSpec {
 // cancel.
 func (m *Model) discardSpec() visual.ModalSpec {
 	spec := visual.ModalSpec{
-		Title:     msgDiscardTitle,
-		Badge:     msgConfirmRiskLabel,
-		RiskLabel: msgConfirmRiskLabel,
-		Risk:      []string{msgDiscardRisk},
-		Buttons:   []string{msgModalApprove, msgModalCancel},
+		Title:       msgDiscardTitle,
+		Badge:       msgConfirmRiskLabel,
+		RiskLabel:   msgConfirmRiskLabel,
+		Risk:        []string{msgDiscardRisk},
+		Buttons:     []string{msgModalApprove, msgModalCancel},
+		ButtonFocus: m.confirmButton,
 	}
 	action := ""
 	if m.pendingNav >= 0 && m.pendingNav < len(m.features) {
@@ -185,16 +187,22 @@ func (m *Model) discardSpec() visual.ModalSpec {
 func (m *Model) updateDiscardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "n":
-		// Every answer stays: this is the whole point of asking.
-		m.discardOpen = false
-		m.pendingNav = -1
-		m.confirmScroll = 0
+		return m.closeDiscard()
+	case "left", "shift+tab", "h":
+		m.confirmButton = confirmButtonApprove
+		return m, nil
+	case "right", "tab", "l":
+		m.confirmButton = confirmButtonCancel
 		return m, nil
 	case "enter":
+		if m.confirmButton == confirmButtonCancel {
+			return m.closeDiscard()
+		}
 		index := m.pendingNav
 		m.discardOpen = false
 		m.pendingNav = -1
 		m.confirmScroll = 0
+		m.confirmButton = confirmButtonCancel
 		if index < 0 || index >= len(m.features) {
 			return m, nil
 		}
@@ -203,6 +211,15 @@ func (m *Model) updateDiscardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	default:
 		m.scrollOverlayKey(msg)
 	}
+	return m, nil
+}
+
+// closeDiscard keeps every answer and stays on the current screen.
+func (m *Model) closeDiscard() (tea.Model, tea.Cmd) {
+	m.discardOpen = false
+	m.pendingNav = -1
+	m.confirmScroll = 0
+	m.confirmButton = confirmButtonCancel
 	return m, nil
 }
 
@@ -301,30 +318,42 @@ func (m *Model) updateConfirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// A confirmation is not an operation; quitting is safe and runs
 		// nothing.
 		return m, tea.Quit
-	case "esc", "n":
-		if m.pendingApproval != core.ApprovalNone {
-			// An approval request is declined explicitly: the canceled
-			// result states that nothing ran, and it is the screen the user
-			// returns to.
-			m.declineApproval()
-			return m, nil
-		}
-		// An ordinary confirmation has no approval to decline. Closing it
-		// returns to the screen the user came from, unchanged: nothing ran,
-		// so there is nothing new to report.
-		m.pending = nil
-		m.planText = ""
-		m.planFingerprint = ""
-		m.req.PlanFingerprint = ""
-		m.confirmScroll = 0
-		m.phase = phaseReady
-		m.notice = ""
+	case "left", "shift+tab", "h":
+		m.confirmButton = confirmButtonApprove
 		return m, nil
+	case "right", "tab", "l":
+		m.confirmButton = confirmButtonCancel
+		return m, nil
+	case "esc", "n":
+		return m.closeConfirmation()
 	case "enter":
-		return m.approveConfirmation()
+		if m.confirmButton == confirmButtonApprove {
+			return m.approveConfirmation()
+		}
+		return m.closeConfirmation()
 	default:
 		m.scrollOverlayKey(msg)
 	}
+	return m, nil
+}
+
+// closeConfirmation declines the panel. An approval request states the
+// cancellation as its result, because the reader asked for a specific
+// decision; an ordinary confirmation simply returns to the screen the user
+// came from, where nothing ran.
+func (m *Model) closeConfirmation() (tea.Model, tea.Cmd) {
+	if m.pendingApproval != core.ApprovalNone {
+		m.declineApproval()
+		return m, nil
+	}
+	m.pending = nil
+	m.planText = ""
+	m.planFingerprint = ""
+	m.req.PlanFingerprint = ""
+	m.confirmScroll = 0
+	m.confirmButton = confirmButtonCancel
+	m.phase = phaseReady
+	m.notice = ""
 	return m, nil
 }
 

@@ -79,6 +79,13 @@ const (
 	envScreenSwitch
 )
 
+// Confirmation buttons are fixed positions in the panel's pinned row. The
+// default focus is cancel: one Enter must never approve a stack change.
+const (
+	confirmButtonApprove = 0
+	confirmButtonCancel  = 1
+)
+
 // Model is the Bubble Tea model. It is exported for behavior tests.
 type Model struct {
 	ctx      context.Context
@@ -165,7 +172,10 @@ type Model struct {
 	// starts at the top.
 	helpOpen      bool
 	confirmScroll int
-
+	// confirmButton is the focused button of an open confirmation panel. It
+	// starts on cancel so Enter never approves a destructive action by
+	// accident, and the arrow keys move it.
+	confirmButton int
 	// discardOpen is the sidebar-click confirmation. It is a one-decision
 	// panel: accept discards the collected answers and navigates, cancel
 	// returns to the screen with every answer intact. pendingNav is the feature
@@ -219,6 +229,19 @@ type Model struct {
 	progressCh     chan struct{}
 	progressTop    int
 	progressFollow bool
+	// heldResult is a successful result waiting for the reader: the progress
+	// screen stays as it finished, with the run's own log still readable, until
+	// Enter opens the result. A failure is shown at once, because the cause is
+	// what the reader needs next.
+	heldResult *core.Result
+	// progressDone reports that the run finished and its log is being kept for
+	// the reader instead of being replaced by the result screen.
+	progressDone bool
+	// pendingEnvAlias and pendingEnvRemoval remember an environment change that
+	// arrived with a held result, so releasing the hold can finish the same
+	// destination the run would have reached directly.
+	pendingEnvAlias   string
+	pendingEnvRemoval string
 	// lastLive keeps the tail of the last live output so the management view
 	// still shows what the process printed after the screen closes.
 	lastLive []string
@@ -417,6 +440,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.phase = phaseConfirm
 		m.confirmScroll = 0
+		m.confirmButton = confirmButtonCancel
 		return m, nil
 	case environmentListMsg:
 		if m.phase != phaseLoadingEnvironments {
@@ -557,7 +581,10 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// The running log belongs to the run. It is dropped before the result
 		// is drawn, so no stale pane competes with the result document.
-		m.closeProgress()
+		held := !m.wizardAwaiting && m.holdCompletion(res)
+		if !held {
+			m.closeProgress()
+		}
 		if m.wizardAwaiting {
 			m.wizardAwaiting = false
 			m.beginWizardSteps(res)
@@ -579,6 +606,22 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.wizardAnswers = nil
 			m.wizardPreview = ""
 			m.wizardPreviewErr = nil
+		}
+		if held {
+			// The success report waits for Enter. The screen keeps the finished
+			// progress log, so the run's own output is still there when the
+			// reader decides to look at the result.
+			if created != "" {
+				m.heldResult = &res
+				m.pendingEnvAlias = created
+				return m, nil
+			}
+			if removedAlias != "" {
+				m.heldResult = &res
+				m.pendingEnvRemoval = removedAlias
+				return m, nil
+			}
+			return m, nil
 		}
 		m.result = &res
 		m.phase = phaseReady
@@ -634,6 +677,17 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateLiveKey(msg)
 		}
 		if m.updateProgressKey(msg) {
+			return m, nil
+		}
+		if m.progressDone {
+			// The run finished and its log is on screen. Enter opens the report;
+			// q ends the session without it. No other key has a meaning here.
+			switch msg.String() {
+			case "enter":
+				return m.releaseHeldResult()
+			case "q", "ctrl+c":
+				return m, tea.Quit
+			}
 			return m, nil
 		}
 		// Body scrolling runs before the phase handlers: PgUp/PgDn, Home/End
@@ -1079,6 +1133,7 @@ func (m *Model) startRunPath(f core.Feature) tea.Cmd {
 	m.planStages = nil
 	m.phase = phaseConfirm
 	m.confirmScroll = 0
+	m.confirmButton = confirmButtonCancel
 	m.notice = ""
 	return nil
 }
@@ -1479,6 +1534,64 @@ func (m *Model) declineApproval() {
 	m.req.PlanFingerprint = ""
 	m.confirmScroll = 0
 	m.phase = phaseReady
+}
+
+// holdCompletion decides whether a finished run keeps the progress screen. A
+// successful stack or data operation holds its result until the reader presses
+// Enter; everything else — a failure, a cancellation, a read-only run, a
+// settings save — shows its screen immediately, because those either need the
+// cause now or have no process output worth keeping.
+func (m *Model) holdCompletion(res core.Result) bool {
+	if res.Outcome != core.OutcomeSuccess || m.active == nil {
+		return false
+	}
+	d := m.active.Descriptor()
+	if d.ReadOnly || !d.RecordsHistory {
+		return false
+	}
+	// Only the sections that change the running stack or its data hold their
+	// result. A settings save (an alias, a hook, a secret reference, the first
+	// Compose file) has no process output to keep, and its report is the whole
+	// point of the run.
+	switch d.Section {
+	case core.SectionOperate, core.SectionData:
+	default:
+		return false
+	}
+	// A live stream's own screen is the content; its result is a short summary
+	// and does not replace a process log.
+	if m.live != nil {
+		return false
+	}
+	m.heldResult = &res
+	m.progressDone = true
+	m.phase = phaseLoading
+	return true
+}
+
+// releaseHeldResult opens the report the reader asked for with Enter.
+func (m *Model) releaseHeldResult() (tea.Model, tea.Cmd) {
+	res := m.heldResult
+	if res == nil {
+		return m, nil
+	}
+	m.heldResult = nil
+	m.progressDone = false
+	m.closeProgress()
+	created, removed := m.pendingEnvAlias, m.pendingEnvRemoval
+	m.pendingEnvAlias, m.pendingEnvRemoval = "", ""
+	m.result = res
+	m.phase = phaseReady
+	m.notice = ""
+	m.resultDismissed = false
+	m.resetScrollState()
+	if created != "" {
+		return m, m.activateCreatedEnvironment(created)
+	}
+	if removed != "" {
+		return m, m.clearRemovedEnvironment(removed)
+	}
+	return m, nil
 }
 
 func (m *Model) runCmd(f core.Feature, approvals []core.ApprovalKind, options map[string]string, events chan core.Stage, ctx context.Context) tea.Cmd {

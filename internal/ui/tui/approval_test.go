@@ -83,6 +83,9 @@ func TestAcceptingApprovalRunsThroughTheEngineWithTheApproval(t *testing.T) {
 	m := newTestModel(t, install)
 	initModel(t, m)
 
+	// The panel starts on cancel; move to approve before pressing Enter.
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	m = nm.(*Model)
 	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = nm.(*Model)
 	feed(t, m, execute(t, cmd))
@@ -101,8 +104,7 @@ func TestApprovalWithoutPlannerStillFailsInTheEngine(t *testing.T) {
 	install := &stubFeature{desc: approvalDescriptor("install-compose"), body: "body"}
 	m := newTestModel(t, install)
 	initModel(t, m)
-	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	m = nm.(*Model)
+	cmd := approveFocused(t, m)
 	feed(t, m, execute(t, cmd))
 	if install.runs != 0 {
 		t.Fatalf("feature without a planner ran without an approval: %d", install.runs)
@@ -179,12 +181,16 @@ func TestOrdinaryPlannerShowsPlanAndRunsWithoutApproval(t *testing.T) {
 		t.Fatalf("plan runs = %d, want 1", upd.planRuns)
 	}
 
+	// The panel starts on cancel; move to approve before pressing Enter.
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	m = nm.(*Model)
 	nm, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = nm.(*Model)
 	feed(t, m, execute(t, cmd))
 	if upd.runs != 1 {
 		t.Fatalf("confirmed update runs = %d, want 1", upd.runs)
 	}
+	pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter}) // open the held result
 	if m.result == nil || m.result.Outcome != core.OutcomeSuccess {
 		t.Fatalf("result = %+v", m.result)
 	}
@@ -227,12 +233,16 @@ func TestPreviousVersionApprovalUsesTheGenericScreen(t *testing.T) {
 		t.Fatalf("rollback ran before approval: %d", rb.runs)
 	}
 
+	// The panel starts on cancel; move to approve before pressing Enter.
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	m = nm.(*Model)
 	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = nm.(*Model)
 	feed(t, m, execute(t, cmd))
 	if rb.runs != 1 {
 		t.Fatalf("approved rollback runs = %d, want 1", rb.runs)
 	}
+	pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter}) // open the held result
 	if m.result == nil || m.result.Outcome != core.OutcomeSuccess {
 		t.Fatalf("result = %+v (the previous_version approval was not passed to the engine)", m.result)
 	}

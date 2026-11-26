@@ -164,7 +164,7 @@ func TestInvariantApprovalStaysOneKey(t *testing.T) {
 		m = nm.(*Model)
 		feed(t, m, execute(t, cmd))
 		if up.runs != 0 {
-			t.Fatalf("%q ran the operation", key.String())
+			t.Fatalf("%q ran the operation without a focused approve button", key.String())
 		}
 		if m.phase != phaseConfirm {
 			t.Fatalf("%q left the confirmation (phase %v)", key.String(), m.phase)
@@ -179,6 +179,14 @@ func TestInvariantApprovalStaysOneKey(t *testing.T) {
 	view := m.View()
 	if !strings.Contains(view, "[enter] 실행") || !strings.Contains(view, "[esc] 취소") {
 		t.Fatalf("confirm footer lost its mandatory keys:\n%s", view)
+	}
+	// The panel states how its buttons are chosen, and the default focus is
+	// cancel: the approve button is not the one Enter would press.
+	if !strings.Contains(view, "[←→] 버튼") {
+		t.Fatalf("confirm footer does not state how to move between buttons:\n%s", view)
+	}
+	if !strings.Contains(view, "▸ [ 취소 ]") {
+		t.Fatalf("the panel does not start on cancel:\n%s", view)
 	}
 	if strings.Contains(view, "[space] 승인") {
 		t.Fatalf("the footer advertises a space approval that does not exist:\n%s", view)
@@ -196,6 +204,9 @@ func TestInvariantQuitSafetyWhileMutating(t *testing.T) {
 	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("down")})
 	m = nm.(*Model)
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(*Model)
+	// The panel starts on cancel: move the focus to approve, then press enter.
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyLeft})
 	m = nm.(*Model)
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	*m = *(nm.(*Model))

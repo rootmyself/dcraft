@@ -117,12 +117,12 @@ func TestTUIAcceptingScriptTrustApprovesAndRuns(t *testing.T) {
 	m := newHookModel(t, up, hooks)
 	initModel(t, m)
 
-	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	m = nm.(*Model)
+	cmd := approveFocused(t, m)
 	feed(t, m, execute(t, cmd))
 	if hooks.approves != 1 || hooks.executes != 1 || up.runs != 1 {
 		t.Fatalf("approve=%d exec=%d feature=%d", hooks.approves, hooks.executes, up.runs)
 	}
+	pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter}) // open the held result
 	if m.result == nil || m.result.Outcome != core.OutcomeSuccess {
 		t.Fatalf("result = %+v", m.result)
 	}
@@ -147,8 +147,7 @@ func TestTUITrustedHooksRunAfterOneConfirmation(t *testing.T) {
 	if strings.Contains(view, "승인: 스크립트 신뢰") {
 		t.Fatalf("trusted hooks still asked for approval:\n%s", view)
 	}
-	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	m = nm.(*Model)
+	cmd := approveFocused(t, m)
 	feed(t, m, execute(t, cmd))
 	if up.runs != 1 || hooks.executes != 1 || hooks.approves != 0 {
 		t.Fatalf("feature=%d exec=%d approve=%d", up.runs, hooks.executes, hooks.approves)

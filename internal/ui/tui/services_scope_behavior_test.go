@@ -61,6 +61,8 @@ func TestScopeTableConfirmedScopeReachesTheRunUnchanged(t *testing.T) {
 	if got := strings.Join(m.req.Services, ","); got != "api,worker" {
 		t.Fatalf("confirm carries %q, want api,worker", got)
 	}
+	// The confirmation panel starts on cancel; move to approve.
+	press(m, tea.KeyMsg{Type: tea.KeyLeft})
 	feedCmd(t, m, press(m, tea.KeyMsg{Type: tea.KeyEnter}))
 
 	if stop.runs != 1 {

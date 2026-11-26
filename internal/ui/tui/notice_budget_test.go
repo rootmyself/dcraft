@@ -24,6 +24,8 @@ func TestNoticeIsCountedAgainstTheBodyBudget(t *testing.T) {
 	m = nm.(*Model)
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = nm.(*Model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyLeft}) // the panel starts on cancel
+	m = nm.(*Model)
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = nm.(*Model)
 	if m.phase != phaseLoading {

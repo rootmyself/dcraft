@@ -225,6 +225,7 @@ func TestWizardPreviewShowsAndPassesIndependentApprovals(t *testing.T) {
 	if wizard.applied {
 		t.Fatal("wizard applied before the independent approval confirmation")
 	}
+	feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeyLeft}}) // the panel starts on cancel
 	feed(t, m, []tea.Msg{tea.KeyMsg{Type: tea.KeyEnter}})
 	if !wizard.applied {
 		t.Fatal("wizard did not apply after the approval")

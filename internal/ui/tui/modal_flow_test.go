@@ -691,3 +691,11 @@ func TestResizeWhileHelpIsOpenKeepsTheFrame(t *testing.T) {
 		}
 	}
 }
+
+// approveFocused moves the confirmation's focus to approve and presses Enter.
+// The panel starts on cancel, so a test that means "approve" must say so.
+func approveFocused(t *testing.T, m *Model) tea.Cmd {
+	t.Helper()
+	pressKey(t, m, tea.KeyMsg{Type: tea.KeyLeft})
+	return pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
+}

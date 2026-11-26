@@ -253,12 +253,23 @@ func (m *Model) activateHit(hit hitTarget, double bool) tea.Cmd {
 		if double {
 			return m.modalKey(tea.KeyMsg{Type: tea.KeyEnter})
 		}
+		m.focusModalButton(confirmButtonApprove)
 	case hitModalCancel:
 		if double {
 			return m.modalKey(tea.KeyMsg{Type: tea.KeyEsc})
 		}
+		m.focusModalButton(confirmButtonCancel)
 	}
 	return nil
+}
+
+// focusModalButton moves the panel's button focus to a click. The keyboard
+// still owns the decision; a single click only says which answer is selected,
+// exactly as an arrow key does.
+func (m *Model) focusModalButton(index int) {
+	if m.confirmOpen() || m.discardOpen {
+		m.confirmButton = index
+	}
 }
 
 // selectServiceRow moves the scope cursor and toggles the clicked service. The
@@ -353,6 +364,10 @@ func (m *Model) formEnter() tea.Cmd {
 }
 
 func (m *Model) modalKey(msg tea.KeyMsg) tea.Cmd {
+	if m.discardOpen {
+		_, cmd := m.updateDiscardKey(msg)
+		return cmd
+	}
 	_, cmd := m.updateConfirmKey(msg)
 	return cmd
 }

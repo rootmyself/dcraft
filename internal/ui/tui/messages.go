@@ -113,6 +113,7 @@ const (
 	msgServiceRequired      = "서비스를 하나 이상 선택."
 	msgServiceCap           = "최대 %d개까지 선택 가능."
 	msgServiceIntroLogs     = "로그를 볼 서비스 선택 · 최대 4개"
+	msgDoneSuffix           = " 완료 · enter 계속"
 	msgServiceNoPort        = "-"
 	// State and health wording comes from internal/stack/present; the service
 	// scope screen draws the same words as the status table.
@@ -194,6 +195,7 @@ const (
 	msgKeyNextSkip    = "다음/건너뛰기"
 	msgKeyPage        = "페이지"
 	msgKeyClose       = "닫기"
+	msgKeyShowResult  = "결과 보기"
 	msgKeyDetail      = "상세"
 
 	// The environment summary counts its files.
