@@ -288,11 +288,11 @@ func TestMouseFormFocusesFieldsAndChoices(t *testing.T) {
 	m := form.m
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
-	clickRow(t, m, "명령:", now)
+	clickRow(t, m, "명령", now)
 	if m.form.focus != 1 {
 		t.Fatalf("click focused %d, want 1", m.form.focus)
 	}
-	clickRow(t, m, "서비스 인스턴스:", now.Add(time.Second))
+	clickRow(t, m, "서비스 인스턴스", now.Add(time.Second))
 	if m.form.focus != 0 {
 		t.Fatalf("click focused %d, want 0", m.form.focus)
 	}
