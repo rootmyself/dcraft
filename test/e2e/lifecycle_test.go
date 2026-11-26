@@ -579,7 +579,7 @@ func TestLifecycleTUIMenuSelectsStopAndQuitsWithoutChangingServices(t *testing.T
 	project := projectNamed(t, "hello-world")
 	env := fake.env(t, t.TempDir())
 	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
-		{wait: "상태 새로 고침", send: ""},
+		{wait: "마지막 조회", send: ""},
 		{wait: "마지막 조회", walk: "서비스 중지", send: "\r"},
 		{wait: "서비스 선택", send: "\r"},
 		{wait: "작업 실행 확인", send: ""},
@@ -600,10 +600,12 @@ func TestLifecycleTUIRunsUpThroughTheSameEngine(t *testing.T) {
 	project := projectNamed(t, "hello-world")
 	env := fake.env(t, t.TempDir())
 	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
-		{wait: "상태 새로 고침", send: ""},
+		{wait: "마지막 조회", send: ""},
 		{wait: "마지막 조회", walk: "서비스 시작", send: "\r"},
 		{wait: "서비스 선택", send: "\r"},
-		{wait: "작업 실행 확인", send: "\r"},
+		{wait: "작업 실행 확인", send: "\x1b[D"}, // the panel starts on cancel
+		{wait: "▸ [ 승인 ]", send: "\r"},
+		{wait: "완료 · enter 계속", send: "\r"},
 		{wait: "스택 시작.", send: ""},
 	})
 	if code != 0 {

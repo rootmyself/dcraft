@@ -484,6 +484,8 @@ func TestPTYTUILiveLogHostileLineKeepsTheFrame(t *testing.T) {
 	s.waitFor("마지막 조회", 15*time.Second)
 	s.openMenuFeature(t, "logs")
 	s.waitFor("서비스 선택", 15*time.Second)
+	// The screen requires a named service: pick the first row, then confirm.
+	s.press(" ")
 	s.press("\r")
 	s.waitFor("실시간 로그", 15*time.Second)
 	s.waitFor("done", 20*time.Second)

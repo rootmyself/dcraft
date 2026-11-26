@@ -757,7 +757,7 @@ func goldenWizardSpec() core.WizardSpec {
 
 func goldenWizardPreviewText() string {
 	return strings.Join([]string{
-		"저장할 비밀값 연결",
+		"저장할 비밀값 설정",
 		"서비스: api",
 		"전달: 환경변수 (실행 시점)",
 		"효과: dcraft up 시 컨테이너 환경변수로 전달.",

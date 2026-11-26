@@ -14,14 +14,16 @@ func TestTUIServiceScopeStopsOnlyTheSelectedService(t *testing.T) {
 	project := projectNamed(t, "hello-world")
 	env := fake.env(t, t.TempDir())
 	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
-		{wait: "상태 새로 고침", send: ""},
-		{wait: "마지막 조회", walk: "스택 중지", send: "\r"},
+		{wait: "마지막 조회", send: ""},
+		{wait: "마지막 조회", walk: "서비스 중지", send: "\r"},
 		{wait: "서비스 선택", send: "down"}, // 전체 → api (Compose order)
 		{wait: "▸[ ] api", send: "down"},
 		{wait: "▸[ ] web", send: " "},
 		{wait: "[x] web", send: "\r"},
 		{wait: "작업 실행 확인", send: ""},
-		{wait: "범위:", send: "\r"},
+		{wait: "범위:", send: "\x1b[D"}, // the panel starts on cancel
+		{wait: "▸ [ 승인 ]", send: "\r"},
+		{wait: "완료 · enter 계속", send: "\r"},
 		{wait: "스택 중지.", send: ""},
 	})
 	// The chosen scope is echoed on the confirmation panel.
@@ -48,11 +50,13 @@ func TestTUIServiceScopeWholeStackKeepsThePreviousBehavior(t *testing.T) {
 	project := projectNamed(t, "hello-world")
 	env := fake.env(t, t.TempDir())
 	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
-		{wait: "상태 새로 고침", send: ""},
-		{wait: "마지막 조회", walk: "스택 중지", send: "\r"},
+		{wait: "마지막 조회", send: ""},
+		{wait: "마지막 조회", walk: "서비스 중지", send: "\r"},
 		{wait: "서비스 선택", send: "\r"},
 		{wait: "작업 실행 확인", send: ""},
-		{wait: "범위:", send: "\r"},
+		{wait: "범위:", send: "\x1b[D"}, // the panel starts on cancel
+		{wait: "▸ [ 승인 ]", send: "\r"},
+		{wait: "완료 · enter 계속", send: "\r"},
 		{wait: "스택 중지.", send: ""},
 	})
 	if code != 0 {
@@ -72,8 +76,8 @@ func TestTUIServiceScopeCancelChangesNothing(t *testing.T) {
 	project := projectNamed(t, "hello-world")
 	env := fake.env(t, t.TempDir())
 	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
-		{wait: "상태 새로 고침", send: ""},
-		{wait: "마지막 조회", walk: "스택 중지", send: "\r"},
+		{wait: "마지막 조회", send: ""},
+		{wait: "마지막 조회", walk: "서비스 중지", send: "\r"},
 		{wait: "서비스 선택", send: "down"},
 		{wait: "▸[ ] api", send: "\x1b"}, // esc
 		{wait: "아무것도 실행하지 않았음", send: ""},
@@ -95,8 +99,9 @@ func TestTUILogsUsesTheSelectedServiceAndKeepsServicesRunning(t *testing.T) {
 	s.waitFor("마지막 조회", 15*time.Second)
 	s.openMenuFeature(t, "logs")
 	s.waitFor("서비스 선택", 15*time.Second)
-	// 전체 → db → job → web
-	s.press("\x1b[B", "\x1b[B", "\x1b[B")
+	// The screen requires a named service, so there is no whole-stack row:
+	// db → job → web.
+	s.press("\x1b[B", "\x1b[B")
 	s.press(" ")
 	s.waitFor("[x] web", 15*time.Second)
 	s.press("\r")

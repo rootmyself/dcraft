@@ -431,7 +431,7 @@ func TestSecretsTUIWizardOffersAWSAndSavesTheShape(t *testing.T) {
 		{wait: "AWS field 선택", send: "database.password\r"},
 		{wait: "AWS 리전 선택", send: "ap-northeast-2\r"},
 		{wait: "AWS profile 선택", send: "\r"}, // skip
-		{wait: "저장할 비밀값 연결", send: ""},
+		{wait: "저장할 비밀값 설정", send: ""},
 		{wait: "AWS Secrets Manager", send: "\r"},
 		{wait: "비밀값 참조 저장", send: ""},
 	})

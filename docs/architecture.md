@@ -752,7 +752,7 @@ is in the payload and in every Compose call.
   (path/files/profiles/project name), the exact scope and the effect. `enter`
   runs the same engine path, `esc` cancels, `q` quits without running.
   The TUI is not whole-stack-only: any feature whose descriptor declares
-  `SupportsServices` (up/stop/restart/update/logs at minimum) first shows the
+  `SupportsServices` (up/stop/restart/update at minimum) first shows the
   current stack as a read-only table with `선택 · 서비스 · 상태 · 인스턴스 ·
   health · 이미지 · 포트`, so the choice is informed by state and ports. The
   whole-stack row `전체 (스택 전체)` is pinned above the table and selected by
@@ -763,9 +763,23 @@ is in the payload and in every Compose call.
   the confirmation panel states the exact scope (`스택 전체` or the service
   names), so an explicit selection never silently widens back to the whole
   stack. A list that cannot be read is shown as a failure and blocks the
-  operation. Features that collect their own service input keep it: the exec
-  form and wizard steps are unchanged. Instance-level selection remains
-  specific to logs/exec.
+  operation.
+
+  Two declared capabilities narrow that screen instead of a feature name.
+  `core.ServiceScope` states that a feature needs a named service and how many
+  one screen may collect: logs requires a selection, so its screen has no
+  whole-stack row and refuses an empty confirm, and it caps the selection at
+  four. Features that collect their own service input keep it: the exec form and
+  wizard steps are unchanged.
+
+  A log screen watches up to four services at once. `core.IO.Fanout` gives the
+  feature one stream per service, each service runs its own child, and the
+  screen draws one tab per service in name order. `tab`/`shift+tab` switch tabs,
+  `q` cancels every stream, and a finished stream is labelled `종료` or `실패` on
+  its own tab while the others keep following. The CLI keeps one child for the
+  whole `-s` selection and is not limited by the tab cap. A non-running service
+  state is drawn with the danger token as well as its icon and Korean label, and
+  a running service that is not verified states the reason in its row detail.
 - During an in-flight mutating operation, `q` explains that the operation is
   running and that quitting can leave partial effects (it does not orphan the
   Compose process). `ctrl+c` requests safe cancellation: the per-run context is
@@ -2830,8 +2844,8 @@ as verified.
   generic plan because it declares the hook scope; with no hooks the plan text
   is empty and only the ordinary confirmation remains. TUI service selection
   is generic for every `SupportsServices` feature that does not collect its own
-  input; it is a convenience over the same engine rules and the selected scope
-  is shown on the plan/confirm screen. Instance-level selection remains
+  input; the selected scope is shown on the plan/confirm screen. Logs requires
+  its scope through `core.ServiceScope`, and instance-level selection remains
   logs/exec-specific.
 - Docker itself (installation, repair, replacement), administrator escalation,
   Docker Desktop/WSL integration changes.
@@ -3484,3 +3498,25 @@ Validation and save:
 Cancellation uses the shared canceled/exit-130 contract with an
 init-specific message about the atomic save window. The feature never writes
 history, because creating a configuration file is not a stack change.
+
+## Interactive confirmation and completion
+
+The confirmation panel owns a focused button instead of one fixed accept key.
+`←/→`, `h/l` and `tab`/`shift+tab` move the focus, `enter` presses the focused
+button, and `esc` cancels. The default focus is cancel, so a bare `enter` never
+approves a stack change. The focused button carries a `▸` marker as well as the
+accent token, so a colorless terminal still shows which answer is selected; a
+single click focuses a button and a double click presses it. The footer states
+`[←→] 버튼` and the panel keeps its risk band.
+
+A successful stack or data run keeps its progress screen instead of replacing it
+immediately. The final stages and the run's own log stay readable, the heading
+states `<작업> 완료 · enter 계속`, `enter` opens the result and `q` leaves without
+it. A failure, a cancellation, a read-only run and a settings save show their
+screen immediately: the first two need the cause next, and the last two have no
+process output worth keeping. A held screen stops its spinner.
+
+An attached shell treats erase-display 0 and 2 as `clear`. ncurses on a screen,
+tmux, linux or ansi terminal and busybox send `ESC[H ESC[J`, so the scrollback is
+emptied there as well; ED 1 stays a scroll-region edit and a log stream keeps its
+history.

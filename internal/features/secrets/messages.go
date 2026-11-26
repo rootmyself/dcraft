@@ -88,7 +88,7 @@ AWS Secrets Manager 원본은 설치된 AWS CLI의 기존 자격 증명 사용. 
 	msgWizardProfilePrompt  = "AWS CLI profile을 입력. 기본 자격 증명 체인을 쓸 때는 비워 두고 Enter를 누르기."
 	msgWizardProfileHint    = "예: ops-admin · staging · production (자격 증명은 저장하지 않음)"
 
-	msgPreviewTitle           = "저장할 비밀값 연결"
+	msgPreviewTitle           = "저장할 비밀값 설정"
 	msgPreviewService         = "서비스"
 	msgPreviewPhase           = "시점"
 	msgPreviewDelivery        = "전달"

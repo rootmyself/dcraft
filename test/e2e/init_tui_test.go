@@ -113,7 +113,8 @@ func TestInitTUIWizardOverwriteShowsTheApprovalAndDeclineKeepsTheOldFile(t *test
 	steps = append(steps,
 		lifecyclePTYStep{wait: "파일 덮어쓰기 (file_overwrite)", send: "\r"},
 		lifecyclePTYStep{wait: "승인 확인", send: ""},
-		lifecyclePTYStep{wait: "파일 덮어쓰기", send: "\r"},
+		lifecyclePTYStep{wait: "파일 덮어쓰기", send: "\x1b[D"}, // the panel starts on cancel
+		lifecyclePTYStep{wait: "▸ [ 승인 ]", send: "\r"},
 		lifecyclePTYStep{wait: "Compose 파일 저장.", send: ""},
 		lifecyclePTYStep{wait: "기존 파일을 덮어썼음.", send: ""},
 		lifecyclePTYStep{wait: "dcraft up", send: ""},

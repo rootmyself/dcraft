@@ -196,7 +196,7 @@ func TestGenerateS3HookTUIWizardShowsThePreviewAndDeclineWritesNothing(t *testin
 	project := projectNamed(t, "s3gen-tui-decline")
 	env := fake.env(t, t.TempDir())
 	steps := []lifecyclePTYStep{
-		{wait: "상태 새로 고침", send: ""},
+		{wait: "마지막 조회", send: ""},
 		{wait: "마지막 조회", walk: "S3", send: "\r"},
 		{wait: "S3 원본", send: "s3://bucket/path/app.tar.gz"},
 		{wait: "app.tar.gz_", send: "\r"},
@@ -232,7 +232,7 @@ func TestGenerateS3HookTUIWizardAcceptSavesTheScript(t *testing.T) {
 	project := projectNamed(t, "s3gen-tui-accept")
 	env := fake.env(t, t.TempDir())
 	steps := []lifecyclePTYStep{
-		{wait: "상태 새로 고침", send: ""},
+		{wait: "마지막 조회", send: ""},
 		{wait: "마지막 조회", walk: "S3", send: "\r"},
 		{wait: "S3 원본", send: "s3://bucket/deploy"},
 		{wait: "deploy_", send: "\r"},
@@ -241,7 +241,8 @@ func TestGenerateS3HookTUIWizardAcceptSavesTheScript(t *testing.T) {
 		{wait: "생성할 스크립트 파일 경로", send: "\r"},
 		{wait: "S3 호스트 스크립트 생성 계획", send: ""},
 		{wait: "dcraft hooks --add", send: "\r"},
-		{wait: "승인 확인", send: "\r"},
+		{wait: "승인 확인", send: "\x1b[D"}, // the panel starts on cancel
+		{wait: "▸ [ 승인 ]", send: "\r"},
 		{wait: "S3 호스트 스크립트 저장", send: ""},
 	}
 	output, code := runLifecyclePTYSteps(t, project, env, steps)
