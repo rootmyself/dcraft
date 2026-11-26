@@ -317,3 +317,45 @@ func TestDocumentOmitsUnknownObservationTime(t *testing.T) {
 		t.Fatalf("pairs = %+v", documentBlocks(doc)[core.BlockKeyValues].Pairs)
 	}
 }
+
+// A running service that is not verified states why in the detail view. The
+// eight-cell column cannot carry the reason, and a bare "앱 확인 안 됨" makes the
+// reader guess.
+func TestDocumentDetailStatesWhyAServiceIsUnverified(t *testing.T) {
+	snap := stack.Snapshot{Services: []stack.Service{
+		{Name: "no-check", Configured: true, State: stack.StateRunning, Health: stack.HealthNone},
+		{Name: "starting", Configured: true, State: stack.StateRunning, Health: stack.HealthStarting, HealthcheckConfigured: true},
+		{Name: "partial", Configured: true, State: stack.StateRunning, Health: stack.HealthNone, HealthcheckConfigured: true},
+		{Name: "verified", Configured: true, State: stack.StateRunning, Health: stack.HealthHealthy, HealthcheckConfigured: true, AppVerified: true},
+		{Name: "stopped", Configured: true, State: stack.StateExited},
+	}}
+	doc := status.New(&fakeBackend{}).Document(successResult(t, snap))
+	var table *core.Table
+	for _, b := range doc.Blocks {
+		if b.Kind == core.BlockTable {
+			table = b.Table
+		}
+	}
+	if table == nil {
+		t.Fatal("no table in the document")
+	}
+	want := map[string]string{
+		"no-check": "healthcheck 없음",
+		"starting": "health 확인 중",
+		"partial":  "일부 인스턴스가 healthcheck를 통과하지 못함",
+	}
+	for _, row := range table.Rows {
+		name := row.Cells[0].Text
+		note := row.Cells[3].DetailNote
+		switch name {
+		case "verified", "stopped":
+			if note != "" {
+				t.Fatalf("%s states a reason it does not have: %q", name, note)
+			}
+		default:
+			if note != want[name] {
+				t.Fatalf("%s reason = %q, want %q", name, note, want[name])
+			}
+		}
+	}
+}

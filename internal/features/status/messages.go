@@ -29,6 +29,12 @@ const (
 	msgHealthyUnverified     = "healthy · 앱 확인 안 됨"
 	msgHealthUnhealthy       = "unhealthy · 앱 확인 안 됨"
 
+	// Detail reasons for an unverified running service. They reuse the column's
+	// own words so the detail screen has one vocabulary.
+	msgHealthReasonNoCheck  = "healthcheck 없음"
+	msgHealthReasonStarting = "health 확인 중"
+	msgHealthReasonPartial  = "일부 인스턴스가 healthcheck를 통과하지 못함"
+
 	msgGuideRefreshInteractive = "상태를 새로 고치려면: dcraft status · 대화형 화면을 열려면: dcraft"
 	msgGuidePending            = "관리 작업: 갱신은 dcraft update, 로그는 dcraft logs, 실행·중지·제거·재시작은 dcraft up/stop/down/restart, 데이터 백업은 dcraft backup, 데이터 복원은 dcraft restore를 사용."
 	msgGuideSecrets            = "기존 Compose/.env의 민감값은 자동 제거되지 않음. dcraft secrets로 참조 등록."

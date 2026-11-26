@@ -84,6 +84,28 @@ func (m *Model) observeTarget(target core.Target) {
 	}
 }
 
+// observeServices records whether the last read snapshot had a running
+// service. It is the TUI's own reading of what it drew; a guided flow uses it to
+// state that the folder is not a blank slate.
+func (m *Model) observeServices(services []core.ServiceStatus) {
+	m.stackRunning = false
+	for _, svc := range services {
+		if svc.State == "running" {
+			m.stackRunning = true
+			return
+		}
+	}
+}
+
+// observeResultRunning reads the running fact from a payload that implements
+// core.StackObserver. A payload without the capability leaves the fact alone: an
+// unrelated run must not claim the stack stopped.
+func (m *Model) observeResultRunning(res core.Result) {
+	if observer, ok := res.Data.(core.StackObserver); ok {
+		m.stackRunning = observer.ObservedRunning()
+	}
+}
+
 // observeTools records the last observed Docker/Compose facts. Nothing here
 // polls: only a plan, service read or run updates them.
 func (m *Model) observeTools(tools core.ToolInfo) {

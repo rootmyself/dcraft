@@ -155,6 +155,11 @@ type Model struct {
 	// nothing re-reads the environment during a redraw.
 	theme visual.Theme
 	facts visual.Facts
+	// stackRunning reports the last observation that at least one service was
+	// running. It is the TUI's own reading of the snapshot it drew, used to warn
+	// a guided flow that the folder is not a blank slate; it is never a Docker
+	// query of its own.
+	stackRunning bool
 
 	// The body scrolls: body is the viewport over the scrollable rows, and
 	// detailOpen switches the result body to the full-value view. The detail's
@@ -521,6 +526,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.observeTarget(msg.report.Target)
 		m.observeTools(msg.report.Tools)
+		m.observeServices(msg.report.Services)
 		m.serviceOptions = append([]core.ServiceStatus{}, msg.report.Services...)
 		m.serviceChecked = make([]bool, len(m.serviceOptions))
 		m.serviceCursor = 0
@@ -574,6 +580,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.observeTarget(res.Target)
 		m.observeTools(res.Tools)
+		m.observeResultRunning(res)
 		if m.runCancel != nil {
 			m.runCancel()
 			m.runCancel = nil

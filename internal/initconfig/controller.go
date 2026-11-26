@@ -415,7 +415,8 @@ func (c *Controller) WizardSteps(ctx context.Context, in core.Invocation) (core.
 
 	const modeStep = "from"
 	spec := core.WizardSpec{
-		Title: msgWizardTitle,
+		Title:  msgWizardTitle,
+		Notice: existingNotice(in, existing),
 		Steps: []core.WizardStep{
 			{
 				Name: "from", Title: msgWizardModeTitle, Prompt: msgWizardModePrompt,
@@ -507,4 +508,20 @@ func (c *Controller) WizardPreview(answers map[string]string) (string, error) {
 		)
 	}
 	return previewText(prepared), nil
+}
+
+// existingNotice states an existing configuration before the flow asks
+// anything. A project that already has Compose input is not a blank slate: the
+// save refuses an existing file unless the reader explicitly overwrites it, so
+// saying so first saves eight questions. The running state is the engine's fact
+// and arrives as an option, so this package never contacts Docker itself.
+func existingNotice(in core.Invocation, existing []string) string {
+	var parts []string
+	if len(existing) > 0 {
+		parts = append(parts, fmt.Sprintf(msgWizardExistingNotice, strings.Join(existing, ", ")))
+	}
+	if in.Option("stack-running") == "true" {
+		parts = append(parts, msgWizardRunningNotice)
+	}
+	return strings.Join(parts, " ")
 }

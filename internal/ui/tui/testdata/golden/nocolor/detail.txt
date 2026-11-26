@@ -110,21 +110,21 @@ Compose 파일
 === 80x18 ===
  dcraft · acme-platform · staging        Docker 29.10.0 · Compose 2.39.1 · 로컬
 메뉴 · ▸ 스택 상태 · 19개 항목                                        tab 펼치기
-전체 값
+전체 값                                                                  1-12/22
 
 Compose 파일
   /work/acme-platform/compose.yaml, /work/acme-platform/compose.staging.yaml
+api · health
+  healthcheck 없음
 api · 이미지
   ghcr.io/acme/platform-api:2026.11.20
+worker · health
+  healthcheck 없음
 worker · 이미지
   ghcr.io/acme/platform-worker:2026.11.20
-scheduler · 이미지
-  ghcr.io/acme/platform-scheduler:2026.11.20
-migrate · 이미지
-  ghcr.io/acme/platform-api:2026.11.20 (로컬 빌드)
-legacy · 이미지
-  ghcr.io/acme/legacy:1.0
-
+web · health
+  healthcheck 없음
+                                                      ↓ 10개 더 있음 · PgUp/PgDn
 [esc] 닫기  [↑↓] 이동  [PgUp/PgDn] 페이지  [g/G] 처음/끝  [q] 종료
 
 === 80x30 ===
@@ -134,26 +134,26 @@ legacy · 이미지
 
 Compose 파일
   /work/acme-platform/compose.yaml, /work/acme-platform/compose.staging.yaml
+api · health
+  healthcheck 없음
 api · 이미지
   ghcr.io/acme/platform-api:2026.11.20
+worker · health
+  healthcheck 없음
 worker · 이미지
   ghcr.io/acme/platform-worker:2026.11.20
+web · health
+  healthcheck 없음
 scheduler · 이미지
   ghcr.io/acme/platform-scheduler:2026.11.20
+db · health
+  healthcheck 없음
 migrate · 이미지
   ghcr.io/acme/platform-api:2026.11.20 (로컬 빌드)
+legacy · health
+  healthcheck 없음
 legacy · 이미지
   ghcr.io/acme/legacy:1.0
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -166,26 +166,26 @@ legacy · 이미지
 
 Compose 파일
   /work/acme-platform/compose.yaml, /work/acme-platform/compose.staging.yaml
+api · health
+  healthcheck 없음
 api · 이미지
   ghcr.io/acme/platform-api:2026.11.20
+worker · health
+  healthcheck 없음
 worker · 이미지
   ghcr.io/acme/platform-worker:2026.11.20
+web · health
+  healthcheck 없음
 scheduler · 이미지
   ghcr.io/acme/platform-scheduler:2026.11.20
+db · health
+  healthcheck 없음
 migrate · 이미지
   ghcr.io/acme/platform-api:2026.11.20 (로컬 빌드)
+legacy · health
+  healthcheck 없음
 legacy · 이미지
   ghcr.io/acme/legacy:1.0
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -213,46 +213,46 @@ legacy · 이미지
 
 === 120x18 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 메뉴 · 19 ─── esc 닫기 ╮ 전체 값
+╭ 메뉴 · 19 ─── esc 닫기 ╮ 전체 값                                                                               1-13/18
 │조회                    │
-│  서비스 접속           │ api · 이미지
-│  로그 보기             │   ghcr.io/acme/platform-api:2026.11.20
-│▸ 스택 상태             │ worker · 이미지
-│                        │   ghcr.io/acme/platform-worker:2026.11.20
-│운영                    │ scheduler · 이미지
-│  스택 제거 ▲ 위험      │   ghcr.io/acme/platform-scheduler:2026.11.20
-│  스택 재시작           │ migrate · 이미지
-│  스택 중지             │   ghcr.io/acme/platform-api:2026.11.20 (로컬 빌드)
-│  스택 시작             │
-│  갱신                  │
-│                        │
-│데이터                  │
-│  데이터 백업           │
-╰────────────────────────╯
+│  서비스 접속           │ api · health
+│  로그 보기             │   healthcheck 없음
+│▸ 스택 상태             │ api · 이미지
+│                        │   ghcr.io/acme/platform-api:2026.11.20
+│운영                    │ worker · health
+│  스택 제거 ▲ 위험      │   healthcheck 없음
+│  스택 재시작           │ worker · 이미지
+│  스택 중지             │   ghcr.io/acme/platform-worker:2026.11.20
+│  스택 시작             │ web · health
+│  갱신                  │   healthcheck 없음
+│                        │ scheduler · 이미지
+│데이터                  │   ghcr.io/acme/platform-scheduler:2026.11.20
+│  데이터 백업           │ db · health
+╰────────────────────────╯                                                                     ↓ 5개 더 있음 · PgUp/PgDn
 [esc] 닫기  [↑↓] 이동  [PgUp/PgDn] 페이지  [g/G] 처음/끝  [q] 종료
 
 === 120x30 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
 ╭ 메뉴 · 19 ─── esc 닫기 ╮ 전체 값
 │조회                    │
-│  서비스 접속           │ api · 이미지
-│  로그 보기             │   ghcr.io/acme/platform-api:2026.11.20
-│▸ 스택 상태             │ worker · 이미지
-│                        │   ghcr.io/acme/platform-worker:2026.11.20
-│운영                    │ scheduler · 이미지
-│  스택 제거 ▲ 위험      │   ghcr.io/acme/platform-scheduler:2026.11.20
-│  스택 재시작           │ migrate · 이미지
-│  스택 중지             │   ghcr.io/acme/platform-api:2026.11.20 (로컬 빌드)
-│  스택 시작             │
-│  갱신                  │
-│                        │
-│데이터                  │
-│  데이터 백업           │
-│  데이터 복원 ▲ 위험    │
-│  이전 버전 복… ▲ 위험  │
-│                        │
-│설정                    │
-│  실행환경 생성         │
+│  서비스 접속           │ api · health
+│  로그 보기             │   healthcheck 없음
+│▸ 스택 상태             │ api · 이미지
+│                        │   ghcr.io/acme/platform-api:2026.11.20
+│운영                    │ worker · health
+│  스택 제거 ▲ 위험      │   healthcheck 없음
+│  스택 재시작           │ worker · 이미지
+│  스택 중지             │   ghcr.io/acme/platform-worker:2026.11.20
+│  스택 시작             │ web · health
+│  갱신                  │   healthcheck 없음
+│                        │ scheduler · 이미지
+│데이터                  │   ghcr.io/acme/platform-scheduler:2026.11.20
+│  데이터 백업           │ db · health
+│  데이터 복원 ▲ 위험    │   healthcheck 없음
+│  이전 버전 복… ▲ 위험  │ migrate · 이미지
+│                        │   ghcr.io/acme/platform-api:2026.11.20 (로컬 빌드)
+│설정                    │ legacy · health
+│  실행환경 생성         │   healthcheck 없음
 │  호스트 스크립트       │
 │    커스텀              │
 │    Git                 │
@@ -267,24 +267,24 @@ legacy · 이미지
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
 ╭ 메뉴 · 19 ─── esc 닫기 ╮ 전체 값
 │조회                    │
-│  서비스 접속           │ api · 이미지
-│  로그 보기             │   ghcr.io/acme/platform-api:2026.11.20
-│▸ 스택 상태             │ worker · 이미지
-│                        │   ghcr.io/acme/platform-worker:2026.11.20
-│운영                    │ scheduler · 이미지
-│  스택 제거 ▲ 위험      │   ghcr.io/acme/platform-scheduler:2026.11.20
-│  스택 재시작           │ migrate · 이미지
-│  스택 중지             │   ghcr.io/acme/platform-api:2026.11.20 (로컬 빌드)
-│  스택 시작             │
-│  갱신                  │
-│                        │
-│데이터                  │
-│  데이터 백업           │
-│  데이터 복원 ▲ 위험    │
-│  이전 버전 복… ▲ 위험  │
-│                        │
-│설정                    │
-│  실행환경 생성         │
+│  서비스 접속           │ api · health
+│  로그 보기             │   healthcheck 없음
+│▸ 스택 상태             │ api · 이미지
+│                        │   ghcr.io/acme/platform-api:2026.11.20
+│운영                    │ worker · health
+│  스택 제거 ▲ 위험      │   healthcheck 없음
+│  스택 재시작           │ worker · 이미지
+│  스택 중지             │   ghcr.io/acme/platform-worker:2026.11.20
+│  스택 시작             │ web · health
+│  갱신                  │   healthcheck 없음
+│                        │ scheduler · 이미지
+│데이터                  │   ghcr.io/acme/platform-scheduler:2026.11.20
+│  데이터 백업           │ db · health
+│  데이터 복원 ▲ 위험    │   healthcheck 없음
+│  이전 버전 복… ▲ 위험  │ migrate · 이미지
+│                        │   ghcr.io/acme/platform-api:2026.11.20 (로컬 빌드)
+│설정                    │ legacy · health
+│  실행환경 생성         │   healthcheck 없음
 │  호스트 스크립트       │
 │    커스텀              │
 │    Git                 │
@@ -317,46 +317,46 @@ legacy · 이미지
 
 === 200x18 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 메뉴 · 19 ─────── esc 닫기 ╮ 전체 값
+╭ 메뉴 · 19 ─────── esc 닫기 ╮ 전체 값                                                                                                                                                           1-13/18
 │조회                        │
-│  서비스 접속               │ api · 이미지
-│  로그 보기                 │   ghcr.io/acme/platform-api:2026.11.20
-│▸ 스택 상태                 │ worker · 이미지
-│                            │   ghcr.io/acme/platform-worker:2026.11.20
-│운영                        │ scheduler · 이미지
-│  스택 제거 ▲ 위험          │   ghcr.io/acme/platform-scheduler:2026.11.20
-│  스택 재시작               │ migrate · 이미지
-│  스택 중지                 │   ghcr.io/acme/platform-api:2026.11.20 (로컬 빌드)
-│  스택 시작                 │
-│  갱신                      │
-│                            │
-│데이터                      │
-│  데이터 백업               │
-╰────────────────────────────╯
+│  서비스 접속               │ api · health
+│  로그 보기                 │   healthcheck 없음
+│▸ 스택 상태                 │ api · 이미지
+│                            │   ghcr.io/acme/platform-api:2026.11.20
+│운영                        │ worker · health
+│  스택 제거 ▲ 위험          │   healthcheck 없음
+│  스택 재시작               │ worker · 이미지
+│  스택 중지                 │   ghcr.io/acme/platform-worker:2026.11.20
+│  스택 시작                 │ web · health
+│  갱신                      │   healthcheck 없음
+│                            │ scheduler · 이미지
+│데이터                      │   ghcr.io/acme/platform-scheduler:2026.11.20
+│  데이터 백업               │ db · health
+╰────────────────────────────╯                                                                                                                                                 ↓ 5개 더 있음 · PgUp/PgDn
 [esc] 닫기  [↑↓] 이동  [PgUp/PgDn] 페이지  [g/G] 처음/끝  [q] 종료
 
 === 200x30 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
 ╭ 메뉴 · 19 ─────── esc 닫기 ╮ 전체 값
 │조회                        │
-│  서비스 접속               │ api · 이미지
-│  로그 보기                 │   ghcr.io/acme/platform-api:2026.11.20
-│▸ 스택 상태                 │ worker · 이미지
-│                            │   ghcr.io/acme/platform-worker:2026.11.20
-│운영                        │ scheduler · 이미지
-│  스택 제거 ▲ 위험          │   ghcr.io/acme/platform-scheduler:2026.11.20
-│  스택 재시작               │ migrate · 이미지
-│  스택 중지                 │   ghcr.io/acme/platform-api:2026.11.20 (로컬 빌드)
-│  스택 시작                 │
-│  갱신                      │
-│                            │
-│데이터                      │
-│  데이터 백업               │
-│  데이터 복원 ▲ 위험        │
-│  이전 버전 복원 ▲ 위험     │
-│                            │
-│설정                        │
-│  실행환경 생성             │
+│  서비스 접속               │ api · health
+│  로그 보기                 │   healthcheck 없음
+│▸ 스택 상태                 │ api · 이미지
+│                            │   ghcr.io/acme/platform-api:2026.11.20
+│운영                        │ worker · health
+│  스택 제거 ▲ 위험          │   healthcheck 없음
+│  스택 재시작               │ worker · 이미지
+│  스택 중지                 │   ghcr.io/acme/platform-worker:2026.11.20
+│  스택 시작                 │ web · health
+│  갱신                      │   healthcheck 없음
+│                            │ scheduler · 이미지
+│데이터                      │   ghcr.io/acme/platform-scheduler:2026.11.20
+│  데이터 백업               │ db · health
+│  데이터 복원 ▲ 위험        │   healthcheck 없음
+│  이전 버전 복원 ▲ 위험     │ migrate · 이미지
+│                            │   ghcr.io/acme/platform-api:2026.11.20 (로컬 빌드)
+│설정                        │ legacy · health
+│  실행환경 생성             │   healthcheck 없음
 │  호스트 스크립트           │
 │    커스텀                  │
 │    Git                     │
@@ -371,24 +371,24 @@ legacy · 이미지
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
 ╭ 메뉴 · 19 ─────── esc 닫기 ╮ 전체 값
 │조회                        │
-│  서비스 접속               │ api · 이미지
-│  로그 보기                 │   ghcr.io/acme/platform-api:2026.11.20
-│▸ 스택 상태                 │ worker · 이미지
-│                            │   ghcr.io/acme/platform-worker:2026.11.20
-│운영                        │ scheduler · 이미지
-│  스택 제거 ▲ 위험          │   ghcr.io/acme/platform-scheduler:2026.11.20
-│  스택 재시작               │ migrate · 이미지
-│  스택 중지                 │   ghcr.io/acme/platform-api:2026.11.20 (로컬 빌드)
-│  스택 시작                 │
-│  갱신                      │
-│                            │
-│데이터                      │
-│  데이터 백업               │
-│  데이터 복원 ▲ 위험        │
-│  이전 버전 복원 ▲ 위험     │
-│                            │
-│설정                        │
-│  실행환경 생성             │
+│  서비스 접속               │ api · health
+│  로그 보기                 │   healthcheck 없음
+│▸ 스택 상태                 │ api · 이미지
+│                            │   ghcr.io/acme/platform-api:2026.11.20
+│운영                        │ worker · health
+│  스택 제거 ▲ 위험          │   healthcheck 없음
+│  스택 재시작               │ worker · 이미지
+│  스택 중지                 │   ghcr.io/acme/platform-worker:2026.11.20
+│  스택 시작                 │ web · health
+│  갱신                      │   healthcheck 없음
+│                            │ scheduler · 이미지
+│데이터                      │   ghcr.io/acme/platform-scheduler:2026.11.20
+│  데이터 백업               │ db · health
+│  데이터 복원 ▲ 위험        │   healthcheck 없음
+│  이전 버전 복원 ▲ 위험     │ migrate · 이미지
+│                            │   ghcr.io/acme/platform-api:2026.11.20 (로컬 빌드)
+│설정                        │ legacy · health
+│  실행환경 생성             │   healthcheck 없음
 │  호스트 스크립트           │
 │    커스텀                  │
 │    Git                     │

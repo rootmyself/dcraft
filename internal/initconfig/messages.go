@@ -110,6 +110,8 @@ Dockerfile의 EXPOSE/CMD는 자동으로 읽지 않음. 포트와 명령은 직�
 	msgPreviewInDir      = "프로젝트 폴더에서 실행."
 
 	msgWizardTitle          = "최초 Compose 설정"
+	msgWizardExistingNotice = "이미 Compose 설정이 있음: %s. 최초 구성은 기존 파일을 덮어쓰지 않으므로 저장 직전에 거부됨."
+	msgWizardRunningNotice  = "이 프로젝트의 스택이 이미 실행 중임."
 	msgWizardModeTitle      = "구성 방식"
 	msgWizardModePrompt     = "Dockerfile을 빌드할지, 직접 입력한 이미지를 실행할지 선택. 포트와 데이터 경로는 자동으로 추측하지 않음."
 	msgWizardModeDocker     = "Dockerfile로 빌드"

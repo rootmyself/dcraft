@@ -121,13 +121,31 @@ func documentTable(snap stack.Snapshot) *core.Table {
 				{Text: svc.Name, Detail: svc.Name, Kind: core.ValueService},
 				{Text: present.StateLabel(svc.State), Badge: present.StateBadge(svc.State), Emphasis: present.StateEmphasis(svc.State)},
 				{Text: fmt.Sprintf("%d", len(svc.Instances))},
-				{Text: present.HealthLabel(svc.Health), Badge: present.HealthBadge(svc.Health)},
+				{Text: present.HealthLabel(svc.Health), Badge: present.HealthBadge(svc.Health), DetailNote: healthDetail(svc)},
 				{Text: imageText(svc), Detail: imageText(svc), Kind: core.ValueImage},
 				{Text: portText(svc), Detail: portDetail(svc)},
 			},
 		})
 	}
 	return table
+}
+
+// healthDetail is the fact the eight-cell health column cannot carry: why a
+// running service is not verified. It reuses the same wording the column and the
+// CLI use, so the detail screen never invents a second vocabulary. Empty means
+// the cell already says everything.
+func healthDetail(svc stack.Service) string {
+	if svc.State != stack.StateRunning || svc.AppVerified {
+		return ""
+	}
+	switch {
+	case !svc.HealthcheckConfigured:
+		return msgHealthReasonNoCheck
+	case svc.Health == stack.HealthStarting:
+		return msgHealthReasonStarting
+	default:
+		return msgHealthReasonPartial
+	}
 }
 
 // imageText is one cell: the image reference, marked when the service builds

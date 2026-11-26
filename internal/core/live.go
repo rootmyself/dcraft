@@ -31,6 +31,14 @@ type ServiceScope interface {
 	MaxServices() int
 }
 
+// StackObserver is an optional capability of a result payload: it reports
+// whether the run observed a running service. The interactive screen keeps that
+// fact to warn a later guided flow that the folder is not a blank slate. It is
+// a fact the feature already read, never a second Docker query.
+type StackObserver interface {
+	ObservedRunning() bool
+}
+
 // CanceledReporter is an optional capability for a feature whose cancellation
 // has a specific, honest effect (a detached stream, an atomic install that is
 // either absent or complete). The engine keeps the canceled outcome and exit
