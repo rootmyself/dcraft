@@ -129,9 +129,4 @@ const (
 	msgColumnStatus  = "확인 결과"
 	msgColumnDetail  = "상세"
 	msgNoticesLabel  = "알림"
-
-	// The next actions in the interactive screen's own terms. The CLI keeps the
-	// command lines in msgSuccessNextStatus and msgSuccessNextUpdate.
-	msgDocNextStatus = "상태 확인: 메뉴에서 스택 상태 선택."
-	msgDocNextUpdate = "설정이나 소스를 바꾼 뒤 메뉴에서 갱신 실행."
 )

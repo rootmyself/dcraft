@@ -138,7 +138,6 @@ AWS Secrets Manager 원본은 설치된 AWS CLI의 기존 자격 증명 사용. 
 	msgListEffect        = "효과"
 	msgListNotice        = "알림"
 	msgListAddHint       = "추가: dcraft secrets --add -s <서비스> --phase runtime --delivery environment|file --source env|file|aws --ref <참조> (AWS는 --target 필수, 선택: --field/--region/--aws-profile, 빌드는 --phase build)"
-	msgListTUIHint       = "대화형 화면에서는 안내에 따라 선택 가능."
 	msgMigrationGuide    = "기존 Compose 파일이나 .env에 직접 적은 민감값은 dcraft가 자동으로 찾아 제거하지 않음. 원본을 참조로 옮기려면 dcraft secrets를 사용. Docker 자체의 저장·조회 경계는 dcraft가 통제하지 않음."
 )
 

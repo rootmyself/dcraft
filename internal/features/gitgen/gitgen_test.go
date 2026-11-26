@@ -352,8 +352,8 @@ func TestGitgenDocumentTagsPathsAndCommands(t *testing.T) {
 		t.Fatalf("the document still carries command runs: %v", kinds)
 	}
 	docText := strings.Join(text, "\n")
-	if !strings.Contains(docText, msgDocNext) {
-		t.Fatalf("document lost the menu guidance: %q", docText)
+	if strings.Contains(docText, "다음 명령") || strings.Contains(docText, "다음 행동") {
+		t.Fatalf("the success document still carries guidance: %q", docText)
 	}
 	if strings.Contains(docText, "dcraft hooks --add") {
 		t.Fatalf("the document still tells an interactive reader to type the command: %q", docText)

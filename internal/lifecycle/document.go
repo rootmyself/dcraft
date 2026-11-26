@@ -41,33 +41,10 @@ func Document(res core.Result) core.Document {
 			Text:    msgObserveFailed,
 		})
 	}
-	blocks = append(blocks, core.Block{
-		Kind:    core.BlockCallout,
-		Callout: core.CalloutInfo,
-		Text:    strings.Join(numbered(documentNextActions(action, report.State == nil)), "\n"),
-	})
+	// A successful run states what happened and stops there. The screen's own
+	// keys lead to the next action, so a list of "next steps" would only repeat
+	// the menu.
 	return core.Document{Title: msgTitle, Blocks: blocks}
-}
-
-// documentNextActions is the interactive screen's version of nextActions. The
-// CLI keeps the command lines; the TUI names the menu entry, because a reader
-// who works only in the screen has no reason to type the command.
-func documentNextActions(action Action, stateUnknown bool) []string {
-	var out []string
-	switch action {
-	case ActionUp:
-		out = []string{msgDocNextStatus, msgDocNextStop, msgDocNextDown}
-	case ActionStop:
-		out = []string{msgDocNextUp, msgDocNextStatus}
-	case ActionDown:
-		out = []string{msgDocNextUp, msgDocNextStatus, msgNextVolumesKept}
-	case ActionRestart:
-		out = []string{msgDocNextStatus, msgDocNextRestartToApply}
-	}
-	if stateUnknown {
-		out = append(out, msgDocNextObserveFailed)
-	}
-	return out
 }
 
 func documentBadges(action Action, report Report) []core.Badge {
@@ -169,13 +146,4 @@ func portDetail(svc stack.Service) string {
 		return ""
 	}
 	return strings.Join(lines, "\n")
-}
-
-// numbered turns guidance into the numbered list the callout renders.
-func numbered(lines []string) []string {
-	out := make([]string, len(lines))
-	for i, line := range lines {
-		out[i] = fmt.Sprintf("%d. %s", i+1, line)
-	}
-	return out
 }

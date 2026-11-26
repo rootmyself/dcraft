@@ -53,17 +53,14 @@ const (
 	msgPlanEditBody = "  - 스크립트의 SRC, DEST, PROFILE 값을 직접 고치거나 이 명령으로 다시 생성.\n" +
 		"  - 파일 내용이 바뀌면 script_trust 승인을 다시 받아야 함."
 
-	msgDoneHeader = "S3 호스트 스크립트 저장."
-	msgDoneScript = "스크립트"
-	msgDoneDest   = "받을 폴더"
-	msgDoneSource = "S3 원본"
-	msgDoneMode   = "방식"
-	msgDoneSave   = "저장"
-	msgDoneSHA    = "내용 식별자"
-	msgDoneNotRun = "아직 등록하거나 실행하지 않았음. 다음 명령으로 직접 등록."
-	// The interactive screen points at the menu entry that registers and
-	// approves the script, so the reader never has to type the commands.
-	msgDocNext        = "다음 행동: 메뉴에서 호스트 스크립트를 열어 등록하고 신뢰 승인."
+	msgDoneHeader     = "S3 호스트 스크립트 저장."
+	msgDoneScript     = "스크립트"
+	msgDoneDest       = "받을 폴더"
+	msgDoneSource     = "S3 원본"
+	msgDoneMode       = "방식"
+	msgDoneSave       = "저장"
+	msgDoneSHA        = "내용 식별자"
+	msgDoneNotRun     = "아직 등록하거나 실행하지 않았음. 다음 명령으로 직접 등록."
 	msgDoneTrust      = "첫 실행 또는 내용 변경 후에는 별도의 script_trust 승인이 필요."
 	msgDoneGeneration = "생성 시 S3에 접속하지 않았음."
 	msgDoneNoDelete   = "sync는 삭제 동기화 옵션을 넣지 않았음. 받을 폴더의 기존 파일은 그대로 남음."

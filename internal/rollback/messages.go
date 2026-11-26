@@ -108,11 +108,6 @@ const (
 	msgSuccessNextData   = "데이터를 되돌리려면 별도의 데이터 복원(백업)을 사용. 이 복원은 DB·볼륨 데이터를 되돌리지 않았음."
 	msgSuccessAlready    = "이미 기록된 이미지가 실행 중이어서 컨테이너를 다시 만들지 않았음."
 
-	// Document wording. The CLI keeps the command lines above; the interactive
-	// screen names the menu entry instead, because a reader who works only in
-	// the screen has no reason to type the command.
-	msgDocNextStatus = "상태 확인: 메뉴에서 스택 상태 선택."
-	msgDocNextUpdate = "현재 설정으로 새 정상 버전을 기록하려면 메뉴에서 갱신 실행."
 	msgColumnService = "서비스"
 	msgColumnImage   = "이미지"
 	msgColumnTag     = "보존 태그"

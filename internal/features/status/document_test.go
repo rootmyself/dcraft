@@ -18,8 +18,9 @@ func documentBlocks(doc core.Document) map[core.BlockKind]core.Block {
 	return out
 }
 
-// The status document is badges → key-values → table → callout. The order is
-// part of the approved contract, so it is asserted rather than assumed.
+// The status document is badges → key-values → table. The order is part of the
+// approved contract, so it is asserted rather than assumed. A successful
+// snapshot ends at the table: the screen's own keys refresh it.
 func TestDocumentFollowsTheApprovedBlockOrder(t *testing.T) {
 	f := status.New(&fakeBackend{})
 	doc := f.Document(successResult(t, sampleSnapshot()))
@@ -28,7 +29,6 @@ func TestDocumentFollowsTheApprovedBlockOrder(t *testing.T) {
 		core.BlockBadges,
 		core.BlockKeyValues,
 		core.BlockTable,
-		core.BlockCallout,
 	}
 	if len(doc.Blocks) != len(want) {
 		t.Fatalf("blocks = %v, want %v", kinds(doc.Blocks), want)

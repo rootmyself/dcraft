@@ -50,15 +50,7 @@ func Document(res core.Result) core.Document {
 			Text:    strings.Join(lines, "\n"),
 		})
 	}
-	blocks = append(blocks, core.Block{
-		Kind:    core.BlockCallout,
-		Callout: core.CalloutInfo,
-		Text: strings.Join([]string{
-			"1. " + msgDocNextStatus,
-			"2. " + msgDocNextUpdate,
-			"3. " + msgSuccessNextData,
-		}, "\n"),
-	})
+	// The report states what happened; the screen's own keys lead onward.
 	return core.Document{Title: msgSuccessHeader, Blocks: blocks}
 }
 

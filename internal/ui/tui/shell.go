@@ -677,9 +677,10 @@ const minTableRows = 3
 // The returned viewport always describes the rows the frame draws, so the
 // counter, the hint and the keys read one computation instead of guessing.
 func (m *Model) fitBand(headerRows int, screen screenLines) bandGeometry {
-	// A pinned table band has a fixed header above scrolling rows and guidance
-	// below them. That shape is what the approved scrollbar gutter belongs to.
-	table := len(screen.Fixed) > 0 && len(screen.Tail) > 0
+	// A pinned table band has a fixed header above scrolling rows. That shape
+	// is what the approved scrollbar gutter belongs to. A tail below the table
+	// is not required: a result that ends at the table is still a table band.
+	table := len(screen.Fixed) > 0
 	tail := screen.Tail
 	budget := m.bodyBudget()
 	if budget <= 0 {

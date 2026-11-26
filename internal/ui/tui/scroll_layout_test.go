@@ -64,7 +64,7 @@ func TestResultScrollKeysWorkWheneverTheHintIsDrawn(t *testing.T) {
 		t.Run(sizeName(size[0], size[1]), func(t *testing.T) {
 			m := statusResultModel(t)
 			resize(t, m, size[0], size[1])
-			if !strings.Contains(m.View(), "↓") {
+			if !m.bodyScrolls() {
 				t.Skipf("nothing below the window at %dx%d:\n%s", size[0], size[1], m.View())
 			}
 			before := m.currentViewport().Top
@@ -91,22 +91,22 @@ func TestResultScrollKeysWorkWheneverTheHintIsDrawn(t *testing.T) {
 }
 
 // Medium layouts used to omit the navigation row from the result accounting:
-// the row cost a line but the scroll decision never saw it, so the last
-// guidance line was clipped with no way to reach it.
+// the row cost a line but the scroll decision never saw it, so the last table
+// row was clipped with no way to reach it.
 func TestMediumResultCountsTheNavigationRow(t *testing.T) {
 	for _, width := range []int{99, 98, 90} {
 		m := statusResultModel(t)
 		resize(t, m, width, 24)
-		// Every guidance line the model renders must be visible or reachable.
+		// Every table row the model renders must be visible or reachable.
 		for _, want := range []string{
-			"상태 새로 고침",
-			"비정상·중지 서비스의 로그를 먼저 확인.",
-			"컨테이너가 없는 서비스는 스택 시작으로 생성됨.",
+			"api ",
+			"migrate ",
+			"legacy ",
 		} {
 			if !viewContains(m, want) {
 				pressRunes(t, m, "G")
 				if !viewContains(m, want) {
-					t.Fatalf("%d columns: guidance line %q is unreachable:\n%s", width, want, m.View())
+					t.Fatalf("%d columns: table row %q is unreachable:\n%s", width, want, m.View())
 				}
 				pressRunes(t, m, "g")
 			}
@@ -130,10 +130,10 @@ func TestWideShortFrameNeverCountsAnUndrawnRow(t *testing.T) {
 	if vp.Top+vp.Visible() > vp.Total {
 		t.Fatalf("counter window %d..%d is past total %d:\n%s", vp.Top, vp.Top+vp.Visible(), vp.Total, view)
 	}
-	// The guidance is reachable instead of being cut.
+	// The last table row is reachable instead of being cut.
 	pressRunes(t, m, "G")
-	if !strings.Contains(strings.Join(m.layoutBody().lines, "\n"), "스택 시작으로 생성됨") {
-		t.Fatalf("G did not reach the guidance:\n%s", m.View())
+	if !strings.Contains(strings.Join(m.layoutBody().lines, "\n"), "legacy") {
+		t.Fatalf("G did not reach the last row:\n%s", m.View())
 	}
 }
 

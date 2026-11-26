@@ -57,9 +57,5 @@ const (
 	msgEmptyStack      = "서비스가 없음. Compose 파일에 services 항목이 있는지 확인."
 	msgNoPort          = "-"
 
-	msgEmptyBadge        = "서비스 없음"
-	msgCalloutEmptyStack = "Compose 파일에 services 항목을 정의한 뒤 r로 다시 읽기."
-	msgCalloutRefresh    = "상태 새로 고침: r."
-	msgCalloutLogs       = "비정상·중지 서비스의 로그를 먼저 확인."
-	msgCalloutStart      = "컨테이너가 없는 서비스는 스택 시작으로 생성됨."
+	msgEmptyBadge = "서비스 없음"
 )

@@ -55,7 +55,8 @@ func renderDoc(t *testing.T, doc core.Document, width int) string {
 }
 
 // Every lifecycle action publishes the same document shape: outcome badges,
-// identity and effect, the observed stack, then next actions.
+// identity and effect, and the observed stack. A successful run ends at the
+// table; the screen's own keys lead to the next action.
 func TestLifecycleDocumentShapeForEveryAction(t *testing.T) {
 	snap := snapshot()
 	for _, action := range []string{"up", "stop", "restart", "down"} {
@@ -64,7 +65,7 @@ func TestLifecycleDocumentShapeForEveryAction(t *testing.T) {
 		for _, b := range doc.Blocks {
 			kinds = append(kinds, b.Kind)
 		}
-		want := []core.BlockKind{core.BlockBadges, core.BlockKeyValues, core.BlockTable, core.BlockCallout}
+		want := []core.BlockKind{core.BlockBadges, core.BlockKeyValues, core.BlockTable}
 		if len(kinds) != len(want) {
 			t.Fatalf("%s: blocks = %v", action, kinds)
 		}
@@ -185,39 +186,32 @@ func TestLifecycleCLIPresenterUnchanged(t *testing.T) {
 	}
 }
 
-// The interactive screen names the menu entry in its next actions. A reader who
-// works only in the screen should not be handed a command to type; the CLI keeps
-// its command lines, asserted separately below.
-func TestLifecycleDocumentNextActionsUseTheMenu(t *testing.T) {
+// A successful lifecycle document stops at the observed stack. Next actions
+// belong to the screen's own keys, so the report does not repeat the menu.
+func TestLifecycleDocumentHasNoNextActionCallout(t *testing.T) {
 	snap := snapshot()
 	for _, action := range []string{"up", "stop", "restart", "down"} {
 		doc := lifecycle.Document(lifecycleResult(action, &snap))
-		var callout string
 		for _, b := range doc.Blocks {
-			if b.Kind == core.BlockCallout {
-				callout = b.Text
+			if b.Kind == core.BlockCallout && b.Callout == core.CalloutInfo {
+				t.Fatalf("%s: success document still carries a guidance callout:\n%s", action, b.Text)
 			}
 		}
-		if callout == "" {
-			t.Fatalf("%s: no next-action callout", action)
-		}
-		if strings.Contains(callout, "dcraft ") {
-			t.Fatalf("%s: the document tells an interactive reader to type a command:\n%s", action, callout)
-		}
-		if !strings.Contains(callout, "메뉴") {
-			t.Fatalf("%s: the callout does not say where to act:\n%s", action, callout)
+		joined := renderDoc(t, doc, 80)
+		if strings.Contains(joined, "다음 행동") {
+			t.Fatalf("%s: success document still carries a next-action section:\n%s", action, joined)
 		}
 	}
 }
 
-// The unread-state document still names the status screen, in menu terms.
-func TestLifecycleDocumentUnreadStateGuidanceUsesTheMenu(t *testing.T) {
+// The unread-state document still says what to check next.
+func TestLifecycleDocumentUnreadStateGuidance(t *testing.T) {
 	doc := lifecycle.Document(lifecycleResult("up", nil))
 	joined := renderDoc(t, doc, 80)
-	if !strings.Contains(joined, "메뉴에서 스택 상태 선택") {
-		t.Fatalf("unread state does not say where to look:\n%s", joined)
+	if !strings.Contains(joined, "현재 상태 확인 실패") {
+		t.Fatalf("unread state does not state the failure:\n%s", joined)
 	}
-	if strings.Contains(joined, "dcraft status를 실행") {
-		t.Fatalf("unread state still asks an interactive reader to run a command:\n%s", joined)
+	if strings.Contains(joined, "메뉴에서") {
+		t.Fatalf("unread state still repeats the menu:\n%s", joined)
 	}
 }

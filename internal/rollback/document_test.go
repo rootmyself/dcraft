@@ -29,27 +29,17 @@ func documentResult() core.Result {
 }
 
 // The interactive rollback screen is a structured document, not the CLI string.
-// Its next actions name the menu entries, because the reader there does not type
-// commands.
-func TestDocumentNextActionsUseTheMenu(t *testing.T) {
+// A successful rollback stops at its report: the next action belongs to the
+// menu, not to a repeated guidance block.
+func TestDocumentHasNoNextActionCallout(t *testing.T) {
 	doc := Document(documentResult())
 	if len(doc.Blocks) == 0 {
 		t.Fatal("empty document")
 	}
-	var callout string
 	for _, b := range doc.Blocks {
 		if b.Kind == core.BlockCallout && b.Callout == core.CalloutInfo {
-			callout = b.Text
+			t.Fatalf("the document still carries a guidance callout:\n%s", b.Text)
 		}
-	}
-	if callout == "" {
-		t.Fatal("no next-action callout")
-	}
-	if strings.Contains(callout, "dcraft ") {
-		t.Fatalf("the document tells an interactive reader to type a command:\n%s", callout)
-	}
-	if !strings.Contains(callout, "메뉴") {
-		t.Fatalf("the callout does not say where to act:\n%s", callout)
 	}
 }
 

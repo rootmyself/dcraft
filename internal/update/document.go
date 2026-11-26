@@ -48,15 +48,8 @@ func Document(res core.Result) core.Document {
 	}
 	blocks = append(blocks, core.Block{Kind: core.BlockHeading, Text: msgSuccessRecord})
 	blocks = append(blocks, core.Block{Kind: core.BlockParagraph, Text: recordText(report)})
-	blocks = append(blocks, core.Block{
-		Kind:    core.BlockCallout,
-		Callout: core.CalloutInfo,
-		Text: strings.Join([]string{
-			"1. " + msgDocNextStatus,
-			"2. " + msgDocNextUpdate,
-			"3. " + msgSuccessNextRoll,
-		}, "\n"),
-	})
+	// The report states what happened; the screen's own keys lead onward, so it
+	// does not repeat the menu as a list of next steps.
 	return core.Document{Title: msgSuccessHeader, Blocks: blocks}
 }
 
