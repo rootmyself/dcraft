@@ -1,7 +1,7 @@
 # 배포 산출물 빌드와 플랫폼 검증
 
 이 문서는 dcraft 실행 파일을 만드는 사람과 검증하는 사람을 위한 기록입니다. 사용자 시작 안내는
-[install.md](install.md)에 있습니다. 이 산출물은 외부 릴리스로 게시되지 않았고, 자동 업데이트도 없습니다.
+[install.md](install.md)에 있습니다. 이 산출물은 외부 릴리스로 게시되지 않았고 자동 업데이트도 없습니다.
 
 ## 빌드
 
@@ -19,7 +19,7 @@ VERSION=v0.1.0 scripts/build.sh
 | `GO` | `go` | 사용할 Go 도구 |
 
 대상은 `darwin/amd64`, `darwin/arm64`, `linux/amd64`, `linux/arm64` 네 가지입니다. Windows 네이티브 대상은
-없습니다. WSL2는 Linux 실행 파일을 사용하는 경로로만 지원합니다.
+없으며 WSL2는 Linux 실행 파일을 사용하는 경로로만 지원합니다.
 
 출력:
 
@@ -60,8 +60,8 @@ ldflags를 주지 않은 일반 `go build`는 `dev` / `none` / `unknown`으로 �
 # dcraft dev (commit ..., built ..., darwin/arm64, go1.27.4)
 ```
 
-`--version`은 `cmd/dcraft` 프로세스 진입에서 처리하며 애플리케이션, Docker, 상태 폴더를 초기화하지 않습니다.
-기능 레지스트리 명령을 추가하지 않았습니다. 기계 판독이 필요하면 `build-info.json`을 사용하세요.
+`--version`은 `cmd/dcraft` 프로세스 진입에서 처리하며 애플리케이션, Docker, 상태 폴더를 초기화하지 않고
+기능 레지스트리 명령도 추가하지 않았습니다. 기계 판독이 필요하면 `build-info.json`을 사용하세요.
 
 무결성 확인:
 
@@ -71,7 +71,7 @@ shasum -a 256 -c SHA256SUMS        # macOS
 sha256sum -c SHA256SUMS            # Linux
 ```
 
-`SHA256SUMS`와 `build-info.json`은 손상 여부를 확인합니다. 서명이나 배포자 신원을 증명하지 않습니다.
+`SHA256SUMS`와 `build-info.json`은 손상 여부를 확인하며 서명이나 배포자 신원을 증명하지 않습니다.
 
 ## 자동 검증
 
@@ -119,5 +119,5 @@ linux/arm64 각각에서 `--help`, `--version`, 빈 폴더 `status`, Compose 파
 ## CI
 
 `.github/workflows/dist-artifacts.yml`은 `v*` 태그 push에서 네 산출물을 빌드해 워크플로 아티팩트로
-올립니다. GitHub Release를 만들지 않고, 게시하거나 배포하지 않으며, 저장소 비밀값을 쓰지 않습니다.
+올립니다. GitHub Release를 만들지 않고 게시하거나 배포하지 않으며 저장소 비밀값을 쓰지 않습니다.
 자동 업데이트와 자동 릴리스는 없습니다.

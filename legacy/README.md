@@ -66,12 +66,12 @@ ENV_FILE_DEV          # (선택) 개발환경 환경변수 파일 경로
 ENV_FILE_PROD         # (선택) 운영환경 환경변수 파일 경로
 ```
 
-> `stack.env`는 `.gitignore`에 포함되어 있어 커밋되지 않으며, `deploy.sh`가 `_script`를 재배포해도 값이 보존됩니다.
+> `stack.env`는 `.gitignore`에 포함되어 있어 커밋되지 않으며 `deploy.sh`가 `_script`를 재배포해도 값이 보존됩니다.
 
 ### 환경별 오버라이드 (권장)
 
 환경마다 완전히 다른 compose 파일을 따로 관리하면 서비스 정의가 중복됩니다.
-대신 공통 서비스 정의는 베이스 파일에 두고, 환경별 파일에는 차이나는 값만 작성하는
+대신 공통 서비스 정의는 베이스 파일에 두고 환경별 파일에는 차이나는 값만 작성하는
 compose 표준 오버레이 방식을 권장합니다.
 
 ```text
@@ -117,7 +117,7 @@ make image-backup
 make image-restore <백업시간>    # 예: make image-restore 20250331_1325
 ```
 
-> `volume-backup`/`volume-restore`는 데이터 정합성을 위해 진행 전 스택을 중지하고, 완료 후 다시 시작합니다.
+> `volume-backup`/`volume-restore`는 데이터 정합성을 위해 진행 전 스택을 중지하고 완료 후 다시 시작합니다.
 > 중지 없이 진행하려면 `no-stop` 옵션을 붙이세요. (예: `make volume-backup no-stop`)
 >
 > `image-backup`은 기본적으로 컨테이너의 현재 상태(런타임 변경분 포함)를 커밋해 백업합니다.
@@ -139,7 +139,7 @@ make help           # 명령어 도움말 출력
 
 ## 🧩 백업 파일명 규칙
 
-백업은 _backup/ 폴더에 자동 저장되며, 다음 규칙으로 이름이 생성됩니다:
+백업은 _backup/ 폴더에 자동 저장되며 다음 규칙으로 이름이 생성됩니다:
 
 ### 이미지 백업
 > <스택이름>.image.<백업날짜_시간>.tar.gz

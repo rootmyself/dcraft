@@ -1,7 +1,7 @@
 # dcraft 설치와 시작
 
 이 문서는 받은 실행 파일을 처음 실행하는 데 필요한 최소 안내입니다. 전체 사용 설명서가 아닙니다.
-이 배포물은 상태 조회 흐름을 검증한 개발 단계 산출물이며, 전체 제품 완료나 정식 출시를 뜻하지 않습니다.
+이 배포물은 상태 조회 흐름을 검증한 개발 단계 산출물이며 전체 제품 완료나 정식 출시를 뜻하지 않습니다.
 
 ## 1. 내 컴퓨터에 맞는 파일 고르기
 
@@ -13,7 +13,7 @@
 | Linux arm64 | `dcraft_<버전>_linux_arm64` |
 | WSL2 | WSL2 안에서 위의 Linux 파일 사용 |
 
-Windows 네이티브 실행은 지원하지 않습니다. WSL2는 지원 사용 경로이지만 이번 검증 환경에서는 실제 실행하지 않았습니다.
+Windows 네이티브 실행은 지원하지 않습니다. WSL2는 지원 사용 경로이지만 이번 검증 환경에서는 실제 실행하지 않았으며
 `<버전>`은 받은 파일 이름과 `build-info.json`의 `version` 값으로 확인하세요.
 
 ## 2. 무결성 확인
@@ -34,7 +34,7 @@ sha256sum -c SHA256SUMS --ignore-missing
 ```
 
 `build-info.json`에는 버전, 커밋, 빌드 시각, Go 도구 버전, 대상 플랫폼과 파일별 SHA-256이 들어 있습니다.
-이 확인은 파일 손상 여부만 알려 줍니다. 서명 검증은 아직 없습니다.
+이 확인은 파일 손상 여부만 알려 주며 서명 검증은 아직 없습니다.
 
 ## 3. 실행 준비
 
@@ -45,7 +45,7 @@ chmod +x dcraft
 ```
 
 `--version`은 `dcraft <버전> (commit ..., built ..., <os>/<arch>, <go 버전>)` 한 줄을 출력합니다.
-Python, Node.js, Go 실행 환경은 필요하지 않습니다. 실행 파일 하나로 동작합니다.
+Python, Node.js, Go 실행 환경은 필요하지 않으며 실행 파일 하나로 동작합니다.
 
 macOS에서 "확인되지 않은 개발자" 경고로 열리지 않으면, 위 해시를 직접 확인한 뒤에만 다음을 실행하세요.
 
@@ -75,11 +75,11 @@ cd ~/my-stack
 - **로컬 Docker Engine만 지원합니다.** `tcp://`, `ssh://`, `http(s)://` 원격 엔드포인트는 거부합니다.
   Docker Desktop의 로컬 VM 소켓은 로컬로 취급합니다.
 - **AWS Secrets Manager 원본을 쓰려면 AWS CLI v2와 기존 AWS 인증이 필요합니다.** `aws secretsmanager
-  get-secret-value`가 동작해야 하며, dcraft는 자격 증명을 저장하거나 `aws configure`를 대신 실행하지 않습니다.
+  get-secret-value`가 동작해야 하며 dcraft는 자격 증명을 저장하거나 `aws configure`를 대신 실행하지 않습니다.
   AWS 원본을 쓰지 않으면 AWS CLI는 필요하지 않습니다. Git은 `generate-git-hook`(호스트 Git 스크립트
-  생성)에 필요하고, S3 배포 스크립트 생성(`generate-s3-hook`)은 생성된 스크립트를 실행할 때 AWS CLI v2와
+  생성)에 필요하고 S3 배포 스크립트 생성(`generate-s3-hook`)은 생성된 스크립트를 실행할 때 AWS CLI v2와
   기존 AWS 인증이 필요합니다.
-- dcraft는 Docker를 자동 설치하지 않고, 스스로 자동 업데이트하지 않습니다. 새 파일은 직접 내려받아 교체하세요.
+- dcraft는 Docker를 자동 설치하지 않고 스스로 자동 업데이트하지 않습니다. 새 파일은 직접 내려받아 교체하세요.
 - 도우미 상태는 `DCRAFT_STATE_DIR` 또는 macOS `~/Library/Application Support/dcraft`,
   Linux `~/.config/dcraft` 아래에 저장됩니다. 상태 조회는 프로젝트의 Compose 파일을 수정하지 않습니다.
 
