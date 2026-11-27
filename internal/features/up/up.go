@@ -28,6 +28,9 @@ func (f *Feature) Descriptor() core.Descriptor {
 		SupportsServices: true,
 		StreamsProgress:  true,
 		Hooks:            core.HookUpUpdate,
+		Menu: []core.MenuEntry{
+			{Kind: core.MenuRun, Feature: "up", Label: msgMenuLabel, Summary: msgMenuSummary, Order: 0},
+		},
 	}
 }
 

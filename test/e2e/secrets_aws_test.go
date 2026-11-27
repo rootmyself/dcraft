@@ -419,7 +419,7 @@ func TestSecretsTUIWizardOffersAWSAndSavesTheShape(t *testing.T) {
 	env := fake.env(t, t.TempDir())
 
 	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
-		{wait: "마지막 조회", walk: "비밀값 연결", send: "\r"},
+		{wait: "마지막 조회", walk: "비밀값 설정", send: "\r"},
 		{wait: "서비스 선택", send: "\r"}, // api is the first sorted service
 		{wait: "전달 시점 선택", send: "\r"},
 		{wait: "전달 방식 선택", send: "\r"},
@@ -431,7 +431,7 @@ func TestSecretsTUIWizardOffersAWSAndSavesTheShape(t *testing.T) {
 		{wait: "AWS field 선택", send: "database.password\r"},
 		{wait: "AWS 리전 선택", send: "ap-northeast-2\r"},
 		{wait: "AWS profile 선택", send: "\r"}, // skip
-		{wait: "저장할 비밀값 연결", send: ""},
+		{wait: "저장할 비밀값 설정", send: ""},
 		{wait: "AWS Secrets Manager", send: "\r"},
 		{wait: "비밀값 참조 저장", send: ""},
 	})

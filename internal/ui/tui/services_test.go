@@ -194,6 +194,7 @@ func TestServiceSelectionTogglesAndRunsOnlySelectedServices(t *testing.T) {
 	if stop.runs != 0 {
 		t.Fatal("stop ran before the confirmation")
 	}
+	press(m, tea.KeyMsg{Type: tea.KeyLeft}) // confirmation starts on cancel
 	feedCmd(t, m, press(m, tea.KeyMsg{Type: tea.KeyEnter}))
 	if stop.runs != 1 {
 		t.Fatalf("runs = %d, want 1", stop.runs)
@@ -214,6 +215,7 @@ func TestServiceSelectionWholeStackKeepsPreviousBehavior(t *testing.T) {
 	if !strings.Contains(m.View(), "스택 전체") || !strings.Contains(m.View(), "범위:") {
 		t.Fatalf("whole-stack scope not shown:\n%s", m.View())
 	}
+	press(m, tea.KeyMsg{Type: tea.KeyLeft}) // confirmation starts on cancel
 	feedCmd(t, m, press(m, tea.KeyMsg{Type: tea.KeyEnter}))
 	if stop.runs != 1 {
 		t.Fatalf("runs = %d, want 1", stop.runs)
@@ -349,6 +351,7 @@ func TestServiceSelectionFeedsTheUpdatePlan(t *testing.T) {
 	if update.runs != 0 {
 		t.Fatal("update ran before the plan was confirmed")
 	}
+	press(m, tea.KeyMsg{Type: tea.KeyLeft}) // confirmation starts on cancel
 	feedCmd(t, m, press(m, tea.KeyMsg{Type: tea.KeyEnter}))
 	if update.runs != 1 || strings.Join(update.got.Services, ",") != "api" {
 		t.Fatalf("run = %d services=%v", update.runs, update.got.Services)

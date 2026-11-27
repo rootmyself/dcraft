@@ -63,6 +63,23 @@ func StateBadge(state stack.ServiceState) core.BadgeKind {
 // StateBadgeValue is StateBadge for the raw value of core.ServiceStatus.
 func StateBadgeValue(state string) core.BadgeKind { return StateBadge(stack.ServiceState(state)) }
 
+// StateEmphasis raises a state the reader should act on. A service that is not
+// running is drawn with the danger token, while the icon and the Korean label
+// still name the state: color is never the only channel. `재시작 중` is not
+// included, because a restart is progress rather than a resting stopped state,
+// and an unconfigured service is stated by its muted row instead.
+func StateEmphasis(state stack.ServiceState) core.Emphasis {
+	switch state {
+	case stack.StateExited, stack.StatePaused, stack.StateNotCreated:
+		return core.EmphasisDanger
+	default:
+		return core.EmphasisNone
+	}
+}
+
+// StateEmphasisValue is StateEmphasis for the raw value of core.ServiceStatus.
+func StateEmphasisValue(state string) core.Emphasis { return StateEmphasis(stack.ServiceState(state)) }
+
 // HealthLabel is the TUI wording of one healthcheck result. Its sentences are
 // deliberately short: the column is eight cells, and the icon carries the same
 // meaning as a second channel.

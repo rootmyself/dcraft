@@ -5,11 +5,13 @@ package environments
 const (
 	msgTitle   = "실행환경 별칭"
 	msgSummary = "Compose 파일·환경 파일·프로필 조합을 실행환경 별칭으로 만들고 확인·제거."
-	// The TUI menu offers two entries over this one feature. They are menu
-	// labels only: each screen keeps its own title.
-	msgMenuCreate        = "실행환경 생성"
+	// The TUI menu offers two entries over this one feature, under one
+	// heading. They are menu labels only: each screen keeps its own title.
+	msgMenuGroup         = "실행환경"
+	msgMenuGroupSummary  = "Compose 입력 조합을 별칭으로 관리."
+	msgMenuCreate        = "생성"
 	msgMenuCreateSummary = "실행환경 별칭을 만들거나 제거."
-	msgMenuSwitch        = "실행환경 전환"
+	msgMenuSwitch        = "전환"
 	msgMenuSwitchSummary = "작업할 실행환경을 골라 대상 전환."
 	msgUsage             = "dcraft environments --add --name <별칭> [--file <Compose 파일> ...] [--env-file <파일> ...] [--profile <프로필> ...]\n" +
 		"  dcraft environments --list\n" +
@@ -51,7 +53,7 @@ const (
 	msgWizardPreviewTitle   = "실행환경 별칭 저장 확인"
 	msgWizardConfigPrefix   = "저장 위치: "
 	msgWizardPreviewConfirm = "enter 저장 · left 이전 단계 · esc 취소"
-	msgDisclosure           = "안내: 실행환경은 Compose 파일·환경 파일·프로필 입력만 묶는 선택 입력. 외부 볼륨·bind mount·네트워크·고정 호스트 포트는 격리하지 않음. 환경끼리 같은 자원을 쓰는지 확인."
+	msgDisclosure           = "주의: 외부 볼륨·bind mount·네트워크·고정 호스트 포트는 실행환경끼리 공유될 수 있음."
 
 	msgPresentTitle     = "실행환경 별칭"
 	msgPresentConfig    = "설정 파일"

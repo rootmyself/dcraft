@@ -146,7 +146,7 @@ func (m *Model) progressBody() (bodyLayout, bool) {
 	if title := m.screenTitle(); title != "" {
 		lines = append(lines, m.titleRow(title, ""), "")
 	}
-	lines = append(lines, m.progressHeading(msgWorking))
+	lines = append(lines, m.progressHeading(m.progressHeadingText()))
 	lines = append(lines, lay.timeline...)
 	start, end := lay.viewport.Window()
 	// Read only the rows this window draws, from one snapshot: the geometry's
@@ -158,6 +158,29 @@ func (m *Model) progressBody() (bodyLayout, bool) {
 	}
 	m.progressTop = lay.viewport.Top
 	return bodyLayout{lines: lines, viewport: lay.viewport, scrolls: false}, true
+}
+
+// progressHeadingText is the heading line of the running screen. A finished run
+// states its completion and the one key that opens the report, so the screen
+// never looks stuck on the last stage.
+func (m *Model) progressHeadingText() string {
+	if m.progressDone && m.heldResult != nil {
+		return m.completionLine()
+	}
+	return msgWorking
+}
+
+// completionLine names what finished and how to continue. The wording follows
+// the product's short noun form, and the key is the one the footer advertises.
+func (m *Model) completionLine() string {
+	action := ""
+	if m.active != nil {
+		action = m.active.Descriptor().Title
+	}
+	if action == "" {
+		action = msgWorking
+	}
+	return action + msgDoneSuffix
 }
 
 // progressHeading keeps the spinner on the heading when no running stage is

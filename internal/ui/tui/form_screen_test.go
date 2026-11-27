@@ -109,7 +109,7 @@ func TestFormRequiredTextBlocksSubmissionInline(t *testing.T) {
 	lines := viewLines(t, m)
 	fieldRow, noticeRow := -1, -1
 	for i, line := range lines {
-		if fieldRow < 0 && strings.Contains(line, "> 명령:") {
+		if fieldRow < 0 && strings.Contains(line, "> 명령") {
 			fieldRow = i
 			continue
 		}
@@ -118,8 +118,8 @@ func TestFormRequiredTextBlocksSubmissionInline(t *testing.T) {
 			break
 		}
 	}
-	if fieldRow < 0 || noticeRow != fieldRow+1 {
-		t.Fatalf("required guidance is not under its field (field=%d notice=%d):\n%s",
+	if fieldRow < 0 || noticeRow < 0 || noticeRow > fieldRow+2 {
+		t.Fatalf("required guidance is not inside its field block (field=%d notice=%d):\n%s",
 			fieldRow, noticeRow, strings.Join(lines, "\n"))
 	}
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("date")})

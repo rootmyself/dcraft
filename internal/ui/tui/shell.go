@@ -19,6 +19,11 @@ func (m *Model) footerPhase() visual.Phase {
 	if m.live != nil {
 		return visual.PhaseLive
 	}
+	if m.progressDone {
+		// The run finished: the screen offers the report and a plain quit, not
+		// the busy row that advertises a cancel key nothing can cancel.
+		return visual.PhaseMenu
+	}
 	switch m.phase {
 	case phaseConfirm:
 		return visual.PhaseConfirm
@@ -55,6 +60,21 @@ func (m *Model) screenKeycaps() []visual.Keycap {
 			{Key: "enter", Label: msgKeyCommit, Priority: 0},
 		}
 	}
+	if m.progressDone {
+		// The run finished: Enter opens the report, q leaves without it. The
+		// log's scroll keys still work, so the row keeps them when it overflows.
+		items := []visual.Keycap{
+			{Key: "enter", Label: msgKeyShowResult, Priority: 0},
+			{Key: "q", Label: msgKeyQuit, Priority: 0},
+		}
+		if m.progressScrolls() {
+			items = append(items,
+				visual.Keycap{Key: "PgUp/PgDn", Label: msgKeyScroll, Priority: 2},
+				visual.Keycap{Key: "g/G", Label: msgKeyEnds, Priority: 3},
+			)
+		}
+		return items
+	}
 	if m.live != nil && m.live.mode == core.LiveAttach {
 		// Attach ends with ctrl+], never with ctrl+c (which is forwarded to the
 		// child), so the live row would be wrong. "?" is a character a shell
@@ -68,13 +88,14 @@ func (m *Model) screenKeycaps() []visual.Keycap {
 		// A log stream owns the scroll keys when its output does not fit. The
 		// approved live row keeps its mandatory chips and gains only the keys
 		// this screen actually accepts.
-		return []visual.Keycap{
+		items := []visual.Keycap{
 			{Key: "q", Label: msgKeyCloseScreen, Priority: 0},
 			{Key: "ctrl+c", Label: msgKeyStop, Priority: 1},
 			{Key: "PgUp/PgDn", Label: msgKeyScroll, Priority: 2},
 			{Key: "g/G", Label: msgKeyEnds, Priority: 3},
 			{Key: "?", Label: msgKeyHelp, Priority: 3},
 		}
+		return append(items, m.liveTabKeycaps()...)
 	}
 	if m.live == nil && (m.phase == phaseLoading || m.phase == phasePlanning) &&
 		m.active != nil && m.active.Descriptor().ReadOnly {
@@ -187,6 +208,11 @@ func (m *Model) screenKeycaps() []visual.Keycap {
 		return items
 	}
 	items := m.resultScrollKeycaps(visual.FooterItems(m.footerPhase()))
+	if m.live != nil && m.live.mode != core.LiveAttach {
+		// A log screen switches between service tabs. The chips are part of the
+		// approved live row only when there is more than one tab to switch to.
+		items = append(items, m.liveTabKeycaps()...)
+	}
 	if m.progressScrolls() {
 		// The log viewport is the only surface PgUp/PgDn move while a run is
 		// in flight; state the keys next to the mandatory cancel/quit chips.
@@ -196,6 +222,15 @@ func (m *Model) screenKeycaps() []visual.Keycap {
 		)
 	}
 	return items
+}
+
+// liveTabKeycaps is the tab-switch chips for a log screen with more than one
+// service. With one tab, tab does nothing, so the row stays as it was.
+func (m *Model) liveTabKeycaps() []visual.Keycap {
+	if m.live == nil || m.live.mode == core.LiveAttach || len(m.live.streams) < 2 {
+		return nil
+	}
+	return []visual.Keycap{{Key: "tab", Label: msgLiveNextTab, Priority: 1}}
 }
 
 // withoutHelp drops the help chip from a row for a screen that cannot open the
@@ -677,9 +712,10 @@ const minTableRows = 3
 // The returned viewport always describes the rows the frame draws, so the
 // counter, the hint and the keys read one computation instead of guessing.
 func (m *Model) fitBand(headerRows int, screen screenLines) bandGeometry {
-	// A pinned table band has a fixed header above scrolling rows and guidance
-	// below them. That shape is what the approved scrollbar gutter belongs to.
-	table := len(screen.Fixed) > 0 && len(screen.Tail) > 0
+	// A pinned table band has a fixed header above scrolling rows. That shape
+	// is what the approved scrollbar gutter belongs to. A tail below the table
+	// is not required: a result that ends at the table is still a table band.
+	table := len(screen.Fixed) > 0
 	tail := screen.Tail
 	budget := m.bodyBudget()
 	if budget <= 0 {
@@ -924,7 +960,7 @@ func (m *Model) phaseBody() string {
 	case phaseLoading:
 		// A live screen is laid out as a body (fixed header plus a scrolling
 		// band) by layoutBody; phaseBody only handles non-live work.
-		return m.workingBody(msgWorking)
+		return m.workingBody(m.progressHeadingText())
 	default:
 		// phaseReady has no single-string body: its document is rendered as
 		// lines by renderBody so the table can scroll under a fixed header.

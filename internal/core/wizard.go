@@ -36,6 +36,13 @@ type WizardSpec struct {
 	// issued alias without knowing the feature or its step names. Empty means
 	// the apply does not issue an environment.
 	EnvironmentAnswer string `json:"environment_answer,omitempty"`
+	// Notice is a warning the flow must show before its first question, such
+	// as an existing configuration a save would replace. It is the feature's
+	// fact, not the screen's guess, and an empty value means no warning.
+	Notice string `json:"notice,omitempty"`
+	// NoticeConfirm is how a wizard with a Notice asks to continue. Empty means
+	// the notice is informational and the first step follows directly.
+	NoticeConfirm bool `json:"notice_confirm,omitempty"`
 }
 
 // WizardStep is one question. Options are rendered as a keyboard-selectable

@@ -22,7 +22,7 @@ func TestPTYTUIShellClearLeavesNothingBehind(t *testing.T) {
 	// The pinned shell is the default: confirm the instance choice, confirm the
 	// command choice (the last visible field, so this submits), and attach.
 	s.press("\r")
-	s.waitFrameFor(t, "명령 선택:", 15*time.Second)
+	s.waitFrameFor(t, "명령 선택", 15*time.Second)
 	s.press("\r")
 	s.waitFrameFor(t, "probe:/ #", 25*time.Second)
 

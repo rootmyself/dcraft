@@ -3,7 +3,7 @@ package secrets
 // Korean user-facing text owned by the secrets feature. Command names, flags,
 // phase/delivery/source machine values and JSON keys stay English.
 const (
-	msgTitle   = "비밀값 연결"
+	msgTitle   = "비밀값 설정"
 	msgSummary = "비밀값 원본 참조를 저장·조회·제거."
 	msgUsage   = `dcraft secrets [--add | --remove | --list] [--json]
   dcraft secrets --add -s <서비스> --phase runtime --delivery environment|file --source env|file --ref <참조> [--target <이름>]
@@ -88,7 +88,7 @@ AWS Secrets Manager 원본은 설치된 AWS CLI의 기존 자격 증명 사용. 
 	msgWizardProfilePrompt  = "AWS CLI profile을 입력. 기본 자격 증명 체인을 쓸 때는 비워 두고 Enter를 누르기."
 	msgWizardProfileHint    = "예: ops-admin · staging · production (자격 증명은 저장하지 않음)"
 
-	msgPreviewTitle           = "저장할 비밀값 연결"
+	msgPreviewTitle           = "저장할 비밀값 설정"
 	msgPreviewService         = "서비스"
 	msgPreviewPhase           = "시점"
 	msgPreviewDelivery        = "전달"
@@ -138,7 +138,6 @@ AWS Secrets Manager 원본은 설치된 AWS CLI의 기존 자격 증명 사용. 
 	msgListEffect        = "효과"
 	msgListNotice        = "알림"
 	msgListAddHint       = "추가: dcraft secrets --add -s <서비스> --phase runtime --delivery environment|file --source env|file|aws --ref <참조> (AWS는 --target 필수, 선택: --field/--region/--aws-profile, 빌드는 --phase build)"
-	msgListTUIHint       = "대화형 화면에서는 안내에 따라 선택 가능."
 	msgMigrationGuide    = "기존 Compose 파일이나 .env에 직접 적은 민감값은 dcraft가 자동으로 찾아 제거하지 않음. 원본을 참조로 옮기려면 dcraft secrets를 사용. Docker 자체의 저장·조회 경계는 dcraft가 통제하지 않음."
 )
 

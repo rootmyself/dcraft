@@ -74,7 +74,7 @@ func (f *Feature) Descriptor() core.Descriptor {
 		// Generated host scripts live under the host-script heading with the
 		// script this project already has.
 		Menu: []core.MenuEntry{
-			{Kind: core.MenuRun, Feature: "generate-git-hook", Label: msgMenuLabel, Summary: msgMenuSummary, Parent: "hooks", Order: 1},
+			{Kind: core.MenuRun, Feature: "generate-git-hook", Label: msgMenuLabel, Summary: msgMenuSummary, Parent: "hooks", Order: 0},
 		},
 		Flags: []core.Flag{
 			{Name: "repo", Kind: core.FlagString, Required: true, Usage: msgFlagRepo},
@@ -360,17 +360,15 @@ func (f *Feature) Document(res core.Result) core.Document {
 }
 
 // documentLines is the saved-script screen in the interactive surface's terms.
-// Registering the script is the same decision the host-script screen makes, so
-// that screen points at the menu instead of the command line; the CLI keeps the
-// exact commands.
+// Creating a script is not registering or running it, and the next decision is a
+// screen of its own; the success report stops at the saved file.
 func documentLines(res core.Result) []core.ValueLine {
 	lines := presentLines(res)
 	for i, line := range lines {
 		if len(line) != 1 || line[0].Text != "다음 명령:" {
 			continue
 		}
-		lines[i] = core.ValueLine{{Text: msgDocNext}}
-		return lines[:i+1]
+		return lines[:i]
 	}
 	return lines
 }

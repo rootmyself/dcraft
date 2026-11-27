@@ -64,6 +64,8 @@ func TestTUIBindsTheRunToTheApprovedPlanFingerprint(t *testing.T) {
 		t.Fatal("TUI did not keep the plan fingerprint")
 	}
 
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyLeft}) // the panel starts on cancel
+	m = nm.(*Model)
 	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = nm.(*Model)
 	feed(t, m, execute(t, cmd))

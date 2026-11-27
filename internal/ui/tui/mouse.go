@@ -253,18 +253,32 @@ func (m *Model) activateHit(hit hitTarget, double bool) tea.Cmd {
 		if double {
 			return m.modalKey(tea.KeyMsg{Type: tea.KeyEnter})
 		}
+		m.focusModalButton(confirmButtonApprove)
 	case hitModalCancel:
 		if double {
 			return m.modalKey(tea.KeyMsg{Type: tea.KeyEsc})
 		}
+		m.focusModalButton(confirmButtonCancel)
 	}
 	return nil
+}
+
+// focusModalButton moves the panel's button focus to a click. The keyboard
+// still owns the decision; a single click only says which answer is selected,
+// exactly as an arrow key does.
+func (m *Model) focusModalButton(index int) {
+	if m.confirmOpen() || m.discardOpen {
+		m.confirmButton = index
+	}
 }
 
 // selectServiceRow moves the scope cursor and toggles the clicked service. The
 // whole-stack row clears every individual choice, exactly like Space on it.
 func (m *Model) selectServiceRow(index int) {
 	if index < 0 || index >= len(m.serviceOptions) {
+		if m.serviceScope != scopeWholeStack {
+			return
+		}
 		m.serviceCursor = 0
 		m.serviceWhole = true
 		for i := range m.serviceChecked {
@@ -273,10 +287,16 @@ func (m *Model) selectServiceRow(index int) {
 		m.followServiceCursor()
 		return
 	}
-	m.serviceCursor = index + 1
+	m.serviceCursor = index + m.wholeRowOffset()
 	if m.serviceOptions[index].Configured && index < len(m.serviceChecked) {
+		if !m.serviceChecked[index] && m.serviceCap > 0 && countChecked(m.serviceChecked) >= m.serviceCap {
+			m.notice = fmt.Sprintf(msgServiceCap, m.serviceCap)
+			m.followServiceCursor()
+			return
+		}
+		m.notice = ""
 		m.serviceChecked[index] = !m.serviceChecked[index]
-		m.serviceWhole = !anyChecked(m.serviceChecked)
+		m.serviceWhole = m.serviceScope != scopeRequired && !anyChecked(m.serviceChecked)
 	}
 	m.followServiceCursor()
 }
@@ -344,6 +364,10 @@ func (m *Model) formEnter() tea.Cmd {
 }
 
 func (m *Model) modalKey(msg tea.KeyMsg) tea.Cmd {
+	if m.discardOpen {
+		_, cmd := m.updateDiscardKey(msg)
+		return cmd
+	}
 	_, cmd := m.updateConfirmKey(msg)
 	return cmd
 }
@@ -384,7 +408,7 @@ func (m *Model) updateWheel(msg tea.MouseMsg) tea.Cmd {
 		}
 		return nil
 	case phaseSelectingServices:
-		total := len(m.serviceOptions) + 1
+		total := m.serviceRowCount()
 		m.serviceCursor = (m.serviceCursor + delta + total) % total
 		m.followServiceCursor()
 		return nil

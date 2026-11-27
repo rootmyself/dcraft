@@ -60,7 +60,6 @@ func (f *Feature) Present(res core.Result, width int) string {
 		}
 	}
 	fmt.Fprintf(&b, "\n%s\n", msgListAddHint)
-	fmt.Fprintf(&b, "%s\n", msgListTUIHint)
 	_ = width
 	return strings.TrimRight(b.String(), "\n")
 }

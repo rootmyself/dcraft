@@ -48,11 +48,14 @@ func TestPTYTUIUpShowsComposeProgressInTheLogPane(t *testing.T) {
 		"DOCKER_FAKE_SLEEP_UP": "1.5",
 	})
 	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
-		{wait: "마지막 조회", walk: "스택 시작", send: "\r"},
+		{wait: "마지막 조회", walk: "서비스 시작", send: "\r"},
 		{wait: "서비스 선택", send: "\r"},
-		{wait: "작업 실행 확인", send: "\r"},
+		{wait: "작업 실행 확인", send: "\x1b[D"}, // the panel starts on cancel
+		{wait: "▸ [ 승인 ]", send: "\r"},
 		{wait: "dcraft-progress line-59", send: ""},
 		{wait: "PgUp/PgDn", send: ""},
+		// The finished run keeps its log until Enter opens the report.
+		{wait: "완료 · enter 계속", send: "\r"},
 		{wait: "현재 Compose 설정을 적용해", send: ""},
 	})
 	if code != 0 {

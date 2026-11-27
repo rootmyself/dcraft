@@ -12,9 +12,9 @@ import (
 // frame and must describe the window the counter names.
 func TestStatusTableRendersTheScrollbarThumb(t *testing.T) {
 	m := statusResultModel(t)
-	// A medium frame keeps the table band, so the gutter belongs to the rows
-	// between the pinned summary and the pinned guidance.
-	resize(t, m, 99, 24)
+	// A short frame is needed now that the result has no guidance block: eight
+	// service rows have to overflow the band for the gutter to exist.
+	resize(t, m, 99, 18)
 	if !m.bodyScrolls() {
 		t.Fatalf("the fixture does not scroll:\n%s", m.View())
 	}
@@ -43,9 +43,8 @@ func TestStatusTableRendersTheScrollbarThumb(t *testing.T) {
 // near the bottom.
 func TestScrollbarThumbFollowsTheWindow(t *testing.T) {
 	m := statusResultModel(t)
-	// A medium frame keeps the table band: the summary and the guidance stay
-	// pinned, so the gutter belongs to the rows between them.
-	resize(t, m, 99, 24)
+	// A short frame keeps the table band while the eight rows overflow it.
+	resize(t, m, 99, 18)
 	topRows := thumbRows(t, m)
 	if len(topRows) == 0 {
 		t.Fatal("no thumb at the top")

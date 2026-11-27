@@ -118,7 +118,30 @@ const (
 
 	msgDoneHeader = "백업 완료"
 	msgSizeLabel  = "크기"
-	msgFilesLabel = "파일"
+
+	// The interactive document's own labels. The CLI keeps the sentence form in
+	// present.go; these are the label/value pairs of the structured screen.
+	msgProjectLabel   = "프로젝트"
+	msgOutputLabel    = "저장 폴더"
+	msgSourcesLabel   = "백업 대상"
+	msgServicesLabel  = "영향 서비스"
+	msgStoppedLabel   = "중지 후 재시작"
+	msgRestartedLabel = "복구한 서비스"
+	msgColumnSource   = "대상"
+	msgColumnState    = "상태"
+	msgColumnPath     = "경로"
+	msgColumnSize     = "크기"
+	msgColumnEntries  = "파일"
+	msgComplete       = "완료"
+	msgIncomplete     = "미완료"
+	msgNoPayload      = "백업 결과 표시 불가."
+
+	// The three statements the interactive screen keeps. They change a later
+	// decision; the rest of the CLI notice list describes this run.
+	msgTUIDataRisk        = "선택한 데이터에 비밀번호·토큰·개인정보가 있을 수 있음. dcraft는 내용을 검사하거나 암호화하지 않음. 백업 파일 공유 금지."
+	msgTUIHostFolderLimit = "연결 폴더는 호스트 사용자 권한으로 복사. uid/gid·xattr·ACL은 보존되지 않을 수 있음."
+	msgTUIKeepOld         = "dcraft는 기존 백업을 자동으로 삭제하지 않음."
+	msgFilesLabel         = "파일"
 
 	msgPlanHeader        = "백업 계획"
 	msgPlanProject       = "프로젝트: %s"

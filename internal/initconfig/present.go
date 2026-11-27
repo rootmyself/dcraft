@@ -20,26 +20,16 @@ func Document(res core.Result) core.Document {
 }
 
 // documentLines is the saved-file screen in the interactive surface's terms.
-// The saved file is a standard Compose input in the project folder, so the
-// reader can start it from the menu. A file written elsewhere or under another
-// name needs the explicit command, because the menu would not find it; there the
-// command stays.
+// The saved file, its path and the validated state are the report. Starting it
+// is the next screen's decision, so the success document does not repeat a
+// command or name the menu entry; the CLI keeps both.
 func documentLines(res core.Result) []core.ValueLine {
 	lines := presentLines(res)
-	report, ok := payloadReport(res.Data)
-	if ok && report.NextCommand != msgNextCommand {
-		return lines
-	}
 	for i, line := range lines {
 		if len(line) == 0 || line[0].Text != msgPreviewNext+": " {
 			continue
 		}
-		lines[i] = core.ValueLine{{Text: msgDocNext}}
-		rest := lines[i+1:]
-		if len(rest) > 0 && rest[0][0].Text == msgPreviewInDir {
-			rest = rest[1:]
-		}
-		return append(lines[:i+1], rest...)
+		return lines[:i]
 	}
 	return lines
 }

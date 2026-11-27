@@ -241,7 +241,7 @@ func TestWizardCollectsAndPreviewsCreation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("preview: %v", err)
 	}
-	for _, want := range []string{"environments:", "dev:", "compose.yaml", "compose,extra.yaml", "compose.dev.yaml", ".env.dev", "profiles", "격리하지 않음"} {
+	for _, want := range []string{"environments:", "dev:", "compose.yaml", "compose,extra.yaml", "compose.dev.yaml", ".env.dev", "profiles", "공유될 수 있음"} {
 		if !strings.Contains(preview, want) {
 			t.Fatalf("preview missing %q:\n%s", want, preview)
 		}

@@ -30,9 +30,10 @@ func spinnerTickCmd(every time.Duration) tea.Cmd {
 }
 
 // animated reports whether the current screen shows a running operation. Live
-// screens render process output instead of a timeline, so they do not animate.
+// screens render process output instead of a timeline, so they do not animate,
+// and a held completion has already finished.
 func (m *Model) animated() bool {
-	if m.live != nil {
+	if m.live != nil || m.progressDone {
 		return false
 	}
 	return m.phase == phaseLoading || m.phase == phasePlanning
@@ -266,7 +267,9 @@ func (m *Model) workingBody(heading string) string {
 			break
 		}
 	}
-	if !spinning {
+	if !spinning && !m.progressDone {
+		// A finished run states completion; a spinner would claim it is still
+		// working on the last stage.
 		heading = m.theme.Paint(visual.TokenAccent, m.theme.Glyphs.SpinnerFrame(m.spinnerFrame)) + " " + heading
 	}
 	if len(visible) == 0 {

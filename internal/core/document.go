@@ -147,10 +147,31 @@ type Cell struct {
 	// Badge renders Text with the state icon + Korean label instead of a
 	// bare word. Style is semantic only; the renderer picks the color.
 	Badge BadgeKind
+	// Emphasis raises a cell the reader must notice even when it carries no
+	// badge kind of its own. It is a separate channel from Badge: the icon and
+	// the Korean label still say what the state is, and Emphasis only decides
+	// how strongly the cell is drawn.
+	Emphasis Emphasis
 	// Detail is the full value shown in the detail view when Text is
 	// truncated. Empty means Text is already complete.
 	Detail string
+	// DetailNote is added to the detail view even when the cell fits, for a
+	// fact the compact cell cannot carry but the reader may need. Empty means
+	// there is nothing extra to state.
+	DetailNote string
 }
+
+// Emphasis is the semantic urgency of a table cell. It is not a color: the
+// renderer decides the token, and a colorless theme still keeps the text.
+type Emphasis string
+
+const (
+	// EmphasisNone is the zero value: the cell is drawn like its neighbours.
+	EmphasisNone Emphasis = ""
+	// EmphasisDanger marks a value the reader should act on, such as a service
+	// that is not running.
+	EmphasisDanger Emphasis = "danger"
+)
 
 // BadgeKind is the semantic state of a badge. It is not a color: the renderer
 // pairs every kind with an icon and keeps the Korean label in the text.

@@ -33,7 +33,14 @@ func (m *Model) beginWizard(f core.Feature) tea.Cmd {
 	m.wizardPreviewErr = nil
 	m.wizardAwaiting = true
 	m.wizardApplying = false
-	cmd := m.beginWithOptions(f, map[string]string{"wizard": "steps"})
+	// The running fact is the TUI's own last observation. It is passed to the
+	// feature so its notice can state it; the feature never queries Docker for
+	// this on its own.
+	options := map[string]string{"wizard": "steps"}
+	if m.stackRunning {
+		options["stack-running"] = "true"
+	}
+	cmd := m.beginWithOptions(f, options)
 	m.phase = phaseWizardLoading
 	return cmd
 }

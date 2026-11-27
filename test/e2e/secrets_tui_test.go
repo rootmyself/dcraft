@@ -14,13 +14,13 @@ func TestSecretsTUIWizardShowsEffectAndSavesOnlyAfterConfirmation(t *testing.T) 
 	env := fake.env(t, t.TempDir())
 
 	declineOutput, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
-		{wait: "마지막 조회", walk: "비밀값 연결", send: "\r"},
+		{wait: "마지막 조회", walk: "비밀값 설정", send: "\r"},
 		{wait: "서비스 선택", send: "\r"}, // api is the first sorted service
 		{wait: "전달 시점 선택", send: "\r"},
 		{wait: "전달 방식 선택", send: "\r"},
 		{wait: "원본 종류 선택", send: "\r"},
 		{wait: "원본 참조 입력", send: "DB_PASSWORD\r"},
-		{wait: "저장할 비밀값 연결", send: ""},
+		{wait: "저장할 비밀값 설정", send: ""},
 		{wait: "Docker 조회 권한", send: "\x1b"}, // esc: decline, save nothing
 		{wait: "저장된 내용 없음", send: ""},
 	})
@@ -28,8 +28,8 @@ func TestSecretsTUIWizardShowsEffectAndSavesOnlyAfterConfirmation(t *testing.T) 
 		t.Fatalf("TUI decline exit = %d\n%s", code, declineOutput)
 	}
 	for _, want := range []string{
-		"비밀값 연결 설정", "서비스 선택", "전달 방식 선택", "원본 종류 선택",
-		"저장할 비밀값 연결", "환경변수", "Docker 조회 권한", "저장된 내용 없음",
+		"비밀값 설정", "서비스 선택", "전달 방식 선택", "원본 종류 선택",
+		"저장할 비밀값 설정", "환경변수", "Docker 조회 권한", "저장된 내용 없음",
 	} {
 		if !strings.Contains(declineOutput, want) {
 			t.Fatalf("TUI output missing %q:\n%s", want, declineOutput)
@@ -40,13 +40,13 @@ func TestSecretsTUIWizardShowsEffectAndSavesOnlyAfterConfirmation(t *testing.T) 
 	}
 
 	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
-		{wait: "마지막 조회", walk: "비밀값 연결", send: "\r"},
+		{wait: "마지막 조회", walk: "비밀값 설정", send: "\r"},
 		{wait: "서비스 선택", send: "\r"}, // api
 		{wait: "전달 시점 선택", send: "\r"},
 		{wait: "전달 방식 선택", send: "\r"},
 		{wait: "원본 종류 선택", send: "\r"},
 		{wait: "원본 참조 입력", send: "DB_PASSWORD\r"},
-		{wait: "저장할 비밀값 연결", send: "\r"}, // enter: save
+		{wait: "저장할 비밀값 설정", send: "\r"}, // enter: save
 		{wait: "비밀값 참조 저장", send: ""},
 	})
 	if code != 0 {
@@ -71,14 +71,14 @@ func TestSecretsTUIWizardBuildPhaseFixesDeliveryToBuildKit(t *testing.T) {
 	env := fake.env(t, t.TempDir())
 
 	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
-		{wait: "마지막 조회", walk: "비밀값 연결", send: "\r"},
+		{wait: "마지막 조회", walk: "비밀값 설정", send: "\r"},
 		{wait: "서비스 선택", send: "\r"}, // api (first sorted service) has build:
 		{wait: "전달 시점 선택", send: "down"},
 		{wait: "> 빌드 시점", send: "\r"},
 		{wait: "전달 방식 선택", send: "\r"}, // environment is selected; build fixes it
 		{wait: "원본 종류 선택", send: "\r"},
 		{wait: "원본 참조 입력", send: "BUILD_TOKEN\r"},
-		{wait: "저장할 비밀값 연결", send: ""},
+		{wait: "저장할 비밀값 설정", send: ""},
 		{wait: "BuildKit secret mount로 고정", send: "\r"},
 		{wait: "비밀값 참조 저장", send: ""},
 	})
@@ -109,13 +109,13 @@ func TestSecretsTUIDeclineLeavesNoConfig(t *testing.T) {
 	env := fake.env(t, t.TempDir())
 
 	output, code := runLifecyclePTYSteps(t, project, env, []lifecyclePTYStep{
-		{wait: "마지막 조회", walk: "비밀값 연결", send: "\r"},
+		{wait: "마지막 조회", walk: "비밀값 설정", send: "\r"},
 		{wait: "서비스 선택", send: "\r"},
 		{wait: "전달 시점 선택", send: "\r"},
 		{wait: "전달 방식 선택", send: "\r"},
 		{wait: "원본 종류 선택", send: "\r"},
 		{wait: "원본 참조 입력", send: "DB_PASSWORD\r"},
-		{wait: "저장할 비밀값 연결", send: "\x1b"},
+		{wait: "저장할 비밀값 설정", send: "\x1b"},
 		{wait: "저장된 내용 없음", send: ""},
 	})
 	if code != 0 {

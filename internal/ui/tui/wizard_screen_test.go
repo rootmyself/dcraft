@@ -20,7 +20,7 @@ func secretWizard() (*wizardStub, core.WizardSpec) {
 			Section: core.SectionConfig, Wizard: true,
 		},
 		steps:   spec,
-		preview: "저장할 비밀값 연결\n서비스: worker\n효과: dcraft up 시 파일로 전달.",
+		preview: "저장할 비밀값 설정\n서비스: worker\n효과: dcraft up 시 파일로 전달.",
 	}
 	return stub, spec
 }
@@ -299,7 +299,7 @@ func TestWizardPreviewPanelShowsTheExactAppliedValues(t *testing.T) {
 	}
 	view := m.View()
 	for _, want := range []string{
-		"적용 내용", "저장할 비밀값 연결",
+		"적용 내용", "저장할 비밀값 설정",
 		"서비스 선택: worker", "시점 선택: 실행 시점 (runtime)",
 		"전달 방식: 파일 (file)", "원본 종류: 로컬 파일 (file)", "원본 참조: secrets/token.txt",
 	} {

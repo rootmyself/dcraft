@@ -21,6 +21,24 @@ type LiveFeature interface {
 	LiveMode() LiveMode
 }
 
+// ServiceScope is an optional capability for a feature whose work names
+// services. The generic scope screen asks it whether a selection is required
+// instead of deriving the answer from a feature name.
+type ServiceScope interface {
+	RequiresServiceScope() bool
+	// MaxServices caps how many services one screen may collect. Zero means the
+	// feature imposes no cap.
+	MaxServices() int
+}
+
+// StackObserver is an optional capability of a result payload: it reports
+// whether the run observed a running service. The interactive screen keeps that
+// fact to warn a later guided flow that the folder is not a blank slate. It is
+// a fact the feature already read, never a second Docker query.
+type StackObserver interface {
+	ObservedRunning() bool
+}
+
 // CanceledReporter is an optional capability for a feature whose cancellation
 // has a specific, honest effect (a detached stream, an atomic install that is
 // either absent or complete). The engine keeps the canceled outcome and exit

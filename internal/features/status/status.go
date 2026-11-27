@@ -24,6 +24,13 @@ type Payload struct {
 	Stack stack.Snapshot `json:"stack"`
 }
 
+// ObservedRunning implements core.StackObserver: the status read is the screen's
+// only routine observation of the stack, so it is what a later guided flow
+// consults when deciding whether the folder is already running.
+func (p Payload) ObservedRunning() bool {
+	return p.Stack.Summary.Running > 0
+}
+
 func (f *Feature) Descriptor() core.Descriptor {
 	return core.Descriptor{
 		Name:     "status",
@@ -33,6 +40,9 @@ func (f *Feature) Descriptor() core.Descriptor {
 		Section:  core.SectionInspect,
 		ReadOnly: true,
 		Primary:  true,
+		Menu: []core.MenuEntry{
+			{Kind: core.MenuRun, Feature: "status", Label: msgTitle, Summary: msgSummary, Order: 0},
+		},
 	}
 }
 

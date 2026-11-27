@@ -109,6 +109,11 @@ func TestBackupWizardSelectsAVolumeCollectsTheOutputPathAndConfirmsTheEffect(t *
 	if backup.answers["volume"] != "data" || backup.answers["output"] != "./dcraft-backups" {
 		t.Fatalf("answers = %v", backup.answers)
 	}
+	// A data operation holds its report until Enter.
+	if !strings.Contains(m.View(), "완료 · enter 계속") {
+		t.Fatalf("the finished screen does not state completion:\n%s", m.View())
+	}
+	pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
 	if !strings.Contains(m.View(), "백업 결과 본문") {
 		t.Fatalf("result not shown:\n%s", m.View())
 	}

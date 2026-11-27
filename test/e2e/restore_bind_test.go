@@ -237,7 +237,8 @@ func TestRestoreBindTUIWizardSelectsABindArtifactAndTarget(t *testing.T) {
 		{wait: "안전 백업 폴더", send: "\r"},
 		{wait: "복원 계획", send: "\r"},
 		{wait: "승인 확인", send: ""},
-		{wait: "데이터 복원 (data_restore)", send: "\r"},
+		{wait: "데이터 복원 (data_restore)", send: "\x1b[D"}, // the panel starts on cancel
+		{wait: "▸ [ 승인 ]", send: "\r"},
 		{wait: "복원 완료", send: ""},
 	})
 	if code != 0 {

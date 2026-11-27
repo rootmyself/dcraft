@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/rootmyself/dcraft/internal/core"
+	"github.com/rootmyself/dcraft/internal/ui/tui/visual"
 )
 
 // formState collects the inputs a feature declared through core.InputProvider.
@@ -255,6 +256,12 @@ func (m *Model) submitForm() (tea.Model, tea.Cmd) {
 // and the exact values that will run. It returns the drawn rows and the field
 // and choice targets together, so a click resolves against what is on screen.
 // Nothing is sent to the engine until the last field is confirmed.
+//
+// Each field opens a block, and the field's own label is the block heading: a
+// choice's label states the decision it collects, so repeating it as a section
+// title would say the same words twice. The heading carries the accent and the
+// help stays muted, so a colorless terminal still reads the structure from the
+// blank line and the label alone.
 func (m *Model) formLines() ([]string, []bodyHit) {
 	form := m.form
 	if form == nil {
@@ -285,8 +292,8 @@ func (m *Model) formLines() ([]string, []bodyHit) {
 		if !field.Visible(form.answer) {
 			continue
 		}
-		// One blank line between field blocks keeps the container choice and
-		// the command choice readable as two sections instead of one list.
+		// One blank line between blocks keeps the instance choice and the
+		// command choice readable as two sections instead of one list.
 		if len(lines) > 0 && lines[len(lines)-1] != "" {
 			add("")
 		}
@@ -296,31 +303,36 @@ func (m *Model) formLines() ([]string, []bodyHit) {
 		}
 		switch field.Kind {
 		case core.InputChoice:
-			selected := ""
-			if len(field.Options) > 0 {
-				selected = field.Options[form.choices[field.Key]].Label
-			}
 			hits = append(hits, bodyHit{row: len(lines), kind: hitFormField, index: i})
-			add(fmt.Sprintf("%s%s: %s", marker, field.Label, selected))
+			add(marker + m.sectionLabel(field.Label))
 			lines = append(lines, m.formNoticeLines(form, i)...)
 			lines = append(lines, m.helpLines(field.Help)...)
 			if i == form.focus {
+				// The open list already marks the selected row, so repeating it
+				// above the list would say the same value twice.
 				for j, option := range field.Options {
 					pointer := "   "
 					if j == form.choices[field.Key] {
 						pointer = " ◉ "
 					}
 					hits = append(hits, bodyHit{row: len(lines), kind: hitFormChoice, index: i, aux: j})
-					add("  " + pointer + option.Label)
+					add("  " + pointer + m.valueText(j == form.choices[field.Key], option.Label))
 				}
+				break
 			}
+			selected := ""
+			if len(field.Options) > 0 {
+				selected = field.Options[form.choices[field.Key]].Label
+			}
+			add("  " + m.valueText(true, selected))
 		default:
 			cursor := ""
 			if i == form.focus {
 				cursor = cursorGlyph
 			}
 			hits = append(hits, bodyHit{row: len(lines), kind: hitFormField, index: i})
-			add(fmt.Sprintf("%s%s: %s%s", marker, field.Label, form.values[field.Key], cursor))
+			add(marker + m.sectionLabel(field.Label))
+			add("  " + m.valueText(true, form.values[field.Key]) + cursor)
 			lines = append(lines, m.formNoticeLines(form, i)...)
 			lines = append(lines, m.helpLines(field.Help)...)
 		}
@@ -347,6 +359,15 @@ func (m *Model) formLines() ([]string, []bodyHit) {
 func (m *Model) formView() string {
 	lines, _ := m.formLines()
 	return strings.Join(lines, "\n")
+}
+
+// valueText paints a collected value in the accent token, so the answer a
+// reader is about to submit stands apart from its label and help.
+func (m *Model) valueText(selected bool, text string) string {
+	if !selected || text == "" {
+		return text
+	}
+	return m.theme.Paint(visual.TokenAccent, text)
 }
 
 // formNoticeLines draws the inline guidance for one field, wrapped to the body

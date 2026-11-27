@@ -53,8 +53,8 @@ func renderDoc(t *testing.T, doc core.Document, width int) string {
 	return strings.Join(lines, "\n")
 }
 
-// The update document states the outcome, the target, the readiness table, the
-// record, and the next actions — in that order.
+// The update document states the outcome, the target, the readiness table and
+// the record — in that order. The next action belongs to the screen's keys.
 func TestUpdateDocumentShape(t *testing.T) {
 	doc := update.Document(updateResult(baseReport()))
 	var kinds []core.BlockKind
@@ -68,8 +68,8 @@ func TestUpdateDocumentShape(t *testing.T) {
 		t.Fatalf("leading blocks = %v", kinds)
 	}
 	last := kinds[len(kinds)-1]
-	if last != core.BlockCallout {
-		t.Fatalf("last block = %q, want callout", last)
+	if last != core.BlockParagraph {
+		t.Fatalf("last block = %q, want the record paragraph", last)
 	}
 	joined := renderDoc(t, doc, 100)
 	if !strings.Contains(joined, "갱신 완료") {
@@ -184,23 +184,17 @@ func TestUpdateCLIPresenterUnchanged(t *testing.T) {
 	}
 }
 
-// The interactive screen names the menu entry in its next actions. The CLI keeps
-// the command lines for its own presenter.
-func TestUpdateDocumentNextActionsUseTheMenu(t *testing.T) {
+// A successful update stops at its report. Guidance callouts are gone; the CLI
+// keeps its command lines for its own presenter.
+func TestUpdateDocumentHasNoNextActionCallout(t *testing.T) {
 	doc := update.Document(updateResult(baseReport()))
-	var callout string
 	for _, b := range doc.Blocks {
 		if b.Kind == core.BlockCallout && b.Callout == core.CalloutInfo {
-			callout = b.Text
+			t.Fatalf("the document still carries a guidance callout:\n%s", b.Text)
 		}
 	}
-	if callout == "" {
-		t.Fatal("no next-action callout")
-	}
-	if strings.Contains(callout, "dcraft ") {
-		t.Fatalf("the document tells an interactive reader to type a command:\n%s", callout)
-	}
-	if !strings.Contains(callout, "메뉴") {
-		t.Fatalf("the callout does not say where to act:\n%s", callout)
+	joined := renderDoc(t, doc, 100)
+	if strings.Contains(joined, "다음 행동") {
+		t.Fatalf("the document still carries a next-action section:\n%s", joined)
 	}
 }

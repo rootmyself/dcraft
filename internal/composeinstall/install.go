@@ -111,6 +111,9 @@ func (f *Feature) Descriptor() core.Descriptor {
 		// Docker CLI and must work in a folder without Compose files.
 		Requires:       core.Requirements{core.RequirementDockerCLI},
 		TargetOptional: true,
+		Menu: []core.MenuEntry{
+			{Kind: core.MenuRun, Feature: featureName, Label: msgTitle, Summary: msgSummary, Order: 4},
+		},
 	}
 }
 
@@ -357,10 +360,11 @@ func (f *Feature) Present(res core.Result, width int) string {
 }
 
 // Document implements core.ViewPresenter: the install target is a path, the
-// source is a URL, and the CLI text stays unchanged. Only the guidance line
-// differs, because the interactive reader acts from the menu.
+// source is a URL, and the CLI text stays unchanged. The interactive reader
+// reaches the next screen from the menu, so the success document stops at the
+// install facts and its one standing limit.
 func (f *Feature) Document(res core.Result) core.Document {
-	return core.Document{Blocks: []core.Block{{Kind: core.BlockValueLines, Lines: presentLinesWith(res, msgDocGuidanceOne)}}}
+	return core.Document{Blocks: []core.Block{{Kind: core.BlockValueLines, Lines: presentLinesWith(res, "")}}}
 }
 
 func presentLines(res core.Result) []core.ValueLine {
@@ -368,8 +372,8 @@ func presentLines(res core.Result) []core.ValueLine {
 }
 
 // presentLinesWith renders the install report with the given guidance line.
-// The CLI and the TUI share every fact and differ only in how the reader is
-// told to check the result.
+// The CLI and the TUI share every fact; an empty guidance omits that line and
+// keeps the limit statement.
 func presentLinesWith(res core.Result, guidance string) []core.ValueLine {
 	payload, ok := payloadFrom(res.Data)
 	if !ok {
@@ -399,10 +403,11 @@ func presentLinesWith(res core.Result, guidance string) []core.ValueLine {
 			lines = append(lines, core.ValueLine{{Text: fmt.Sprintf("- 재확인: %s", info.RecheckOutput)}})
 		}
 	}
-	lines = append(lines, nil,
-		core.ValueLine{{Text: guidance}},
-		core.ValueLine{{Text: msgGuidanceTwo}},
-	)
+	lines = append(lines, nil)
+	if guidance != "" {
+		lines = append(lines, core.ValueLine{{Text: guidance}})
+	}
+	lines = append(lines, core.ValueLine{{Text: msgGuidanceTwo}})
 	return lines
 }
 

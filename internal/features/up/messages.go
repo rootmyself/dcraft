@@ -3,7 +3,11 @@ package up
 const (
 	msgTitle   = "스택 시작"
 	msgSummary = "현재 폴더 스택 시작."
-	msgUsage   = `dcraft up [--service <서비스>] [--path <폴더>] [--profile <프로필>] [--json]
+	// The menu names the operation by what it acts on; the screen keeps the
+	// stack title because a run without -s covers the whole stack.
+	msgMenuLabel   = "서비스 시작"
+	msgMenuSummary = "서비스 시작. 선택하지 않으면 스택 전체."
+	msgUsage       = `dcraft up [--service <서비스>] [--path <폴더>] [--profile <프로필>] [--json]
 
 현재 Compose 설정을 적용해 스택 컨테이너 시작. 중지된 스택을 다시 시작할 때도 사용.
 전체 스택이 기본이며 -s/--service로 서비스 지정 가능. 지정한 서비스와 그 의존 서비스가 함께 시작될 수 있음.

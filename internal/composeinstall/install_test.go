@@ -415,24 +415,24 @@ func TestComposeInstallDocumentTagsURLAndPath(t *testing.T) {
 	if kinds[core.ValueURL] != 1 || kinds[core.ValuePath] != 1 {
 		t.Fatalf("kinds = %v, want one url and one path", kinds)
 	}
-	// The facts are shared with the CLI; the guidance line differs on purpose,
-	// because the interactive reader acts from the menu. Everything before the
-	// guidance must stay byte-identical.
+	// The facts are shared with the CLI. The interactive success screen stops
+	// at them: the CLI keeps its command line, and the standing limit statement
+	// stays on both.
 	docText := strings.Join(text, "\n")
 	cliText := feature.Present(res, 0)
-	docFacts, docGuide, docOK := strings.Cut(docText, "\n다음 행동: ")
-	cliFacts, cliGuide, cliOK := strings.Cut(cliText, "\n다음 행동: ")
-	if !docOK || !cliOK {
-		t.Fatalf("guidance line missing:\ndocument %q\ncli %q", docText, cliText)
+	if strings.Contains(docText, "다음 행동") {
+		t.Fatalf("the document still carries next-action guidance: %q", docText)
 	}
+	if !strings.Contains(cliText, "\n다음 행동: ") {
+		t.Fatalf("the CLI lost its guidance line: %q", cliText)
+	}
+	docFacts, _, _ := strings.Cut(docText, "\n\ndcraft는")
+	cliFacts, _, _ := strings.Cut(cliText, "\n\n다음 행동: ")
 	if docFacts != cliFacts {
 		t.Fatalf("document facts = %q, want %q", docFacts, cliFacts)
 	}
-	if docGuide == cliGuide {
-		t.Fatalf("the document kept the CLI command line: %q", docGuide)
-	}
-	if strings.Contains(docGuide, "dcraft status") {
-		t.Fatalf("the document still tells an interactive reader to type the command: %q", docGuide)
+	if !strings.Contains(docText, msgGuidanceTwo) {
+		t.Fatalf("the document lost the standing limit statement: %q", docText)
 	}
 }
 

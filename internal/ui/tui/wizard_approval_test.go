@@ -74,6 +74,8 @@ func TestApprovalWizardUsesTheGenericPlanAndDataRestoreApproval(t *testing.T) {
 	}
 	// Accepting the independent approval runs the same feature path with
 	// wizard=apply and the collected answers.
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyLeft}) // the panel starts on cancel
+	m = nm.(*Model)
 	nm, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = nm.(*Model)
 	feed(t, m, execute(t, cmd))

@@ -8,6 +8,7 @@
 로그 보기
 
 실시간 로그 (서비스는 계속 실행 중)
+[api]
 서비스: 스택 전체
 인스턴스: 전체
 명령: logs
@@ -18,7 +19,6 @@ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
 api-1  | error connection refused
-
 
 
 [q] 화면 닫기  [ctrl+c] 중단
@@ -28,6 +28,7 @@ api-1  | error connection refused
 로그 보기
 
 실시간 로그 (서비스는 계속 실행 중)
+[api]
 서비스: 스택 전체
 인스턴스: 전체
 명령: logs
@@ -38,7 +39,6 @@ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
 api-1  | error connection refused
-
 
 
 
@@ -60,6 +60,7 @@ api-1  | error connection refused
 로그 보기
 
 실시간 로그 (서비스는 계속 실행 중)
+[api]
 서비스: 스택 전체
 인스턴스: 전체
 명령: logs
@@ -70,7 +71,6 @@ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
 api-1  | error connection refused
-
 
 
 
@@ -112,6 +112,7 @@ api-1  | error connection refused
 로그 보기
 
 실시간 로그 (서비스는 계속 실행 중)
+[api]
 서비스: 스택 전체
 인스턴스: 전체
 명령: logs
@@ -122,7 +123,6 @@ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx�
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 api-1  | error connection refused
-
 
 
 [q] 화면 닫기  [ctrl+c] 중단  [ctrl+] 접속 종료  [?] 도움말
@@ -132,6 +132,7 @@ api-1  | error connection refused
 로그 보기
 
 실시간 로그 (서비스는 계속 실행 중)
+[api]
 서비스: 스택 전체
 인스턴스: 전체
 명령: logs
@@ -142,7 +143,6 @@ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx�
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 api-1  | error connection refused
-
 
 
 
@@ -164,6 +164,7 @@ api-1  | error connection refused
 로그 보기
 
 실시간 로그 (서비스는 계속 실행 중)
+[api]
 서비스: 스택 전체
 인스턴스: 전체
 명령: logs
@@ -174,7 +175,6 @@ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx�
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 api-1  | error connection refused
-
 
 
 
@@ -216,17 +216,17 @@ api-1  | error connection refused
 ╭ 메뉴 · 19 ─── esc 닫기 ╮ 로그 보기
 │조회                    │
 │  서비스 접속           │ 실시간 로그 (서비스는 계속 실행 중)
-│  로그 보기             │ 서비스: 스택 전체
-│▸ 스택 상태             │ 인스턴스: 전체
-│                        │ 명령: logs
-│운영                    │
-│  스택 제거 ▲ 위험      │ 90%-1  |done%
-│  스택 재시작           │ api-1  | xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
-│  스택 중지             │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
+│  로그 보기             │ [api]
+│▸ 스택 상태             │ 서비스: 스택 전체
+│                        │ 인스턴스: 전체
+│운영                    │ 명령: logs
+│  스택 제거 ▲ 위험      │
+│  스택 재시작           │ 90%-1  |done%
+│  스택 중지             │ api-1  | xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
 │  스택 시작             │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
-│  갱신                  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-│                        │ api-1  | error connection refused
-│데이터                  │
+│  갱신                  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
+│                        │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│데이터                  │ api-1  | error connection refused
 │  데이터 백업           │
 ╰────────────────────────╯
 [q] 화면 닫기  [ctrl+c] 중단  [ctrl+] 접속 종료  [?] 도움말
@@ -236,27 +236,27 @@ api-1  | error connection refused
 ╭ 메뉴 · 19 ─── esc 닫기 ╮ 로그 보기
 │조회                    │
 │  서비스 접속           │ 실시간 로그 (서비스는 계속 실행 중)
-│  로그 보기             │ 서비스: 스택 전체
-│▸ 스택 상태             │ 인스턴스: 전체
-│                        │ 명령: logs
-│운영                    │
-│  스택 제거 ▲ 위험      │ 90%-1  |done%
-│  스택 재시작           │ api-1  | xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
-│  스택 중지             │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
+│  로그 보기             │ [api]
+│▸ 스택 상태             │ 서비스: 스택 전체
+│                        │ 인스턴스: 전체
+│운영                    │ 명령: logs
+│  스택 제거 ▲ 위험      │
+│  스택 재시작           │ 90%-1  |done%
+│  스택 중지             │ api-1  | xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
 │  스택 시작             │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
-│  갱신                  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-│                        │ api-1  | error connection refused
-│데이터                  │
+│  갱신                  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
+│                        │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│데이터                  │ api-1  | error connection refused
 │  데이터 백업           │
 │  데이터 복원 ▲ 위험    │
 │  이전 버전 복… ▲ 위험  │
 │                        │
 │설정                    │
 │  실행환경 생성         │
-│  실행환경 전환         │
 │  호스트 스크립트       │
 │    커스텀              │
 │    Git                 │
+│    S3                  │
 │────────────────────────│
 │ ▸ 스택 상태            │
 │ 현재 스택과 서비스 상  │
@@ -268,24 +268,23 @@ api-1  | error connection refused
 ╭ 메뉴 · 19 ─── esc 닫기 ╮ 로그 보기
 │조회                    │
 │  서비스 접속           │ 실시간 로그 (서비스는 계속 실행 중)
-│  로그 보기             │ 서비스: 스택 전체
-│▸ 스택 상태             │ 인스턴스: 전체
-│                        │ 명령: logs
-│운영                    │
-│  스택 제거 ▲ 위험      │ 90%-1  |done%
-│  스택 재시작           │ api-1  | xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
-│  스택 중지             │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
+│  로그 보기             │ [api]
+│▸ 스택 상태             │ 서비스: 스택 전체
+│                        │ 인스턴스: 전체
+│운영                    │ 명령: logs
+│  스택 제거 ▲ 위험      │
+│  스택 재시작           │ 90%-1  |done%
+│  스택 중지             │ api-1  | xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
 │  스택 시작             │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
-│  갱신                  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-│                        │ api-1  | error connection refused
-│데이터                  │
+│  갱신                  │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
+│                        │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│데이터                  │ api-1  | error connection refused
 │  데이터 백업           │
 │  데이터 복원 ▲ 위험    │
 │  이전 버전 복… ▲ 위험  │
 │                        │
 │설정                    │
 │  실행환경 생성         │
-│  실행환경 전환         │
 │  호스트 스크립트       │
 │    커스텀              │
 │    Git                 │
@@ -293,6 +292,7 @@ api-1  | error connection refused
 │  Compose 설치          │
 │  비밀값 연결           │
 │  최초 구성             │
+│  실행환경 전환         │
 │                        │
 │                        │
 │                        │
@@ -320,17 +320,17 @@ api-1  | error connection refused
 ╭ 메뉴 · 19 ─────── esc 닫기 ╮ 로그 보기
 │조회                        │
 │  서비스 접속               │ 실시간 로그 (서비스는 계속 실행 중)
-│  로그 보기                 │ 서비스: 스택 전체
-│▸ 스택 상태                 │ 인스턴스: 전체
-│                            │ 명령: logs
-│운영                        │
-│  스택 제거 ▲ 위험          │ 90%-1  |done%
-│  스택 재시작               │ api-1  | xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-│  스택 중지                 │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│  로그 보기                 │ [api]
+│▸ 스택 상태                 │ 서비스: 스택 전체
+│                            │ 인스턴스: 전체
+│운영                        │ 명령: logs
+│  스택 제거 ▲ 위험          │
+│  스택 재시작               │ 90%-1  |done%
+│  스택 중지                 │ api-1  | xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 │  스택 시작                 │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-│  갱신                      │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-│                            │ api-1  | error connection refused
-│데이터                      │
+│  갱신                      │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│                            │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│데이터                      │ api-1  | error connection refused
 │  데이터 백업               │
 ╰────────────────────────────╯
 [q] 화면 닫기  [ctrl+c] 중단  [ctrl+] 접속 종료  [?] 도움말
@@ -340,27 +340,27 @@ api-1  | error connection refused
 ╭ 메뉴 · 19 ─────── esc 닫기 ╮ 로그 보기
 │조회                        │
 │  서비스 접속               │ 실시간 로그 (서비스는 계속 실행 중)
-│  로그 보기                 │ 서비스: 스택 전체
-│▸ 스택 상태                 │ 인스턴스: 전체
-│                            │ 명령: logs
-│운영                        │
-│  스택 제거 ▲ 위험          │ 90%-1  |done%
-│  스택 재시작               │ api-1  | xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-│  스택 중지                 │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│  로그 보기                 │ [api]
+│▸ 스택 상태                 │ 서비스: 스택 전체
+│                            │ 인스턴스: 전체
+│운영                        │ 명령: logs
+│  스택 제거 ▲ 위험          │
+│  스택 재시작               │ 90%-1  |done%
+│  스택 중지                 │ api-1  | xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 │  스택 시작                 │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-│  갱신                      │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-│                            │ api-1  | error connection refused
-│데이터                      │
+│  갱신                      │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│                            │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│데이터                      │ api-1  | error connection refused
 │  데이터 백업               │
 │  데이터 복원 ▲ 위험        │
 │  이전 버전 복원 ▲ 위험     │
 │                            │
 │설정                        │
 │  실행환경 생성             │
-│  실행환경 전환             │
 │  호스트 스크립트           │
 │    커스텀                  │
 │    Git                     │
+│    S3                      │
 │────────────────────────────│
 │ ▸ 스택 상태                │
 │ 현재 스택과 서비스 상태를  │
@@ -372,24 +372,23 @@ api-1  | error connection refused
 ╭ 메뉴 · 19 ─────── esc 닫기 ╮ 로그 보기
 │조회                        │
 │  서비스 접속               │ 실시간 로그 (서비스는 계속 실행 중)
-│  로그 보기                 │ 서비스: 스택 전체
-│▸ 스택 상태                 │ 인스턴스: 전체
-│                            │ 명령: logs
-│운영                        │
-│  스택 제거 ▲ 위험          │ 90%-1  |done%
-│  스택 재시작               │ api-1  | xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-│  스택 중지                 │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│  로그 보기                 │ [api]
+│▸ 스택 상태                 │ 서비스: 스택 전체
+│                            │ 인스턴스: 전체
+│운영                        │ 명령: logs
+│  스택 제거 ▲ 위험          │
+│  스택 재시작               │ 90%-1  |done%
+│  스택 중지                 │ api-1  | xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 │  스택 시작                 │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-│  갱신                      │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-│                            │ api-1  | error connection refused
-│데이터                      │
+│  갱신                      │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│                            │ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+│데이터                      │ api-1  | error connection refused
 │  데이터 백업               │
 │  데이터 복원 ▲ 위험        │
 │  이전 버전 복원 ▲ 위험     │
 │                            │
 │설정                        │
 │  실행환경 생성             │
-│  실행환경 전환             │
 │  호스트 스크립트           │
 │    커스텀                  │
 │    Git                     │
@@ -397,6 +396,7 @@ api-1  | error connection refused
 │  Compose 설치              │
 │  비밀값 연결               │
 │  최초 구성                 │
+│  실행환경 전환             │
 │                            │
 │                            │
 │                            │

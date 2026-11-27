@@ -669,6 +669,9 @@ func mutatingDescriptor(name string) core.Descriptor {
 	d := descriptor(name, false)
 	d.ReadOnly = false
 	d.RecordsHistory = true
+	// A mutating feature belongs to the operate section; the result hold is a
+	// property of that section, not of the descriptor's body.
+	d.Section = core.SectionOperate
 	return d
 }
 
@@ -692,12 +695,19 @@ func TestMutatingFeatureConfirmsTargetAndEffectBeforeRunning(t *testing.T) {
 		t.Fatalf("mutating feature ran before confirmation: %d", up.runs)
 	}
 
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyLeft}) // the panel starts on cancel
+	m = nm.(*Model)
 	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = nm.(*Model)
 	feed(t, m, execute(t, cmd))
 	if up.runs != 1 {
 		t.Fatalf("confirmed feature runs = %d, want 1", up.runs)
 	}
+	// The run finished, so the screen states completion and waits for Enter.
+	if !strings.Contains(m.View(), "완료 · enter 계속") {
+		t.Fatalf("the finished screen does not state completion:\n%s", m.View())
+	}
+	pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
 	if !strings.Contains(m.View(), "시작 본문") {
 		t.Fatalf("result not shown:\n%s", m.View())
 	}
@@ -833,12 +843,15 @@ func TestRefreshOfAMutatingFeatureAlsoConfirms(t *testing.T) {
 	m = nm.(*Model)
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = nm.(*Model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyLeft}) // the panel starts on cancel
+	m = nm.(*Model)
 	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = nm.(*Model)
 	feed(t, m, execute(t, cmd))
 	if up.runs != 1 {
 		t.Fatalf("first run = %d", up.runs)
 	}
+	pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter}) // leave the held completion
 	// r must ask again instead of silently changing the stack.
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")})
 	m = nm.(*Model)

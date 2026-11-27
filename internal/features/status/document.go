@@ -9,10 +9,10 @@ import (
 	"github.com/rootmyself/dcraft/internal/stack/present"
 )
 
-// Document implements core.ViewPresenter. The TUI renders these four blocks in
-// the approved order: summary badges, key-values, the service table, then the
-// next-action callout. The CLI keeps using Present, so this method introduces no
-// wording change for scripts.
+// Document implements core.ViewPresenter. The TUI renders these three blocks in
+// the approved order: summary badges, key-values, and the service table. A
+// successful snapshot is a statement of fact; the screen's own keys refresh it,
+// so no separate next-action callout repeats them. The CLI keeps using Present.
 func (f *Feature) Document(res core.Result) core.Document {
 	payload, ok := payloadFrom(res.Data)
 	if !ok {
@@ -30,7 +30,6 @@ func (f *Feature) Document(res core.Result) core.Document {
 			{Kind: core.BlockBadges, Badges: documentBadges(snap)},
 			{Kind: core.BlockKeyValues, Pairs: documentPairs(res, snap)},
 			{Kind: core.BlockTable, Table: documentTable(snap)},
-			{Kind: core.BlockCallout, Callout: core.CalloutInfo, Text: documentCallout(snap)},
 		},
 	}
 }
@@ -120,15 +119,33 @@ func documentTable(snap stack.Snapshot) *core.Table {
 			Selectable: svc.Configured,
 			Cells: []core.Cell{
 				{Text: svc.Name, Detail: svc.Name, Kind: core.ValueService},
-				{Text: present.StateLabel(svc.State), Badge: present.StateBadge(svc.State)},
+				{Text: present.StateLabel(svc.State), Badge: present.StateBadge(svc.State), Emphasis: present.StateEmphasis(svc.State)},
 				{Text: fmt.Sprintf("%d", len(svc.Instances))},
-				{Text: present.HealthLabel(svc.Health), Badge: present.HealthBadge(svc.Health)},
+				{Text: present.HealthLabel(svc.Health), Badge: present.HealthBadge(svc.Health), DetailNote: healthDetail(svc)},
 				{Text: imageText(svc), Detail: imageText(svc), Kind: core.ValueImage},
 				{Text: portText(svc), Detail: portDetail(svc)},
 			},
 		})
 	}
 	return table
+}
+
+// healthDetail is the fact the eight-cell health column cannot carry: why a
+// running service is not verified. It reuses the same wording the column and the
+// CLI use, so the detail screen never invents a second vocabulary. Empty means
+// the cell already says everything.
+func healthDetail(svc stack.Service) string {
+	if svc.State != stack.StateRunning || svc.AppVerified {
+		return ""
+	}
+	switch {
+	case !svc.HealthcheckConfigured:
+		return msgHealthReasonNoCheck
+	case svc.Health == stack.HealthStarting:
+		return msgHealthReasonStarting
+	default:
+		return msgHealthReasonPartial
+	}
 }
 
 // imageText is one cell: the image reference, marked when the service builds
@@ -188,26 +205,6 @@ func portDetail(svc stack.Service) string {
 	}
 	if len(lines) == 0 {
 		return ""
-	}
-	return strings.Join(lines, "\n")
-}
-
-// documentCallout is the next action. It mirrors the guidance the CLI prints so
-// the TUI never claims a different capability.
-//
-// The callout has no separate title line: the renderer already labels the block
-// with its severity word, and compact mode keeps only the first line. Putting
-// "다음 행동" first would mean compact showed the heading and no actual advice.
-func documentCallout(snap stack.Snapshot) string {
-	if snap.Summary.Services == 0 {
-		return msgCalloutEmptyStack
-	}
-	lines := []string{"1. " + msgCalloutRefresh}
-	if snap.Summary.Unhealthy > 0 || snap.Summary.Stopped > 0 {
-		lines = append(lines, "2. "+msgCalloutLogs)
-	}
-	if snap.Summary.NotCreated > 0 {
-		lines = append(lines, "3. "+msgCalloutStart)
 	}
 	return strings.Join(lines, "\n")
 }

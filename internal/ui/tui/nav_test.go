@@ -232,8 +232,14 @@ func TestSelectionSurvivesAResultRoundTrip(t *testing.T) {
 	// A destructive stub is still a mutating feature, so the ordinary
 	// confirmation stands between the menu and the run.
 	if m.phase == phaseConfirm {
+		// The panel starts on cancel: move to approve, then press enter.
+		pressKey(t, m, tea.KeyMsg{Type: tea.KeyLeft})
 		cmd = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
 		feed(t, m, execute(t, cmd))
+	}
+	if m.phase == phaseLoading {
+		// A data operation holds its report until Enter.
+		pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
 	}
 	if m.phase != phaseReady {
 		t.Fatalf("phase = %v, want ready", m.phase)

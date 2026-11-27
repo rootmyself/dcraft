@@ -79,6 +79,13 @@ const (
 	envScreenSwitch
 )
 
+// Confirmation buttons are fixed positions in the panel's pinned row. The
+// default focus is cancel: one Enter must never approve a stack change.
+const (
+	confirmButtonApprove = 0
+	confirmButtonCancel  = 1
+)
+
 // Model is the Bubble Tea model. It is exported for behavior tests.
 type Model struct {
 	ctx      context.Context
@@ -148,6 +155,11 @@ type Model struct {
 	// nothing re-reads the environment during a redraw.
 	theme visual.Theme
 	facts visual.Facts
+	// stackRunning reports the last observation that at least one service was
+	// running. It is the TUI's own reading of the snapshot it drew, used to warn
+	// a guided flow that the folder is not a blank slate; it is never a Docker
+	// query of its own.
+	stackRunning bool
 
 	// The body scrolls: body is the viewport over the scrollable rows, and
 	// detailOpen switches the result body to the full-value view. The detail's
@@ -165,7 +177,10 @@ type Model struct {
 	// starts at the top.
 	helpOpen      bool
 	confirmScroll int
-
+	// confirmButton is the focused button of an open confirmation panel. It
+	// starts on cancel so Enter never approves a destructive action by
+	// accident, and the arrow keys move it.
+	confirmButton int
 	// discardOpen is the sidebar-click confirmation. It is a one-decision
 	// panel: accept discards the collected answers and navigates, cancel
 	// returns to the screen with every answer intact. pendingNav is the feature
@@ -196,6 +211,13 @@ type Model struct {
 	serviceCursor  int
 	serviceChecked []bool
 	serviceWhole   bool
+	// serviceScope is how the current scope screen behaves: most features keep
+	// the whole-stack row, and a feature that needs a named service demands a
+	// selection instead.
+	serviceScope scopeMode
+	// serviceCap caps how many services the screen may collect. Zero means no
+	// cap.
+	serviceCap int
 	// live is non-nil while a feature attaches to a running process. The TUI
 	// renders its output and forwards keys for core.LiveAttach.
 	live   *liveState
@@ -212,6 +234,19 @@ type Model struct {
 	progressCh     chan struct{}
 	progressTop    int
 	progressFollow bool
+	// heldResult is a successful result waiting for the reader: the progress
+	// screen stays as it finished, with the run's own log still readable, until
+	// Enter opens the result. A failure is shown at once, because the cause is
+	// what the reader needs next.
+	heldResult *core.Result
+	// progressDone reports that the run finished and its log is being kept for
+	// the reader instead of being replaced by the result screen.
+	progressDone bool
+	// pendingEnvAlias and pendingEnvRemoval remember an environment change that
+	// arrived with a held result, so releasing the hold can finish the same
+	// destination the run would have reached directly.
+	pendingEnvAlias   string
+	pendingEnvRemoval string
 	// lastLive keeps the tail of the last live output so the management view
 	// still shows what the process printed after the screen closes.
 	lastLive []string
@@ -410,6 +445,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.phase = phaseConfirm
 		m.confirmScroll = 0
+		m.confirmButton = confirmButtonCancel
 		return m, nil
 	case environmentListMsg:
 		if m.phase != phaseLoadingEnvironments {
@@ -490,6 +526,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.observeTarget(msg.report.Target)
 		m.observeTools(msg.report.Tools)
+		m.observeServices(msg.report.Services)
 		m.serviceOptions = append([]core.ServiceStatus{}, msg.report.Services...)
 		m.serviceChecked = make([]bool, len(m.serviceOptions))
 		m.serviceCursor = 0
@@ -543,6 +580,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.observeTarget(res.Target)
 		m.observeTools(res.Tools)
+		m.observeResultRunning(res)
 		if m.runCancel != nil {
 			m.runCancel()
 			m.runCancel = nil
@@ -550,7 +588,10 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// The running log belongs to the run. It is dropped before the result
 		// is drawn, so no stale pane competes with the result document.
-		m.closeProgress()
+		held := !m.wizardAwaiting && m.holdCompletion(res)
+		if !held {
+			m.closeProgress()
+		}
 		if m.wizardAwaiting {
 			m.wizardAwaiting = false
 			m.beginWizardSteps(res)
@@ -572,6 +613,22 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.wizardAnswers = nil
 			m.wizardPreview = ""
 			m.wizardPreviewErr = nil
+		}
+		if held {
+			// The success report waits for Enter. The screen keeps the finished
+			// progress log, so the run's own output is still there when the
+			// reader decides to look at the result.
+			if created != "" {
+				m.heldResult = &res
+				m.pendingEnvAlias = created
+				return m, nil
+			}
+			if removedAlias != "" {
+				m.heldResult = &res
+				m.pendingEnvRemoval = removedAlias
+				return m, nil
+			}
+			return m, nil
 		}
 		m.result = &res
 		m.phase = phaseReady
@@ -627,6 +684,17 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateLiveKey(msg)
 		}
 		if m.updateProgressKey(msg) {
+			return m, nil
+		}
+		if m.progressDone {
+			// The run finished and its log is on screen. Enter opens the report;
+			// q ends the session without it. No other key has a meaning here.
+			switch msg.String() {
+			case "enter":
+				return m.releaseHeldResult()
+			case "q", "ctrl+c":
+				return m, tea.Quit
+			}
 			return m, nil
 		}
 		// Body scrolling runs before the phase handlers: PgUp/PgDn, Home/End
@@ -1072,6 +1140,7 @@ func (m *Model) startRunPath(f core.Feature) tea.Cmd {
 	m.planStages = nil
 	m.phase = phaseConfirm
 	m.confirmScroll = 0
+	m.confirmButton = confirmButtonCancel
 	m.notice = ""
 	return nil
 }
@@ -1096,7 +1165,20 @@ func (m *Model) beginServiceSelection(f core.Feature) tea.Cmd {
 	m.serviceOptions = nil
 	m.serviceCursor = 0
 	m.serviceChecked = nil
-	m.serviceWhole = true
+	m.serviceScope = scopeWholeStack
+	m.serviceCap = 0
+	if scope, ok := f.(core.ServiceScope); ok {
+		if scope.RequiresServiceScope() {
+			m.serviceScope = scopeRequired
+		}
+		m.serviceCap = scope.MaxServices()
+	}
+	// A scope that demands a selection starts with nothing chosen and the
+	// cursor on the first service; the whole-stack mode starts on that row.
+	m.serviceWhole = m.serviceScope == scopeWholeStack
+	if m.serviceScope == scopeRequired {
+		m.serviceCursor = 0
+	}
 	// The table starts at its first row, never at the previous screen's scroll
 	// position: the select screen measures different rows than a result body.
 	m.body = visual.Viewport{}
@@ -1121,18 +1203,35 @@ func (m *Model) resetServiceSelection() {
 	m.serviceCursor = 0
 	m.serviceChecked = nil
 	m.serviceWhole = true
+	m.serviceScope = scopeWholeStack
+	m.serviceCap = 0
 	// The table window is reset with the rows it measured: a later screen with
 	// a different service count must not start mid-list.
 	m.body = visual.Viewport{}
 }
 
-// updateServiceKey drives the scope table. The first row is the whole stack and
-// is selected until an individual service is checked; space on the whole row
-// clears every individual choice. Enter feeds Request.Services, esc returns to
-// the menu, and q/ctrl+c quit without running anything. The cursor window follows
-// the selection, so every row stays reachable on a large stack.
+// serviceRowCount is how many cursor positions the scope table has: the whole
+// stack row when it exists, plus one per service.
+func (m *Model) serviceRowCount() int {
+	return len(m.serviceOptions) + m.wholeRowOffset()
+}
+
+// wholeRowOffset is 1 when the whole-stack row is the first target, 0 when the
+// screen requires a named service.
+func (m *Model) wholeRowOffset() int {
+	if m.serviceScope == scopeWholeStack {
+		return 1
+	}
+	return 0
+}
+
+// updateServiceKey drives the scope table. When the screen offers the whole
+// stack, that row is the first target and space on it clears every individual
+// choice. Enter feeds Request.Services, esc returns to the menu, and q/ctrl+c
+// quit without running anything. The cursor window follows the selection, so
+// every row stays reachable on a large stack.
 func (m *Model) updateServiceKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	total := len(m.serviceOptions) + 1
+	total := m.serviceRowCount()
 	switch msg.String() {
 	case "up", "k":
 		m.serviceCursor = (m.serviceCursor - 1 + total) % total
@@ -1159,18 +1258,29 @@ func (m *Model) updateServiceKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.followServiceCursor()
 		return m, nil
 	case " ":
-		if m.serviceCursor == 0 {
+		if offset := m.wholeRowOffset(); offset == 1 && m.serviceCursor == 0 {
 			m.serviceWhole = true
 			for i := range m.serviceChecked {
 				m.serviceChecked[i] = false
 			}
 			return m, nil
 		}
-		index := m.serviceCursor - 1
+		index := m.serviceCursor - m.wholeRowOffset()
 		if index < 0 || index >= len(m.serviceOptions) || !m.serviceOptions[index].Configured {
 			return m, nil
 		}
+		// A cap keeps the selection readable: the earliest choices stay, and
+		// the screen says why the extra one was refused.
+		if !m.serviceChecked[index] && m.serviceCap > 0 && countChecked(m.serviceChecked) >= m.serviceCap {
+			m.notice = fmt.Sprintf(msgServiceCap, m.serviceCap)
+			return m, nil
+		}
+		m.notice = ""
 		m.serviceChecked[index] = !m.serviceChecked[index]
+		if m.serviceScope == scopeRequired {
+			m.serviceWhole = false
+			return m, nil
+		}
 		m.serviceWhole = !anyChecked(m.serviceChecked)
 		return m, nil
 	case "enter":
@@ -1185,6 +1295,13 @@ func (m *Model) updateServiceKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					services = append(services, svc.Name)
 				}
 			}
+		}
+		if len(services) == 0 && m.serviceScope == scopeRequired {
+			// Nothing selected: the screen says what is missing and stays open.
+			// A required-scope screen never runs against every service, because
+			// that is exactly the whole-stack case it removed.
+			m.notice = msgServiceRequired
+			return m, nil
 		}
 		m.resetServiceSelection()
 		m.req.Feature = feature.Descriptor().Name
@@ -1201,6 +1318,29 @@ func (m *Model) updateServiceKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	return m, nil
 }
+
+func countChecked(checked []bool) int {
+	n := 0
+	for _, ok := range checked {
+		if ok {
+			n++
+		}
+	}
+	return n
+}
+
+// scopeMode is how a supporting feature's service screen behaves. Most
+// features act on the whole stack by default, so their screen offers that row;
+// a feature whose work is meaningless without a named service requires a
+// selection instead.
+type scopeMode int
+
+const (
+	// scopeWholeStack offers the whole-stack row (the default).
+	scopeWholeStack scopeMode = iota
+	// scopeRequired demands at least one service and hides the whole-stack row.
+	scopeRequired
+)
 
 // pageRows is how far PgUp/PgDn move on the scope table: one visible window.
 func (m *Model) pageRows() int {
@@ -1401,6 +1541,64 @@ func (m *Model) declineApproval() {
 	m.req.PlanFingerprint = ""
 	m.confirmScroll = 0
 	m.phase = phaseReady
+}
+
+// holdCompletion decides whether a finished run keeps the progress screen. A
+// successful stack or data operation holds its result until the reader presses
+// Enter; everything else — a failure, a cancellation, a read-only run, a
+// settings save — shows its screen immediately, because those either need the
+// cause now or have no process output worth keeping.
+func (m *Model) holdCompletion(res core.Result) bool {
+	if res.Outcome != core.OutcomeSuccess || m.active == nil {
+		return false
+	}
+	d := m.active.Descriptor()
+	if d.ReadOnly || !d.RecordsHistory {
+		return false
+	}
+	// Only the sections that change the running stack or its data hold their
+	// result. A settings save (an alias, a hook, a secret reference, the first
+	// Compose file) has no process output to keep, and its report is the whole
+	// point of the run.
+	switch d.Section {
+	case core.SectionOperate, core.SectionData:
+	default:
+		return false
+	}
+	// A live stream's own screen is the content; its result is a short summary
+	// and does not replace a process log.
+	if m.live != nil {
+		return false
+	}
+	m.heldResult = &res
+	m.progressDone = true
+	m.phase = phaseLoading
+	return true
+}
+
+// releaseHeldResult opens the report the reader asked for with Enter.
+func (m *Model) releaseHeldResult() (tea.Model, tea.Cmd) {
+	res := m.heldResult
+	if res == nil {
+		return m, nil
+	}
+	m.heldResult = nil
+	m.progressDone = false
+	m.closeProgress()
+	created, removed := m.pendingEnvAlias, m.pendingEnvRemoval
+	m.pendingEnvAlias, m.pendingEnvRemoval = "", ""
+	m.result = res
+	m.phase = phaseReady
+	m.notice = ""
+	m.resultDismissed = false
+	m.resetScrollState()
+	if created != "" {
+		return m, m.activateCreatedEnvironment(created)
+	}
+	if removed != "" {
+		return m, m.clearRemovedEnvironment(removed)
+	}
+	return m, nil
 }
 
 func (m *Model) runCmd(f core.Feature, approvals []core.ApprovalKind, options map[string]string, events chan core.Stage, ctx context.Context) tea.Cmd {
@@ -1609,9 +1807,10 @@ func (m *Model) serviceTable(compact bool) core.Table {
 		}
 		state := present.StateLabelValue(svc.State)
 		stateBadge := present.StateBadgeValue(svc.State)
+		stateEmphasis := present.StateEmphasisValue(svc.State)
 		if compact {
 			if folded, ok := serviceFoldedHealth(svc.Health); ok {
-				state, stateBadge = folded, present.HealthBadgeValue(svc.Health)
+				state, stateBadge, stateEmphasis = folded, present.HealthBadgeValue(svc.Health), core.EmphasisNone
 			}
 		}
 		table.Rows = append(table.Rows, core.Row{
@@ -1619,7 +1818,7 @@ func (m *Model) serviceTable(compact bool) core.Table {
 			Cells: []core.Cell{
 				{Text: marker + checked},
 				{Text: svc.Name, Detail: svc.Name},
-				{Text: state, Badge: stateBadge},
+				{Text: state, Badge: stateBadge, Emphasis: stateEmphasis},
 				{Text: fmt.Sprintf("%d", svc.Instances)},
 				{Text: present.HealthLabelValue(svc.Health), Badge: present.HealthBadgeValue(svc.Health)},
 				{Text: serviceImageLabel(svc), Detail: svc.Image},
@@ -1663,11 +1862,19 @@ func (m *Model) serviceScreenLayout() serviceScreenLayout {
 		fixed = append(fixed, msgConfirmEnvironment+": "+m.target.Environment)
 	}
 	if !compact {
-		fixed = append(fixed, "", m.hintText(msgServiceSelectIntro))
+		fixed = append(fixed, "", m.hintText(m.serviceIntro()))
+	}
+	if m.notice != "" {
+		// A refusal ("select a service", "the cap is four") is the reason Enter
+		// did nothing. It belongs above the table, where it is always drawn,
+		// rather than in the tail a compact screen drops.
+		fixed = append(fixed, "", m.noticeText(m.notice))
 	}
 	fixed = append(fixed, "")
 	wholeRow := len(fixed)
-	fixed = append(fixed, m.wholeStackRow())
+	if m.serviceScope == scopeWholeStack {
+		fixed = append(fixed, m.wholeStackRow())
+	}
 
 	table := m.serviceTable(compact)
 	tail := m.serviceTail(compact)
@@ -1679,12 +1886,20 @@ func (m *Model) serviceScreenLayout() serviceScreenLayout {
 		}, 0)
 		return serviceScreenLayout{screen: screenLines{Fixed: fixed, Band: rows, Tail: tail}, wholeRow: wholeRow}
 	}
+	cursor := m.serviceCursor
+	if m.serviceScope == scopeWholeStack {
+		// The whole-stack row is pinned above the table, so the cursor is a
+		// table row only when it points at a service.
+		cursor = m.serviceCursor
+	} else {
+		// Without the whole row the cursor indexes the table directly, and the
+		// table's cursor is one-based.
+		cursor++
+	}
 	layout := visual.LayoutTableOptions(th, table, width, visual.TableOptions{
 		Compact:        compact,
 		CompactColumns: 3,
-		// The whole-stack row is pinned above the table, so the cursor is a
-		// table row only when it points at a service.
-		CursorRow: m.serviceCursor,
+		CursorRow:      cursor,
 	})
 	if layout.Header != "" {
 		fixed = append(fixed, layout.Header)
@@ -1692,16 +1907,21 @@ func (m *Model) serviceScreenLayout() serviceScreenLayout {
 	return serviceScreenLayout{screen: screenLines{Fixed: fixed, Band: layout.Rows, Tail: tail}, wholeRow: wholeRow}
 }
 
+// serviceIntro is the one-line explanation above the table. A screen that
+// requires a named service must not claim that "전체 선택 시 스택 전체" applies.
+func (m *Model) serviceIntro() string {
+	if m.serviceScope == scopeRequired {
+		return msgServiceIntroLogs
+	}
+	return msgServiceSelectIntro
+}
+
 // serviceTail is the guidance below the table. Compact keeps only the
-// unconfigured marker, because it states a fact about a visible row; the note
-// about engine revalidation can wait for a decorated screen.
+// unconfigured marker, because it states a fact about a visible row.
 func (m *Model) serviceTail(compact bool) []string {
 	var tail []string
 	if flag := m.unconfiguredFlag(); flag != "" {
 		tail = append(tail, flag)
-	}
-	if !compact {
-		tail = append(tail, "", m.hintText(msgServiceSelectionNote))
 	}
 	return tail
 }
@@ -1765,7 +1985,7 @@ func (m *Model) followServiceCursor() {
 		m.body.Top = v.Top
 		return
 	}
-	v.Follow(m.serviceCursor - 1)
+	v.Follow(m.serviceCursor - m.wholeRowOffset())
 	m.body.Top = v.Top
 }
 

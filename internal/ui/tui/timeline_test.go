@@ -206,6 +206,10 @@ func TestTimelineStopsTickingAfterAResult(t *testing.T) {
 	if m.spinnerCmd() != nil {
 		t.Fatal("the finished screen offered a new animation")
 	}
+	if !strings.Contains(m.View(), "완료 · enter 계속") {
+		t.Fatalf("the finished screen does not state completion:\n%s", m.View())
+	}
+	pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
 	if !strings.Contains(m.View(), "시작 본문") {
 		t.Fatalf("result not on screen:\n%s", m.View())
 	}
@@ -361,6 +365,8 @@ func TestConfirmedPlanCarriesTheTimelineIntoTheRun(t *testing.T) {
 
 	// Approving is the plan screen's enter; the run command is not executed, so
 	// the model stays on the loading screen.
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyLeft}) // the panel starts on cancel
+	m = nm.(*Model)
 	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = nm.(*Model)
 	if isQuit(t, cmd) {

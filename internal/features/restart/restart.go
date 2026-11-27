@@ -26,6 +26,9 @@ func (f *Feature) Descriptor() core.Descriptor {
 		Section:          core.SectionOperate,
 		RecordsHistory:   true,
 		SupportsServices: true,
+		Menu: []core.MenuEntry{
+			{Kind: core.MenuRun, Feature: "restart", Label: msgMenuLabel, Summary: msgMenuSummary, Order: 1},
+		},
 	}
 }
 

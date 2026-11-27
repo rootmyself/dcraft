@@ -64,11 +64,12 @@ func (f *Feature) Descriptor() core.Descriptor {
 		TargetOptional: true,
 		Wizard:         true,
 		// One feature offers two entry points: creating (and removing) an
-		// alias, and switching the active target to one. They are separate
-		// menu entries instead of one administration screen with two rows.
+		// alias, and switching the active target to one. They sit under one
+		// heading so the section reads as groups instead of a flat list.
 		Menu: []core.MenuEntry{
-			{Kind: core.MenuRun, Feature: "environments", Label: msgMenuCreate, Summary: msgMenuCreateSummary},
-			{Kind: core.MenuSwitchEnvironment, Feature: "environments", Label: msgMenuSwitch, Summary: msgMenuSwitchSummary, Order: 1},
+			{Kind: core.MenuGroup, Feature: "environments", Label: msgMenuGroup, Summary: msgMenuGroupSummary, Order: 1},
+			{Kind: core.MenuRun, Feature: "environments", Label: msgMenuCreate, Summary: msgMenuCreateSummary, Parent: "environments"},
+			{Kind: core.MenuSwitchEnvironment, Feature: "environments", Label: msgMenuSwitch, Summary: msgMenuSwitchSummary, Parent: "environments", Order: 1},
 		},
 		Flags: []core.Flag{
 			{Name: "add", Kind: core.FlagBool, Usage: msgFlagAdd},

@@ -757,7 +757,7 @@ func goldenWizardSpec() core.WizardSpec {
 
 func goldenWizardPreviewText() string {
 	return strings.Join([]string{
-		"저장할 비밀값 연결",
+		"저장할 비밀값 설정",
 		"서비스: api",
 		"전달: 환경변수 (실행 시점)",
 		"효과: dcraft up 시 컨테이너 환경변수로 전달.",
@@ -862,7 +862,7 @@ func goldenLiveHostileModel(t *testing.T) *Model {
 		_, _ = fmt.Fprintln(view, line)
 	}
 	ch := make(chan struct{}, 1)
-	m.live = &liveState{mode: core.LiveStream, view: view}
+	m.live = &liveState{mode: core.LiveStream, streams: []*liveStream{{name: "api", view: view, writer: &liveWriter{view: view, notify: ch}}}}
 	m.liveCh = ch
 	m.liveFollow = true
 	return m
@@ -889,7 +889,7 @@ func goldenLogs(t *testing.T) *Model {
 		_, _ = fmt.Fprintln(view, line)
 	}
 	ch := make(chan struct{}, 1)
-	m.live = &liveState{mode: core.LiveStream, view: view}
+	m.live = &liveState{mode: core.LiveStream, streams: []*liveStream{{name: "api", view: view, writer: &liveWriter{view: view, notify: ch}}}}
 	m.liveCh = ch
 	m.liveFollow = true
 	return m

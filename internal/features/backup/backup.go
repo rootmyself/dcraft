@@ -117,3 +117,12 @@ func (f *Feature) WizardPreview(answers map[string]string) (string, error) {
 func (f *Feature) Present(res core.Result, width int) string {
 	return backupimpl.Present(res, width)
 }
+
+// Document implements core.ViewPresenter. The interactive screen reports the
+// saved archive and keeps only the statements that change a later decision:
+// sensitive contents, ownership limits when a host folder was archived, and the
+// fact that dcraft never deletes old backups. The CLI keeps its full notice
+// list.
+func (f *Feature) Document(res core.Result) core.Document {
+	return backupimpl.Document(res)
+}

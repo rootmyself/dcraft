@@ -85,8 +85,8 @@ func TestStatusDocumentSnapshot(t *testing.T) {
 	lines := renderStatus(t, doc, 100)
 	joined := strings.Join(lines, "\n")
 
-	// Block order: the summary comes first, then identity, then the table,
-	// then the guidance. This is the approved order, not an accident.
+	// Block order: the summary comes first, then identity, then the table.
+	// A successful snapshot ends there; the screen's own keys refresh it.
 	badges := strings.Index(joined, "실행 중 2")
 	identity := strings.Index(joined, "Compose 파일")
 	// The table header row is the one that carries every column name.
@@ -94,15 +94,17 @@ func TestStatusDocumentSnapshot(t *testing.T) {
 	if header < 0 {
 		header = strings.Index(joined, "서비스")
 	}
-	guidance := strings.Index(joined, "상태 새로 고침")
-	for name, idx := range map[string]int{"badges": badges, "identity": identity, "table": header, "guidance": guidance} {
+	for name, idx := range map[string]int{"badges": badges, "identity": identity, "table": header} {
 		if idx < 0 {
 			t.Fatalf("%s block missing:\n%s", name, joined)
 		}
 	}
-	if !(badges < identity && identity < header && header < guidance) {
-		t.Fatalf("block order is wrong (badges=%d identity=%d table=%d guidance=%d):\n%s",
-			badges, identity, header, guidance, joined)
+	if !(badges < identity && identity < header) {
+		t.Fatalf("block order is wrong (badges=%d identity=%d table=%d):\n%s",
+			badges, identity, header, joined)
+	}
+	if strings.Contains(joined, "다음 행동") || strings.Contains(joined, "상태 새로 고침") {
+		t.Fatalf("the snapshot still carries a next-action block:\n%s", joined)
 	}
 
 	// The TUI health wording, not the CLI's.

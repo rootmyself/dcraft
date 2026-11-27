@@ -25,6 +25,9 @@ func (f *Feature) Descriptor() core.Descriptor {
 		Section:          core.SectionOperate,
 		RecordsHistory:   true,
 		SupportsServices: true,
+		Menu: []core.MenuEntry{
+			{Kind: core.MenuRun, Feature: "stop", Label: msgMenuLabel, Summary: msgMenuSummary, Order: 2},
+		},
 	}
 }
 

@@ -253,10 +253,10 @@ api-1  | Container api-1  Started
 │                        │ cache-1 | Container cache-1  Created
 │설정                    │ web-1  | Container web-1  Creating
 │  실행환경 생성         │ web-1  | Container web-1  Created
-│  실행환경 전환         │ api-1  | Container api-1  Creating
-│  호스트 스크립트       │ api-1  | Container api-1  Created
-│    커스텀              │ cache-1 | Container cache-1  Starting
-│    Git                 │ web-1  | Container web-1  Starting
+│  호스트 스크립트       │ api-1  | Container api-1  Creating
+│    커스텀              │ api-1  | Container api-1  Created
+│    Git                 │ cache-1 | Container cache-1  Starting
+│    S3                  │ web-1  | Container web-1  Starting
 │────────────────────────│ api-1  | Container api-1  Starting
 │ ▸ 스택 상태            │ cache-1 | Container cache-1  Started
 │ 현재 스택과 서비스 상  │ web-1  | Container web-1  Started
@@ -285,14 +285,14 @@ api-1  | Container api-1  Started
 │                        │ api-1  | exporting to image
 │설정                    │ api-1  | naming to docker.io/library/acme-api
 │  실행환경 생성         │ cache-1 | Container cache-1  Creating
-│  실행환경 전환         │ cache-1 | Container cache-1  Created
-│  호스트 스크립트       │ web-1  | Container web-1  Creating
-│    커스텀              │ web-1  | Container web-1  Created
-│    Git                 │ api-1  | Container api-1  Creating
-│    S3                  │ api-1  | Container api-1  Created
-│  Compose 설치          │ cache-1 | Container cache-1  Starting
-│  비밀값 연결           │ web-1  | Container web-1  Starting
-│  최초 구성             │ api-1  | Container api-1  Starting
+│  호스트 스크립트       │ cache-1 | Container cache-1  Created
+│    커스텀              │ web-1  | Container web-1  Creating
+│    Git                 │ web-1  | Container web-1  Created
+│    S3                  │ api-1  | Container api-1  Creating
+│  Compose 설치          │ api-1  | Container api-1  Created
+│  비밀값 연결           │ cache-1 | Container cache-1  Starting
+│  최초 구성             │ web-1  | Container web-1  Starting
+│  실행환경 전환         │ api-1  | Container api-1  Starting
 │                        │ cache-1 | Container cache-1  Started
 │                        │ web-1  | Container web-1  Started
 │                        │ api-1  | Container api-1  Started
@@ -357,10 +357,10 @@ api-1  | Container api-1  Started
 │                            │ cache-1 | Container cache-1  Created
 │설정                        │ web-1  | Container web-1  Creating
 │  실행환경 생성             │ web-1  | Container web-1  Created
-│  실행환경 전환             │ api-1  | Container api-1  Creating
-│  호스트 스크립트           │ api-1  | Container api-1  Created
-│    커스텀                  │ cache-1 | Container cache-1  Starting
-│    Git                     │ web-1  | Container web-1  Starting
+│  호스트 스크립트           │ api-1  | Container api-1  Creating
+│    커스텀                  │ api-1  | Container api-1  Created
+│    Git                     │ cache-1 | Container cache-1  Starting
+│    S3                      │ web-1  | Container web-1  Starting
 │────────────────────────────│ api-1  | Container api-1  Starting
 │ ▸ 스택 상태                │ cache-1 | Container cache-1  Started
 │ 현재 스택과 서비스 상태를  │ web-1  | Container web-1  Started
@@ -389,14 +389,14 @@ api-1  | Container api-1  Started
 │                            │ api-1  | exporting to image
 │설정                        │ api-1  | naming to docker.io/library/acme-api
 │  실행환경 생성             │ cache-1 | Container cache-1  Creating
-│  실행환경 전환             │ cache-1 | Container cache-1  Created
-│  호스트 스크립트           │ web-1  | Container web-1  Creating
-│    커스텀                  │ web-1  | Container web-1  Created
-│    Git                     │ api-1  | Container api-1  Creating
-│    S3                      │ api-1  | Container api-1  Created
-│  Compose 설치              │ cache-1 | Container cache-1  Starting
-│  비밀값 연결               │ web-1  | Container web-1  Starting
-│  최초 구성                 │ api-1  | Container api-1  Starting
+│  호스트 스크립트           │ cache-1 | Container cache-1  Created
+│    커스텀                  │ web-1  | Container web-1  Creating
+│    Git                     │ web-1  | Container web-1  Created
+│    S3                      │ api-1  | Container api-1  Creating
+│  Compose 설치              │ api-1  | Container api-1  Created
+│  비밀값 연결               │ cache-1 | Container cache-1  Starting
+│  최초 구성                 │ web-1  | Container web-1  Starting
+│  실행환경 전환             │ api-1  | Container api-1  Starting
 │                            │ cache-1 | Container cache-1  Started
 │                            │ web-1  | Container web-1  Started
 │                            │ api-1  | Container api-1  Started

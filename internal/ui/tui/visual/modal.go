@@ -43,6 +43,10 @@ type ModalSpec struct {
 	// as bracketed buttons; the row is omitted when empty. The confirmation
 	// panel uses it, the help panel does not.
 	Buttons []string
+	// ButtonFocus is the index of the focused button. Only the focused one
+	// carries the accent and the position marker; the rest stay muted, so the
+	// row states which answer Enter will give. It is clamped to the row.
+	ButtonFocus int
 
 	// ScrollTop is the first visible scroll-band row.
 	ScrollTop int
@@ -335,7 +339,7 @@ func renderModalPanelAt(th Theme, l modalLayout, spec ModalSpec) []string {
 		panel = append(panel, modalContentRow(th, l.width, l.content, modalPositionLine(top+1, len(l.scroll))))
 	}
 	if l.buttons {
-		panel = append(panel, modalContentRow(th, l.width, l.content, modalButtonLine(spec.Buttons)))
+		panel = append(panel, modalContentRow(th, l.width, l.content, modalButtonLine(spec.Buttons, spec.ButtonFocus)))
 	}
 	if len(l.pinned) > 0 {
 		panel = append(panel, modalRule(th, l.width, TokenDanger))
@@ -355,19 +359,27 @@ func renderModalPanelAt(th Theme, l modalLayout, spec ModalSpec) []string {
 }
 
 // modalButtonLine renders the pinned action row: bracketed labels separated by
-// three cells. The brackets are the non-color channel; the first (approve)
-// button carries the accent, the second stays muted so it never competes.
-func modalButtonLine(labels []string) modalLine {
+// three cells. The focused button carries the accent, a position marker and
+// bold, so the selected answer is readable without color. Every other button
+// stays muted.
+func modalButtonLine(labels []string, focus int) modalLine {
+	if focus < 0 || focus >= len(labels) {
+		focus = 0
+	}
 	line := make(modalLine, 0, len(labels)*2)
 	for i, label := range labels {
 		if i > 0 {
 			line = append(line, modalSpan{Text: "   "})
 		}
+		marker := "  "
 		token := TokenMuted
-		if i == 0 {
+		bold := false
+		if i == focus {
+			marker = msgButtonFocus
 			token = TokenAccent
+			bold = true
 		}
-		line = append(line, modalSpan{Text: "[ " + label + " ]", Token: token, Bold: true})
+		line = append(line, modalSpan{Text: marker + "[ " + label + " ]", Token: token, Bold: bold})
 	}
 	return line
 }
@@ -393,7 +405,13 @@ func ModalButtonRects(th Theme, width, height int, spec ModalSpec) []ModalButton
 	x := place.left + 3 // border plus the panel's two-cell padding
 	out := make([]ModalButtonRect, 0, len(spec.Buttons))
 	for i, label := range spec.Buttons {
-		text := "[ " + label + " ]"
+		// Each button starts with its two-cell marker slot, so the focus marker
+		// never shifts the next button's position.
+		marker := "  "
+		if i == spec.ButtonFocus {
+			marker = msgButtonFocus
+		}
+		text := marker + "[ " + label + " ]"
 		out = append(out, ModalButtonRect{Index: i, X: x, Y: row, Width: Width(text), Height: 1})
 		x += Width(text) + 3
 	}

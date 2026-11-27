@@ -162,7 +162,7 @@ func TestGenerateGitHookTUIWizardShowsThePreviewAndDeclineWritesNothing(t *testi
 	project := projectNamed(t, "gitgen-tui")
 	env := fake.env(t, t.TempDir())
 	steps := []lifecyclePTYStep{
-		{wait: "상태 새로 고침", send: ""},
+		{wait: "마지막 조회", send: ""},
 		// The menu order is the registration order; compute the distance from
 		// status so another ticket's feature does not break this journey.
 		{wait: "마지막 조회", walk: "Git", send: "\r"},

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/rootmyself/dcraft/internal/core"
 	"github.com/rootmyself/dcraft/internal/selector"
@@ -57,6 +58,9 @@ func (f *Feature) Descriptor() core.Descriptor {
 		Section:          core.SectionInspect,
 		ReadOnly:         true,
 		SupportsServices: true,
+		Menu: []core.MenuEntry{
+			{Kind: core.MenuRun, Feature: "logs", Label: msgTitle, Summary: msgSummary, Order: 2},
+		},
 		Flags: []core.Flag{
 			{Name: "no-follow", Kind: core.FlagBool, Usage: msgFlagNoFollow},
 			{Name: "tail", Kind: core.FlagString, Usage: msgFlagTail},
@@ -69,6 +73,16 @@ func (f *Feature) Descriptor() core.Descriptor {
 
 // LiveMode implements core.LiveFeature: stdout is user log data, not a result.
 func (f *Feature) LiveMode() core.LiveMode { return core.LiveStream }
+
+// RequiresServiceScope implements core.ServiceScope. A log line belongs to a
+// service, so a whole-stack stream cannot be named on the screen or compared
+// across tabs.
+func (f *Feature) RequiresServiceScope() bool { return true }
+
+// MaxServices implements core.ServiceScope. The interactive screen shows one
+// tab per service; past four the tabs stop being readable. The CLI is not
+// limited by this, because it writes one stream and no tabs.
+func (f *Feature) MaxServices() int { return 4 }
 
 // CanceledDiagnostic implements core.CanceledReporter. Stopping a follow
 // detaches the stream; it never stops a service.
@@ -94,6 +108,17 @@ func (f *Feature) Run(ctx context.Context, in core.Invocation) (any, error) {
 	index, err := parseIndex(in.Option("index"))
 	if err != nil {
 		return nil, err
+	}
+	if len(in.Services) == 0 {
+		// Logs name services. A whole-stack stream cannot tell a reader which
+		// service a line came from, and the interactive screen would draw one
+		// tab per service anyway, so the selection is required.
+		return nil, core.Fail(core.Diagnostic{
+			Category:    core.CategorySelectionRequired,
+			Severity:    core.SeverityError,
+			Message:     msgServiceRequired,
+			NextActions: []string{msgServiceRequiredActionOne, msgServiceRequiredActionTwo},
+		})
 	}
 	streams := in.IO.WithDefaults()
 
@@ -135,7 +160,7 @@ func (f *Feature) Run(ctx context.Context, in core.Invocation) (any, error) {
 	}
 
 	in.Reporter.Begin(stageStream, msgStageStream)
-	streamErr := f.streamer.Logs(ctx, in.Target, req, streams)
+	streamErr := f.stream(ctx, in, req, streams)
 	switch {
 	case streamErr == nil:
 		in.Reporter.End(stageStream, core.StageSucceeded, "")
@@ -147,6 +172,43 @@ func (f *Feature) Run(ctx context.Context, in core.Invocation) (any, error) {
 		return nil, logsFailure(streamErr)
 	}
 	return Payload{Logs: report}, nil
+}
+
+// stream runs the log read. With a fanout the screen watches several services
+// at once, so each service gets its own child process and its own stream; the
+// first failure is reported but never stops the other services. Without a
+// fanout (the CLI) one child covers the whole selection.
+func (f *Feature) stream(ctx context.Context, in core.Invocation, req stack.LogsRequest, streams core.IO) error {
+	if streams.Fanout == nil || len(req.Services) < 2 {
+		return f.streamer.Logs(ctx, in.Target, req, streams)
+	}
+	var wg sync.WaitGroup
+	errs := make(chan error, len(req.Services))
+	for _, service := range req.Services {
+		service := service
+		one := req
+		one.Services = []string{service}
+		out := streams.Fanout.Stream(service)
+		out.Width, out.Height = streams.Width, streams.Height
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			err := f.streamer.Logs(ctx, in.Target, one, out)
+			streams.Fanout.StreamDone(service, err)
+			if err != nil {
+				errs <- err
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		// One service's failure is that tab's failure: the others already ran
+		// to their own end. The result keeps the first failure, so the screen
+		// can report it without hiding the streams that succeeded.
+		return err
+	}
+	return nil
 }
 
 // Present implements core.Presenter for successful results.

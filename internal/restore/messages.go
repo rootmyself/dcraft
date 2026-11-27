@@ -131,6 +131,25 @@ const (
 	msgWizardSafetyDef   = "./dcraft-safety"
 	msgWizardRecheck     = "실행 직전에 백업 무결성·대상 볼륨·소비자·서비스 상태를 다시 확인. 선택이 바뀌면 복원하지 않음."
 
+	// The interactive document's own labels. The CLI keeps present.go's sentence
+	// form; these are the label/value pairs of the structured screen.
+	msgDocProject      = "프로젝트"
+	msgDocBackup       = "백업"
+	msgDocTarget       = "대상"
+	msgDocDataState    = "교체 후 데이터 상태"
+	msgDocSafetyBackup = "안전 백업"
+	msgDocWarnings     = "경고"
+	msgDocNoPayload    = "복원 결과 표시 불가."
+	msgDocWarningCount = "경고 %d개"
+
+	// The statements the interactive screen keeps. They change a later
+	// decision; the rest of the CLI notice list describes this run.
+	msgTUIReplace         = "대상 데이터를 백업 내용으로 교체. 이전 파일을 남기는 병합이 아님."
+	msgTUISafety          = "교체 전 현재 데이터는 안전 백업에 남아 있음."
+	msgTUIKeepOld         = "안전 백업을 포함한 기존 백업을 자동으로 삭제하지 않음."
+	msgTUIOwnershipLimit  = "볼륨 복원은 uid/gid·모드를 보존하지만 xattr·ACL·특수 파일은 플랫폼에 따라 완전히 복원되지 않을 수 있음."
+	msgTUIHostFolderLimit = "연결 폴더 복원은 uid/gid·xattr·ACL·특수 모드 비트가 보존되지 않을 수 있음."
+
 	// Exported text for the registration unit.
 	MsgNoBackend       = msgNoBackend
 	MsgNoBackendAction = msgNoBackendAction

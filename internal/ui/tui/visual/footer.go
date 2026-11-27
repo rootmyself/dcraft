@@ -62,9 +62,11 @@ const footerSeparator = "  "
 func FooterItems(p Phase) []Keycap {
 	switch p {
 	case PhaseConfirm:
-		// Approving is a single key. The footer advertises exactly the keys
-		// that act on this screen, so a second accept key is not listed.
+		// The panel owns a focused button. Enter presses the focused one, and
+		// the arrows move it; the default focus is cancel, so a bare Enter
+		// never approves a destructive change.
 		return []Keycap{
+			{Key: "←→", Label: msgKeyButton, Priority: 2},
 			{Key: "enter", Label: msgKeyRun, Priority: 0},
 			{Key: "esc", Label: msgKeyCancel, Priority: 0},
 			{Key: "↑↓", Label: msgKeyItem, Priority: 3},

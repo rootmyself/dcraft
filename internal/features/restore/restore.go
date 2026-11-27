@@ -160,6 +160,13 @@ func (f *Feature) Present(res core.Result, width int) string {
 	return restoreimpl.Present(res, width)
 }
 
+// Document implements core.ViewPresenter. The interactive screen keeps the
+// replaced data and the statements that change a later decision; the CLI keeps
+// its full notice list.
+func (f *Feature) Document(res core.Result) core.Document {
+	return restoreimpl.Document(res)
+}
+
 func (f *Feature) CanceledDiagnostic() core.Diagnostic {
 	if f.control == nil {
 		return core.Diagnostic{Message: restoreimpl.MsgNoBackend, NextActions: []string{restoreimpl.MsgNoBackendAction}}

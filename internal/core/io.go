@@ -27,6 +27,23 @@ type IO struct {
 	// result and a live terminal feature keep their existing meaning. Nil means
 	// capture-only: the CLI never sets it, so its output is unchanged.
 	Progress io.Writer
+	// Fanout delivers one stream per target instead of one shared stream. A
+	// feature that watches several services at once uses it so each service's
+	// output reaches its own surface; the CLI leaves it nil and keeps writing
+	// to Stdout/Stderr.
+	Fanout Fanout
+}
+
+// Fanout is the optional multi-target delivery seam. A feature that runs one
+// child per target asks for a stream per label and reports how each one ended.
+// Nil is the single-stream case, so every existing caller is unchanged.
+type Fanout interface {
+	// Stream returns the streams for one label. The label names the target: the
+	// Compose service a log stream follows.
+	Stream(label string) IO
+	// StreamDone reports that one label's child ended. err is nil for a clean
+	// exit and carries the failure otherwise.
+	StreamDone(label string, err error)
 }
 
 // WithDefaults fills unset streams with the process standard streams. Tests

@@ -193,7 +193,7 @@ func TestWizardShowsEffectBeforeSaveAndDeclineSavesNothing(t *testing.T) {
 			Wizard:  true,
 		},
 		steps:   wizardSteps(),
-		preview: "저장할 비밀값 연결\n서비스: worker\n전달: 파일 /run/secrets/token\n효과: dcraft up 시 파일로 전달.",
+		preview: "저장할 비밀값 설정\n서비스: worker\n전달: 파일 /run/secrets/token\n효과: dcraft up 시 파일로 전달.",
 	}
 	m := newWizardModel(t, wizard)
 	openWizard(t, m)
@@ -204,7 +204,7 @@ func TestWizardShowsEffectBeforeSaveAndDeclineSavesNothing(t *testing.T) {
 	}
 	answerWizard(t, m, true)
 	view := m.View()
-	for _, want := range []string{"저장할 비밀값 연결", "worker", "/run/secrets/token", "[enter] 저장"} {
+	for _, want := range []string{"저장할 비밀값 설정", "worker", "/run/secrets/token", "[enter] 저장"} {
 		if !stringsContains(view, want) {
 			t.Fatalf("preview missing %q:\n%s", want, view)
 		}
@@ -233,7 +233,7 @@ func TestWizardSavesThroughTheSameFeaturePathAfterConfirmation(t *testing.T) {
 			Wizard:  true,
 		},
 		steps:   wizardSteps(),
-		preview: "저장할 비밀값 연결\n효과: 파일 /run/secrets/token",
+		preview: "저장할 비밀값 설정\n효과: 파일 /run/secrets/token",
 	}
 	m := newWizardModel(t, wizard)
 	openWizard(t, m)

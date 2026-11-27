@@ -40,7 +40,22 @@ func menuLabels(t *testing.T) []string {
 func TestAssembledMenuShape(t *testing.T) {
 	got := strings.Join(menuLabels(t), "\n")
 	for _, want := range []string{
-		"- 실행환경 생성\n- 실행환경 전환\n[호스트 스크립트]\n  - 커스텀\n  - Git\n  - S3\n- Compose 설치",
+		"- 최초 구성\n[실행환경]\n  - 생성\n  - 전환\n[스크립트]\n  - Git\n  - S3\n  - 커스텀\n- 비밀값 설정\n- Compose 설치",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("assembled menu is missing\n%s\n\nfull menu:\n%s", want, got)
+		}
+	}
+}
+
+// The read-only and operate sections use the service-scoped menu labels while
+// the screens keep their stack titles.
+func TestInspectAndOperateMenuLabels(t *testing.T) {
+	got := strings.Join(menuLabels(t), "\n")
+	for _, want := range []string{
+		"## 조회\n- 서비스 상태\n- 서비스 접속\n- 서비스 로그",
+		"## 운영\n- 서비스 시작\n- 서비스 재시작\n- 서비스 중지\n- 서비스 갱신\n- 서비스 제거",
+		"## 데이터\n- 데이터 백업\n- 데이터 복원\n- 이전 버전 복원",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("assembled menu is missing\n%s\n\nfull menu:\n%s", want, got)
@@ -59,7 +74,8 @@ func TestAssembledMenuCountsSelectableEntries(t *testing.T) {
 	if got := tree.Count(); got != 19 {
 		t.Fatalf("selectable entries = %d, want 19", got)
 	}
-	// The heading is drawn but never addressable.
+	// The heading is drawn but never addressable: two headings now, one per
+	// grouped part of the configuration section.
 	headings := 0
 	for _, section := range tree.Sections {
 		for _, entry := range section.Entries {
@@ -68,8 +84,8 @@ func TestAssembledMenuCountsSelectableEntries(t *testing.T) {
 			}
 		}
 	}
-	if headings != 1 {
-		t.Fatalf("group headings = %d, want the host-script one", headings)
+	if headings != 2 {
+		t.Fatalf("group headings = %d, want the environment and script ones", headings)
 	}
 }
 
@@ -91,10 +107,10 @@ func TestEnvironmentSwitchRowNeedsTheWriteCapability(t *testing.T) {
 		}
 	}
 	joined := strings.Join(labels, "|")
-	if strings.Contains(joined, "실행환경 전환") {
+	if strings.Contains(joined, "전환") {
 		t.Fatalf("the switch row survived without the capability: %v", labels)
 	}
-	if !strings.Contains(joined, "실행환경 생성") {
+	if !strings.Contains(joined, "생성") {
 		t.Fatalf("hiding the switch row also hid the create row: %v", labels)
 	}
 }

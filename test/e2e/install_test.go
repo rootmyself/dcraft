@@ -303,6 +303,8 @@ func TestTUIConfirmationShowsPlanDeclinesAndInstallsAfterApproval(t *testing.T) 
 
 	session.send("\r") // re-plan the active feature
 	session.waitFor("승인 확인", 20*time.Second)
+	session.send("\x1b[D") // the panel starts on cancel
+	session.waitFor("▸ [ 승인 ]", 20*time.Second)
 	session.send("\r") // accept
 	session.waitFor("설치됨", 20*time.Second)
 	info, err := os.Stat(filepath.Join(pluginDir, "docker-compose"))

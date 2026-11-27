@@ -13,7 +13,7 @@ func TestFooterExactStringsPerPhase(t *testing.T) {
 		want  string
 	}{
 		{PhaseMenu, "[↑↓] 이동  [enter] 실행  [q] 종료  [/] 찾기  [tab] 메뉴  [r] 새로고침  [?] 도움말"},
-		{PhaseConfirm, "[enter] 실행  [esc] 취소  [↑↓] 항목  [?] 도움말"},
+		{PhaseConfirm, "[←→] 버튼  [enter] 실행  [esc] 취소  [↑↓] 항목  [?] 도움말"},
 		{PhaseForm, "[enter] 제출  [esc] 취소  [tab] 다음 항목  [shift+tab] 이전  [?] 도움말"},
 		{PhaseLive, "[q] 화면 닫기  [ctrl+c] 중단  [ctrl+] 접속 종료  [?] 도움말"},
 		{PhaseBusy, "[ctrl+c] 안전 취소  [q] 종료 불가"},
@@ -39,7 +39,9 @@ func TestFooterTruncationAt48Columns(t *testing.T) {
 	if got := Footer(th, PhaseMenu, 48); got != "[↑↓] 이동  [enter] 실행  [q] 종료  [?] 도움말" {
 		t.Fatalf("menu@48 = %q", got)
 	}
-	if got := Footer(th, PhaseConfirm, 48); got != "[enter] 실행  [esc] 취소  [↑↓] 항목  [?] 도움말" {
+	// The confirm row keeps the button-move chip at 48 columns: without it the
+	// panel's focus would be unexplained, and the item chip yields first.
+	if got := Footer(th, PhaseConfirm, 48); got != "[←→] 버튼  [enter] 실행  [esc] 취소  [?] 도움말" {
 		t.Fatalf("confirm@48 = %q", got)
 	}
 }

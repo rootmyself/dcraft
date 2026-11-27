@@ -2,8 +2,8 @@ package status
 
 // Korean user-facing text owned by the status feature.
 const (
-	msgTitle   = "스택 상태"
-	msgSummary = "현재 폴더 스택의 서비스 상태와 연결 정보 확인."
+	msgTitle   = "서비스 상태"
+	msgSummary = "현재 폴더 서비스의 상태와 연결 정보 확인."
 	msgUsage   = "dcraft status [--path <폴더>] [--json]"
 
 	msgStageInspect    = "스택 조회"
@@ -29,6 +29,12 @@ const (
 	msgHealthyUnverified     = "healthy · 앱 확인 안 됨"
 	msgHealthUnhealthy       = "unhealthy · 앱 확인 안 됨"
 
+	// Detail reasons for an unverified running service. They reuse the column's
+	// own words so the detail screen has one vocabulary.
+	msgHealthReasonNoCheck  = "healthcheck 없음"
+	msgHealthReasonStarting = "health 확인 중"
+	msgHealthReasonPartial  = "일부 인스턴스가 healthcheck를 통과하지 못함"
+
 	msgGuideRefreshInteractive = "상태를 새로 고치려면: dcraft status · 대화형 화면을 열려면: dcraft"
 	msgGuidePending            = "관리 작업: 갱신은 dcraft update, 로그는 dcraft logs, 실행·중지·제거·재시작은 dcraft up/stop/down/restart, 데이터 백업은 dcraft backup, 데이터 복원은 dcraft restore를 사용."
 	msgGuideSecrets            = "기존 Compose/.env의 민감값은 자동 제거되지 않음. dcraft secrets로 참조 등록."
@@ -41,7 +47,7 @@ const (
 	msgBadgeRunning    = "실행 중 %d"
 	msgBadgeInstances  = "인스턴스 %d"
 	msgBadgeUnhealthy  = "비정상 %d"
-	msgBadgeUnverified = "확인 안 됨 %d"
+	msgBadgeUnverified = "앱 확인 안 됨 %d"
 	msgBadgeStopped    = "중지 %d"
 	msgBadgeNotCreated = "미생성 %d"
 
@@ -57,9 +63,5 @@ const (
 	msgEmptyStack      = "서비스가 없음. Compose 파일에 services 항목이 있는지 확인."
 	msgNoPort          = "-"
 
-	msgEmptyBadge        = "서비스 없음"
-	msgCalloutEmptyStack = "Compose 파일에 services 항목을 정의한 뒤 r로 다시 읽기."
-	msgCalloutRefresh    = "상태 새로 고침: r."
-	msgCalloutLogs       = "비정상·중지 서비스의 로그를 먼저 확인."
-	msgCalloutStart      = "컨테이너가 없는 서비스는 스택 시작으로 생성됨."
+	msgEmptyBadge = "서비스 없음"
 )

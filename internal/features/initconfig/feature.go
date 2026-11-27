@@ -31,6 +31,11 @@ func (f *Feature) Descriptor() core.Descriptor {
 		Requires:       core.Requirements{core.RequirementDockerCLI},
 		TargetOptional: true,
 		Wizard:         true,
+		// Initial configuration opens the configuration section: it is the
+		// first thing a new project needs.
+		Menu: []core.MenuEntry{
+			{Kind: core.MenuRun, Feature: "init", Label: initimpl.Title(), Summary: initimpl.Summary(), Order: 0},
+		},
 		Flags: []core.Flag{
 			{
 				Name: "from", Kind: core.FlagString, Required: true,

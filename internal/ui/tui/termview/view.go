@@ -155,12 +155,15 @@ func NewWith(cols, rows int, opts Options) *View {
 		emu: emu, rows: rows, cols: cols, opts: opts,
 		in: newInputQueue(), pumpDone: make(chan struct{}),
 	}
-	// Erase-display (ESC[2J) is the sequence `clear` sends. The emulator's own
+	// Erase-display is what `clear` sends. Which parameter it carries depends on
+	// the terminal and the clear implementation: ncurses on a screen/linux
+	// terminal and busybox send ED 0 (`ESC[H ESC[J`), while xterm sends ED 2.
+	// Both mean "start from an empty screen" to the reader. The emulator's own
 	// handler pushes the visible rows onto the scrollback before clearing, which
-	// is right for a full-screen program and wrong for a shell: the reader's
-	// `clear` would leave the cleared text one PgUp away. This handler only
-	// records the request; the clear itself happens after the emulator has
-	// finished parsing, so it never re-enters a locked emulator.
+	// is right for a full-screen program and wrong for a shell: the cleared text
+	// would stay one PgUp away. This handler only records the request; the clear
+	// itself happens after the emulator has finished parsing, so it never
+	// re-enters a locked emulator.
 	if opts.ClearScrollbackOnED2 {
 		emu.RegisterCsiHandler('J', v.recordClearHandler())
 	}
@@ -172,9 +175,14 @@ func NewWith(cols, rows int, opts Options) *View {
 // emulator's own handler draw the screen. The scrollback is emptied by Write
 // after the parse, once the emulator's lock is free: calling into the emulator
 // from inside a handler would deadlock on that lock.
+//
+// ED 0 and ED 2 both count. A shell's `clear` is `ESC[H ESC[J` on a screen or
+// linux terminal and `ESC[H ESC[2J` on xterm; the reader asked for an empty
+// screen either way. ED 1 (erase above) is a scroll-region edit, not a clear.
 func (v *View) recordClearHandler() vt.CsiHandler {
 	return func(params ansi.Params) bool {
-		if n, _, _ := params.Param(0, 0); n == 2 {
+		switch n, _, _ := params.Param(0, 0); n {
+		case 0, 2:
 			v.clearScrollback = true
 		}
 		// Returning false runs the emulator's own handler too, which is what

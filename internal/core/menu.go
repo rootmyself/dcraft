@@ -179,6 +179,9 @@ func (r *Registry) menuSection(section Section, include func(MenuEntry) bool) []
 	for i := range roots {
 		sortMenuEntries(roots[i].Children, r.featureOrder)
 	}
+	// A top-level entry declares its Order the same way a child does; entries
+	// that declare none keep registration order, which is the published default.
+	sortMenuEntries(roots, r.featureOrder)
 	// A heading with no visible child is not a heading for anything. It is
 	// dropped rather than turned into a target: the feature's own entry, when
 	// it declares one, is already the row a reader can run.

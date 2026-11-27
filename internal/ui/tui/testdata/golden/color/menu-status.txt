@@ -5,11 +5,11 @@
 
 === 40x18 ===
  dcraft · acme-platform · staging
-스택 상태                        1-13/28
+스택 상태
 
 서비스 8   ✓ 실행 중 5   인스턴스 7
-▲ 비정상 1   ◐ 확인 안 됨 1   ■ 중지 1
-○ 미생성 1
+▲ 비정상 1   ◐ 앱 확인 안 됨 1
+■ 중지 1   ○ 미생성 1
 
 마지막 조회   09:14:05
 Compose 파일  /work/acme-
@@ -20,48 +20,16 @@ Compose 파일  /work/acme-
 프로젝트      acme-platform
 
 서비스                   상태
-              ↓ 15개 더 있음 · PgUp/PgDn
+               ↓ 8개 더 있음 · PgUp/PgDn
 [esc] 메뉴  [↑↓] 스크롤  [q] 종료
 
 === 40x30 ===
  dcraft · acme-platform · staging
-스택 상태                          1-5/8
-
-서비스 8   ✓ 실행 중 5   인스턴스 7
-▲ 비정상 1   ◐ 확인 안 됨 1   ■ 중지 1
-○ 미생성 1
-
-마지막 조회   09:14:05
-Compose 파일  /work/acme-
-              platform/compose.yaml,
-              /work/acme-
-              platform/compose.staging.y
-              aml
-프로젝트      acme-platform
-
-서비스                   상태
-api                      ✓ 실행 중     █
-worker                   ✓ 실행 중     █
-web                      ✓ 실행 중     █
-scheduler                ◐ 재시작 중
-db                       ✓ 실행 중
-               ↓ 3개 더 있음 · PgUp/PgDn
-
-안내
-  1. 상태 새로 고침: r.
-  2. 비정상·중지 서비스의 로그를 먼저
-  확인.
-  3. 컨테이너가 없는 서비스는 스택
-  시작으로 생성됨.
-[esc] 메뉴  [↑↓] 스크롤  [q] 종료
-
-=== 40x50 ===
- dcraft · acme-platform · staging
 스택 상태
 
 서비스 8   ✓ 실행 중 5   인스턴스 7
-▲ 비정상 1   ◐ 확인 안 됨 1   ■ 중지 1
-○ 미생성 1
+▲ 비정상 1   ◐ 앱 확인 안 됨 1
+■ 중지 1   ○ 미생성 1
 
 마지막 조회   09:14:05
 Compose 파일  /work/acme-
@@ -80,13 +48,38 @@ db                       ✓ 실행 중
 cache                    ■ 중지됨
 migrate                  ○ 미생성
 legacy                   ✓ 실행 중
+작업
+조회
+  서비스 접속
+  로그 보기
+▸ 스택 상태
+[↑↓] 이동  [enter] 실행  [q] 종료
 
-안내
-  1. 상태 새로 고침: r.
-  2. 비정상·중지 서비스의 로그를 먼저
-  확인.
-  3. 컨테이너가 없는 서비스는 스택
-  시작으로 생성됨.
+=== 40x50 ===
+ dcraft · acme-platform · staging
+스택 상태
+
+서비스 8   ✓ 실행 중 5   인스턴스 7
+▲ 비정상 1   ◐ 앱 확인 안 됨 1
+■ 중지 1   ○ 미생성 1
+
+마지막 조회   09:14:05
+Compose 파일  /work/acme-
+              platform/compose.yaml,
+              /work/acme-
+              platform/compose.staging.y
+              aml
+프로젝트      acme-platform
+
+서비스                   상태
+api                      ✓ 실행 중
+worker                   ✓ 실행 중
+web                      ✓ 실행 중
+scheduler                ◐ 재시작 중
+db                       ✓ 실행 중
+cache                    ■ 중지됨
+migrate                  ○ 미생성
+legacy                   ✓ 실행 중
 작업
 조회
   서비스 접속
@@ -105,14 +98,21 @@ legacy                   ✓ 실행 중
   데이터 복원 ▲ 위험
   이전 버전 복원 ▲ 위험
 
+설정
+  실행환경 생성
+  호스트 스크립트
+    커스텀
+    Git
+    S3
+  Compose 설치
 [↑↓] 이동  [enter] 실행  [q] 종료
 
 === 80x18 ===
  dcraft · acme-platform · staging        Docker 29.10.0 · Compose 2.39.1 · 로컬
 메뉴 · ▸ 스택 상태 · 19개 항목                                        tab 펼치기
-스택 상태                                                                1-12/22
+스택 상태                                                                  1-3/8
 
-서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 확인 안 됨 1   ■ 중지 1
+서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 앱 확인 안 됨 1   ■ 중지 1
 ○ 미생성 1
 
 마지막 조회   09:14:05
@@ -120,11 +120,11 @@ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-
               platform/compose.staging.yaml
 프로젝트      acme-platform
 
-서비스         상태        인스턴스 health   이미지                포트
-api            ✓ 실행 중          1 정상     ghcr.io/acme/platfor… 8080→8080
-worker         ✓ 실행 중          1 ▲ 비정상 ghcr.io/acme/platfor… -
-web            ✓ 실행 중          1 ◐ 확인   nginx:1.27-alpine     3000→80
-                                                      ↓ 10개 더 있음 · PgUp/PgDn
+서비스         상태        인스턴스 health   이미지               포트
+api            ✓ 실행 중          1 정상     ghcr.io/acme/platfo… 8080→8080    █
+worker         ✓ 실행 중          1 ▲ 비정상 ghcr.io/acme/platfo… -
+web            ✓ 실행 중          1 ◐ 확인   nginx:1.27-alpine    3000→80
+                                                       ↓ 5개 더 있음 · PgUp/PgDn
 [↑↓] 이동  [enter] 실행  [q] 종료  [?] 도움말  [PgUp/PgDn] 스크롤  [d] 상세
 
 === 80x30 ===
@@ -132,7 +132,7 @@ web            ✓ 실행 중          1 ◐ 확인   nginx:1.27-alpine     3000
 메뉴 · ▸ 스택 상태 · 19개 항목                                        tab 펼치기
 스택 상태
 
-서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 확인 안 됨 1   ■ 중지 1
+서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 앱 확인 안 됨 1   ■ 중지 1
 ○ 미생성 1
 
 마지막 조회   09:14:05
@@ -149,14 +149,14 @@ db             ✓ 실행 중          1 정상     postgres:17           5432�
 cache          ■ 중지됨           1 없음     redis:7-alpine        -
 migrate        ○ 미생성           0 없음     ghcr.io/acme/platfor… -
 legacy         ✓ 실행 중          1 없음     ghcr.io/acme/legacy:… -
-
-안내
-  1. 상태 새로 고침: r.
-  2. 비정상·중지 서비스의 로그를 먼저 확인.
-  3. 컨테이너가 없는 서비스는 스택 시작으로 생성됨.
 작업
+조회
+  서비스 접속 (exec) · 실행 중인 서비스에 접속.
   로그 보기 (logs) · 서비스 로그 따라보기.
 ▸ 스택 상태 (status) · 현재 스택과 서비스 상태를 보여 줌.
+
+운영
+  스택 제거 ▲ 위험 (down) · 컨테이너와 네트워크 제거.
 [↑↓] 이동  [enter] 실행  [q] 종료  [?] 도움말  [d] 상세
 
 === 80x50 ===
@@ -164,7 +164,7 @@ legacy         ✓ 실행 중          1 없음     ghcr.io/acme/legacy:… -
 메뉴 · ▸ 스택 상태 · 19개 항목                                        tab 펼치기
 스택 상태
 
-서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 확인 안 됨 1   ■ 중지 1
+서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 앱 확인 안 됨 1   ■ 중지 1
 ○ 미생성 1
 
 마지막 조회   09:14:05
@@ -181,11 +181,6 @@ db             ✓ 실행 중          1 정상     postgres:17           5432�
 cache          ■ 중지됨           1 없음     redis:7-alpine        -
 migrate        ○ 미생성           0 없음     ghcr.io/acme/platfor… -
 legacy         ✓ 실행 중          1 없음     ghcr.io/acme/legacy:… -
-
-안내
-  1. 상태 새로 고침: r.
-  2. 비정상·중지 서비스의 로그를 먼저 확인.
-  3. 컨테이너가 없는 서비스는 스택 시작으로 생성됨.
 작업
 조회
   서비스 접속 (exec) · 실행 중인 서비스에 접속.
@@ -206,16 +201,21 @@ legacy         ✓ 실행 중          1 없음     ghcr.io/acme/legacy:… -
 
 설정
   실행환경 생성 (environments) · 실행환경 별칭을 만들거나 제거.
-  실행환경 전환 (environments) · 작업할 실행환경을 골라 대상 전환.
   호스트 스크립트 · up/update 전후에 실행할 스크립트.
     커스텀 (hooks) · 이미 있는 스크립트를 경로로 등록.
+    Git (generate-git-hook) · 저장소를 받아 오는 스크립트를 생성.
+    S3 (generate-s3-hook) · S3에서 받아 오는 스크립트를 생성.
+  Compose 설치 (install-compose) · Compose 실행 파일 설치.
+  비밀값 연결 (secrets) · 비밀값 참조 등록.
+  최초 구성 (init) · Compose 파일과 .env를 생성.
+  실행환경 전환 (environments) · 작업할 실행환경을 골라 대상 전환.
 [↑↓] 이동  [enter] 실행  [q] 종료  [?] 도움말  [d] 상세
 
 === 120x18 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 메뉴 · 19 ─── esc 닫기 ╮ 스택 상태                                                                               1-2/8
+╭ 메뉴 · 19 ─── esc 닫기 ╮ 스택 상태                                                                               1-6/8
 │조회                    │
-│  서비스 접속           │ 서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 확인 안 됨 1   ■ 중지 1   ○ 미생성 1
+│  서비스 접속           │ 서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 앱 확인 안 됨 1   ■ 중지 1   ○ 미생성 1
 │  로그 보기             │
 │▸ 스택 상태             │ 마지막 조회   09:14:05
 │                        │ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-platform/compose.staging.yaml
@@ -223,19 +223,19 @@ legacy         ✓ 실행 중          1 없음     ghcr.io/acme/legacy:… -
 │  스택 제거 ▲ 위험      │
 │  스택 재시작           │ 서비스              상태        인스턴스 health   이미지                       포트
 │  스택 중지             │ api                 ✓ 실행 중          1 정상     ghcr.io/acme/platform-api:2… 8080→8080    █
-│  스택 시작             │ worker              ✓ 실행 중          1 ▲ 비정상 ghcr.io/acme/platform-worke… -
-│  갱신                  │                                                                     ↓ 6개 더 있음 · PgUp/PgDn
-│                        │ 안내
-│데이터                  │   1. 상태 새로 고침: r.
-│  데이터 백업           │   2. 비정상·중지 서비스의 로그를 먼저 확인.
-╰────────────────────────╯   3. 컨테이너가 없는 서비스는 스택 시작으로 생성됨.
+│  스택 시작             │ worker              ✓ 실행 중          1 ▲ 비정상 ghcr.io/acme/platform-worke… -            █
+│  갱신                  │ web                 ✓ 실행 중          1 ◐ 확인   nginx:1.27-alpine            3000→80      █
+│                        │ scheduler           ◐ 재시작 중        1 없음     ghcr.io/acme/platform-sched… -            █
+│데이터                  │ db                  ✓ 실행 중          1 정상     postgres:17                  5432→5432
+│  데이터 백업           │ cache               ■ 중지됨           1 없음     redis:7-alpine               -
+╰────────────────────────╯                                                                     ↓ 2개 더 있음 · PgUp/PgDn
 [↑↓] 이동  [enter] 실행  [q] 종료  [/] 찾기  [tab] 메뉴  [r] 새로고침  [?] 도움말  [PgUp/PgDn] 스크롤  [d] 상세
 
 === 120x30 ===
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
 ╭ 메뉴 · 19 ─── esc 닫기 ╮ 스택 상태
 │조회                    │
-│  서비스 접속           │ 서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 확인 안 됨 1   ■ 중지 1   ○ 미생성 1
+│  서비스 접속           │ 서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 앱 확인 안 됨 1   ■ 중지 1   ○ 미생성 1
 │  로그 보기             │
 │▸ 스택 상태             │ 마지막 조회   09:14:05
 │                        │ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-platform/compose.staging.yaml
@@ -251,12 +251,12 @@ legacy         ✓ 실행 중          1 없음     ghcr.io/acme/legacy:… -
 │  데이터 복원 ▲ 위험    │ migrate              ○ 미생성           0 없음     ghcr.io/acme/platform-api:2… -
 │  이전 버전 복… ▲ 위험  │ legacy               ✓ 실행 중          1 없음     ghcr.io/acme/legacy:1.0      -
 │                        │
-│설정                    │ 안내
-│  실행환경 생성         │   1. 상태 새로 고침: r.
-│  실행환경 전환         │   2. 비정상·중지 서비스의 로그를 먼저 확인.
-│  호스트 스크립트       │   3. 컨테이너가 없는 서비스는 스택 시작으로 생성됨.
+│설정                    │
+│  실행환경 생성         │
+│  호스트 스크립트       │
 │    커스텀              │
 │    Git                 │
+│    S3                  │
 │────────────────────────│
 │ ▸ 스택 상태            │
 │ 현재 스택과 서비스 상  │
@@ -267,7 +267,7 @@ legacy         ✓ 실행 중          1 없음     ghcr.io/acme/legacy:… -
  dcraft · acme-platform · staging                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
 ╭ 메뉴 · 19 ─── esc 닫기 ╮ 스택 상태
 │조회                    │
-│  서비스 접속           │ 서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 확인 안 됨 1   ■ 중지 1   ○ 미생성 1
+│  서비스 접속           │ 서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 앱 확인 안 됨 1   ■ 중지 1   ○ 미생성 1
 │  로그 보기             │
 │▸ 스택 상태             │ 마지막 조회   09:14:05
 │                        │ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-platform/compose.staging.yaml
@@ -283,16 +283,16 @@ legacy         ✓ 실행 중          1 없음     ghcr.io/acme/legacy:… -
 │  데이터 복원 ▲ 위험    │ migrate              ○ 미생성           0 없음     ghcr.io/acme/platform-api:2… -
 │  이전 버전 복… ▲ 위험  │ legacy               ✓ 실행 중          1 없음     ghcr.io/acme/legacy:1.0      -
 │                        │
-│설정                    │ 안내
-│  실행환경 생성         │   1. 상태 새로 고침: r.
-│  실행환경 전환         │   2. 비정상·중지 서비스의 로그를 먼저 확인.
-│  호스트 스크립트       │   3. 컨테이너가 없는 서비스는 스택 시작으로 생성됨.
+│설정                    │
+│  실행환경 생성         │
+│  호스트 스크립트       │
 │    커스텀              │
 │    Git                 │
 │    S3                  │
 │  Compose 설치          │
 │  비밀값 연결           │
 │  최초 구성             │
+│  실행환경 전환         │
 │                        │
 │                        │
 │                        │
@@ -317,9 +317,9 @@ legacy         ✓ 실행 중          1 없음     ghcr.io/acme/legacy:… -
 
 === 200x18 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
-╭ 메뉴 · 19 ─────── esc 닫기 ╮ 스택 상태                                                                                                                                                           1-2/8
+╭ 메뉴 · 19 ─────── esc 닫기 ╮ 스택 상태                                                                                                                                                           1-6/8
 │조회                        │
-│  서비스 접속               │ 서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 확인 안 됨 1   ■ 중지 1   ○ 미생성 1
+│  서비스 접속               │ 서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 앱 확인 안 됨 1   ■ 중지 1   ○ 미생성 1
 │  로그 보기                 │
 │▸ 스택 상태                 │ 마지막 조회   09:14:05
 │                            │ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-platform/compose.staging.yaml
@@ -327,19 +327,19 @@ legacy         ✓ 실행 중          1 없음     ghcr.io/acme/legacy:… -
 │  스택 제거 ▲ 위험          │
 │  스택 재시작               │ 서비스                   상태        인스턴스 health   이미지                             포트
 │  스택 중지                 │ api                      ✓ 실행 중          1 정상     ghcr.io/acme/platform-api:2026.11… 8080→8080                                                                     █
-│  스택 시작                 │ worker                   ✓ 실행 중          1 ▲ 비정상 ghcr.io/acme/platform-worker:2026… -
-│  갱신                      │                                                                                                                                                 ↓ 6개 더 있음 · PgUp/PgDn
-│                            │ 안내
-│데이터                      │   1. 상태 새로 고침: r.
-│  데이터 백업               │   2. 비정상·중지 서비스의 로그를 먼저 확인.
-╰────────────────────────────╯   3. 컨테이너가 없는 서비스는 스택 시작으로 생성됨.
+│  스택 시작                 │ worker                   ✓ 실행 중          1 ▲ 비정상 ghcr.io/acme/platform-worker:2026… -                                                                             █
+│  갱신                      │ web                      ✓ 실행 중          1 ◐ 확인   nginx:1.27-alpine                  3000→80                                                                       █
+│                            │ scheduler                ◐ 재시작 중        1 없음     ghcr.io/acme/platform-scheduler:2… -                                                                             █
+│데이터                      │ db                       ✓ 실행 중          1 정상     postgres:17                        5432→5432
+│  데이터 백업               │ cache                    ■ 중지됨           1 없음     redis:7-alpine                     -
+╰────────────────────────────╯                                                                                                                                                 ↓ 2개 더 있음 · PgUp/PgDn
 [↑↓] 이동  [enter] 실행  [q] 종료  [/] 찾기  [tab] 메뉴  [r] 새로고침  [?] 도움말  [PgUp/PgDn] 스크롤  [d] 상세
 
 === 200x30 ===
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
 ╭ 메뉴 · 19 ─────── esc 닫기 ╮ 스택 상태
 │조회                        │
-│  서비스 접속               │ 서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 확인 안 됨 1   ■ 중지 1   ○ 미생성 1
+│  서비스 접속               │ 서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 앱 확인 안 됨 1   ■ 중지 1   ○ 미생성 1
 │  로그 보기                 │
 │▸ 스택 상태                 │ 마지막 조회   09:14:05
 │                            │ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-platform/compose.staging.yaml
@@ -355,12 +355,12 @@ legacy         ✓ 실행 중          1 없음     ghcr.io/acme/legacy:… -
 │  데이터 복원 ▲ 위험        │ migrate                  ○ 미생성           0 없음     ghcr.io/acme/platform-api:2026.11… -
 │  이전 버전 복원 ▲ 위험     │ legacy                   ✓ 실행 중          1 없음     ghcr.io/acme/legacy:1.0            -
 │                            │
-│설정                        │ 안내
-│  실행환경 생성             │   1. 상태 새로 고침: r.
-│  실행환경 전환             │   2. 비정상·중지 서비스의 로그를 먼저 확인.
-│  호스트 스크립트           │   3. 컨테이너가 없는 서비스는 스택 시작으로 생성됨.
+│설정                        │
+│  실행환경 생성             │
+│  호스트 스크립트           │
 │    커스텀                  │
 │    Git                     │
+│    S3                      │
 │────────────────────────────│
 │ ▸ 스택 상태                │
 │ 현재 스택과 서비스 상태를  │
@@ -371,7 +371,7 @@ legacy         ✓ 실행 중          1 없음     ghcr.io/acme/legacy:… -
  dcraft · acme-platform · staging                                                                                                                                Docker 29.10.0 · Compose 2.39.1 · 로컬
 ╭ 메뉴 · 19 ─────── esc 닫기 ╮ 스택 상태
 │조회                        │
-│  서비스 접속               │ 서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 확인 안 됨 1   ■ 중지 1   ○ 미생성 1
+│  서비스 접속               │ 서비스 8   ✓ 실행 중 5   인스턴스 7   ▲ 비정상 1   ◐ 앱 확인 안 됨 1   ■ 중지 1   ○ 미생성 1
 │  로그 보기                 │
 │▸ 스택 상태                 │ 마지막 조회   09:14:05
 │                            │ Compose 파일  /work/acme-platform/compose.yaml, /work/acme-platform/compose.staging.yaml
@@ -387,16 +387,16 @@ legacy         ✓ 실행 중          1 없음     ghcr.io/acme/legacy:… -
 │  데이터 복원 ▲ 위험        │ migrate                  ○ 미생성           0 없음     ghcr.io/acme/platform-api:2026.11… -
 │  이전 버전 복원 ▲ 위험     │ legacy                   ✓ 실행 중          1 없음     ghcr.io/acme/legacy:1.0            -
 │                            │
-│설정                        │ 안내
-│  실행환경 생성             │   1. 상태 새로 고침: r.
-│  실행환경 전환             │   2. 비정상·중지 서비스의 로그를 먼저 확인.
-│  호스트 스크립트           │   3. 컨테이너가 없는 서비스는 스택 시작으로 생성됨.
+│설정                        │
+│  실행환경 생성             │
+│  호스트 스크립트           │
 │    커스텀                  │
 │    Git                     │
 │    S3                      │
 │  Compose 설치              │
 │  비밀값 연결               │
 │  최초 구성                 │
+│  실행환경 전환             │
 │                            │
 │                            │
 │                            │

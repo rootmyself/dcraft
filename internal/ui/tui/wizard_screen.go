@@ -44,6 +44,14 @@ func (m *Model) wizardStepScreen(step core.WizardStep) wizardStepScreen {
 		addStyled(m.title, title)
 		screen.head = append(screen.head, "")
 	}
+	if notice := strings.TrimSpace(m.wizardSpec.Notice); notice != "" {
+		// The feature's own warning is stated before the first question and on
+		// every step, so a reader who scrolls back into the flow still sees it.
+		for _, line := range m.wrapTo(notice, width) {
+			screen.head = append(screen.head, m.noticeText(line))
+		}
+		screen.head = append(screen.head, "")
+	}
 	ordinal, total := m.wizardProgress()
 	progress := fmt.Sprintf("%s %d/%d", msgWizardProgress, ordinal, total)
 	screen.head = append(screen.head, m.hintText(progress))

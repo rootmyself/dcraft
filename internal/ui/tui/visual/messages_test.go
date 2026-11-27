@@ -48,6 +48,7 @@ func knownKeyLabel(label string) bool {
 		msgKeyRun, msgKeyCancel, msgKeyItem, msgKeyHelp, msgKeySubmit, msgKeyNextField,
 		msgKeyPrev, msgKeyCloseScreen, msgKeyStop, msgKeyDetach, msgKeySafeCancel,
 		msgKeyQuitBlocked, msgKeyMove, msgKeyQuit, msgKeyFind, msgKeyMenu, msgKeyRefresh,
+		msgKeyButton,
 	} {
 		if label == known {
 			return true
